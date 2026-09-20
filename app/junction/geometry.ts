@@ -148,7 +148,7 @@ export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:Tr
 function uncutArmIslands(d:Design,i:number,segments:Edge[]):P[][]{
  const a=d.arms[i],core=armMouth(d,i),origins=armTreatmentOrigins(d,i,segments);
  if(d.type!=='roundabout')return [medianPolygon(a,core,false,origins)].filter(p=>p.length);
- const s=roundSettings(d),split=splitterPolygon(a,core,s),median=medianPolygon({...a,medianOffset:0},core+s.splitterLength+2+a.medianOffset,false,origins);
+ const s=roundSettings(d),split=splitterPolygon(a,core,s,origins),median=medianPolygon({...a,medianOffset:0},core+s.splitterLength+2+a.medianOffset,false,origins);
  return [split,median].filter(p=>p.length);
 }
 /** Curb intersections for crossings on flared roundabout approaches. */
