@@ -1,5 +1,5 @@
 import {roundSettings} from './roundabout';
-import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor} from './model';
+import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
 import {activeIds,armMouth,stopPosition,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
 import {allocate,pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
@@ -78,9 +78,9 @@ export function designShapes(d:Design){
         10
       );
 
-      const p=pocketsFor(a,dir);
+      const p=pocketsFor(a,dir),rightWidth=pocketLaneWidth(a,dir,'right'),leftWidth=pocketLaneWidth(a,dir,'left');
       for(let laneIndex=0;laneIndex<a[dir];laneIndex++){
-        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*c.width*(p.right.lanes*pocketFactor(p.right,x,origin)+laneIndex);
+        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,origin)+c.width*laneIndex);
         add(
           {kind:'lane',arm:i,direction:dir,laneIndex,role:'main'},
           strip(inner,x=>inner(x)+side*c.width),
@@ -105,14 +105,15 @@ export function designShapes(d:Design){
         const xx=approachSamples(a,origin,origin,origin+pocket.length+pocket.taper);
         for(let laneIndex=0;laneIndex<pocket.lanes;laneIndex++){
           const factor=(x:number)=>pocketFactor(pocket,x,origin);
+          const w=which==='right'?rightWidth:leftWidth;
           const base=(x:number)=>{
-            if(which==='right')return innerEdge(a,side,x,origins)+side*c.width*laneIndex*factor(x);
-            const outerMain=innerEdge(a,side,x,origins)+side*c.width*(p.right.lanes*pocketFactor(p.right,x,origin)+a[dir]);
-            return outerMain+side*c.width*laneIndex*factor(x);
+            if(which==='right')return innerEdge(a,side,x,origins)+side*w*laneIndex*factor(x);
+            const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,origin)+c.width*a[dir]);
+            return outerMain+side*w*laneIndex*factor(x);
           };
           add(
             {kind:'pocket',arm:i,direction:dir,side:which,laneIndex,role:which==='left'?'aux-left':'aux-right'},
-            [...xx.map(x=>({x,y:base(x)})),...xx.slice().reverse().map(x=>({x,y:base(x)+side*c.width*factor(x)}))],
+            [...xx.map(x=>({x,y:base(x)})),...xx.slice().reverse().map(x=>({x,y:base(x)+side*w*factor(x)}))],
             40,
             true,
             ` · เลน ${laneIndex+1}`
