@@ -284,16 +284,18 @@ export function valid(d:unknown):d is Design{
     );
 }
 
-function retainExplicitSchema4Target(a:Arm){
-  if(a.residualTarget===undefined)return a;
+function preserveSchema4Allocation(a:Arm){
   const convert=(p:Pockets|undefined)=>{
     if(!p)return p;
-    return {
-      left:{...p.left},
-      right:p.right.lanes&&(p.right.allocation===undefined||p.right.allocation==='auto')
-        ?{...p.right,allocation:'retain' as const,retainedMedian:a.residualTarget}
-        :{...p.right}
-    };
+    const right={...p.right};
+    if(right.lanes){
+      const mode=right.allocation??(a.corridorMode==='preserve'?'legacy-preserve':a.corridorMode==='widen'?'widen':'auto');
+      // Schema 4 Auto silently retained 1.50 m (or residualTarget) and "median" retained 0.20 m.
+      // Preserve that visual result only when importing old files; new Auto has no hidden retained width.
+      if(mode==='auto'){right.allocation='retain';right.retainedMedian=a.residualTarget??1.5;}
+      else if(mode==='median'){right.allocation='retain';right.retainedMedian=.2;}
+    }
+    return {left:{...p.left},right};
   };
   return {...a,incomingPockets:convert(a.incomingPockets),outgoingPockets:convert(a.outgoingPockets)};
 }
@@ -313,7 +315,7 @@ export function migrate(raw:any):Design{
       medianOffset:source.medianOffset??(r?0:9),
       crossOffset:source.crossOffset??(r?14:4)
     };
-    if(raw.schemaVersion===4)a=retainExplicitSchema4Target(a);
+    if(raw.schemaVersion===4)a=preserveSchema4Allocation(a);
     // Schema-5 files round-trip byte-for-structure: derived defaults are filled at read/use time.
     // Older schemas receive an explicit marking model during migration.
     if(raw.schemaVersion!==5||source.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
