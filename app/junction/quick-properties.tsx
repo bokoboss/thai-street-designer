@@ -18,7 +18,12 @@ const f=allocate(a).features[dir][s.side??'right'],laneIndex=s.laneIndex??0,lane
 const laneArrow=laneArrowFor(a,dir,laneRole,laneIndex);
 const editArrow=(code:string)=>onArm({laneMarkings:withLaneArrow(a,dir,laneRole,laneIndex,code as LaneArrowCode)});
 const mouth=armMouth(d,s.arm),usableLength=Math.max(0,a.length-mouth);
-return <div className="quick-properties"><h2>{objectNames[s.kind]}{s.kind==='pocket'?` · ${s.side==='left'?'ซ้าย':'ขวา'}`:''}</h2><p className="object-subtitle">{a.name}{s.direction?` · ${dir==='incoming'?'ขาเข้า':'ขาออก / เลนรับ'}`:''}</p>
+const objectTitle=s.kind==='pocket'
+ ?(dir==='incoming'
+   ?`เลนรอเลี้ยว${s.side==='right'?'ขวา':'ซ้าย'}`
+   :`เลนรับ · ${s.side==='right'?'ชิดเกาะกลาง':'ริมทาง'}`)
+ :objectNames[s.kind];
+return <div className="quick-properties"><h2>{objectTitle}{s.laneIndex!==undefined&&['lane','pocket'].includes(s.kind)?` · เลน ${s.laneIndex+1}`:''}</h2><p className="object-subtitle">{a.name}{s.direction?` · ${dir==='incoming'?'ขาเข้าแยก':'ขาออกแยก'}`:''}</p>
 {['approach','lane'].includes(s.kind)&&<><Num label="จำนวนเลนหลัก" value={a[dir]} min={a[dir==='incoming'?'outgoing':'incoming']?0:1} max={4} onChange={editMainCount}/><Num label="ความกว้างเลน (ม.)" value={section.width} min={2.5} max={4.5} step={.25} onChange={width=>editSection({width})}/>{s.kind==='lane'&&<Pick label={`ลูกศรเลน ${laneIndex+1}`} value={laneArrow} items={options} onChange={editArrow}/>} {s.kind==='approach'&&<><Num label="ความยาวจากปากแยกถึงปลายแบบ (ม.)" value={+usableLength.toFixed(1)} min={12} max={380} step={1} onChange={v=>onArm({length:mouth+v})}/><Num label="มุมขาถนน (°)" value={a.angle} min={0} max={359} onChange={angle=>onArm({angle})}/><p className="j-small">ความยาวที่แสดงวัดจากปากทางของขานี้ ไม่ใช่จากศูนย์กลางทางแยก</p></>}</>}
 {s.kind==='sidewalk'&&<Num label="ความกว้างทางเท้า (ม.)" value={section.walk} min={0} max={5} step={.25} onChange={walk=>editSection({walk})}/>}
 {s.kind==='band'&&(()=>{const b=section.bands.find(b=>b.id===s.id);return b?<><Pick label="ประเภทแถบ" value={b.type} items={{shoulder:'ไหล่ทาง',buffer:'พื้นที่คั่น',bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์'}} onChange={type=>editSection({bands:section.bands.map(x=>x.id===b.id?{...x,type}:x)})}/><Num label="กว้างแถบ (ม.)" value={b.width} min={.25} max={4.5} step={.25} onChange={width=>editSection({bands:section.bands.map(x=>x.id===b.id?{...x,width}:x)})}/></>:null;})()}
