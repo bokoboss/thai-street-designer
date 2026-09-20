@@ -57,7 +57,7 @@ export function designShapes(d:Design){
   };
 
   for(const i of activeIds(d)){
-    const a=d.arms[i],mouth=armMouth(d,i),origins=treatmentOrigins(a,mouth,d.type==='roundabout');
+    const a=d.arms[i],mouth=armMouth(d,i),origins=treatmentOrigins(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):undefined);
     const incomingOrigin=origins.incoming,[lo,hi]=bounds(a,mouth,origins);
     add({kind:'approach',arm:i},rect(mouth,lo-3,a.length-mouth,hi-lo+6),0);
 
