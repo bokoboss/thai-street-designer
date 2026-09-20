@@ -46,6 +46,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 pnpm exec tsc --noEmit
 pnpm test
+pnpm lint
 pnpm test:builds
 ```
 
