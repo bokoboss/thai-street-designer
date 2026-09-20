@@ -39,3 +39,9 @@
 
 .inline-review.note{color:var(--ws-muted);border-color:var(--ws-border);background:#f8fafb}
 .review-popover .review-note{color:var(--ws-muted);background:#f8fafb}
+
+.j-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;height:24px;min-height:24px;padding:3px 10px}
+.j-footer span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ws-ink)}
+.j-footer span:last-child{white-space:nowrap;color:var(--ws-muted)}
+.j-export-dialog{font-family:var(--ws-font)}
+@media(max-width:760px){.j-footer span:last-child{display:none}}
