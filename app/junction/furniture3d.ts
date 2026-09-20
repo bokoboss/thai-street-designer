@@ -1,6 +1,6 @@
 import {type Design,sectionFor} from './model';
 import {roadObjects} from './objects';
-import {activeIds,innerEdge,bounds,carBounds,armMouth,stopPosition,rotate,armTurn} from './geometry';
+import {activeIds,innerEdge,bounds,carBounds,armMouth,stopPosition,rotate} from './geometry';
 export type V={x:number;y:number;z:number};
 export type Face={points:V[];color:string};
 export function cylinder(x:number,y:number,base:number,height:number,r0:number,r1:number,colors:string[]):Face[]{return Array.from({length:12},(_,i)=>{const a=i/12*Math.PI*2,b=(i+1)/12*Math.PI*2;return {points:[{x:x+r0*Math.cos(a),y:y+r0*Math.sin(a),z:base},{x:x+r0*Math.cos(b),y:y+r0*Math.sin(b),z:base},{x:x+r1*Math.cos(b),y:y+r1*Math.sin(b),z:base+height},{x:x+r1*Math.cos(a),y:y+r1*Math.sin(a),z:base+height}],color:colors[i%colors.length]};});}
