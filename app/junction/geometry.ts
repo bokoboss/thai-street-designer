@@ -59,8 +59,8 @@ export const coreSize=(d:Design)=>Math.max(...armMouths(d));
 export function offset(ps:P[],w0:number,w1:number,startIndex=0,endIndex=ps.length-1){const ds=[0];for(let i=1;i<ps.length;i++)ds.push(ds[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return ps.map((p,i)=>{const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,t=Math.max(0,Math.min(1,(ds[i]-ds[startIndex])/(ds[endIndex]-ds[startIndex]||1))),smooth=t*t*(3-2*t),w=mix(w0,w1,smooth);return{x:p.x+dy/l*w,y:p.y-dx/l*w};});}
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
 export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
-export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout';return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(a)[1],nlo=bounds(b)[0],vx=-nlo,vy=hi,far={x:a.length,y:hi},end=rotate({x:b.length,y:nlo},gap);let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round),originsB=treatmentOrigins(b,mouths[next],round),originA=originsA.incoming,originB=originsB.outgoing;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap);const ps=approachSamples(b,originB,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
-if(round){const settings=roundSettings(d),entry=roundFillet(core,hi,settings.entryRadius),exit=roundFillet(core,-nlo,settings.exitRadius),ta=entry.theta,tb=g-exit.theta;
+export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout',roundCfg=round?roundSettings(d):roundDefaults();return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(a)[1],nlo=bounds(b)[0],vx=-nlo,vy=hi,far={x:a.length,y:hi},end=rotate({x:b.length,y:nlo},gap);let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round,roundCfg),originsB=treatmentOrigins(b,mouths[next],round,roundCfg),originA=originsA.incoming,originB=originsB.outgoing;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap);const ps=approachSamples(b,originB,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
+if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius),exit=roundFillet(core,-nlo,settings.exitRadius),ta=entry.theta,tb=g-exit.theta;
  const arc=Array.from({length:81},(_,j)=>{const t=mix(ta,tb,j/80);return{x:core*Math.cos(t),y:core*Math.sin(t)}}),exitPoints=exit.points.map(p=>rotate({x:p.x,y:-p.y},gap)).reverse();
  base=join(lead(entry.points[0]),entry.points,arc,exitPoints,trail(exitPoints.at(-1)!));}
 
@@ -81,8 +81,8 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  const core=coreSize(d);if(!Number.isFinite(core)||core>80)return 'มุมและความกว้างนี้ทำให้ปากทางแยกกว้างเกินพื้นที่แบบ';
  for(const i of ids){const a=d.arms[i],core=armMouth(d,i);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30);if(a.length<Math.max(core+12,dividerRange(a,core,d.type==='roundabout',side).start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
 
- for(const i of ids){const a=d.arms[i],origins=treatmentOrigins(a,armMouth(d,i),d.type==='roundabout');for(const dir of ['incoming','outgoing'] as const){const origin=originFor(origins,dir),p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}
- const boundaries=edges(d);for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=treatmentOrigins(a,armMouth(d,id),d.type==='roundabout'),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
+ for(const i of ids){const a=d.arms[i],origins=treatmentOrigins(a,armMouth(d,i),d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults());for(const dir of ['incoming','outgoing'] as const){const origin=originFor(origins,dir),p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}
+ const boundaries=edges(d);for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=treatmentOrigins(a,armMouth(d,id),d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults()),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
  if(ids.some(i=>armIslands(d,i).some(p=>selfIntersects(p))))return 'Geometry Error — ขอบเกาะตัดกัน กรุณาปรับหน้าตัดและช่วงสอบ';
  const footprint=boundaries.flatMap(e=>e.outer.map(p=>rotate(p,armTurn(d,e.i))));
  const walkFootprint=boundaries.flatMap(e=>e.walk.map(p=>rotate(p,armTurn(d,e.i))));
@@ -90,7 +90,7 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  return null;}
 
 export function crossingIntervals(a:Arm,core:number,round:boolean,settings=roundDefaults()){
- const x=core+a.crossOffset,start=round?core+.8:core+a.medianOffset,origins=treatmentOrigins(a,core,round),
+ const x=core+a.crossOffset,start=round?core+.8:core+a.medianOffset,origins=treatmentOrigins(a,core,round,settings),
  profile=medianEdges(a,x+1.6,origins),ordinary=round&&x+3.2>=core+settings.splitterLength+2+a.medianOffset,
  half=round&&!ordinary?splitterHalfAt(x+1.6,core,settings):(profile[1]-profile[0])/2,
  split=round?half>0:(a.median>0&&start<=x+3.2),island=round&&!ordinary?[-half,half]:profile,road=bounds(a,x,origins);
@@ -99,9 +99,13 @@ export function crossingIntervals(a:Arm,core:number,round:boolean,settings=round
 
 export function stopPosition(a:Arm,core:number){return core+(a.crossing?a.crossOffset+4.5:(a.stopOffset??2));}
 /** Departure-side reference for receiving lanes. Kept independent from the incoming stop/crossing datum. */
-export function departurePosition(_a:Arm,core:number,round=false){return core+(round ? .8 : 1);}
-export function treatmentOrigins(a:Arm,core:number,round=false){
- return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round)} as const;
+export function departurePosition(a:Arm,core:number,round=false,settings=roundDefaults()){
+ if(!round)return core;
+ const exit=roundFillet(core,Math.max(.1,-bounds(a)[0]),settings.exitRadius);
+ return exit.valid?exit.cx:core+.8;
+}
+export function treatmentOrigins(a:Arm,core:number,round=false,settings=roundDefaults()){
+ return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round,settings)} as const;
 }
 export const STOP_LINE_WIDTH = .55;
 export function dividerRange(a:Arm,core:number,round:boolean,side=1){
@@ -135,13 +139,13 @@ export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:Tr
 }
 
 function uncutArmIslands(d:Design,i:number):P[][]{
- const a=d.arms[i],core=armMouth(d,i),origins=treatmentOrigins(a,core,d.type==='roundabout');
+ const a=d.arms[i],core=armMouth(d,i),origins=treatmentOrigins(a,core,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults());
  if(d.type!=='roundabout')return [medianPolygon(a,core,false,origins)].filter(p=>p.length);
  const s=roundSettings(d),split=splitterPolygon(a,core,s),median=medianPolygon({...a,medianOffset:0},core+s.splitterLength+2+a.medianOffset,false,origins);
  return [split,median].filter(p=>p.length);
 }
 /** Curb intersections for crossings on flared roundabout approaches. */
-export function curbBoundsAt(d:Design,i:number,x:number,segments=edges(d)){const hits:number[]=[];for(const edge of segments){if(edge.i!==i&&edge.next!==i)continue;const ps=edge.outer.map(p=>rotate(p,(d.arms[edge.i].angle-d.arms[i].angle)/90));for(let j=1;j<ps.length;j++){const p=ps[j-1],q=ps[j];if(Math.abs(p.x-q.x)<1e-8||x<Math.min(p.x,q.x)||x>Math.max(p.x,q.x))continue;hits.push(p.y+(q.y-p.y)*(x-p.x)/(q.x-p.x));}}const fallback=bounds(d.arms[i],x,treatmentOrigins(d.arms[i],armMouth(d,i),d.type==='roundabout')),negative=hits.filter(y=>y<=0),positive=hits.filter(y=>y>=0);return[negative.length?Math.max(...negative):fallback[0],positive.length?Math.min(...positive):fallback[1]];}
+export function curbBoundsAt(d:Design,i:number,x:number,segments=edges(d)){const hits:number[]=[];for(const edge of segments){if(edge.i!==i&&edge.next!==i)continue;const ps=edge.outer.map(p=>rotate(p,(d.arms[edge.i].angle-d.arms[i].angle)/90));for(let j=1;j<ps.length;j++){const p=ps[j-1],q=ps[j];if(Math.abs(p.x-q.x)<1e-8||x<Math.min(p.x,q.x)||x>Math.max(p.x,q.x))continue;hits.push(p.y+(q.y-p.y)*(x-p.x)/(q.x-p.x));}}const fallback=bounds(d.arms[i],x,treatmentOrigins(d.arms[i],armMouth(d,i),d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults())),negative=hits.filter(y=>y<=0),positive=hits.filter(y=>y>=0);return[negative.length?Math.max(...negative):fallback[0],positive.length?Math.min(...positive):fallback[1]];}
 
 export function clipStation(ps:P[],station:number,keepAfter:boolean):P[]{const out:P[]=[];for(let i=0;i<ps.length;i++){const p=ps[i],q=ps[(i+1)%ps.length],a=keepAfter?p.x>=station:p.x<=station,b=keepAfter?q.x>=station:q.x<=station;if(a)out.push(p);if(a!==b){const t=(station-p.x)/(q.x-p.x);out.push({x:station,y:p.y+t*(q.y-p.y)});}}return out;}
 export function armIslands(d:Design,i:number):P[][]{let polygons=uncutArmIslands(d,i);const mouth=armMouth(d,i);for(const opening of d.arms[i].medianOpenings??[]){const start=mouth+opening.start,end=start+opening.length;polygons=polygons.flatMap(ps=>[clipStation(ps,start,false),clipStation(ps,end,true)]).filter(ps=>ps.length>=3);}return polygons;}
