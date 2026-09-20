@@ -300,34 +300,38 @@ function preserveSchema4Allocation(a:Arm){
   return {...a,incomingPockets:convert(a.incomingPockets),outgoingPockets:convert(a.outgoingPockets)};
 }
 
-export function migrate(raw:any):Design{
-  if(raw?.schemaVersion>5)throw Error('Unsupported future schema');
-  if(!raw||typeof raw.type!=='string'||!Array.isArray(raw.arms))throw Error('Invalid design');
-  const defaults=initial(),r=raw.type.startsWith('round');
-  const arms=raw.arms.map((source:Arm,i:number)=>{
+type LegacyDesignInput=Partial<Design>&{type:string;arms:Partial<Arm>[];schemaVersion?:number;omitted?:number};
+export function migrate(raw:unknown):Design{
+  if(!raw||typeof raw!=='object')throw Error('Invalid design');
+  const candidate=raw as Partial<LegacyDesignInput>;
+  if((candidate.schemaVersion??0)>5)throw Error('Unsupported future schema');
+  if(typeof candidate.type!=='string'||!Array.isArray(candidate.arms))throw Error('Invalid design');
+  const source=candidate as LegacyDesignInput,version=source.schemaVersion??0,defaults=initial(),r=source.type.startsWith('round');
+  const arms=source.arms.map((input,i)=>{
+    const fallback=defaults.arms[i]??defaults.arms[0];
     let a:Arm={
-      ...defaults.arms[i],
-      ...source,
-      ...(raw.schemaVersion>=4?{}:{corridorMode:source.corridorMode??(raw.schemaVersion===3?'preserve':'widen')}),
-      angle:source.angle??i*90,
-      length:source.length??92,
-      bands:source.bands??[],
-      medianOffset:source.medianOffset??(r?0:9),
-      crossOffset:source.crossOffset??(r?14:4)
+      ...fallback,
+      ...input,
+      ...(version>=4?{}:{corridorMode:input.corridorMode??(version===3?'preserve':'widen')}),
+      angle:input.angle??i*90,
+      length:input.length??92,
+      bands:input.bands??[],
+      medianOffset:input.medianOffset??(r?0:9),
+      crossOffset:input.crossOffset??(r?14:4)
     };
-    if(raw.schemaVersion===4)a=preserveSchema4Allocation(a);
+    if(version===4)a=preserveSchema4Allocation(a);
     // Schema-5 files round-trip byte-for-structure: derived defaults are filled at read/use time.
     // Older schemas receive an explicit marking model during migration.
-    if(raw.schemaVersion!==5||source.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
+    if(version!==5||input.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
     return a;
   });
   const d:Design={
     ...defaults,
-    ...raw,
+    ...source,
     schemaVersion:5,
     type:r?'roundabout':'junction',
-    enabled:raw.enabled??[0,1,2,3].map(i=>!['three','round3'].includes(raw.type)||i!==(raw.omitted??3)),
-    circulation:raw.circulation??raw.ring*3.5,
+    enabled:source.enabled??[0,1,2,3].map(i=>!['three','round3'].includes(source.type)||i!==(source.omitted??3)),
+    circulation:source.circulation??(source.ring??defaults.ring)*3.5,
     arms
   };
   if(!valid(d))throw Error('Invalid design');
