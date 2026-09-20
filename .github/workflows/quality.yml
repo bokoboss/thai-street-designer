@@ -30,5 +30,7 @@ jobs:
         run: pnpm test
       - name: TypeScript
         run: pnpm exec tsc --noEmit
+      - name: Lint
+        run: pnpm lint
       - name: Sites and Vercel production builds
         run: pnpm test:builds
