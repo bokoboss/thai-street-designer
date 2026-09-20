@@ -4,7 +4,7 @@ import {PointerGesture,clampZoom} from './gestures';
 import {ContextMenu,ContextMenuTrigger,ContextMenuContent,ContextMenuItem,ContextMenuSeparator} from '@/components/ui/context-menu';
 import {groundAt,anchorGround,orbitGround,pointerAction} from './camera3d';
 import type {Design} from './model';
-import {edges,rotate,armTurn,activeIds,bounds,armMouth,medianPolygon} from './geometry';
+import {edges,armIslands,rotate,armTurn,activeIds,bounds,armMouth,medianPolygon} from './geometry';
 import {furnitureFaces} from './furniture3d';
 import {buildVisibility,visibleOrder,cameraDirection} from './visibility3d';
 type V={x:number;y:number;z:number};
@@ -17,7 +17,7 @@ export default function Scene3D({d,active,ref,onSave,onNotice}:{d:Design;active:
  const drag=useRef<{action:string;point:{x:number;y:number};screen:{x:number;y:number}}|null>(null);
  const extent=Math.max(115,...activeIds(d).map(i=>d.arms[i].length+20));
  const faces=useMemo(()=>{const fs:Face[]=[];for(const e of edges(d)){const ps=[...e.outer,...e.walk.slice().reverse()].map(p=>rotate(p,armTurn(d,e.i)));fs.push(...prism(ps,.18,'#bdc9ce','#8d9ca4'));if(e.island.length)fs.push(...prism(e.island.map(p=>rotate(p,armTurn(d,e.i))),.18,'#c7cdbd','#9caa9d'));}
- for(const i of activeIds(d)){const core=armMouth(d,i),a=d.arms[i],ps=medianPolygon(a,core,d.type==='roundabout').map(p=>rotate(p,armTurn(d,i)));if(!ps.length)continue;fs.push(...prism(ps,.2,'#86a58a','#b6ad77'));}
+ for(const i of activeIds(d)){const core=armMouth(d,i),a=d.arms[i],polygons=armIslands(d,i);for(const polygon of polygons){const ps=polygon.map(p=>rotate(p,armTurn(d,i)));fs.push(...prism(ps,.2,'#86a58a','#b6ad77'));}}
  if(d.type==='roundabout'){const ps=Array.from({length:80},(_,i)=>({x:d.radius*Math.cos(i/80*Math.PI*2),y:d.radius*Math.sin(i/80*Math.PI*2)}));fs.push(...prism(ps,.25,'#86a58a','#b6ad77'));}
  fs.push(...furnitureFaces(d));
  return fs;},[d]);

@@ -1,0 +1,7 @@
+import {offset,selfIntersects,type P} from '../app/junction/geometry';
+export type Alignment={vertices:P[]};
+export const lengthOf=(ps:P[])=>ps.slice(1).reduce((s,p,i)=>s+Math.hypot(p.x-ps[i].x,p.y-ps[i].y),0);
+export function station(ps:P[],distance:number){let remain=Math.max(0,distance);for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],len=Math.hypot(b.x-a.x,b.y-a.y);if(remain<=len||i===ps.length-1){const t=Math.min(1,remain/(len||1));return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,angle:Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,index:i-1};}remain-=len;}return{...ps[0],angle:0,index:0};}
+export function projectAlignment(ps:P[],p:P){let before=0,best={t:0,distance:Infinity,point:ps[0],index:0};const total=lengthOf(ps);for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),u=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len||1))),q={x:a.x+u*dx,y:a.y+u*dy},distance=Math.hypot(q.x-p.x,q.y-p.y);if(distance<best.distance)best={t:(before+u*len)/(total||1),distance,point:q,index:i-1};before+=len;}return best;}
+export const parallel=(ps:P[],leftOffset:number)=>offset(ps,-leftOffset,-leftOffset);
+export function validAlignment(ps:P[]){return !selfIntersects(ps,false)&&ps.slice(1,-1).every((p,i)=>{const a=ps[i],b=ps[i+2],ux=p.x-a.x,uy=p.y-a.y,vx=b.x-p.x,vy=b.y-p.y;return (ux*vx+uy*vy)/(Math.hypot(ux,uy)*Math.hypot(vx,vy)||1)>-.76;})&&ps.length>=2&&ps.length<=100&&ps.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))&&ps.slice(1).every((p,i)=>Math.hypot(p.x-ps[i].x,p.y-ps[i].y)>=3);}

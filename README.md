@@ -2,6 +2,8 @@
 
 เว็บออกแบบแนวคิดทางแยกและวงเวียน สำหรับการจราจรชิดซ้าย
 
+รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
+
 ## เริ่มใช้งาน
 
 เลือกทางแยกหรือวงเวียน เปิด/ปิดขาถนนให้เหลือ 3 หรือ 4 ขา จากนั้นคลิกขาถนนบนแบบเพื่อแก้ไข
@@ -121,6 +123,16 @@ Select an arm, open **ถนน**, then select **ทิศทางหน้า�
 
 Each direction supports 0–3 additional lanes on either side: left is curb-side and right is median-side, relative to travel. Incoming additions are turning pockets; outgoing additions are receiving lanes. Set full-width length and taper length separately. Full-width length starts at the stop-line reference and excludes the taper. Increase approach length when the complete pocket and taper do not fit. Tapers cannot start inside a corner/slip-lane curve.
 
-The road, sidewalks, bands, dividers, arrows and roadside objects follow the widening in 2D and 3D. Median-side pockets shift the regular lanes outward; the median remains in place. Section-copy includes both directions and their pockets. These are conceptual geometric lanes, without vehicle routing or capacity simulation.
+The road, sidewalks, bands, dividers, arrows and roadside objects follow the selected corridor constraint in 2D and 3D. New designs preserve the corridor: right pockets consume median reserve and left pockets consume shoulder/buffer space. Explicit widening retains the former outward-shift behavior. Schema-2 imports retain widening to preserve their existing geometry. Section-copy includes both directions and their pockets. These are conceptual geometric lanes, without vehicle routing or capacity simulation.
 
 Verification: `node scripts/verify-junction.cjs` followed by `node scripts/verify-pockets.cjs`. Tests cover independent dimensions, legacy defaults, JSON validation, insufficient length, both pocket sides, outgoing receiving lanes, skew approaches, slip lanes and roundabouts. Browser checks cover independent directional controls, six added lanes, and 2D/3D rendering.
+
+## Current verification commands
+
+```sh
+node scripts/verify-junction.cjs
+node scripts/verify-pockets.cjs
+node scripts/verify-constraints-roundabout.cjs
+node scripts/verify-network.cjs
+node scripts/verify-visibility.cjs
+```
