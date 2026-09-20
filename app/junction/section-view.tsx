@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
-import {sectionFor,pocketsFor,type Design,type Direction} from './model';
+import {sectionFor,pocketsFor,pocketLaneWidth,type Design,type Direction} from './model';
 import {allocate,pocketFactor,originFor} from './allocation';
 import {armMouth,armTreatmentOrigins,bandWidths,armIslands} from './geometry';
 import {selectionKey,type Selection} from './selection';
@@ -35,7 +35,8 @@ export function sectionPieces(d:Design,id:number,x:number){
     const push=(width:number,label:string,kind:string,selection:Selection,editable?:Editable)=>{
       if(width>.001)sidePieces.push({width,label,kind,group,selection,editable});
     };
-    const laneEdit:Editable={value:section.width,min:2.5,max:4.5,step:.25,label:`ความกว้างเลนหลัก${direction==='incoming'?'ขาเข้า':'ขาออก'}`};
+    const mainLaneEdit:Editable={value:section.width,min:2.5,max:4.5,step:.25,label:`ความกว้างเลนหลัก${direction==='incoming'?'ขาเข้า':'ขาออก'}`};
+    const auxEdit=(which:'left'|'right'):Editable=>({value:p[which].width??section.width,min:2.5,max:4.5,step:.25,label:`ความกว้าง${direction==='incoming'?'เลนเสริม':'เลนรับ'}${which==='right'?'ชิดเกาะกลาง':'ริมทาง'}`});
 
     if(direction==='incoming'){
       push(section.walk,'ทางเท้า','walk',{kind:'sidewalk',arm:id,direction},{value:section.walk,min:0,max:8,step:.25,label:'ความกว้างทางเท้าขาเข้า'});
@@ -47,23 +48,23 @@ export function sectionPieces(d:Design,id:number,x:number){
         {value:b.width,min:.25,max:4.5,step:.25,label:`ความกว้าง${b.type}`}
       ));
       for(let j=p.left.lanes-1;j>=0;j--){
-        const w=section.width*pocketFactor(p.left,x,origin);
-        push(w,'เสริมริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},laneEdit);
+        const w=pocketLaneWidth(a,direction,'left')*pocketFactor(p.left,x,origin);
+        push(w,'เสริมริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
       }
-      for(let j=a.incoming-1;j>=0;j--)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},laneEdit);
+      for(let j=a.incoming-1;j>=0;j--)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
       for(let j=p.right.lanes-1;j>=0;j--){
-        const w=section.width*pocketFactor(p.right,x,origin);
-        push(w,'เลนเลี้ยว','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},laneEdit);
+        const w=pocketLaneWidth(a,direction,'right')*pocketFactor(p.right,x,origin);
+        push(w,'เลนเลี้ยว','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
       }
     }else{
       for(let j=0;j<p.right.lanes;j++){
-        const w=section.width*pocketFactor(p.right,x,origin);
-        push(w,'เลนรับ','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},laneEdit);
+        const w=pocketLaneWidth(a,direction,'right')*pocketFactor(p.right,x,origin);
+        push(w,'เลนรับ','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
       }
-      for(let j=0;j<a.outgoing;j++)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},laneEdit);
+      for(let j=0;j<a.outgoing;j++)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
       for(let j=0;j<p.left.lanes;j++){
-        const w=section.width*pocketFactor(p.left,x,origin);
-        push(w,'เลนรับริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},laneEdit);
+        const w=pocketLaneWidth(a,direction,'left')*pocketFactor(p.left,x,origin);
+        push(w,'เลนรับริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
       }
       section.bands.forEach((b,k)=>push(
         bands[k],
@@ -139,7 +140,7 @@ export function CrossSection({
     <div className="section-components">
       {pieces.map((p,i)=>{
         const key=selectionKey(p.selection),active=selectionKey(selection)===key,isEditing=editing===key;
-        return <div key={key+'-'+i} className={`section-piece ${p.kind} ${p.group} ${active?'active':''}`} style={{flex:Math.max(.18,p.width)}} title={`${p.label} ${p.width.toFixed(2)} ม.`}>
+        return <div key={key+'-'+i} className={`section-piece ${p.kind} ${p.group} ${active?'active':''}`} style={{flex:Math.max(.18,p.width)}} title={p.editable&&Math.abs(p.editable.value-p.width)>.01?`${p.label} · กำหนด ${p.editable.value.toFixed(2)} ม. · ณ หน้าตัด ${p.width.toFixed(2)} ม.`:`${p.label} ${p.width.toFixed(2)} ม.`}>
           <button className="section-hit" aria-label={`เลือก ${p.label} ${p.selection.direction??''}`} onClick={()=>onSelect(p.selection)}>
             <span>{p.label}</span>
           </button>
@@ -148,7 +149,7 @@ export function CrossSection({
             :<button className="section-value" disabled={!p.editable||!onEdit}
                 aria-label={p.editable?`แก้ ${p.editable.label}`:undefined}
                 onClick={e=>{e.stopPropagation();onSelect(p.selection);if(p.editable&&onEdit)setEditing(key);}}>
-                {p.width.toFixed(2)}
+                {(p.editable?.value??p.width).toFixed(2)}
               </button>}
         </div>;
       })}
