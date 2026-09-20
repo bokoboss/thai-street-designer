@@ -186,7 +186,7 @@ export const initial=():Design=>{
     dividerMode:"solid",
     solidLength:30,
     angle:i*90,
-    length:110,
+    length:92,
     bands:[],
     stopOffset:2,
     slipCrossing:false,
@@ -306,7 +306,7 @@ export function migrate(raw:any):Design{
       ...source,
       ...(raw.schemaVersion>=4?{}:{corridorMode:source.corridorMode??(raw.schemaVersion===3?'preserve':'widen')}),
       angle:source.angle??i*90,
-      length:source.length??110,
+      length:source.length??92,
       bands:source.bands??[],
       medianOffset:source.medianOffset??(r?0:9),
       crossOffset:source.crossOffset??(r?14:4)
