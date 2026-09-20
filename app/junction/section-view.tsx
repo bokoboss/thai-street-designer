@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
 import {sectionFor,pocketsFor,pocketLaneWidth,type Design,type Direction} from './model';
 import {allocate,pocketFactor,originFor} from './allocation';
-import {armMouth,armTreatmentOrigins,bandWidths,armIslands} from './geometry';
+import {armMouth,armTreatmentOrigins,bandWidths,armIslands,edges} from './geometry';
 import {selectionKey,type Selection} from './selection';
 
 export const sectionStart=(d:Design,id:number)=>d.type==='roundabout'?roundSettings(d).splitterLength+d.arms[id].medianOffset+8:0;
@@ -25,7 +25,7 @@ type Piece={
 };
 
 export function sectionPieces(d:Design,id:number,x:number){
-  const a=d.arms[id],mouth=armMouth(d,id),origins=armTreatmentOrigins(d,id);
+  const a=d.arms[id],mouth=armMouth(d,id),edgeSet=edges(d),origins=armTreatmentOrigins(d,id,edgeSet);
   const allocation=allocate(a,x,origins),pieces:Piece[]=[];
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
@@ -81,7 +81,7 @@ export function sectionPieces(d:Design,id:number,x:number){
   // Permanent engineering convention: LEFT = incoming, CENTER = median, RIGHT = outgoing.
   addDirection('incoming');
 
-  const planted=armIslands(d,id).some(poly=>Math.min(...poly.map(p=>p.x))<=x&&Math.max(...poly.map(p=>p.x))>=x);
+  const planted=armIslands(d,id,edgeSet).some(poly=>Math.min(...poly.map(p=>p.x))<=x&&Math.max(...poly.map(p=>p.x))>=x);
   const opening=a.medianOpenings?.find(o=>x>=mouth+o.start&&x<=mouth+o.start+o.length);
   add({
     width:Math.max(.001,allocation.residual),
