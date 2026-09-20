@@ -1,4 +1,4 @@
-import {allocate} from './allocation';
+import {allocate,type TreatmentOrigins} from './allocation';
 import {medianEdges,pocketWidth,modeFor} from './cross-section';
 import type {Arm,Design} from './model';
 export type XY={x:number;y:number};
@@ -10,10 +10,10 @@ export const outerRadius=(d:Design)=>d.radius+roundSettings(d).apron+d.circulati
  * No arbitrary cubic handles. Mirroring gives the outbound curb fillet. */
 export function roundFillet(R:number,width:number,radius:number){const cy=width+radius,rr=R+radius,cx=Math.sqrt(Math.max(.01,rr*rr-cy*cy)),theta=Math.atan2(cy,cx),end=-Math.PI+theta;const points=Array.from({length:49},(_,i)=>{const t=-Math.PI/2+(end+Math.PI/2)*i/48;return{x:cx+radius*Math.cos(t),y:cy+radius*Math.sin(t)};});return{points,theta,cx,valid:cy<rr};}
 /** Finite raised splitter, separate from the ordinary approach median. */
-export function splitterPolygon(a:Arm,R:number,s:RoundaboutSettings):XY[]{
+export function splitterPolygon(a:Arm,R:number,s:RoundaboutSettings,originOverride?:TreatmentOrigins):XY[]{
  const start=R+.8,end=R+s.splitterLength,peak=Math.min(end-3,R+8),half=s.splitterWidth/2,
  exit=roundFillet(R,Math.max(.1,a.outgoing*(a.outgoingSection?.width??a.width)+a.median/2),s.exitRadius),
- origins={incoming:R+(a.crossing?a.crossOffset+4.5:a.stopOffset),outgoing:exit.valid?exit.cx:R+.8};
+ origins=originOverride??{incoming:R+(a.crossing?a.crossOffset+4.5:a.stopOffset),outgoing:exit.valid?exit.cx:R+.8};
  const side=Array.from({length:41},(_,i)=>{
   const x=start+(end-start)*i/40,t=x<=peak?(x-start)/(peak-start):(end-x)/(end-peak),w=half*Math.sin(Math.max(0,t)*Math.PI/2),
   edges=medianEdges(a,x,origins),used=allocate(a,x,origins).medianUsed>0,center=used?(edges[0]+edges[1])/2:0;
