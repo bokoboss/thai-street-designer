@@ -1,4 +1,4 @@
-import {allocate,pocketFactor,reserveWidth,type TreatmentOrigins} from './allocation';
+import {allocate,type TreatmentOrigins} from './allocation';
 import {sectionFor,type Arm,type Direction,medianTreeDefaults} from './model';
 
 export type Feedback={level:'geometry'|'engineering'|'note';message:string};
