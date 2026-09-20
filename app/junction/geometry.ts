@@ -81,8 +81,8 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  const core=coreSize(d);if(!Number.isFinite(core)||core>80)return 'มุมและความกว้างนี้ทำให้ปากทางแยกกว้างเกินพื้นที่แบบ';
  for(const i of ids){const a=d.arms[i],core=armMouth(d,i);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30);if(a.length<Math.max(core+12,dividerRange(a,core,d.type==='roundabout',side).start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
 
- for(const i of ids){const a=d.arms[i],origin=stopPosition(a,armMouth(d,i));for(const dir of ['incoming','outgoing'] as const){const p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return 'พื้นที่ Pocket / เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลดความยาวเลนและช่วงสอบ';}}
- const boundaries=edges(d);for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origin=stopPosition(a,armMouth(d,id));for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return 'ช่วงสอบ Pocket อยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวเลนเต็มก่อนช่วงสอบ';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
+ for(const i of ids){const a=d.arms[i],origins=treatmentOrigins(a,armMouth(d,i),d.type==='roundabout');for(const dir of ['incoming','outgoing'] as const){const origin=originFor(origins,dir),p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}
+ const boundaries=edges(d);for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=treatmentOrigins(a,armMouth(d,id),d.type==='roundabout'),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
  if(ids.some(i=>armIslands(d,i).some(p=>selfIntersects(p))))return 'Geometry Error — ขอบเกาะตัดกัน กรุณาปรับหน้าตัดและช่วงสอบ';
  const footprint=boundaries.flatMap(e=>e.outer.map(p=>rotate(p,armTurn(d,e.i))));
  const walkFootprint=boundaries.flatMap(e=>e.walk.map(p=>rotate(p,armTurn(d,e.i))));
@@ -104,7 +104,14 @@ export function treatmentOrigins(a:Arm,core:number,round=false){
  return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round)} as const;
 }
 export const STOP_LINE_WIDTH = .55;
-export function dividerRange(a:Arm,core:number,round:boolean,side=1){const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30);const start=round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0);return {start,end:Math.min(a.length,start+(mode==='dashed'?0:length))};}
+export function dividerRange(a:Arm,core:number,round:boolean,side=1){
+ const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),
+ length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30),
+ start=side===1
+  ?(round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0))
+  :departurePosition(a,core,round);
+ return {start,end:Math.min(a.length,start+(mode==='dashed'?0:length))};
+}
 
 /** Proper intersections, excluding adjacent edges and shared endpoint tangencies. */
 export function selfIntersects(ps:P[],closed=true):boolean {
@@ -118,15 +125,21 @@ export function selfIntersects(ps:P[],closed=true):boolean {
 }
 export function slipCrossLimit(e:Edge|undefined,a:Arm){return Math.max(2,Math.min(MAX_SLIP_CROSS_OFFSET,Math.floor(((e?.radius??20)+a.slipWidth/2)*(e?.sweep??Math.PI/2)-2)));}
 /** Shared sampled quadratic nose for SVG masks and the raised 3D mesh. */
-export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:number):P[]{
+export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:TreatmentOrigins):P[]{
  if(!round&&a.median<=0)return [];
- const start=core+a.medianOffset,origin=originOverride??stopPosition(a,core),[lo,hi]=medianEdges(a,start,origin),center=(lo+hi)/2,tip=Math.min(start+Math.min(5,hi-lo),a.length);
- const xs=approachSamples(a,origin,tip,a.length),smooth=(t:number)=>t*t*(3-2*t);
- const nose=(side:number)=>Array.from({length:17},(_,i)=>{const t=i/16,x=start+(tip-start)*t,y=medianEdges(a,x,origin)[side];return{x,y:center+(y-center)*Math.sqrt(smooth(t))};});
- return [...nose(0),...xs.slice(1).map(x=>({x,y:medianEdges(a,x,origin)[0]})),...xs.slice().reverse().map(x=>({x,y:medianEdges(a,x,origin)[1]})),...nose(1).reverse().slice(1,-1)];
+ const origins=originOverride??treatmentOrigins(a,core,round),incomingOrigin=originFor(origins,'incoming'),outgoingOrigin=originFor(origins,'outgoing'),
+ start=core+a.medianOffset,[lo,hi]=medianEdges(a,start,origins),center=(lo+hi)/2,tip=Math.min(start+Math.max(.8,Math.min(5,Math.max(0,hi-lo))),a.length);
+ const xs=[...new Set([...approachSamples(a,incomingOrigin,tip,a.length),...approachSamples(a,outgoingOrigin,tip,a.length)])].sort((x,y)=>x-y),smooth=(t:number)=>t*t*(3-2*t);
+ const nose=(side:number)=>Array.from({length:17},(_,i)=>{const t=i/16,x=start+(tip-start)*t,y=medianEdges(a,x,origins)[side];return{x,y:center+(y-center)*Math.sqrt(smooth(t))};});
+ return [...nose(0),...xs.slice(1).map(x=>({x,y:medianEdges(a,x,origins)[0]})),...xs.slice().reverse().map(x=>({x,y:medianEdges(a,x,origins)[1]})),...nose(1).reverse().slice(1,-1)];
 }
 
-function uncutArmIslands(d:Design,i:number):P[][]{const a=d.arms[i],core=armMouth(d,i);if(d.type!=='roundabout')return [medianPolygon(a,core,false)].filter(p=>p.length);const s=roundSettings(d),split=splitterPolygon(a,core,s),median=medianPolygon({...a,medianOffset:0},core+s.splitterLength+2+a.medianOffset,false,stopPosition(a,core));return [split,median].filter(p=>p.length);}
+function uncutArmIslands(d:Design,i:number):P[][]{
+ const a=d.arms[i],core=armMouth(d,i),origins=treatmentOrigins(a,core,d.type==='roundabout');
+ if(d.type!=='roundabout')return [medianPolygon(a,core,false,origins)].filter(p=>p.length);
+ const s=roundSettings(d),split=splitterPolygon(a,core,s),median=medianPolygon({...a,medianOffset:0},core+s.splitterLength+2+a.medianOffset,false,origins);
+ return [split,median].filter(p=>p.length);
+}
 /** Curb intersections for crossings on flared roundabout approaches. */
 export function curbBoundsAt(d:Design,i:number,x:number,segments=edges(d)){const hits:number[]=[];for(const edge of segments){if(edge.i!==i&&edge.next!==i)continue;const ps=edge.outer.map(p=>rotate(p,(d.arms[edge.i].angle-d.arms[i].angle)/90));for(let j=1;j<ps.length;j++){const p=ps[j-1],q=ps[j];if(Math.abs(p.x-q.x)<1e-8||x<Math.min(p.x,q.x)||x>Math.max(p.x,q.x))continue;hits.push(p.y+(q.y-p.y)*(x-p.x)/(q.x-p.x));}}const fallback=bounds(d.arms[i],x,treatmentOrigins(d.arms[i],armMouth(d,i),d.type==='roundabout')),negative=hits.filter(y=>y<=0),positive=hits.filter(y=>y>=0);return[negative.length?Math.max(...negative):fallback[0],positive.length?Math.min(...positive):fallback[1]];}
 
