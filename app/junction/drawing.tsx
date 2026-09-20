@@ -1,7 +1,7 @@
-import {roundSettings,splitterHalfAt} from './roundabout';
+import {roundSettings} from './roundabout';
 import {roadObjects} from './objects';
 import {type Design,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth,laneArrowFor} from './model';
-import {activeIds,curbBoundsAt,armIslands,innerEdge,medianEdges,bandWidths,direction,laneCount,laneY,pocketFactor,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,stopPosition,armTreatmentOrigins,dividerRange,STOP_LINE_WIDTH,medianPolygon} from './geometry';
+import {activeIds,curbBoundsAt,armIslands,innerEdge,bandWidths,direction,laneY,pocketFactor,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,armTreatmentOrigins,dividerRange,STOP_LINE_WIDTH} from './geometry';
 export function Mark({code,x,y,angle=0,mergeSide=1}:{code:string;x:number;y:number;angle?:number;mergeSide?:-1|1}){
 if(code==='none')return null;
 const merge=code==='merge',straight=['straight','sl','sr','all','su'].includes(code),left=['left','sl','lr','all'].includes(code),right=['right','sr','lr','all','ru'].includes(code),u=['uturn','su','ru'].includes(code);
