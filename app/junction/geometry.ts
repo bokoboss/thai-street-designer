@@ -79,7 +79,7 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  if(d.type==='roundabout'){const R=outerRadius(d),s=roundSettings(d);for(const i of ids){const a=d.arms[i],b=d.arms[ids[(ids.indexOf(i)+1)%ids.length]],entry=roundFillet(R,bounds(a)[1],s.entryRadius),exit=roundFillet(R,-bounds(b)[0],s.exitRadius);if(!entry.valid||!exit.valid||entry.theta+exit.theta>=angleGap(d,i,ids[(ids.indexOf(i)+1)%ids.length])*Math.PI/180-.01)return 'Geometry Error — ทางเข้าวงเวียนซ้อนกัน เพิ่มรัศมีเกาะ ลดความกว้างถนน หรือเว้นมุมขามากขึ้น';if(R+s.splitterLength+6>a.length)return 'Geometry Error — ขาถนนสั้นเกินไปสำหรับ splitter island';if(s.splitterWidth>Math.min(bounds(a)[1],-bounds(a)[0])*2-2)return 'Geometry Error — splitter island กว้างเกินช่องทางเข้า/ออก';}}
  for(const i of ids)for(const o of d.arms[i].medianOpenings??[])if(armMouth(d,i)+o.start+o.length>d.arms[i].length-1)return 'ช่องเปิดยาวเกินขาถนน';
  const core=coreSize(d);if(!Number.isFinite(core)||core>80)return 'มุมและความกว้างนี้ทำให้ปากทางแยกกว้างเกินพื้นที่แบบ';
- for(const i of ids){const a=d.arms[i],core=armMouth(d,i);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30);if(a.length<Math.max(core+12,dividerRange(a,core,d.type==='roundabout',side).start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
+ for(const i of ids){const a=d.arms[i],core=armMouth(d,i);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30);if(a.length<Math.max(core+12,dividerRange(a,core,d.type==='roundabout',side,d.type==='roundabout'?roundSettings(d):roundDefaults()).start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
 
  for(const i of ids){const a=d.arms[i],origins=treatmentOrigins(a,armMouth(d,i),d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults());for(const dir of ['incoming','outgoing'] as const){const origin=originFor(origins,dir),p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}
  const boundaries=edges(d);for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=treatmentOrigins(a,armMouth(d,id),d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults()),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
@@ -108,12 +108,12 @@ export function treatmentOrigins(a:Arm,core:number,round=false,settings=roundDef
  return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round,settings)} as const;
 }
 export const STOP_LINE_WIDTH = .55;
-export function dividerRange(a:Arm,core:number,round:boolean,side=1){
+export function dividerRange(a:Arm,core:number,round:boolean,side=1,settings=roundDefaults()){
  const mode=side===1?a.dividerMode:(a.outgoingDividerMode??a.dividerMode),
  length=side===1?(a.solidLength??30):(a.outgoingSolidLength??a.solidLength??30),
  start=side===1
   ?(round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0))
-  :departurePosition(a,core,round);
+  :departurePosition(a,core,round,settings);
  return {start,end:Math.min(a.length,start+(mode==='dashed'?0:length))};
 }
 
