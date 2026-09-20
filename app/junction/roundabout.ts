@@ -12,7 +12,8 @@ export function roundFillet(R:number,width:number,radius:number){const cy=width+
 /** Finite raised splitter, separate from the ordinary approach median. */
 export function splitterPolygon(a:Arm,R:number,s:RoundaboutSettings):XY[]{
  const start=R+.8,end=R+s.splitterLength,peak=Math.min(end-3,R+8),half=s.splitterWidth/2,
- origins={incoming:R+(a.crossing?a.crossOffset+4.5:a.stopOffset),outgoing:R+.8};
+ exit=roundFillet(R,Math.max(.1,a.outgoing*(a.outgoingSection?.width??a.width)+a.median/2),s.exitRadius),
+ origins={incoming:R+(a.crossing?a.crossOffset+4.5:a.stopOffset),outgoing:exit.valid?exit.cx:R+.8};
  const side=Array.from({length:41},(_,i)=>{
   const x=start+(end-start)*i/40,t=x<=peak?(x-start)/(peak-start):(end-x)/(end-peak),w=half*Math.sin(Math.max(0,t)*Math.PI/2),
   edges=medianEdges(a,x,origins),used=allocate(a,x,origins).medianUsed>0,center=used?(edges[0]+edges[1])/2:0;
