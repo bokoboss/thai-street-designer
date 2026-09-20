@@ -36,3 +36,6 @@
 .all-properties>summary{position:sticky;bottom:-1px;background:#fff;padding:10px 0;border-top:1px solid var(--ws-border);z-index:2}
 .review-count{white-space:nowrap}
 .j-drawing{isolation:isolate}
+
+.inline-review.note{color:var(--ws-muted);border-color:var(--ws-border);background:#f8fafb}
+.review-popover .review-note{color:var(--ws-muted);background:#f8fafb}
