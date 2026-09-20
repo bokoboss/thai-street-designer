@@ -1,5 +1,5 @@
 import {useMemo,useState,useRef,useEffect} from 'react';
-import {type Design,type Arm,pocketsFor,medianTreeDefaults,displayFor} from './model';
+import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displayFor} from './model';
 import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from './selection';
 import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,designError} from './geometry';
 import {originFor} from './allocation';
@@ -9,7 +9,7 @@ function finish(cancel=false){if(!drag.current)return;const t=drag.current.tx;dr
 useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&drag.current){e.preventDefault();finish(true);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);});
 const a=d.arms[s.arm],mouth=armMouth(d,s.arm),origins=armTreatmentOrigins(d,s.arm),dir=s.direction??'incoming',origin=originFor(origins,dir),side=dir==='incoming'?1:-1,pk=pocketsFor(a,dir),p=pk[s.side??'right'];const grips:{x:number;y:number;label:string;update:(x:number)=>Partial<Arm>}[]=[];
 const pocketUpdate=(patch:object)=>({[dir==='incoming'?'incomingPockets':'outgoingPockets']:{...pk,[s.side??'right']:{...p,...patch}}});
-if(s.kind==='pocket'&&p.lanes){const y=s.side==='right'?innerEdge(a,side,origin,origins)+side*1.5:carBounds(a,origin,origins)[side===1?1:0]-side*1.5;grips.push({x:origin+p.length,y,label:dir==='incoming'?'Storage':'Receiving',update:x=>pocketUpdate({length:Math.max(5,Math.min(140,Math.round(x-origin)))})},{x:origin+p.length+p.taper,y,label:dir==='incoming'?'Taper':'Merge taper',update:x=>pocketUpdate({taper:Math.max(5,Math.min(80,Math.round(x-origin-p.length)))})});}
+if(s.kind==='pocket'&&p.lanes){const w=pocketLaneWidth(a,dir,s.side??'right'),y=s.side==='right'?innerEdge(a,side,origin,origins)+side*w/2:carBounds(a,origin,origins)[side===1?1:0]-side*w/2;grips.push({x:origin+p.length,y,label:dir==='incoming'?'Storage':'Receiving',update:x=>pocketUpdate({length:Math.max(5,Math.min(140,Math.round(x-origin)))})},{x:origin+p.length+p.taper,y,label:dir==='incoming'?'Taper':'Merge taper',update:x=>pocketUpdate({taper:Math.max(5,Math.min(80,Math.round(x-origin-p.length)))})});}
 if(s.kind==='crossing')grips.push({x:mouth+a.crossOffset,y:carBounds(a,mouth,origins)[1]+3,label:'Crossing',update:x=>({crossOffset:Math.max(0,Math.min(35,Math.round((x-mouth)*2)/2))})});
 if(s.kind==='landscape')grips.push({x:mouth+(a.medianTrees?.start??18),y:0,label:'First tree',update:x=>({medianTrees:{...medianTreeDefaults(),...a.medianTrees,start:Math.max(0,Math.min(200,Math.round(x-mouth)))}})});
 if(s.kind==='opening'){const o=a.medianOpenings?.find(o=>o.id===s.id);if(o)for(const end of [false,true])grips.push({x:mouth+o.start+(end?o.length:0),y:0,label:end?'Opening end':'Opening start',update:x=>({medianOpenings:a.medianOpenings?.map(v=>v.id===o.id?{...v,...(end?{length:Math.max(2,Math.min(40,Math.round(x-mouth-o.start)))}:{start:Math.max(0,Math.min(a.length-mouth-o.length-1,Math.round(x-mouth)))})}:v)})});}
