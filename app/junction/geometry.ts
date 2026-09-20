@@ -1,4 +1,4 @@
-import {outerRadius,roundSettings,roundFillet,splitterPolygon,splitterHalfAt,roundDefaults,type RoundaboutSettings} from './roundabout';
+import {outerRadius,roundSettings,roundFillet,splitterPolygon,splitterHalfAt,roundDefaults} from './roundabout';
 import {pocketFactor,medianEdges,innerEdge,bandWidths,corridorWarning} from './cross-section';
 import {originFor,type TreatmentOrigins} from './allocation';
 export {pocketFactor,medianEdges,innerEdge,bandWidths} from './cross-section';
