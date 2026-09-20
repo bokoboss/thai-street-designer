@@ -1,4 +1,4 @@
-import {sectionFor,pocketsFor,type Arm,type Direction,type Pocket} from './model';
+import {sectionFor,pocketsFor,pocketLaneWidth,type Arm,type Direction,type Pocket} from './model';
 
 export type AllocationMode='auto'|'median'|'retain'|'widen'|'reallocate'|'legacy-preserve';
 export type TreatmentOrigins=number|Partial<Record<Direction,number>>;
@@ -39,7 +39,7 @@ export function allocate(a:Arm,x=0,origins:TreatmentOrigins=0){
     const origin=originFor(origins,dir);
     for(const side of ['left','right'] as const){
       const p=pocketsFor(a,dir)[side],mode=allocationMode(a,p);
-      const requested=sectionFor(a,dir).width*p.lanes*pocketFactor(p,x,origin);
+      const requested=pocketLaneWidth(a,dir,side)*p.lanes*pocketFactor(p,x,origin);
       result[dir][side]={
         requested,medianUsed:0,reallocated:0,widening:requested,
         start:origin,end:origin+p.length+p.taper,mode
