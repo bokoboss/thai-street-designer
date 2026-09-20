@@ -2,7 +2,7 @@ import {outerRadius,roundSettings,roundFillet,splitterPolygon,splitterHalfAt,rou
 import {pocketFactor,medianEdges,innerEdge,bandWidths,corridorWarning} from './cross-section';
 import {originFor,type TreatmentOrigins} from './allocation';
 export {pocketFactor,medianEdges,innerEdge,bandWidths} from './cross-section';
-import {valid,MAX_SLIP_CROSS_OFFSET,sectionFor,pocketsFor,type Direction} from './model';
+import {valid,MAX_SLIP_CROSS_OFFSET,sectionFor,pocketsFor,pocketLaneWidth,type Direction} from './model';
 import type {Arm,Design} from './model';
 export type P={x:number;y:number};
 export const activeIds=(d:Design)=>[0,1,2,3].filter(i=>d.enabled[i]).sort((a,b)=>d.arms[a].angle-d.arms[b].angle);
@@ -10,8 +10,9 @@ export const direction=(side:number):Direction=>side===1?'incoming':'outgoing';
 export const extraWidth=(a:Arm,side:Direction='incoming')=>sectionFor(a,side).bands.reduce((sum,b)=>sum+b.width,0);
 export const laneCount=(a:Arm,side:number)=>a[direction(side)]+pocketsFor(a,direction(side)).left.lanes+pocketsFor(a,direction(side)).right.lanes;
 export function carriageWidth(a:Arm,side:number,x=0,origins:TreatmentOrigins=0){
- const d=direction(side),origin=originFor(origins,d),p=pocketsFor(a,d),s=sectionFor(a,d);
- return s.width*(a[d]+p.left.lanes*pocketFactor(p.left,x,origin)+p.right.lanes*pocketFactor(p.right,x,origin));
+ const d=direction(side),origin=originFor(origins,d),p=pocketsFor(a,d),s=sectionFor(a,d),
+ leftWidth=pocketLaneWidth(a,d,'left'),rightWidth=pocketLaneWidth(a,d,'right');
+ return s.width*a[d]+leftWidth*p.left.lanes*pocketFactor(p.left,x,origin)+rightWidth*p.right.lanes*pocketFactor(p.right,x,origin);
 }
 export const carBounds=(a:Arm,x=0,origins:TreatmentOrigins=0)=>[
  innerEdge(a,-1,x,origins)-carriageWidth(a,-1,x,origins),
@@ -25,8 +26,8 @@ export const bounds=(a:Arm,x=0,origins:TreatmentOrigins=0)=>{
  ];
 };
 export const laneY=(a:Arm,side:number,lane:number,x:number,origins:TreatmentOrigins)=>{
- const dir=direction(side),origin=originFor(origins,dir),p=pocketsFor(a,dir),w=sectionFor(a,dir).width;
- return innerEdge(a,side,x,origins)+side*(w*(p.right.lanes*pocketFactor(p.right,x,origin)+lane+.5));
+ const dir=direction(side),origin=originFor(origins,dir),p=pocketsFor(a,dir),w=sectionFor(a,dir).width,rightWidth=pocketLaneWidth(a,dir,'right');
+ return innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,origin)+w*(lane+.5));
 };
 /** Sample at exact taper breakpoints as well as regular intervals. */
 export function approachSamples(a:Arm,origin:number,start:number,end:number){const xs=Array.from({length:41},(_,i)=>start+(end-start)*i/40);for(const d of ['incoming','outgoing'] as const)for(const p of Object.values(pocketsFor(a,d)))if(p.lanes)for(const x of [origin+p.length,origin+p.length+p.taper])if(x>Math.min(start,end)&&x<Math.max(start,end))xs.push(x);return [...new Set(xs)].sort((a,b)=>start<end?a-b:b-a);}
