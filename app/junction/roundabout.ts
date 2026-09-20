@@ -1,5 +1,5 @@
 import {allocate,type TreatmentOrigins} from './allocation';
-import {medianEdges,pocketWidth,modeFor} from './cross-section';
+import {medianEdges} from './cross-section';
 import type {Arm,Design} from './model';
 export type XY={x:number;y:number};
 export type RoundaboutSettings={apron:number;entryRadius:number;exitRadius:number;splitterLength:number;splitterWidth:number;yieldOffset:number};
