@@ -16,8 +16,8 @@ export default function Scene3D({d,active,ref,onSave,onNotice}:{d:Design;active:
  const canvas=useRef<HTMLCanvasElement>(null),[yaw,setYaw]=useState(-30),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(1),[texture,setTexture]=useState<HTMLImageElement|null>(null),[size,setSize]=useState({w:900,h:650});const gestures=useRef(new PointerGesture()),textureTask=useRef<Promise<HTMLImageElement|null>>(Promise.resolve(null));const [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState('pan');const camera=useRef({yaw,pitch,zoom,pan});camera.current={yaw,pitch,zoom,pan};
  const drag=useRef<{action:string;point:{x:number;y:number};screen:{x:number;y:number}}|null>(null);
  const extent=Math.max(115,...activeIds(d).map(i=>d.arms[i].length+20));
- const faces=useMemo(()=>{const fs:Face[]=[];for(const e of edges(d)){const ps=[...e.outer,...e.walk.slice().reverse()].map(p=>rotate(p,armTurn(d,e.i)));fs.push(...prism(ps,.18,'#bdc9ce','#8d9ca4'));if(e.island.length)fs.push(...prism(e.island.map(p=>rotate(p,armTurn(d,e.i))),.18,'#c7cdbd','#9caa9d'));}
- for(const i of activeIds(d)){const core=armMouth(d,i),a=d.arms[i],polygons=armIslands(d,i);for(const polygon of polygons){const ps=polygon.map(p=>rotate(p,armTurn(d,i)));fs.push(...prism(ps,.2,'#86a58a','#b6ad77'));}}
+ const faces=useMemo(()=>{const fs:Face[]=[],edgeSet=edges(d);for(const e of edgeSet){const ps=[...e.outer,...e.walk.slice().reverse()].map(p=>rotate(p,armTurn(d,e.i)));fs.push(...prism(ps,.18,'#bdc9ce','#8d9ca4'));if(e.island.length)fs.push(...prism(e.island.map(p=>rotate(p,armTurn(d,e.i))),.18,'#c7cdbd','#9caa9d'));}
+ for(const i of activeIds(d)){const core=armMouth(d,i),a=d.arms[i],polygons=armIslands(d,i,edgeSet);for(const polygon of polygons){const ps=polygon.map(p=>rotate(p,armTurn(d,i)));fs.push(...prism(ps,.2,'#86a58a','#b6ad77'));}}
  if(d.type==='roundabout'){const ps=Array.from({length:80},(_,i)=>({x:d.radius*Math.cos(i/80*Math.PI*2),y:d.radius*Math.sin(i/80*Math.PI*2)}));fs.push(...prism(ps,.25,'#86a58a','#b6ad77'));}
  fs.push(...furnitureFaces(d));
  return fs;},[d]);
