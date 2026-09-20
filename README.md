@@ -136,3 +136,7 @@ node scripts/verify-constraints-roundabout.cjs
 node scripts/verify-network.cjs
 node scripts/verify-visibility.cjs
 ```
+
+## Vercel (separate Next.js build)
+
+See [VERCEL.md](./VERCEL.md). Use `pnpm build:vercel` for Vercel and `pnpm test:builds` to verify both targets. The existing `pnpm build` remains the ChatGPT Sites/vinext path.

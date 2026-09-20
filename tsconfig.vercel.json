@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "tsBuildInfoFile": ".next-vercel/cache/tsconfig.vercel.tsbuildinfo"
+  },
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
+    "lib/**/*.ts",
+    ".next-vercel/types/**/*.ts",
+    ".next-vercel/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build", "examples", ".sites-runtime"]
+}
