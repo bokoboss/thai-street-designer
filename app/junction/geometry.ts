@@ -99,7 +99,7 @@ export function crossingIntervals(a:Arm,core:number,round:boolean,settings=round
 
 export function stopPosition(a:Arm,core:number){return core+(a.crossing?a.crossOffset+4.5:(a.stopOffset??2));}
 /** Departure-side reference for receiving lanes. Kept independent from the incoming stop/crossing datum. */
-export function departurePosition(_a:Arm,core:number,round=false){return core+(round?.8:1);}
+export function departurePosition(_a:Arm,core:number,round=false){return core+(round ? .8 : 1);}
 export function treatmentOrigins(a:Arm,core:number,round=false){
  return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round)} as const;
 }
