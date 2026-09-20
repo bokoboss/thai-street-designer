@@ -1,68 +1,117 @@
-# Engineering-model remediation — 20 September 2026
+# Engineering + UI/UX audit remediation — 20 September 2026
 
-This updates the existing application and visual identity. It is a **Concept Design Tool — Not for Detailed Engineering Design**. No compliance certification is provided.
+This report describes the current audit branch. Thai Street Designer remains a **Concept Design Tool — Not for Detailed Engineering Design**. The implementation provides conceptual geometry and engineering feedback; it does not certify compliance with Thai or foreign design standards.
 
-## Cross sections and pockets
+## 1. Road-space allocation
 
-- New designs use Preserve Corridor Width. Schema-2 designs migrate to schema 3 with Allow Widening, preserving their previous explicit geometry rather than silently changing saved pockets.
-- Each arm has a corridor constraint shared by both directions. The reference width is the current base cross section (main lanes, median, bands and sidewalks), not a surveyed or historically frozen ROW boundary.
-- In preserve mode, median-side pockets consume one shared median reserve. Independent longitudinal profiles track both median edges; different storage/taper lengths can produce an asymmetric median. Main lanes and outside approach/sidewalk boundaries stay fixed.
-- Curbside pockets consume shoulder/buffer widths in order. Bicycle/motorcycle lanes and sidewalks are not treated as expendable reserve. Bands regain their width through the pocket taper.
-- Insufficient space rejects the proposed edit and retains the last valid design, reporting the deficit and alternatives. A 0.20 m residual is solely a polygon-drawing threshold, not a Thai or other engineering standard.
-- Allow Widening retains the median and widens outward. The inspector reports base/result widths, added width, lane counts and residual median.
-- Feedback distinguishes Geometry Error, Engineering Warning and Design Note. Corner/slip-lane land requirements are explicitly outside the straight-approach width accounting.
+The former arm-wide Preserve/Widen workflow is no longer the normal authoring model.
 
-## Roundabout geometry v2
+New edits use feature-driven allocation:
 
-- Replaced arbitrary long cubic connectors with exact external circular fillets tangent to the approach curb and circulating outer circle. Entry and exit radii are independently controlled.
-- Central island, optional apron and circulating roadway have separate dimensions. Circulating lane count determines actual lane markings. The one-lane preset is the primary reviewed configuration.
-- Each arm has a finite shaped splitter island, a separate approach median and a deliberate gap/transition between them. Splitters participate in 2D/3D geometry and crossing masks. Ordinary medians retain the same pocket datum as the carriageway.
-- Crossings use their setback and intersect the actual flared curbs. Yield markings follow the circulating boundary; arrows follow clockwise LHT circulation.
-- Entry/exit widths are derived from the arm cross section, pocket configuration and splitter footprint. No vehicle swept-path or speed analysis is implied.
-- Geometry checks reject overlapping approach fillets, self-intersecting road/sidewalk/island outlines and insufficient approach length. Review warnings cover overly flat entry curvature, narrow splitter clearances and multi-lane assumptions.
+- **Median-side auxiliary / turn lane:** use available median first, then widen only by the actual deficit.
+- **Curb-side auxiliary lane:** widen outward by default.
+- **Reallocate shoulder/buffer:** explicit choice only.
+- **Retain median:** explicit per-pocket constraint only.
+- No hidden 1.50 m residual median is used by Auto.
 
-Guidance: [FHWA Roundabouts: An Informational Guide, geometric design chapter](https://www.fhwa.dot.gov/publications/research/safety/00067/000676.pdf). Component separation, channelization and entry deflection informed the conceptual model; LHT is mirrored appropriately. Numerical controls are not presented as compliance checks. The old standards-check panel was removed.
+Example: median 4.00 m + auxiliary lane 3.25 m → median used 3.25 m, residual 0.75 m, outward widening 0.00 m.
 
-## UI
+A narrow residual median may generate an engineering review, but advice is separated from geometry generation. Schema-4 files retain their former visual result by migrating old hidden retention behavior into explicit per-pocket settings. New designs do not inherit those hidden rules.
 
-- Preserved left/global, center/canvas and right/inspector architecture and theme.
-- A sticky selected-arm/direction context controls section, divider and roadside edits.
-- Inspector groups: lanes/section, turn lanes, alignment, intersection treatment, markings, roadside and advanced/copy. Basic section controls open first; lower-frequency controls are folded.
-- File and Export menus replace permanent Open/Save/SVG/PNG/JPEG buttons. Recovery remains prominent. Undo/redo and 2D/3D remain beside the canvas.
-- Bulk two-direction divider/roadside actions remain available in Advanced.
+## 2. Incoming turn pockets vs outgoing receiving lanes
 
-## Free Draw
+Incoming and outgoing auxiliary lanes now use different longitudinal datums.
 
-- Roads now optionally carry editable polyline vertices while existing two-point roads still work.
-- Click successive points and finish the alignment; insert intermediate vertices, drag vertices, delete internal vertices and snap endpoints. Shared endpoint nodes move connected road ends together.
-- Stations, projection and parallel geometry are pure modules. Shared junction offset and pocket/reserve utilities are reused; the former independent median minimum was removed.
-- Existing graphical T-junction and median-opening overlays remain available and are still schematic. Pocket overlays must fit within one straight segment.
-- Fixed ID generation on browsers without secure-context randomUUID support.
+- **Incoming turn pocket:** Storage/full-width region begins from the incoming control datum; taper develops upstream.
+- **Outgoing receiving lane:** Receiving length begins at the actual departure-side road-mouth / curb-tangency datum; merge taper follows downstream.
 
-## Automated verification
+The departure datum is derived from actual intersection edge geometry, including skewed approaches and roundabout exits. Validation, dimensions, grips, section geometry, markings and no-plant calculations use the same directional treatment origins.
 
-Passed:
+## 3. Lane identity and markings
 
-- `node node_modules/typescript/bin/tsc --noEmit`
-- `node scripts/verify-junction.cjs`: existing render, three-arm, skew/slip, median, stop/divider edge, long-road, migration, roadside, camera and gesture regressions.
-- `node scripts/verify-pockets.cjs`: independent sections, incoming/outgoing additions, skew/slip and roundabout render cases. Legacy widening fixtures now explicitly select widening; the very wide roundabout fixture uses a larger circle to satisfy the new tangent geometry.
-- `node scripts/verify-constraints-roundabout.cjs`: shared reserve, asymmetric profiles, fixed outer bounds, deficits, curb reserve, schema-2 migration and nine roundabout cases (four/three arms, skew, unequal widths, 10/30 m islands, splitter/crossing/tangent checks).
-- `node scripts/verify-network.cjs`: polyline stations/projection, bend guards, snapping, shared-node movement and shared pocket constraints.
-- `node scripts/verify-visibility.cjs`: 9,723 overlap probes across 36 camera angles.
-- Production build completed before publication.
+Selection now identifies individual lanes by arm, direction, main/auxiliary role, curb/median side and lane index. Markings are stored per lane for incoming/outgoing main and auxiliary lanes.
 
-## Manual Site-preview checks
+Outgoing receiving lanes default to semantic **merge-to-main** markings. The renderer derives the visual diagonal from lane-local geometry, avoiding geographic left/right mirroring errors. If an arrow cannot be placed clear of a crossing or before the full-width lane ends, lane identity is retained while the unsafe arrow is suppressed.
 
-- 6 m median + one 3.25 m pocket: median locally reduced to 2.75 m; corridor stayed 23 m. A second pocket was rejected with a 0.70 m deficit. Widening mode produced 26.25 m and explicitly showed +3.25 m. Storage and taper edits regenerated.
-- Four-arm one-lane roundabout, three-arm skewed layout, unequal incoming/outgoing widths, narrow and wide islands: inspected actual rendered geometry, splitters, sidewalks, yield/crossing placement and LHT arrows.
-- Roundabout 3D and PNG export preview completed; download action became available.
-- Inspector context, independent directional width, accordion groups, file/export menus and undo/redo inspected.
-- Free Draw: created a three-vertex road, inserted/moved/deleted a vertex, drew another road snapped to its endpoint and verified a shared node appeared.
+## 4. Independent auxiliary-lane widths
 
-## Limitations and deferred work
+Auxiliary lanes can have an independent design width instead of being forced to inherit main-lane width. That width is used consistently by allocation, carriageway geometry, median consumption, outside widening, dividers, arrows, hit testing, grips, cross-section rendering and inspector editing. Older designs without an auxiliary width inherit the directional main-lane width.
 
-- No swept paths, fastest-path solver, visibility analysis, capacity analysis or standards certification. Multi-lane roundabouts remain conceptual; detailed entry-lane continuity/vehicle overlap is not solved.
-- No terrain, grades, vertical curb ramps or truck-apron structural/vertical design. Raised islands and texture-based markings retain the concept-model simplifications.
-- Free Draw bends are polyline joins, not engineered curves. Shared nodes coordinate endpoints but do not yet trim/merge complete intersection footprints; small seams at angled link joins remain possible. There is no automatic mid-link splitting or junction-editor handoff for a network node yet.
-- The full node-to-junction/roundabout workflow, automatic crossing detection/splitting, curved alignments and optional vehicle-path visualization are deliberately deferred (P2/next phase). The legacy Free Draw overlays are not represented as finished network intersections.
-- Physical touch devices and every extreme parameter combination were not manually retested. Existing pure gesture tests passed; 2D/3D gestures and export code paths were preserved.
+## 5. Cross-section editor
+
+The permanent orientation invariant is:
+
+**LEFT = ขาเข้าแยก · CENTER = เกาะกลาง · RIGHT = ขาออกแยก**
+
+It never mirrors because an approach is North, South, East, West or skewed. The cross-section is a quick editing surface: select an element, click its displayed dimension, Enter/blur to commit, Escape to cancel. Plan, section and inspector share the same model. Tapered auxiliary slices stay proportional to local physical width while the editable value represents the lane design/full width.
+
+## 6. Median landscaping
+
+Median planting remains interval-based. Turn-lane consumption, median openings and unavailable areas generate no-plant intervals. Requested first-tree setback is a minimum request; if it conflicts with geometry, planting moves to the first valid interval and reports the actual result.
+
+## 7. Roundabout geometry
+
+Roundabout Geometry v2 is preserved: central island, truck apron, circulating roadway, external-tangent entry/exit fillets, splitter islands, crossings, yield markings and LHT circulation arrows. Outgoing receiving treatments use the departure/exit tangency where applicable. Multi-lane lane continuity, swept paths and fastest-path analysis remain deferred.
+
+## 8. UI/UX architecture
+
+The application is being consolidated as a **Modern Precision Workspace**:
+
+- compact application header;
+- explicit Junction / Free Draw workspace switch;
+- compact left tool rail;
+- canvas as the dominant surface;
+- floating contextual action bar;
+- selection-driven right inspector;
+- bottom cross-section editing dock;
+- one compact status/disclaimer bar;
+- View/Display controls separated from design structure.
+
+Roundabout is treated as a junction structure/type rather than a drawing tool. Free Draw is another workspace, not a tool button inside Junction. The visual system uses restrained teal for active/selection states, technical light surfaces, thin borders, limited shadows and a Thai-capable system font stack.
+
+## 9. Reviews and warnings
+
+Feedback is separated into Geometry Error, Engineering Warning and Design Note. Normal successful operations are not warnings merely because median space is used. Widening and complete median consumption are actionable reviews; a shifted first median tree is a Design Note. The header count reports actionable issues rather than low-severity notes.
+
+## 10. Free Draw
+
+Free Draw retains polyline alignments and shared endpoint nodes. Its shell and terminology are aligned with Junction. Median-side pocket overlays now use the same shared Auto allocation logic: median first, widening only the deficit, independent auxiliary width, reported median use/widening/residual, editable lane arrow and flippable travel direction.
+
+The pocket must still fit within one straight alignment segment. Free Draw does not yet convert a mid-link crossing into a complete intersection node automatically.
+
+## 11. Data model and migration
+
+Current design schema: **5**.
+
+Schema 5 adds per-lane markings, semantic merge marking, optional independent auxiliary-lane width and explicit retained-median allocation. Older files migrate forward; unsupported future schemas are rejected explicitly. Legacy `corridorMode` and `residualTarget` remain only for backward compatibility/migration and are not normal new-design controls.
+
+## 12. Verification
+
+Automated regression coverage includes median-first allocation, retained-median behavior, opposing demands, independent auxiliary widths, directional treatment origins, actual departure tangency, lane selection, fixed section orientation for all arms/rotations, merge arrows, schema migration, planting exclusions, roundabouts, Free Draw nodes/pockets and 3D visibility.
+
+Required acceptance commands:
+
+```sh
+pnpm test
+pnpm exec tsc --noEmit
+pnpm test:builds
+```
+
+`pnpm test:builds` verifies both ChatGPT Sites/vinext and Vercel/Next.js. GitHub Actions runs the same regression/type/build gate on the audit branch and pull request.
+
+## 13. Deliberately deferred
+
+- swept-path analysis;
+- formal standards compliance;
+- capacity / LOS and signal optimization;
+- fastest-path and full multi-lane roundabout lane-continuity solving;
+- terrain / vertical alignment / pavement / drainage / BIM;
+- full CAD curve/alignment engine;
+- automatic Free Draw mid-link intersection splitting;
+- full network-node → Junction workspace handoff.
+
+These require separate engineering scope rather than incremental UI patches.
+
+## 14. Deployment
+
+The source remains shared between two build targets. ChatGPT Sites uses the existing vinext/Cloudflare path; Vercel uses the isolated Next.js path. The GitHub-connected Vercel project creates branch preview deployments automatically. Production remains tied to the configured production branch and should not change until the audit PR is deliberately merged.
