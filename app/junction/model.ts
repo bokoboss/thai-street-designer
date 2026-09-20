@@ -312,7 +312,9 @@ export function migrate(raw:any):Design{
       crossOffset:source.crossOffset??(r?14:4)
     };
     if(raw.schemaVersion===4)a=retainExplicitSchema4Target(a);
-    a={...a,laneMarkings:markingsFor(a)};
+    // Schema-5 files round-trip byte-for-structure: derived defaults are filled at read/use time.
+    // Older schemas receive an explicit marking model during migration.
+    if(raw.schemaVersion!==5||source.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
     return a;
   });
   const d:Design={
