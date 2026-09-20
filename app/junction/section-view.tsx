@@ -25,7 +25,7 @@ type Piece={
 };
 
 export function sectionPieces(d:Design,id:number,x:number){
-  const a=d.arms[id],mouth=armMouth(d,id),origins=treatmentOrigins(a,mouth,d.type==='roundabout');
+  const a=d.arms[id],mouth=armMouth(d,id),origins=treatmentOrigins(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):undefined);
   const allocation=allocate(a,x,origins),pieces:Piece[]=[];
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
