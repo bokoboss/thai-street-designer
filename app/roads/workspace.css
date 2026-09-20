@@ -12,3 +12,7 @@
 .free-workspace .cross-section{border-radius:4px;overflow:hidden;border:1px solid var(--ws-border);min-height:52px;background:#f7f9fa}
 .free-workspace .section-label{font-size:10px;letter-spacing:.04em;color:var(--ws-muted);font-weight:650;margin-top:12px}
 .free-workspace .status,.free-workspace .disclaimer{height:24px;min-height:24px;padding:4px 10px;background:#fff;border-color:var(--ws-border)}
+
+.free-workspace .disclaimer{display:flex;align-items:center;justify-content:space-between;gap:16px;height:24px;min-height:24px;padding:3px 10px;border-top:1px solid var(--ws-border);background:#fff;color:var(--ws-muted)}
+.free-workspace .disclaimer>span:first-child{color:var(--ws-ink)}
+@media(max-width:700px){.free-workspace .disclaimer>span:last-child{display:none}}
