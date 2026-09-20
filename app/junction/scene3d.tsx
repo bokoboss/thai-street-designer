@@ -4,7 +4,7 @@ import {PointerGesture,clampZoom} from './gestures';
 import {ContextMenu,ContextMenuTrigger,ContextMenuContent,ContextMenuItem,ContextMenuSeparator} from '@/components/ui/context-menu';
 import {groundAt,anchorGround,orbitGround,pointerAction} from './camera3d';
 import type {Design} from './model';
-import {edges,armIslands,rotate,armTurn,activeIds,bounds,armMouth,medianPolygon} from './geometry';
+import {edges,armIslands,rotate,armTurn,activeIds,armMouth} from './geometry';
 import {furnitureFaces} from './furniture3d';
 import {buildVisibility,visibleOrder,cameraDirection} from './visibility3d';
 type V={x:number;y:number;z:number};
