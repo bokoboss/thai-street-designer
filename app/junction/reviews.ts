@@ -1,4 +1,4 @@
-import {type Design,pocketsFor} from './model';
+import {type Design} from './model';
 import {allocate} from './allocation';
 import {activeIds} from './geometry';
 import {plantingPlan} from './planting';
