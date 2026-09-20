@@ -1,7 +1,7 @@
 import {roundSettings} from './roundabout';
 import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,armMouth,stopPosition,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
-import {allocate,pocketFactor,originFor} from './allocation';
+import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
+import {pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
 
 export type ObjectKind='approach'|'lane'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
