@@ -43,8 +43,8 @@ export const objectNames:Record<ObjectKind,string>={
 const rect=(x:number,y:number,w:number,h:number)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
 const circle=(x:number,y:number,r:number)=>Array.from({length:24},(_,i)=>({x:x+r*Math.cos(i/12*Math.PI),y:y+r*Math.sin(i/12*Math.PI)}));
 
-export function designShapes(d:Design){
-  const out:HitShape[]=[],es=edges(d);
+export function designShapes(d:Design,es=edges(d)){
+  const out:HitShape[]=[];
   const add=(s:Selection,points:P[],priority:number,local=true,labelSuffix='')=>{
     if(points.length<3)return;
     out.push({
