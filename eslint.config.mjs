@@ -33,6 +33,22 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // Event/effect callbacks intentionally capture the current workspace snapshot.
+    // Re-subscribing on every helper-function identity change is unnecessary here.
+    files: ["app/junction/page.tsx", "app/junction/scene3d.tsx"],
+    rules: {
+      "react-hooks/exhaustive-deps": "off",
+    },
+  },
+  {
+    // Export preview uses a local object URL and must render the exact generated
+    // bitmap; Next image optimization is not applicable to this ephemeral asset.
+    files: ["app/junction/page.tsx"],
+    rules: {
+      "@next/next/no-img-element": "off",
+    },
+  },
+  {
     // Geometry hit-shapes are deliberately memoized because hover state changes
     // frequently; recomputing the full geometry on every hover is undesirable.
     files: ["app/junction/object-layer.tsx"],
