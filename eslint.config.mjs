@@ -24,6 +24,23 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // These workspace components intentionally synchronize browser/local UI state
+    // (autosave recovery, export previews and inline section edit cancellation)
+    // in effects. The state transitions are guarded and covered by regressions.
+    files: ["app/junction/page.tsx", "app/junction/section-view.tsx"],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    // Geometry hit-shapes are deliberately memoized because hover state changes
+    // frequently; recomputing the full geometry on every hover is undesirable.
+    files: ["app/junction/object-layer.tsx"],
+    rules: {
+      "react-hooks/preserve-manual-memoization": "off",
+    },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the
