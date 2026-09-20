@@ -5,7 +5,7 @@ export const MAX_SLIP_CROSS_OFFSET=600;
 export type Band={id:string;type:"shoulder"|"bike"|"motorcycle"|"buffer";width:number};
 export type Direction='incoming'|'outgoing';
 export type Section={width:number;walk:number;bands:Band[]};
-export type Pocket={allocation?:AllocationMode;retainedMedian?:number;lanes:number;length:number;taper:number};
+export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;lanes:number;length:number;taper:number};
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -13,6 +13,7 @@ export const emptyPockets=():Pockets=>({
 });
 export const sectionFor=(a:Arm,side:Direction):Section=>a[side==='incoming'?'incomingSection':'outgoingSection']??{width:a.width,walk:a.walk,bands:a.bands};
 export const pocketsFor=(a:Arm,side:Direction):Pockets=>a[side==='incoming'?'incomingPockets':'outgoingPockets']??emptyPockets();
+export const pocketLaneWidth=(a:Arm,side:Direction,which:'left'|'right')=>pocketsFor(a,side)[which].width??sectionFor(a,side).width;
 
 export type LaneArrowCode='straight'|'left'|'right'|'sl'|'sr'|'lr'|'all'|'ru'|'uturn'|'su'|'none'|'merge';
 export type LaneRole='main'|'aux-left'|'aux-right';
@@ -30,6 +31,7 @@ const validPockets=(p:Pockets)=>!!p&&['left','right'].every(k=>{
   return !!v
     &&(v.allocation===undefined||['auto','median','retain','widen','reallocate','legacy-preserve'].includes(v.allocation))
     &&(v.retainedMedian===undefined||(Number.isFinite(v.retainedMedian)&&v.retainedMedian>=0&&v.retainedMedian<=8))
+    &&(v.width===undefined||(Number.isFinite(v.width)&&v.width>=2.5&&v.width<=4.5))
     &&[0,1,2,3].includes(v.lanes)
     &&Number.isFinite(v.length)&&v.length>=5&&v.length<=140
     &&Number.isFinite(v.taper)&&v.taper>=5&&v.taper<=80;
