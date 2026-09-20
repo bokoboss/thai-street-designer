@@ -1,4 +1,4 @@
-import {type Design,type Arm,type Direction,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,roadsideFor,medianTreeDefaults,options,laneArrowFor,withLaneArrow,markingsFor} from './model';
+import {type Design,type Arm,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,roadsideFor,medianTreeDefaults,options,laneArrowFor,withLaneArrow,markingsFor} from './model';
 import {allocate,allocationMode} from './allocation';
 import {armMouth} from './geometry';
 import {roundSettings} from './roundabout';
