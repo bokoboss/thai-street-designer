@@ -1,4 +1,3 @@
-import {roundSettings} from './roundabout';
 import {plantingPlan} from './planting';
 import {type Design,displayFor,roadsideFor,sectionFor} from './model';
 import {activeIds,bounds,armMouth,edges,rotate,armTurn,armTreatmentOrigins} from './geometry';
