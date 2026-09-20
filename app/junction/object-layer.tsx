@@ -3,7 +3,6 @@ import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displ
 import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from './selection';
 import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,designError,edges} from './geometry';
 import {originFor} from './allocation';
-import {roundSettings} from './roundabout';
 export function ObjectLayer({d,s,onSelect,onMenu,onPreview,onFinish,onArmHandle}:{d:Design;s:Selection;onSelect:(s:Selection)=>void;onMenu:(items:HitShape[],x:number,y:number)=>void;onPreview:(d:Design)=>void;onFinish:(before:Design,after:Design,cancel:boolean)=>void;onArmHandle:(e:React.PointerEvent<SVGCircleElement>,id:number)=>void}){const edgeSet=useMemo(()=>edges(d),[d]),shapes=useMemo(()=>designShapes(d,edgeSet),[d,edgeSet]),[hover,setHover]=useState(''),drag=useRef<{tx:EditTransaction<Design>;update:(x:number)=>Partial<Arm>}|null>(null);const point=(e:React.PointerEvent|React.MouseEvent)=>{const svg=(e.currentTarget as SVGElement).ownerSVGElement!,m=svg.getScreenCTM()!;return rotate(new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse()),-d.rotation/90);};
 function finish(cancel=false){if(!drag.current)return;const t=drag.current.tx;drag.current=null;onFinish(t.before,t.latest,cancel);}
 useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&drag.current){e.preventDefault();finish(true);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);});
