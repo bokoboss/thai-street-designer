@@ -1,6 +1,6 @@
 import {roundSettings} from './roundabout';
 import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor} from './model';
-import {activeIds,armMouth,stopPosition,treatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
+import {activeIds,armMouth,stopPosition,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
 import {allocate,pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
 
@@ -57,11 +57,11 @@ export function designShapes(d:Design){
   };
 
   for(const i of activeIds(d)){
-    const a=d.arms[i],mouth=armMouth(d,i),origins=treatmentOrigins(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):undefined);
+    const a=d.arms[i],mouth=armMouth(d,i),origins=armTreatmentOrigins(d,i,es);
     const incomingOrigin=origins.incoming,[lo,hi]=bounds(a,mouth,origins);
     add({kind:'approach',arm:i},rect(mouth,lo-3,a.length-mouth,hi-lo+6),0);
 
-    armIslands(d,i).forEach((p,k)=>add({kind:d.type==='roundabout'&&k===0?'splitter':'median',arm:i},p,30));
+    armIslands(d,i,es).forEach((p,k)=>add({kind:d.type==='roundabout'&&k===0?'splitter':'median',arm:i},p,30));
     for(const o of a.medianOpenings??[])add({kind:'opening',arm:i,id:o.id},rect(mouth+o.start,-a.median/2,o.length,a.median),65);
 
     for(const dir of ['incoming','outgoing'] as const){
