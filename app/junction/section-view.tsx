@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
 import {sectionFor,pocketsFor,type Design,type Direction} from './model';
 import {allocate,pocketFactor,originFor} from './allocation';
-import {armMouth,treatmentOrigins,bandWidths,armIslands} from './geometry';
+import {armMouth,armTreatmentOrigins,bandWidths,armIslands} from './geometry';
 import {selectionKey,type Selection} from './selection';
 
 export const sectionStart=(d:Design,id:number)=>d.type==='roundabout'?roundSettings(d).splitterLength+d.arms[id].medianOffset+8:0;
@@ -25,7 +25,7 @@ type Piece={
 };
 
 export function sectionPieces(d:Design,id:number,x:number){
-  const a=d.arms[id],mouth=armMouth(d,id),origins=treatmentOrigins(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):undefined);
+  const a=d.arms[id],mouth=armMouth(d,id),origins=armTreatmentOrigins(d,id);
   const allocation=allocate(a,x,origins),pieces:Piece[]=[];
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
