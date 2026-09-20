@@ -35,7 +35,7 @@
 - `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D
 - `app/junction/scene3d.tsx`: รูปทรงยกสูงและกล้อง 3D
 - `app/junction/page.tsx`: เครื่องมือ ประวัติการแก้ไข autosave และส่งออก
-- `app/roads/page.tsx`: โหมดวาดถนนอิสระเดิม
+- `app/roads/page.tsx`: พื้นที่ทำงานวาดถนนอิสระ (Free Draw / Network)
 
 ## Development
 
@@ -46,7 +46,6 @@ pnpm install --frozen-lockfile
 pnpm dev
 pnpm exec tsc --noEmit
 pnpm test
-pnpm exec tsc --noEmit
 pnpm test:builds
 ```
 
@@ -56,7 +55,7 @@ pnpm test:builds
 
 - TypeScript ผ่าน
 - Geometry/render: ตั้งฉาก, 3 ขาทั้ง 4 แบบ, มุมเฉียงร่วมกับ Slip lane และถนนกว้างต่างกัน, Slip lane ทุกมุม, วงเวียนมุมเฉียง, แถบหน้าตัดและวัตถุริมทาง
-- เส้นแบ่งเลนทั้งสองทิศเริ่มที่ขอบด้านรอของเส้นหยุด คิดครึ่งความหนาเส้นหยุด และทึบต่อไป 30 เมตร: 12 กรณี
+- เส้นแบ่งเลนขาเข้าอ้างจากแนวควบคุม/เส้นหยุด ส่วนขาออกอ้างจาก datum ด้านออกของปากแยกหรือแนวสัมผัสทางออกวงเวียน และรองรับช่วงเส้นทึบแยกกันตามทิศทาง
 - การย้ายข้อมูล JSON เดิม การปฏิเสธข้อมูลผิดและมุมแคบเกินไป
 - Regression: median-first Auto allocation, explicit retained-median override, independent auxiliary widths, receiving-lane departure datum, lane-level selection/markings, fixed cross-section orientation, Free Draw shared allocation and schema migration
 - Browser PNG/JPEG: ส่งออก 2400×2400 พิกเซล PNG มุมภาพ alpha 0; JPEG มุมภาพ RGB 255,255,255
@@ -93,7 +92,7 @@ Browser verification covers reset/undo, 3D zoom buttons, opposite-arm alignment,
 - Roadside settings belong to each arm and its incoming/outgoing sidewalk. Choose one side or both, or apply the displayed values to the same sides of all enabled arms. Existing global-setting JSON files retain their old appearance until edited.
 - Tree height/crown diameter, pole height/diameter/arm reach, spacing, start setback and curb-to-center offset are editable. New curb offsets default to 0.5 m. Object centers are clamped 0.35 m inside sidewalk edges; sidewalks narrower than 0.75 m omit objects.
 - Streetlights have arms pointing toward the road and downward-facing luminaires. Traffic signals are raised cantilever models with horizontal red-yellow-green lenses facing incoming traffic; the flat 2D symbol is removed from the 3D texture. The model does not simulate illumination or signal cycles.
-- Each arm can use dashed lane dividers or a configurable solid segment (default 30 m), followed by dashes. Both travel directions share the waiting-side edge of the stop line, including its half-width. Increase road length when needed to fit the selected segment and its dashed continuation.
+- Each arm can use dashed lane dividers or a configurable solid segment (default 30 m), followed by dashes. Incoming dividers begin from the incoming control datum; outgoing dividers begin from the departure-side road-mouth/tangency datum. Increase road length when needed to fit the selected segment and its dashed continuation.
 - Verified model migration, independent side settings, 0.5 m curb positioning, inward arms on four road directions, signal meshes, configurable divider lengths and all previous geometry regressions. Browser checks cover independent offsets, solid/dashed changes, 3D furniture and PNG export preview/download.
 
 Lane divider controls now select incoming, outgoing or both directions within the selected arm. Each direction retains its own mode and solid length; changing incoming values does not change outgoing values. Legacy files without outgoing overrides inherit their former shared settings. Markings-copy includes both directions, and road-length checks consider directions that actually contain lane dividers. Regression coverage includes independent modes, lengths, other-arm isolation, legacy imports and rendered SVG paths.
