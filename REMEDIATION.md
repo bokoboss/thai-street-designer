@@ -94,6 +94,7 @@ Required acceptance commands:
 ```sh
 pnpm test
 pnpm exec tsc --noEmit
+pnpm lint
 pnpm test:builds
 ```
 
