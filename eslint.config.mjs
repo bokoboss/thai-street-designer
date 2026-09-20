@@ -9,10 +9,20 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-vercel/**",
+    ".sites-runtime/**",
+    "dist/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["scripts/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
