@@ -3,8 +3,9 @@ import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLan
 import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
 import {pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
+import {resolvedArrowsForArm} from './arrow-layout';
 
-export type ObjectKind='approach'|'lane'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
+export type ObjectKind='approach'|'lane'|'arrow'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
 export type Selection={
   kind:ObjectKind;
   arm:number;
@@ -23,6 +24,7 @@ export const selectionKey=(s:Selection)=>[
 export const objectNames:Record<ObjectKind,string>={
   approach:'ขาถนน',
   lane:'เลนหลัก',
+  arrow:'ลูกศรเลน',
   sidewalk:'ทางเท้า',
   band:'แถบหน้าตัด',
   median:'เกาะกลาง',
@@ -134,6 +136,13 @@ export function designShapes(d:Design,es=edges(d)){
         add({kind:'stop',arm:i},rect(incomingOrigin-1,innerEdge(a,1,incomingOrigin,origins),2,carBounds(a,incomingOrigin,origins)[1]-innerEdge(a,1,incomingOrigin,origins)),55);
       }
     }
+    for(const arrow of resolvedArrowsForArm(d,i,es))add(
+      {kind:'arrow',arm:i,direction:arrow.direction,role:arrow.role,laneIndex:arrow.laneIndex,id:arrow.id},
+      circle(arrow.x,arrow.y,2.25),
+      92,
+      true,
+      ` · ${arrow.direction==='incoming'?'ขาเข้า':'ขาออก'} · เลน ${arrow.laneIndex+1}`
+    );
     if(a.signal)add({kind:'signal',arm:i},rect((d.type==='roundabout'?mouth+5:incomingOrigin)-2,hi+.7,4,2),80);
     const e=es.find(e=>e.i===i);
     if(e?.slip){
