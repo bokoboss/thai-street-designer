@@ -208,7 +208,7 @@ export const initial=():Design=>{
     medianOffset:9,
     crossOffset:4,
     slipWidth:4,
-    slipRadius:18,
+    slipRadius:32,
     slip:false,
     name,
     incoming:2,
