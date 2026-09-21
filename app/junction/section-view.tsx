@@ -139,7 +139,7 @@ export function CrossSection({
     </div>
     <div className="section-components">
       {pieces.map((p,i)=>{
-        const key=selectionKey(p.selection),active=selectionKey(selection)===key,isEditing=editing===key;
+        const key=selectionKey(p.selection),arrowLaneActive=selection.kind==='arrow'&&p.selection.direction===selection.direction&&p.selection.role===selection.role&&p.selection.laneIndex===selection.laneIndex,active=selectionKey(selection)===key||arrowLaneActive,isEditing=editing===key;
         return <div key={key+'-'+i} className={`section-piece ${p.kind} ${p.group} ${active?'active':''}`} style={{flex:Math.max(.18,p.width)}} title={p.editable&&Math.abs(p.editable.value-p.width)>.01?`${p.label} · กำหนด ${p.editable.value.toFixed(2)} ม. · ณ หน้าตัด ${p.width.toFixed(2)} ม.`:`${p.label} ${p.width.toFixed(2)} ม.`}>
           <button className="section-hit" aria-label={`เลือก ${p.label} ${p.selection.direction??''}`} onClick={()=>onSelect(p.selection)}>
             <span>{p.label}</span>
