@@ -39,7 +39,7 @@ function enableSlip(){
  selectObject({kind:'slip',arm:selectedId});
 }
 function nextLocalId(prefix:string,used:string[]){let n=1;while(used.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;}
-function addOpening(type:'opening'|'uturn'='opening'){if(arm.median<=0){setNotice('ต้องมีเกาะกลางก่อนเพิ่มช่องเปิด');return;}const id=nextLocalId(type==='uturn'?'uturn':'opening',(arm.medianOpenings??[]).map(o=>o.id)),usable=Math.max(8,arm.length-armMouth(d,selectedId)),length=type==='uturn'?8:6,start=Math.max(4,Math.min(type==='uturn'?35:45,usable-length-2));if(edit({medianOpenings:[...(arm.medianOpenings??[]),{id,start,length,type}]}))selectObject({kind:'opening',arm:selectedId,id});}
+function addOpening(type:'opening'|'uturn'='opening'){if(arm.median<=0){setNotice('ต้องมีเกาะกลางก่อนเพิ่มช่องเปิด');return;}if(type==='uturn'&&!arm.incoming){setNotice('ช่องกลับรถต้องมีช่องจราจรขาเข้าในขานี้');return;}const mouth=armMouth(d,selectedId),id=nextLocalId(type==='uturn'?'uturn':'opening',(arm.medianOpenings??[]).map(o=>o.id)),usable=Math.max(8,arm.length-mouth),length=type==='uturn'?8:6,origins=armTreatmentOrigins(d,selectedId),medianPocket=pocketsFor(arm,'incoming').right,pocketClear=medianPocket.lanes?origins.incoming-mouth+medianPocket.length+medianPocket.taper+6:0,requested=type==='uturn'?Math.max(35,pocketClear):45,start=Math.max(4,Math.min(requested,usable-length-2));if(edit({medianOpenings:[...(arm.medianOpenings??[]),{id,start,length,type}]}))selectObject({kind:'opening',arm:selectedId,id});}
 function fit(){setZoom(115/Math.max(100,...ids.map(i=>d.arms[i].length+20)));setPan({x:0,y:0});}
 function addArrowToSelection(){
  if(!['lane','pocket','arrow'].includes(selection.kind))return;
