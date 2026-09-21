@@ -62,7 +62,7 @@ export function designShapes(d:Design,es=edges(d)){
     add({kind:'approach',arm:i},rect(mouth,lo-3,a.length-mouth,hi-lo+6),0);
 
     armIslands(d,i,es).forEach((p,k)=>add({kind:d.type==='roundabout'&&k===0?'splitter':'median',arm:i},p,30));
-    for(const o of a.medianOpenings??[])add({kind:'opening',arm:i,id:o.id},rect(mouth+o.start,-a.median/2,o.length,a.median),65);
+    for(const o of a.medianOpenings??[])add({kind:'opening',arm:i,id:o.id},rect(mouth+o.start,-a.median/2,o.length,a.median),65,true,(o.type??'opening')==='uturn'?' · ช่องกลับรถ':'');
 
     for(const dir of ['incoming','outgoing'] as const){
       const side=dir==='incoming'?1:-1,idx=side===1?1:0,c=sectionFor(a,dir),origin=originFor(origins,dir);
