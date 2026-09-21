@@ -53,7 +53,7 @@ function validRoadside(v:Roadside){
 
 export type MedianTrees={enabled:boolean;start:number;spacing:number;height:number;crown:number;offset:number};
 export const medianTreeDefaults=():MedianTrees=>({enabled:false,start:18,spacing:8,height:5,crown:1.5,offset:0});
-export type MedianOpening={id:string;start:number;length:number};
+export type MedianOpening={id:string;start:number;length:number;type?:'opening'|'uturn'};
 export type Display={grid:boolean;trees:boolean;lights:boolean;dimensions:boolean;reviews:boolean;handles:boolean};
 export const displayFor=(d:Design):Display=>({grid:true,trees:true,lights:true,dimensions:false,reviews:true,handles:true,...d.display});
 
@@ -196,7 +196,7 @@ export const initial=():Design=>{
     medianOffset:9,
     crossOffset:4,
     slipWidth:4,
-    slipRadius:32,
+    slipRadius:18,
     slip:false,
     name,
     incoming:2,
@@ -249,7 +249,7 @@ export function valid(d:unknown):d is Design{
         const n=a.medianTrees![k as keyof MedianTrees];
         return typeof n==='number'&&Number.isFinite(n)&&n>=lo&&n<=hi;
       })))
-      &&(a.medianOpenings===undefined||(Array.isArray(a.medianOpenings)&&a.medianOpenings.length<=8&&a.medianOpenings.every(o=>typeof o.id==='string'&&Number.isFinite(o.start)&&o.start>=0&&Number.isFinite(o.length)&&o.length>=2&&o.length<=40&&o.start+o.length<a.length)))
+      &&(a.medianOpenings===undefined||(Array.isArray(a.medianOpenings)&&a.medianOpenings.length<=8&&a.medianOpenings.every(o=>typeof o.id==='string'&&(o.type===undefined||['opening','uturn'].includes(o.type))&&Number.isFinite(o.start)&&o.start>=0&&Number.isFinite(o.length)&&o.length>=2&&o.length<=40&&o.start+o.length<a.length)))
       &&(a.corridorMode===undefined||['preserve','widen'].includes(a.corridorMode))
       &&(a.incomingSection===undefined||validSection(a.incomingSection))
       &&(a.outgoingSection===undefined||validSection(a.outgoingSection))
@@ -270,7 +270,7 @@ export function valid(d:unknown):d is Design{
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
-      &&Number.isFinite(a.slipRadius)&&a.slipRadius>=20&&a.slipRadius<=50
+      &&Number.isFinite(a.slipRadius)&&a.slipRadius>=10&&a.slipRadius<=60
       &&typeof a.slip==='boolean'
       &&typeof a.name==='string'&&a.name.length<=40
       &&[0,1,2,3,4].includes(a.incoming)
