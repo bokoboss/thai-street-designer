@@ -85,7 +85,7 @@ export function sectionPieces(d:Design,id:number,x:number){
   const opening=a.medianOpenings?.find(o=>x>=mouth+o.start&&x<=mouth+o.start+o.length);
   add({
     width:Math.max(.001,allocation.residual),
-    label:opening?'ช่องเปิด':planted?'เกาะกลาง':'พื้นที่กลาง',
+    label:opening?((opening.type??'opening')==='uturn'?'ช่องกลับรถ':'ช่องเปิด'):planted?'เกาะกลาง':'พื้นที่กลาง',
     kind:opening||!planted?'median-open':'median',
     group:'median',
     selection:opening?{kind:'opening',arm:id,id:opening.id}:{kind:'median',arm:id},
