@@ -1,11 +1,11 @@
 import {roundSettings} from './roundabout';
 import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
+import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,slipArcState,type P} from './geometry';
 import {pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
 import {resolvedArrowsForArm} from './arrow-layout';
 
-export type ObjectKind='approach'|'lane'|'arrow'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
+export type ObjectKind='approach'|'lane'|'arrow'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'slipCrossing'|'slipArrow'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
 export type Selection={
   kind:ObjectKind;
   arm:number;
@@ -57,6 +57,8 @@ export const objectNames:Record<ObjectKind,string>={
   yield:'เส้นให้ทาง',
   signal:'สัญญาณไฟ',
   slip:'Slip lane',
+  slipCrossing:'ทางข้ามบน Slip',
+  slipArrow:'ลูกศรบน Slip',
   opening:'ช่องเปิดเกาะกลาง',
   central:'เกาะวงเวียน',
   splitter:'Splitter island',
@@ -169,11 +171,16 @@ export function designShapes(d:Design,es=edges(d)){
     if(a.signal)add({kind:'signal',arm:i},rect((d.type==='roundabout'?mouth+5:incomingOrigin)-2,hi+.7,4,2),80);
     const e=es.find(e=>e.i===i);
     if(e?.slip){
-      const polar=(r:number,t:number)=>({x:e.cx-r*Math.sin(t),y:e.cy-r*Math.cos(t)});
+      const s=slipArcState(e,a);
       add({kind:'slip',arm:i},[
-        ...Array.from({length:41},(_,j)=>polar(e.radius,e.sweep*j/40)),
-        ...Array.from({length:41},(_,j)=>polar(e.radius+a.slipWidth,e.sweep*(40-j)/40))
+        ...Array.from({length:41},(_,j)=>s.point(s.inner,e.sweep*j/40)),
+        ...Array.from({length:41},(_,j)=>s.point(s.outer,e.sweep*(40-j)/40))
       ],20);
+      if(a.slipCrossing)add({kind:'slipCrossing',arm:i},[
+        ...Array.from({length:13},(_,j)=>s.point(s.inner-.35,s.crossT-s.crossHalf-.02+(2*s.crossHalf+.04)*j/12)),
+        ...Array.from({length:13},(_,j)=>s.point(s.outer+.35,s.crossT+s.crossHalf+.02-(2*s.crossHalf+.04)*j/12))
+      ],94);
+      add({kind:'slipArrow',arm:i},circle(s.arrowPoint.x,s.arrowPoint.y,2.7),95);
     }
   }
 

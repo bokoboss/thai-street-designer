@@ -82,6 +82,8 @@ export type Arm={
   stopOffset:number;
   slipCrossing:boolean;
   slipCrossOffset:number;
+  /** Optional centerline distance from Slip entry tangent; omitted = automatic mid-arc placement. */
+  slipArrowOffset?:number;
   medianOffset:number;
   crossOffset:number;
   slipWidth:number;
@@ -309,6 +311,7 @@ export function valid(d:unknown):d is Design{
       &&Number.isFinite(a.stopOffset)&&a.stopOffset>=0&&a.stopOffset<=35
       &&typeof a.slipCrossing==='boolean'
       &&Number.isFinite(a.slipCrossOffset)&&a.slipCrossOffset>=2&&a.slipCrossOffset<=MAX_SLIP_CROSS_OFFSET
+      &&(a.slipArrowOffset===undefined||(Number.isFinite(a.slipArrowOffset)&&a.slipArrowOffset>=2&&a.slipArrowOffset<=MAX_SLIP_CROSS_OFFSET))
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
