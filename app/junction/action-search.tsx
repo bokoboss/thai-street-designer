@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useMemo,useState} from 'react';
 import {X,Search} from 'lucide-react';
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
 
@@ -13,8 +13,7 @@ export type Command={
 const groupOrder=['ออกแบบ','มุมมอง','ไฟล์และส่งออก','พื้นที่ทำงาน'] as const;
 
 export function ActionSearch({open,onOpenChange,actions}:{open:boolean;onOpenChange:(v:boolean)=>void;actions:Command[]}){
-  const [q,setQ]=useState(''),input=useRef<HTMLInputElement>(null);
-  useEffect(()=>{if(open){setQ('');requestAnimationFrame(()=>input.current?.focus());}},[open]);
+  const [q,setQ]=useState('');
   const filtered=useMemo(()=>{
     const needle=q.trim().toLowerCase();
     return actions.filter(a=>!needle||`${a.label} ${a.keywords??''}`.toLowerCase().includes(needle));
@@ -25,7 +24,7 @@ export function ActionSearch({open,onOpenChange,actions}:{open:boolean;onOpenCha
 
   const run=(a:Command)=>{a.run();onOpenChange(false);};
 
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChange={v=>{if(!v)setQ('');onOpenChange(v);}}>
     <DialogContent showCloseButton={false} className="action-search" aria-label="ค้นหาคำสั่ง">
       <header className="action-search-head">
         <div>
@@ -36,7 +35,7 @@ export function ActionSearch({open,onOpenChange,actions}:{open:boolean;onOpenCha
       </header>
       <label className="action-search-field">
         <Search size={17}/>
-        <input ref={input} aria-label="ค้นหาคำสั่ง" placeholder="เช่น เลนรอเลี้ยว, ช่องกลับรถ, มิติ, ส่งออก…" value={q}
+        <input autoFocus aria-label="ค้นหาคำสั่ง" placeholder="เช่น เลนรอเลี้ยว, ช่องกลับรถ, มิติ, ส่งออก…" value={q}
           onChange={e=>setQ(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'&&filtered[0])run(filtered[0]);}}/>
         <kbd>⌘ K</kbd>
