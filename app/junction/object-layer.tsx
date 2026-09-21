@@ -3,12 +3,20 @@ import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displ
 import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from './selection';
 import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,designError,edges} from './geometry';
 import {originFor} from './allocation';
+import {clampArrowOffset,laneArrowKey,manualPlacementsForLane,resolvedArrow} from './arrow-layout';
 export function ObjectLayer({d,s,onSelect,onMenu,onPreview,onFinish,onArmHandle}:{d:Design;s:Selection;onSelect:(s:Selection)=>void;onMenu:(items:HitShape[],x:number,y:number)=>void;onPreview:(d:Design)=>void;onFinish:(before:Design,after:Design,cancel:boolean)=>void;onArmHandle:(e:React.PointerEvent<SVGCircleElement>,id:number)=>void}){const edgeSet=useMemo(()=>edges(d),[d]),shapes=useMemo(()=>designShapes(d,edgeSet),[d,edgeSet]),[hover,setHover]=useState(''),drag=useRef<{tx:EditTransaction<Design>;update:(x:number)=>Partial<Arm>}|null>(null);const point=(e:React.PointerEvent|React.MouseEvent)=>{const svg=(e.currentTarget as SVGElement).ownerSVGElement!,m=svg.getScreenCTM()!;return rotate(new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse()),-d.rotation/90);};
 function finish(cancel=false){if(!drag.current)return;const t=drag.current.tx;drag.current=null;onFinish(t.before,t.latest,cancel);}
 useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&drag.current){e.preventDefault();finish(true);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);});
 const a=d.arms[s.arm],mouth=armMouth(d,s.arm),origins=armTreatmentOrigins(d,s.arm,edgeSet),dir=s.direction??'incoming',origin=originFor(origins,dir),side=dir==='incoming'?1:-1,pk=pocketsFor(a,dir),p=pk[s.side??'right'];const grips:{x:number;y:number;label:string;update:(x:number)=>Partial<Arm>}[]=[];
 const pocketUpdate=(patch:object)=>({[dir==='incoming'?'incomingPockets':'outgoingPockets']:{...pk,[s.side??'right']:{...p,...patch}}});
 if(s.kind==='pocket'&&p.lanes){const w=pocketLaneWidth(a,dir,s.side??'right'),y=s.side==='right'?innerEdge(a,side,origin,origins)+side*w/2:carBounds(a,origin,origins)[side===1?1:0]-side*w/2;grips.push({x:origin+p.length,y,label:dir==='incoming'?'Storage':'Receiving',update:x=>pocketUpdate({length:Math.max(5,Math.min(140,Math.round(x-origin)))})},{x:origin+p.length+p.taper,y,label:dir==='incoming'?'Taper':'Merge taper',update:x=>pocketUpdate({taper:Math.max(5,Math.min(80,Math.round(x-origin-p.length)))})});}
+if(s.kind==='arrow'&&s.id){
+ const role=s.role??'main',laneIndex=s.laneIndex??0,current=resolvedArrow(d,s.arm,dir,role,laneIndex,s.id,edgeSet);
+ if(current){
+  const key=laneArrowKey(dir,role,laneIndex),manual=manualPlacementsForLane(d,s.arm,dir,role,laneIndex,edgeSet);
+  grips.push({x:current.x,y:current.y,label:'Arrow',update:x=>({arrowOverrides:{...(a.arrowOverrides??{}),[key]:manual.map(v=>v.id===s.id?{...v,offset:+clampArrowOffset(d,s.arm,dir,role,laneIndex,x-origin,edgeSet).toFixed(3)}:v)}})});
+ }
+}
 if(s.kind==='crossing')grips.push({x:mouth+a.crossOffset,y:carBounds(a,mouth,origins)[1]+3,label:'Crossing',update:x=>({crossOffset:Math.max(0,Math.min(35,Math.round((x-mouth)*2)/2))})});
 if(s.kind==='landscape')grips.push({x:mouth+(a.medianTrees?.start??18),y:0,label:'First tree',update:x=>({medianTrees:{...medianTreeDefaults(),...a.medianTrees,start:Math.max(0,Math.min(200,Math.round(x-mouth)))}})});
 if(s.kind==='opening'){const o=a.medianOpenings?.find(o=>o.id===s.id);if(o)for(const end of [false,true])grips.push({x:mouth+o.start+(end?o.length:0),y:0,label:end?'Opening end':'Opening start',update:x=>({medianOpenings:a.medianOpenings?.map(v=>v.id===o.id?{...v,...(end?{length:Math.max(2,Math.min(40,Math.round(x-mouth-o.start)))}:{start:Math.max(0,Math.min(a.length-mouth-o.length-1,Math.round(x-mouth)))})}:v)})});}
