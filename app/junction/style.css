@@ -45,3 +45,5 @@
 .j-footer span:last-child{white-space:nowrap;color:var(--ws-muted)}
 .j-export-dialog{font-family:var(--ws-font)}
 @media(max-width:760px){.j-footer span:last-child{display:none}}
+
+.arrow-actions{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.arrow-actions button{min-height:30px;padding:5px 8px;font-size:11px}.arrow-actions button.danger{color:var(--ws-error);border-color:#e8caca}.arrow-actions button.danger:hover{background:#fff3f3}
