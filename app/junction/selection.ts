@@ -1,7 +1,7 @@
 import {roundSettings} from './roundabout';
 import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
 import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,slipArcState,type P} from './geometry';
-import {pocketFactor,originFor} from './allocation';
+import {pocketFactor,originFor,pocketOriginFor} from './allocation';
 import {roadObjects} from './objects';
 import {resolvedArrowsForArm} from './arrow-layout';
 
@@ -92,8 +92,8 @@ export function designShapes(d:Design,es=edges(d)){
     for(const o of a.medianOpenings??[])add({kind:'opening',arm:i,id:o.id},rect(mouth+o.start,-a.median/2,o.length,a.median),65,true,(o.type??'opening')==='uturn'?' · ช่องกลับรถ':'');
 
     for(const dir of ['incoming','outgoing'] as const){
-      const side=dir==='incoming'?1:-1,idx=side===1?1:0,c=sectionFor(a,dir),origin=originFor(origins,dir);
-      const xs=approachSamples(a,origin,origin,a.length);
+      const side=dir==='incoming'?1:-1,idx=side===1?1:0,c=sectionFor(a,dir),origin=originFor(origins,dir),rightOrigin=pocketOriginFor(origins,dir,'right');
+      const xs=approachSamples(a,origins,origin,a.length);
       const strip=(f:(x:number)=>number,g:(x:number)=>number)=>[
         ...xs.map(x=>({x,y:f(x)})),
         ...xs.slice().reverse().map(x=>({x,y:g(x)}))
@@ -107,7 +107,7 @@ export function designShapes(d:Design,es=edges(d)){
 
       const p=pocketsFor(a,dir),rightWidth=pocketLaneWidth(a,dir,'right'),leftWidth=pocketLaneWidth(a,dir,'left');
       for(let laneIndex=0;laneIndex<a[dir];laneIndex++){
-        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,origin)+c.width*laneIndex);
+        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,rightOrigin)+c.width*laneIndex);
         add(
           {kind:'lane',arm:i,direction:dir,laneIndex,role:'main'},
           strip(inner,x=>inner(x)+side*c.width),
@@ -129,13 +129,13 @@ export function designShapes(d:Design,es=edges(d)){
       for(const which of ['left','right'] as const){
         const pocket=p[which];
         if(!pocket.lanes)continue;
-        const xx=approachSamples(a,origin,origin,origin+pocket.length+pocket.taper);
+        const pocketOrigin=pocketOriginFor(origins,dir,which),xx=approachSamples(a,origins,pocketOrigin,pocketOrigin+pocket.length+pocket.taper);
         for(let laneIndex=0;laneIndex<pocket.lanes;laneIndex++){
-          const factor=(x:number)=>pocketFactor(pocket,x,origin);
+          const factor=(x:number)=>pocketFactor(pocket,x,pocketOrigin);
           const w=which==='right'?rightWidth:leftWidth;
           const base=(x:number)=>{
             if(which==='right')return innerEdge(a,side,x,origins)+side*w*laneIndex*factor(x);
-            const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,origin)+c.width*a[dir]);
+            const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,rightOrigin)+c.width*a[dir]);
             return outerMain+side*w*laneIndex*factor(x);
           };
           add(
