@@ -75,9 +75,12 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  hasApproach=approach.lanes>0,hasReceiving=receiving.lanes>0,
  aMain={...a,incomingPockets:{...aP,left:{...aP.left,lanes:0}}},
  bMain={...b,outgoingPockets:{...bP,left:{...bP.left,lanes:0}}},
- approachOuter=hasApproach?bounds(a)[1]:bounds(aMain)[1],
- receivingOuter=hasReceiving?bounds(b)[0]:bounds(bMain)[0],
- arc=cornerArc(approachOuter-w/2,receivingOuter+w/2,g,R);cx=arc.cx;cy=arc.cy;
+ baseApproachOuter=bounds(aMain)[1],baseReceivingOuter=bounds(bMain)[0],
+ approachOuter=hasApproach?bounds(a)[1]:baseApproachOuter,
+ receivingOuter=hasReceiving?bounds(b)[0]:baseReceivingOuter,
+ approachCenter=hasApproach?approachOuter-w/2:baseApproachOuter+w/2,
+ receivingCenter=hasReceiving?receivingOuter+w/2:baseReceivingOuter-w/2,
+ arc=cornerArc(approachCenter,receivingCenter,g,R);cx=arc.cx;cy=arc.cy;
  const entryTaper=Math.max(15,4*w),smooth=(t:number)=>{const q=Math.max(0,Math.min(1,t));return q*q*(3-2*q);},
  outerArc=arc.points.map((_,j)=>arc.polar(R-w/2,j/80)),inner=arc.points.map((_,j)=>arc.polar(R+w/2,j/80));
  entryX=arc.points[0].x;
