@@ -186,6 +186,7 @@ function validArrowOverrides(v:LaneArrowOverrides|undefined){
   return Object.entries(v).every(([key,list])=>
     /^(incoming|outgoing):(main|aux-left|aux-right):[0-7]$/.test(key)
     &&Array.isArray(list)&&list.length<=8
+    &&new Set(list.map(p=>p.id)).size===list.length
     &&list.every(p=>!!p&&typeof p.id==='string'&&p.id.length>0&&p.id.length<=40&&typeof p.code==='string'&&Object.hasOwn(options,p.code)&&Number.isFinite(p.offset)&&p.offset>=0&&p.offset<=400)
   );
 }
@@ -231,6 +232,34 @@ export const initial=():Design=>{
     rotation:0,radius:15,ring:2,arms
   };
 };
+
+export function roundaboutDesign(d:Design,singleLane=false):Design{
+  const arms=d.arms.map(a=>{
+    const base:Arm={
+      ...a,
+      ...(singleLane?{
+        incoming:1,
+        outgoing:1,
+        incomingSection:{...sectionFor(a,'incoming'),width:3.5},
+        outgoingSection:{...sectionFor(a,'outgoing'),width:3.5},
+        incomingPockets:undefined,
+        outgoingPockets:undefined,
+        median:2
+      }:{median:Math.max(2,a.median)}),
+      medianOffset:0,
+      crossOffset:6,
+      signal:false,
+      stop:true,
+      slip:false,
+      slipCrossing:false,
+      arrows:['straight','straight','straight','straight'],
+      laneMarkings:undefined,
+      arrowOverrides:undefined
+    };
+    return {...base,laneMarkings:markingsFor(base)};
+  });
+  return {...d,type:'roundabout',...(singleLane?{ring:1,circulation:5.5,radius:15}:{}),arms};
+}
 
 export function valid(d:unknown):d is Design{
   if(!d||typeof d!=='object')return false;

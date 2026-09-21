@@ -1,5 +1,5 @@
 import {roundSettings} from './roundabout';
-import {type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
+import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
 import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
 import {pocketFactor,originFor} from './allocation';
 import {roadObjects} from './objects';
@@ -20,6 +20,29 @@ export type HitShape={selection:Selection;key:string;label:string;points:P[];pri
 export const selectionKey=(s:Selection)=>[
   s.kind,s.arm,s.direction??'',s.side??'',s.role??'',s.laneIndex??'',s.id??''
 ].join(':');
+
+export function selectionForDirection(s:Selection,direction:Direction,a:Arm):Selection{
+  const approach:Selection={kind:'approach',arm:s.arm};
+  const laneIndex=Math.max(0,s.laneIndex??0);
+  if(s.kind==='lane'||s.kind==='arrow'){
+    const role=s.role??'main';
+    if(role==='main'){
+      if(!a[direction])return approach;
+      return {kind:'lane',arm:s.arm,direction,role:'main',laneIndex:Math.min(laneIndex,a[direction]-1)};
+    }
+    const side=role==='aux-left'?'left':'right',p=pocketsFor(a,direction)[side];
+    if(!p.lanes)return approach;
+    return {kind:'pocket',arm:s.arm,direction,side,role,laneIndex:Math.min(laneIndex,p.lanes-1)};
+  }
+  if(s.kind==='pocket'){
+    const side=s.side??(s.role==='aux-left'?'left':'right'),role:LaneRole=side==='left'?'aux-left':'aux-right',p=pocketsFor(a,direction)[side];
+    if(!p.lanes)return approach;
+    return {kind:'pocket',arm:s.arm,direction,side,role,laneIndex:Math.min(laneIndex,p.lanes-1)};
+  }
+  if(s.kind==='sidewalk'||s.kind==='trees'||s.kind==='lights')return {...s,direction};
+  if(s.kind==='band')return s.id&&sectionFor(a,direction).bands.some(b=>b.id===s.id)?{...s,direction}:approach;
+  return s;
+}
 
 export const objectNames:Record<ObjectKind,string>={
   approach:'ขาถนน',

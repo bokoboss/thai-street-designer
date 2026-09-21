@@ -79,6 +79,16 @@ export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  const a=d.arms[i],mouth=armMouth(d,i),incoming=stopPosition(a,mouth),previous=segments.find(e=>e.next===i);
  return {incoming,outgoing:previous?.exitX??departurePosition(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults())} as const;
 }
+export function suggestedMedianOpeningStart(d:Design,i:number,type:'opening'|'uturn',length:number){
+ const a=d.arms[i],mouth=armMouth(d,i),origins=armTreatmentOrigins(d,i),usable=Math.max(0,a.length-mouth);
+ let requested=type==='uturn'?35:45;
+ if(type==='uturn')for(const direction of ['incoming','outgoing'] as const){
+  const p=pocketsFor(a,direction).right;
+  if(p.lanes)requested=Math.max(requested,originFor(origins,direction)-mouth+p.length+p.taper+6);
+ }
+ for(const o of a.medianOpenings??[])requested=Math.max(requested,o.start+o.length+6);
+ return Math.max(4,Math.min(requested,Math.max(4,usable-length-2)));
+}
 export function designError(d:Design):string|null{if(!valid(d))return 'ข้อมูลแบบมีค่าที่ไม่รองรับ กรุณาตรวจตัวเลขและไฟล์แบบ';const ids=activeIds(d);for(let k=0;k<ids.length;k++){const g=angleGap(d,ids[k],ids[(k+1)%ids.length]);if(g<40)return 'ขาถนนชิดกันเกินไป — เว้นมุมอย่างน้อย 40°';}
  for(const i of ids){const warning=corridorWarning(d.arms[i]);if(warning)return warning;}
  if(d.type==='roundabout'){const R=outerRadius(d),s=roundSettings(d);for(const i of ids){const a=d.arms[i],b=d.arms[ids[(ids.indexOf(i)+1)%ids.length]],entry=roundFillet(R,bounds(a)[1],s.entryRadius),exit=roundFillet(R,-bounds(b)[0],s.exitRadius);if(!entry.valid||!exit.valid||entry.theta+exit.theta>=angleGap(d,i,ids[(ids.indexOf(i)+1)%ids.length])*Math.PI/180-.01)return 'Geometry Error — ทางเข้าวงเวียนซ้อนกัน เพิ่มรัศมีเกาะ ลดความกว้างถนน หรือเว้นมุมขามากขึ้น';if(R+s.splitterLength+6>a.length)return 'Geometry Error — ขาถนนสั้นเกินไปสำหรับ splitter island';if(s.splitterWidth>Math.min(bounds(a)[1],-bounds(a)[0])*2-2)return 'Geometry Error — splitter island กว้างเกินช่องทางเข้า/ออก';}}
