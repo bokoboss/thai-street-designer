@@ -2,7 +2,7 @@ import {
   type Arm,type Design,type Direction,type LaneRole,type LaneArrowCode,type LaneArrowPlacement,
   laneArrowFor,pocketsFor,pocketLaneWidth,sectionFor
 } from './model';
-import {originFor,pocketFactor} from './allocation';
+import {originFor,pocketOriginFor,pocketFactor} from './allocation';
 import {
   type Edge,edges,armTreatmentOrigins,armMouth,coreSize,crossingIntervals,
   laneY,innerEdge
@@ -54,10 +54,11 @@ export function normalizeArrowOverrides(a:Arm){
 }
 
 function laneRange(d:Design,armId:number,direction:Direction,role:LaneRole,laneIndex:number,edgeSet:Edge[]){
-  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),origin=originFor(origins,direction),mouth=armMouth(d,armId);
+  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),baseOrigin=originFor(origins,direction),mouth=armMouth(d,armId),
+    side=role==='aux-left'?'left':role==='aux-right'?'right':null,origin=side?pocketOriginFor(origins,direction,side):baseOrigin;
   let minX=origin+3,maxX=a.length-3;
-  if(role!=='main'){
-    const side=role==='aux-left'?'left':'right',p=pocketsFor(a,direction)[side];
+  if(side){
+    const p=pocketsFor(a,direction)[side];
     maxX=Math.min(maxX,origin+p.length-2);
   }
   if(direction==='outgoing'&&a.crossing)minX=Math.max(minX,mouth+a.crossOffset+3.2+2);
@@ -68,11 +69,11 @@ function laneYAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneInd
   const a=d.arms[armId],{origin,origins}=laneRange(d,armId,direction,role,laneIndex,edgeSet),side=direction==='incoming'?1:-1;
   if(role==='main')return laneY(a,side,laneIndex,x,origins);
   const section=sectionFor(a,direction),pockets=pocketsFor(a,direction),right=pockets.right,rightWidth=pocketLaneWidth(a,direction,'right');
-  const which=role==='aux-left'?'left':'right',p=pockets[which],w=pocketLaneWidth(a,direction,which),factor=pocketFactor(p,x,origin);
+  const which=role==='aux-left'?'left':'right',p=pockets[which],w=pocketLaneWidth(a,direction,which),factor=pocketFactor(p,x,origin),rightOrigin=pocketOriginFor(origins,direction,'right');
   return innerEdge(a,side,x,origins)+side*(
     which==='right'
       ?w*(laneIndex+.5)*factor
-      :rightWidth*right.lanes*pocketFactor(right,x,origin)+section.width*a[direction]+w*(laneIndex+.5)*factor
+      :rightWidth*right.lanes*pocketFactor(right,x,rightOrigin)+section.width*a[direction]+w*(laneIndex+.5)*factor
   );
 }
 
