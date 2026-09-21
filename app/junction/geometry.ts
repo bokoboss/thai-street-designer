@@ -58,7 +58,7 @@ export const armMouth=(d:Design,i:number)=>armMouths(d)[i];
 export const coreSize=(d:Design)=>Math.max(...armMouths(d));
 export function offset(ps:P[],w0:number,w1:number,startIndex=0,endIndex=ps.length-1){const ds=[0];for(let i=1;i<ps.length;i++)ds.push(ds[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return ps.map((p,i)=>{const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,t=Math.max(0,Math.min(1,(ds[i]-ds[startIndex])/(ds[endIndex]-ds[startIndex]||1))),smooth=t*t*(3-2*t),w=mix(w0,w1,smooth);return{x:p.x+dy/l*w,y:p.y-dx/l*w};});}
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
-export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
+export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipLead:P[];slipTrail:P[];slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
 export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout',roundCfg=round?roundSettings(d):roundDefaults();return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(a)[1],nlo=bounds(b)[0];let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round,roundCfg),originA=originsA.incoming;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap),originsB={incoming:stopPosition(b,mouths[next]),outgoing:local.x};const ps=approachSamples(b,local.x,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
 if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius),exit=roundFillet(core,-nlo,settings.exitRadius),ta=entry.theta,tb=g-exit.theta;
  const arc=Array.from({length:81},(_,j)=>{const t=mix(ta,tb,j/80);return{x:core*Math.cos(t),y:core*Math.sin(t)}}),exitPoints=exit.points.map(p=>rotate({x:p.x,y:-p.y},gap)).reverse();
@@ -66,14 +66,34 @@ if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius
 
 else if(g<Math.PI-.08){const arc=cornerArc(hi,nlo,g,d.corner).points;base=join(lead(arc[0]),arc,trail(arc.at(-1)!));}
 else {const p={x:mouths[i],y:hi},q=rotate({x:mouths[next],y:nlo},gap);base=join(lead(p),cubic(p,{x:0,y:hi},rotate({x:0,y:nlo},gap),q),trail(q));}
-const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],arrow:P|undefined,R=0,cx=0,cy=0;const sweep=Math.PI-g;
+const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],slipLead:P[]=[],slipTrail:P[]=[],arrow:P|undefined,R=0,cx=0,cy=0;const sweep=Math.PI-g;
 if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core/Math.sin(g/2)+w+3):0);
- const arc=cornerArc(hi,nlo,g,R);cx=arc.cx;cy=arc.cy;
- outer=join(lead(arc.points[0]),arc.points,trail(arc.points.at(-1)!));
- const inside=arc.points.map((_,j)=>arc.polar(R+w,j/80));
- const pairs=inside.map(p=>({p,b:radialHit(base,p)})).filter(({p,b})=>Math.hypot(b.x,b.y)>1&&Math.hypot(p.x,p.y)-Math.hypot(b.x,b.y)>.45);
- if(pairs.length>3)island=[...pairs.map(v=>v.p),...pairs.map(v=>v.b).reverse()];arrow=arc.polar(R+w/2,.5);}
-const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island,slip,arrow,radius:R,sweep,cx,cy};});}
+ // slipRadius is the TURNING-CENTERLINE radius. Build the curve from the
+ // through-road curb, not from an optional curb-side auxiliary lane.
+ const aP=pocketsFor(a,'incoming'),bP=pocketsFor(b,'outgoing'),
+ aMain={...a,incomingPockets:{...aP,left:{...aP.left,lanes:0}}},
+ bMain={...b,outgoingPockets:{...bP,left:{...bP.left,lanes:0}}},
+ slipHi=bounds(aMain)[1],slipLo=bounds(bMain)[0],
+ arc=cornerArc(slipHi+w/2,slipLo-w/2,g,R);cx=arc.cx;cy=arc.cy;
+ const taper=Math.max(15,4*w),smooth=(t:number)=>{const q=Math.max(0,Math.min(1,t));return q*q*(3-2*q);},
+ outerArc=arc.points.map((_,j)=>arc.polar(R-w/2,j/80)),inner=arc.points.map((_,j)=>arc.polar(R+w/2,j/80));
+ entryX=arc.points[0].x;
+ const leadBreak=Math.min(a.length,entryX+taper),leadXs=[...new Set([...approachSamples(a,originA,a.length,entryX),leadBreak])].filter(x=>x>=Math.min(entryX,a.length)&&x<=Math.max(entryX,a.length)).sort((x,y)=>y-x),
+ entryDelta=outerArc[0].y-bounds(a,entryX,originsA)[1],
+ leadOuter=leadXs.map(x=>({x,y:bounds(a,x,originsA)[1]+entryDelta*smooth((leadBreak-x)/Math.max(.001,leadBreak-entryX))}));
+ leadCount=leadOuter.length;
+ slipLead=leadXs.filter(x=>x<=leadBreak+1e-8&&x>=entryX-1e-8).map(x=>({x,y:bounds(aMain,x,originsA)[1]}));
+ const exitLocal=rotate(arc.points.at(-1)!,-gap);exitX=exitLocal.x;
+ const originsB={incoming:stopPosition(b,mouths[next]),outgoing:exitX},outerExit=rotate(outerArc.at(-1)!,-gap),trailBreak=Math.min(b.length,exitX+taper),
+ trailXs=[...new Set([...approachSamples(b,exitX,exitX,b.length),trailBreak])].filter(x=>x>=Math.min(exitX,b.length)&&x<=Math.max(exitX,b.length)).sort((x,y)=>x-y),
+ exitDelta=outerExit.y-bounds(b,exitX,originsB)[0],
+ trailOuter=trailXs.map(x=>rotate({x,y:bounds(b,x,originsB)[0]+exitDelta*smooth((trailBreak-x)/Math.max(.001,trailBreak-exitX))},gap));
+ trailCount=trailOuter.length;
+ slipTrail=trailXs.filter(x=>x>=exitX-1e-8&&x<=trailBreak+1e-8).map(x=>rotate({x,y:bounds(bMain,x,originsB)[0]},gap));
+ outer=join(leadOuter,outerArc,trailOuter);
+ const pairs=inner.map(p=>({p,b:radialHit(base,p)})).filter(({p,b})=>Math.hypot(b.x,b.y)>1&&Math.hypot(p.x,p.y)-Math.hypot(b.x,b.y)>.45);
+ if(pairs.length>3)island=[...pairs.map(v=>v.p),...pairs.map(v=>v.b).reverse()];arrow=arc.polar(R,.5);}
+const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island,slipLead,slipTrail,slip,arrow,radius:R,sweep,cx,cy};});}
 
 export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  const a=d.arms[i],mouth=armMouth(d,i),incoming=stopPosition(a,mouth),previous=segments.find(e=>e.next===i);
@@ -98,7 +118,7 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  for(const i of ids){const a=d.arms[i],core=armMouth(d,i),origins=armTreatmentOrigins(d,i,boundaries);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?(a.dividerMode??'solid'):(a.outgoingDividerMode??'dashed'),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??30),range=dividerRange(a,core,d.type==='roundabout',side,d.type==='roundabout'?roundSettings(d):roundDefaults(),origins.outgoing);if(a.length<Math.max(core+12,range.start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
 
  for(const i of ids){const a=d.arms[i],origins=armTreatmentOrigins(d,i,boundaries);for(const dir of ['incoming','outgoing'] as const){const origin=originFor(origins,dir),p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const pocket of Object.values(p))if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}
- for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=armTreatmentOrigins(d,id,boundaries),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],c=cornerArc(bounds(a)[1],bounds(b)[0],angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
+ for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=armTreatmentOrigins(d,id,boundaries),origin=originFor(origins,dir);for(const pocket of Object.values(pocketsFor(a,dir)))if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก / Slip lane — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}if(e.slip){const a=d.arms[e.i],b=d.arms[e.next],ap=pocketsFor(a,'incoming'),bp=pocketsFor(b,'outgoing'),aMain={...a,incomingPockets:{...ap,left:{...ap.left,lanes:0}}},bMain={...b,outgoingPockets:{...bp,left:{...bp.left,lanes:0}}},c=cornerArc(bounds(aMain)[1]+a.slipWidth/2,bounds(bMain)[0]-a.slipWidth/2,angleGap(d,e.i,e.next)*Math.PI/180,e.radius),end=rotate(c.points.at(-1)!,-angleGap(d,e.i,e.next)/90);if(c.points[0].x>a.length-8||end.x>b.length-8||e.island.length<4)return 'พื้นที่ Slip lane ไม่พอ — เพิ่มความยาวขาถนน ลดรัศมี หรือปรับมุม';}}
  if(ids.some(i=>armIslands(d,i,boundaries).some(p=>selfIntersects(p))))return 'Geometry Error — ขอบเกาะตัดกัน กรุณาปรับหน้าตัดและช่วงสอบ';
  const footprint=boundaries.flatMap(e=>e.outer.map(p=>rotate(p,armTurn(d,e.i))));
  const walkFootprint=boundaries.flatMap(e=>e.walk.map(p=>rotate(p,armTurn(d,e.i))));
@@ -124,13 +144,16 @@ export function treatmentOrigins(a:Arm,core:number,round=false,settings=roundDef
  return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round,settings)} as const;
 }
 export const STOP_LINE_WIDTH = .55;
+/** Common longitudinal datum for approach/departure lane markings at a normal junction. */
+export function junctionMarkingStart(a:Arm,core:number,round=false){
+ return round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0);
+}
 export function dividerRange(a:Arm,core:number,round:boolean,side=1,settings=roundDefaults(),outgoingOrigin=departurePosition(a,core,round,settings)){
  const mode=side===1?(a.dividerMode??'solid'):(a.outgoingDividerMode??'dashed'),
  length=side===1?(a.solidLength??30):(a.outgoingSolidLength??30),
+ shared=junctionMarkingStart(a,core,round),
  crossingClear=side===-1&&a.crossing?crossingIntervals(a,core,round,settings).x+3.4:outgoingOrigin,
- start=side===1
-  ?(round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0))
-  :Math.max(outgoingOrigin,crossingClear);
+ start=side===1?shared:(round?Math.max(outgoingOrigin,crossingClear):shared);
  return {mode,start,end:Math.min(a.length,start+(mode==='dashed'?0:length))};
 }
 
@@ -149,10 +172,11 @@ export function slipCrossLimit(e:Edge|undefined,a:Arm){return Math.max(2,Math.mi
 export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:TreatmentOrigins):P[]{
  if(!round&&a.median<=0)return [];
  const origins=originOverride??treatmentOrigins(a,core,round),incomingOrigin=originFor(origins,'incoming'),outgoingOrigin=originFor(origins,'outgoing'),
- start=core+a.medianOffset,[lo,hi]=medianEdges(a,start,origins),center=(lo+hi)/2,tip=Math.min(start+Math.max(.8,Math.min(5,Math.max(0,hi-lo))),a.length);
- const xs=[...new Set([...approachSamples(a,incomingOrigin,tip,a.length),...approachSamples(a,outgoingOrigin,tip,a.length)])].sort((x,y)=>x-y),smooth=(t:number)=>t*t*(3-2*t);
- const nose=(side:number)=>Array.from({length:17},(_,i)=>{const t=i/16,x=start+(tip-start)*t,y=medianEdges(a,x,origins)[side];return{x,y:center+(y-center)*Math.sqrt(smooth(t))};});
- return [...nose(0),...xs.slice(1).map(x=>({x,y:medianEdges(a,x,origins)[0]})),...xs.slice().reverse().map(x=>({x,y:medianEdges(a,x,origins)[1]})),...nose(1).reverse().slice(1,-1)];
+ start=core+a.medianOffset,[lo,hi]=medianEdges(a,start,origins),noseDepth=Math.max(.8,Math.min(4,Math.max(.4,(hi-lo)/2))),
+ join=Math.min(a.length,start+noseDepth),[joinLo,joinHi]=medianEdges(a,join,origins),center=(joinLo+joinHi)/2,half=Math.max(.05,(joinHi-joinLo)/2),
+ xs=[...new Set([...approachSamples(a,incomingOrigin,join,a.length),...approachSamples(a,outgoingOrigin,join,a.length),join])].sort((x,y)=>x-y),
+ nose=Array.from({length:25},(_,i)=>{const theta=-Math.PI/2+Math.PI*i/24;return{x:join-(join-start)*Math.cos(theta),y:center+half*Math.sin(theta)};});
+ return [...nose,...xs.slice(1).map(x=>({x,y:medianEdges(a,x,origins)[1]})),...xs.slice().reverse().map(x=>({x,y:medianEdges(a,x,origins)[0]}))];
 }
 
 function uncutArmIslands(d:Design,i:number,segments:Edge[]):P[][]{

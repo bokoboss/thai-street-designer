@@ -49,3 +49,15 @@
 .arrow-actions{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.arrow-actions button{min-height:30px;padding:5px 8px;font-size:11px}.arrow-actions button.danger{color:var(--ws-error);border-color:#e8caca}.arrow-actions button.danger:hover{background:#fff3f3}
 
 .j-subsection{margin-top:10px;padding-top:10px;border-top:1px solid var(--ws-border)}.j-subsection>b{display:block;margin-bottom:6px;font-size:11px}.j-subsection>button{width:100%;margin-top:5px}
+
+/* Consolidated workflow/navigation pass */
+.add-treatment-list section{padding:10px 0;border-top:1px solid var(--ws-border)}
+.add-treatment-list section:first-child{border-top:0}
+.add-treatment-list h3,.view-display-group h3{margin:0 0 7px;font-size:10px;letter-spacing:.04em;color:var(--ws-muted);font-weight:650}
+.view-controls{padding-bottom:12px;border-bottom:1px solid var(--ws-border)}
+.view-display-group{padding-top:12px}
+.view-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.view-actions button{min-height:30px;font-size:11px}
+.j-camera-num{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ws-muted);white-space:nowrap}
+.j-camera-num input{width:60px;height:26px;border:1px solid var(--ws-border);border-radius:5px;padding:3px 5px;text-align:right;font:11px var(--ws-font);color:var(--ws-ink);background:#fff}
+@media(max-width:900px){.j-camera-num span{display:none}.j-camera-num input{width:54px}}
