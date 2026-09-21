@@ -17,6 +17,8 @@ export const pocketLaneWidth=(a:Arm,side:Direction,which:'left'|'right')=>pocket
 
 export type LaneArrowCode='straight'|'left'|'right'|'sl'|'sr'|'lr'|'all'|'ru'|'uturn'|'su'|'none'|'merge';
 export type LaneRole='main'|'aux-left'|'aux-right';
+export type LaneArrowPlacement={id:string;code:LaneArrowCode;offset:number};
+export type LaneArrowOverrides=Record<string,LaneArrowPlacement[]>;
 export type LaneMarkings={
   incomingMain:LaneArrowCode[];
   outgoingMain:LaneArrowCode[];
@@ -68,6 +70,7 @@ export type Arm={
   incomingPockets?:Pockets;
   outgoingPockets?:Pockets;
   laneMarkings?:LaneMarkings;
+  arrowOverrides?:LaneArrowOverrides;
   outgoingDividerMode?:'solid'|'dashed';
   outgoingSolidLength?:number;
   dividerMode?:'solid'|'dashed';
@@ -177,6 +180,15 @@ export function withLaneArrow(a:Arm,dir:Direction,role:LaneRole,index:number,cod
   return {...m,[key]:{...m[key],[side]:m[key][side].map((v,i)=>i===index?code:v)}};
 }
 
+function validArrowOverrides(v:LaneArrowOverrides|undefined){
+  if(v===undefined)return true;
+  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length>32)return false;
+  return Object.entries(v).every(([key,list])=>
+    /^(incoming|outgoing):(main|aux-left|aux-right):[0-7]$/.test(key)
+    &&Array.isArray(list)&&list.length<=8
+    &&list.every(p=>!!p&&typeof p.id==='string'&&p.id.length>0&&p.id.length<=40&&typeof p.code==='string'&&Object.hasOwn(options,p.code)&&Number.isFinite(p.offset)&&p.offset>=0&&p.offset<=400)
+  );
+}
 function validMarkings(v:LaneMarkings|undefined){
   if(v===undefined)return true;
   const arr=(x:unknown)=>Array.isArray(x)&&x.length<=8&&x.every(c=>typeof c==='string'&&Object.hasOwn(options,c));
@@ -256,6 +268,7 @@ export function valid(d:unknown):d is Design{
       &&(a.incomingPockets===undefined||validPockets(a.incomingPockets))
       &&(a.outgoingPockets===undefined||validPockets(a.outgoingPockets))
       &&validMarkings(a.laneMarkings)
+      &&validArrowOverrides(a.arrowOverrides)
       &&(a.outgoingDividerMode===undefined||["solid","dashed"].includes(a.outgoingDividerMode))
       &&(a.outgoingSolidLength===undefined||(Number.isFinite(a.outgoingSolidLength)&&a.outgoingSolidLength>=1&&a.outgoingSolidLength<=140))
       &&(a.dividerMode===undefined||["solid","dashed"].includes(a.dividerMode))
