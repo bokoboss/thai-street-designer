@@ -1,5 +1,5 @@
 import {type Design,type Arm,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,roadsideFor,medianTreeDefaults,options,laneArrowFor,withLaneArrow,markingsFor} from './model';
-import {autoLaneArrowPlacements,clampArrowOffset,laneArrowKey,manualPlacementsForLane,nextArrowId,resolvedArrow} from './arrow-layout';
+import {autoLaneArrowPlacements,clampArrowOffset,laneArrowKey,manualPlacementsForLane,nextArrowId,normalizeArrowOverrides,resolvedArrow} from './arrow-layout';
 import {allocate,allocationMode} from './allocation';
 import {armMouth,edges} from './geometry';
 import {roundSettings} from './roundabout';
@@ -11,9 +11,9 @@ const a=d.arms[s.arm],dir=s.direction??'incoming',section=sectionFor(a,dir),pock
 const editSection=(patch:object)=>onArm({[dir==='incoming'?'incomingSection':'outgoingSection']:{...section,...patch}}),
 editPocket=(patch:object)=>{
  const key=dir==='incoming'?'incomingPockets':'outgoingPockets',nextPockets={...pockets,[s.side??'right']:{...p,...patch}},next={...a,[key]:nextPockets};
- onArm({[key]:nextPockets,...('lanes' in patch?{laneMarkings:markingsFor(next)}:{})});
+ onArm({[key]:nextPockets,...('lanes' in patch?{laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)}:{})});
 },
-editMainCount=(count:number)=>{const next={...a,[dir]:count};onArm({[dir]:count,laneMarkings:markingsFor(next)});},
+editMainCount=(count:number)=>{const next={...a,[dir]:count};onArm({[dir]:count,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)});},
 editTree=(patch:object)=>onArm({medianTrees:{...tree,...patch}});
 const f=allocate(a).features[dir][s.side??'right'],laneIndex=s.laneIndex??0,laneRole:LaneRole=s.role??(s.kind==='pocket'?(s.side==='left'?'aux-left':'aux-right'):'main');
 const laneArrow=laneArrowFor(a,dir,laneRole,laneIndex),arrowKey=laneArrowKey(dir,laneRole,laneIndex),arrowManual=!!a.arrowOverrides&&Object.prototype.hasOwnProperty.call(a.arrowOverrides,arrowKey);
