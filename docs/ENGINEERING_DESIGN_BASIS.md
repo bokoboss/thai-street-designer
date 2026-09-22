@@ -4,6 +4,18 @@ Updated: 2026-09-22
 
 This is the engineering basis for a **concept-design tool**. It does not certify compliance with a road authority and does not replace project-specific criteria, traffic analysis, swept-path analysis, road-safety audit or professional review.
 
+## Product calibration: visual plausibility, not compliance checking
+
+The governing product test is: **would a traffic/street engineer look at the concept and immediately see something semantically or visually wrong?** Thai Street Designer should behave like an engineering-informed illustration tool, not a detailed-design checker.
+
+Use three levels when deciding what belongs in runtime logic:
+
+1. **Semantically / physically wrong — fix it.** Examples: incoming/outgoing reversed, a taper develops in the wrong direction, a Slip mutates the base road, a crossing and its pavement use inconsistent width, or 2D/cross-section/3D disagree.
+2. **Visually implausible — improve the default or geometry heuristic.** Examples: an abrupt merge, an unnatural island nose, a disconnected/kinked transition, or markings in an obviously implausible sequence.
+3. **Detailed engineering — document, do not police in the concept UI.** Examples: queue-based storage, design-speed taper calculation, swept-path certification, sight-distance calculation, signal warrants and exact clear-zone checks.
+
+A numeric value from a standard/guideline is not, by itself, a reason to show an Engineering Warning. Runtime warnings should be reserved for combinations that materially misrepresent the concept or create an obvious feature conflict. Preferred dimensions remain useful as defaults and design references.
+
 ## 1. Source hierarchy
 
 1. Current requirements of the Thai authority responsible for the project (DOH, DRR, BMA, local authority, concessionaire).
@@ -28,7 +40,7 @@ The current 2.5–4.5 m lane-width range is a modelling envelope, not a universa
 ### Raised median and turn-lane allocation
 DOH median guidance identifies about **1.20 m minimum residual raised median** where a turn lane is created or hardware must be accommodated, about **4.20 m minimum** for a normal raised median intended to accommodate a turn lane, and roughly **6–10 m or more** as a planning range for convenient U-turn operation depending on vehicle and receiving roadway.
 
-Auto allocation remains geometry-first and transparent. Review warns when residual median is below 1.20 m. Explicit **Retain** should be used when the designer intends to preserve a minimum median width. The retained-median UI default is 1.20 m; project-specific larger values remain allowed.
+Auto allocation remains geometry-first and transparent. The retained-median UI default may use 1.20 m as a sensible reference, but the runtime Review should not behave as a 1.20 m compliance checker. It warns only when median consumption materially changes the concept (for example, the usable median is consumed entirely). Explicit **Retain** is available when the designer wants to preserve a chosen width.
 
 ### Turn pockets, receiving lanes and tapers
 Storage/deceleration length and taper/merge length depend on approach speed, queue, turn volume, signal operation, design vehicle and right-of-way. The tool therefore keeps these as explicit user inputs and checks geometric fit only. Defaults are starting values, not warrants or design minima. Slip-owned auxiliary treatments remain separate from generic Pockets.
@@ -38,7 +50,7 @@ New/reconstructed intersections should be close to 90 degrees. FHWA guidance rec
 
 The **40-degree limit is only the geometry solver boundary**:
 - below 40 degrees: Geometry Error;
-- 40–75 degrees: editable for existing/constrained sites, with Engineering Warning;
+- 40–75 degrees: editable for existing/constrained sites; the value is design-basis context rather than an automatic runtime warning;
 - near 90 degrees: preferred conceptual starting point.
 
 ### Corner radius
@@ -47,7 +59,7 @@ The circular corner model ensures coherent plan geometry only. Real design must 
 ### Pedestrian crossing and stop line
 Thai DOH marking guidance uses about 2.0 m minimum crosswalk width for normal cases and 4.0 m in higher-speed/higher-demand contexts. The current 3.2 m crossing zone is a concept default.
 
-Thai intersection-marking guidance places the stop line about 1 m in advance of the crosswalk and calls for a no-lane-change / solid-line treatment for at least **36 m before a crosswalk**. New junctions therefore default to 36 m rather than 30 m; Review warns for shorter/dashed-only multi-lane approaches.
+Thai intersection-marking guidance places the stop line about 1 m in advance of the crosswalk and calls for a no-lane-change / solid-line treatment for at least **36 m before a crosswalk**. New junctions may use 36 m as a visually plausible default rather than 30 m. A different value is not automatically a runtime warning in a concept tool.
 
 ### Outgoing lane-divider datum
 Incoming and outgoing markings must not share the incoming stop-line datum. Incoming dividers use the approach control datum; outgoing dividers use the departure-side mouth/tangent and must clear a pedestrian crossing. The engine now uses the departure-side origin for outgoing dividers.
