@@ -4,7 +4,7 @@ import {PointerGesture,clampZoom} from './gestures';
 import {ContextMenu,ContextMenuTrigger,ContextMenuContent,ContextMenuItem,ContextMenuSeparator} from '@/components/ui/context-menu';
 import {groundAt,anchorGround,orbitGround,pointerAction} from './camera3d';
 import type {Design} from './model';
-import {edges,armIslands,rotate,armTurn,activeIds} from './geometry';
+import {activeIds,approachSamples,armIslands,armMouth,armTreatmentOrigins,armTurn,edges,rotate} from './geometry';
 import {slipGeometries} from './slip-geometry';
 import {resolvedSidewalkEdges} from './lane-configuration';
 import {furnitureFaces} from './furniture3d';
