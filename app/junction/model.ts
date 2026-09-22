@@ -7,8 +7,16 @@ export type Direction='incoming'|'outgoing';
 export type Section={width:number;walk:number;bands:Band[]};
 export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;lanes:number;length:number;taper:number};
 export type SlipAuxMode='direct'|'added'|'channelized';
-export const slipAuxMode=(value:SlipAuxMode|undefined,hasLane:boolean):SlipAuxMode=>value??(hasLane?'added':'direct');
+export type SlipAccelerationSeparator='chevron'|'raised';
+/** Legacy channelized approach values are interpreted as an ordinary adjacent auxiliary lane. */
+export const slipApproachMode=(value:SlipAuxMode|undefined,hasLane:boolean):'direct'|'added'=>value==='direct'?'direct':(value||hasLane?'added':'direct');
+/** Departure modes: direct = enter existing curb lane, added = junction departure auxiliary, channelized = protected Slip acceleration lane. */
+export const slipDepartureMode=(value:SlipAuxMode|undefined,hasDepartureAux:boolean):SlipAuxMode=>value??(hasDepartureAux?'added':'direct');
 export const slipSeparatorWidth=(value:number|undefined)=>Math.max(.5,Math.min(4,value??1.5));
+export const slipAccelerationWidth=(a:Arm)=>Math.max(2.5,Math.min(6,a.slipAccelerationWidth??a.slipWidth));
+export const slipAccelerationLength=(a:Arm)=>Math.max(5,Math.min(200,a.slipAccelerationLength??40));
+export const slipAccelerationMerge=(a:Arm)=>Math.max(5,Math.min(120,a.slipAccelerationMerge??25));
+export const slipAccelerationSeparator=(a:Arm):SlipAccelerationSeparator=>a.slipAccelerationSeparator??'chevron';
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -87,13 +95,18 @@ export type Arm={
   slipCrossOffset:number;
   /** Optional centerline distance from Slip entry tangent; omitted = automatic mid-arc placement. */
   slipArrowOffset?:number;
-  /** Slip approach treatment: direct from curbside lane, adjacent added lane, or physically separated lane. */
+  /** Slip approach: direct from curbside lane or an adjacent auxiliary left-turn lane. Legacy 'channelized' reads as 'added'. */
   slipApproachMode?:SlipAuxMode;
-  /** Slip departure treatment stored on the Slip source arm; receiving lane geometry lives on the next arm. */
+  /** Slip departure: direct, added auxiliary lane from junction mouth, or protected Slip acceleration lane ('channelized'). */
   slipReceivingMode?:SlipAuxMode;
-  /** Separator-island width for a channelized approach/departure. */
+  /** Deprecated legacy approach separator; retained only for schema compatibility. */
   slipApproachSeparator?:number;
+  /** Width of the departure gore/raised separator protecting a Slip acceleration lane. */
   slipReceivingSeparator?:number;
+  slipAccelerationWidth?:number;
+  slipAccelerationLength?:number;
+  slipAccelerationMerge?:number;
+  slipAccelerationSeparator?:SlipAccelerationSeparator;
   medianOffset:number;
   crossOffset:number;
   slipWidth:number;
@@ -268,6 +281,10 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
       slipReceivingMode:undefined,
       slipApproachSeparator:undefined,
       slipReceivingSeparator:undefined,
+      slipAccelerationWidth:undefined,
+      slipAccelerationLength:undefined,
+      slipAccelerationMerge:undefined,
+      slipAccelerationSeparator:undefined,
       arrows:['straight','straight','straight','straight'],
       laneMarkings:undefined,
       arrowOverrides:undefined
@@ -330,6 +347,10 @@ export function valid(d:unknown):d is Design{
       &&(a.slipReceivingMode===undefined||['direct','added','channelized'].includes(a.slipReceivingMode))
       &&(a.slipApproachSeparator===undefined||(Number.isFinite(a.slipApproachSeparator)&&a.slipApproachSeparator>=.5&&a.slipApproachSeparator<=4))
       &&(a.slipReceivingSeparator===undefined||(Number.isFinite(a.slipReceivingSeparator)&&a.slipReceivingSeparator>=.5&&a.slipReceivingSeparator<=4))
+      &&(a.slipAccelerationWidth===undefined||(Number.isFinite(a.slipAccelerationWidth)&&a.slipAccelerationWidth>=2.5&&a.slipAccelerationWidth<=6))
+      &&(a.slipAccelerationLength===undefined||(Number.isFinite(a.slipAccelerationLength)&&a.slipAccelerationLength>=5&&a.slipAccelerationLength<=200))
+      &&(a.slipAccelerationMerge===undefined||(Number.isFinite(a.slipAccelerationMerge)&&a.slipAccelerationMerge>=5&&a.slipAccelerationMerge<=120))
+      &&(a.slipAccelerationSeparator===undefined||['chevron','raised'].includes(a.slipAccelerationSeparator))
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
