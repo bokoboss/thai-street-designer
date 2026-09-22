@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
 import {sectionFor,pocketsFor,pocketLaneWidth,type Design,type Direction} from './model';
-import {allocate,pocketFactorAt,originFor} from './allocation';
+import {allocate,pocketFactorAt} from './allocation';
 import {armMouth,armTreatmentOrigins,bandWidths,armIslands,edges,slipAuxSeparatorAt} from './geometry';
 import {selectionKey,type Selection} from './selection';
 
@@ -30,7 +30,7 @@ export function sectionPieces(d:Design,id:number,x:number){
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
   const addDirection=(direction:Direction)=>{
-    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction),origin=originFor(origins,direction),slipSeparator=slipAuxSeparatorAt(d,id,direction,x,edgeSet);
+    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction),slipSeparator=slipAuxSeparatorAt(d,id,direction,x,edgeSet);
     const bands=bandWidths(a,direction,x,origins),sidePieces:Piece[]=[];
     const push=(width:number,label:string,kind:string,selection:Selection,editable?:Editable)=>{
       if(width>.001)sidePieces.push({width,label,kind,group,selection,editable});
