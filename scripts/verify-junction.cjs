@@ -103,7 +103,7 @@ const view={width:813,height:665,extent:115,rotation:23},camera3={yaw:-30,pitch:
  assert.equal(at.incoming.mainLaneCount,2);assert.equal(at.incoming.activeLaneCount,2);
  const pocket=structuredClone(base);pocket.arms[0].incomingPockets=emptyPockets();pocket.arms[0].incomingPockets.right={lanes:1,length:35,taper:20,allocation:'auto'};
  const pe=geo.edges(pocket),po=geo.armTreatmentOrigins(pocket,0,pe),near=lc.resolveStreetSection(pocket,0,po.incoming+5,pe),far=lc.resolveStreetSection(pocket,0,po.incoming+70,pe);
- assert.equal(near.incoming.activeLaneCount,3);assert.equal(far.incoming.activeLaneCount,2);assert.deepEqual(lc.resolvedLaneSummary(near).incoming,['pocket-median','main','main']);
+ assert.equal(near.incoming.activeLaneCount,3);assert.equal(far.incoming.activeLaneCount,2);assert.deepEqual(lc.resolvedLaneSummary(near).incoming,['pocket-median','main','main']);const boundaries=lc.resolvedLaneBoundaries(pocket,0,'incoming',pe);assert.equal(boundaries.length,2);assert(boundaries.some(v=>v.kind==='main-divider'));assert(boundaries.some(v=>v.kind==='pocket-divider'));
  const receive=structuredClone(base);receive.arms[0].outgoingPockets=emptyPockets();receive.arms[0].outgoingPockets.right={lanes:1,length:35,taper:20,allocation:'auto'};
  const re=geo.edges(receive),ro=geo.armTreatmentOrigins(receive,0,re),rNear=lc.resolveStreetSection(receive,0,ro.outgoing+5,re),rFar=lc.resolveStreetSection(receive,0,ro.outgoing+70,re);
  assert.equal(rNear.outgoing.activeLaneCount,3);assert.equal(rFar.outgoing.activeLaneCount,2);
