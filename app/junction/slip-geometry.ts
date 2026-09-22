@@ -209,6 +209,36 @@ export function slipOffsetAtPoint(g:SlipGeometry,p:P,kind:'crossing'|'arrow'){
   return kind==='crossing'?length-station:station;
 }
 
+export function slipSectionAt(d:Design,armId:number,x:number,baseEdges=edges(d),geometries=slipGeometries(d,baseEdges)){
+  const pieces:{group:'incoming'|'outgoing';kind:'slip-aux'|'slip-accel'|'separator';width:number;sourceArm:number}[]=[];
+  const source=d.slips.find(s=>s.fromArm===armId),sourceGeom=source?geometries.find(g=>g.id===source.id):undefined;
+  if(source&&sourceGeom&&source.approach.mode==='auxiliary'){
+    const fullEnd=sourceGeom.entryX+source.approach.storage,taperEnd=fullEnd+source.approach.taper;
+    if(x>=sourceGeom.entryX&&x<=taperEnd){
+      const factor=x<=fullEnd?1:Math.max(0,1-(x-fullEnd)/Math.max(.001,taperEnd-fullEnd));
+      if(factor>1e-6)pieces.push({group:'incoming',kind:'slip-aux',width:source.approach.width*factor,sourceArm:source.fromArm});
+    }
+  }
+  const receiving=d.slips.find(s=>s.toArm===armId),receivingGeom=receiving?geometries.find(g=>g.id===receiving.id):undefined;
+  if(receiving&&receivingGeom){
+    if(receiving.departure.mode==='shared-aux'){
+      const start=armMouth(d,armId),fullEnd=start+receiving.departure.length,taperEnd=fullEnd+receiving.departure.taper;
+      if(x>=start&&x<=taperEnd){
+        const factor=x<=fullEnd?1:Math.max(0,1-(x-fullEnd)/Math.max(.001,taperEnd-fullEnd));
+        if(factor>1e-6)pieces.push({group:'outgoing',kind:'slip-aux',width:receiving.departure.width*factor,sourceArm:receiving.fromArm});
+      }
+    }else if(receiving.departure.mode==='acceleration'&&x>=receivingGeom.exitX&&x<=receivingGeom.mergeEnd){
+      const factor=x<=receivingGeom.fullEnd?1:Math.max(0,1-(x-receivingGeom.fullEnd)/Math.max(.001,receivingGeom.mergeEnd-receivingGeom.fullEnd));
+      const goreLength=Math.min(receiving.departure.length,Math.max(8,Math.min(18,receiving.departure.length*.35))),
+        goreEnd=receivingGeom.exitX+goreLength,
+        sep=x>=goreEnd?0:receiving.departure.separatorWidth*(1-smooth((x-receivingGeom.exitX)/Math.max(.001,goreEnd-receivingGeom.exitX)));
+      if(sep>1e-6)pieces.push({group:'outgoing',kind:'separator',width:sep,sourceArm:receiving.fromArm});
+      if(factor>1e-6)pieces.push({group:'outgoing',kind:'slip-accel',width:receiving.departure.width*factor,sourceArm:receiving.fromArm});
+    }
+  }
+  return pieces;
+}
+
 export function slipDesignError(d:Design,baseEdges=edges(d)){
   if(d.type==='roundabout'&&d.slips.length)return 'Slip lane ใช้กับทางแยกทั่วไปในรุ่นนี้';
   const geoms=slipGeometries(d,baseEdges);
