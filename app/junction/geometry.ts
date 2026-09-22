@@ -280,18 +280,20 @@ function pointAlong(ps:P[],station:number){
 function offsetAt(ps:P[],station:number,lateral:number){const q=pointAlong(ps,station),n={x:q.tangent.y,y:-q.tangent.x};return{x:q.point.x+n.x*lateral,y:q.point.y+n.y*lateral};}
 function projectStation(ps:P[],p:P){let best=0,bestD=Infinity,acc=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy,l=Math.sqrt(l2)||1,t=Math.max(0,Math.min(1,l2?( (p.x-a.x)*dx+(p.y-a.y)*dy)/l2:0)),x=a.x+t*dx,y=a.y+t*dy,d=(p.x-x)**2+(p.y-y)**2;if(d<bestD){bestD=d;best=acc+t*l;}acc+=l;}return best;}
 
-export function slipCrossLimit(e:Edge|undefined,a:Arm){return Math.max(2,Math.min(MAX_SLIP_CROSS_OFFSET,Math.floor(((e?.radius??20)+a.slipWidth/2)*(e?.sweep??Math.PI/2)-2)));}
+export function slipCrossLimit(e:Edge|undefined,_a:Arm){const length=e?.slipCenter?.length?polylineLength(e.slipCenter):20;return Math.max(2,Math.min(MAX_SLIP_CROSS_OFFSET,Math.floor(length-2)));}
 export function slipArcState(e:Edge,a:Arm){
- const center=e.radius,inner=Math.max(.1,center-a.slipWidth/2),outer=center+a.slipWidth/2,outerLength=outer*e.sweep,centerLength=center*e.sweep,
- crossOffset=Math.max(2,Math.min(a.slipCrossOffset,Math.max(2,outerLength-2))),crossT=e.sweep-crossOffset/outer,
- arrowOffset=Math.max(2,Math.min(a.slipArrowOffset??centerLength/2,Math.max(2,centerLength-2))),arrowT=arrowOffset/Math.max(.001,center),
- point=(radius:number,t:number)=>({x:e.cx-radius*Math.sin(t),y:e.cy-radius*Math.cos(t)}),
- crossHalf=1.6/outer,stopT=Math.max(.02,crossT-crossHalf-1.5/Math.max(.001,center));
- return{center,inner,outer,outerLength,centerLength,crossOffset,crossT,arrowOffset,arrowT,crossHalf,stopT,point,crossPoint:point(center,crossT),arrowPoint:point(center,arrowT)};
+ const centerLength=Math.max(.001,polylineLength(e.slipCenter)),inner=-a.slipWidth/2,outer=a.slipWidth/2,outerLength=centerLength,
+ crossOffset=Math.max(2,Math.min(a.slipCrossOffset,Math.max(2,centerLength-2))),crossT=centerLength-crossOffset,
+ arrowOffset=Math.max(2,Math.min(a.slipArrowOffset??centerLength/2,Math.max(2,centerLength-2))),arrowT=arrowOffset,
+ point=(lateral:number,station:number)=>offsetAt(e.slipCenter,Math.max(0,Math.min(centerLength,station)),lateral),
+ crossHalf=1.6,stopT=Math.max(.2,crossT-crossHalf-1.5),
+ crossPoint=pointAlong(e.slipCenter,crossT).point,arrowState=pointAlong(e.slipCenter,arrowT),arrowPoint=arrowState.point,
+ arrowAngle=(Math.atan2(arrowState.tangent.y,arrowState.tangent.x)*180/Math.PI+360)%360;
+ return{center:e.radius,inner,outer,outerLength,centerLength,crossOffset,crossT,arrowOffset,arrowT,crossHalf,stopT,point,crossPoint,arrowPoint,arrowAngle};
 }
-export function slipOffsetAtPoint(e:Edge,a:Arm,p:P,kind:'crossing'|'arrow'){
- let t=Math.atan2(-(p.x-e.cx),-(p.y-e.cy));if(t<0)t+=Math.PI*2;t=Math.max(0,Math.min(e.sweep,t));
- return kind==='crossing'?(e.radius+a.slipWidth/2)*(e.sweep-t):e.radius*t;
+export function slipOffsetAtPoint(e:Edge,_a:Arm,p:P,kind:'crossing'|'arrow'){
+ const length=Math.max(.001,polylineLength(e.slipCenter)),station=projectStation(e.slipCenter,p);
+ return kind==='crossing'?length-station:station;
 }
 /** Shared sampled quadratic nose for SVG masks and the raised 3D mesh. */
 export function medianPolygon(a:Arm,core:number,round:boolean,originOverride?:TreatmentOrigins):P[]{
