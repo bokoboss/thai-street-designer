@@ -73,23 +73,31 @@ export const armMouth=(d:Design,i:number)=>armMouths(d)[i];
 export const coreSize=(d:Design)=>Math.max(...armMouths(d));
 export function offset(ps:P[],w0:number,w1:number,startIndex=0,endIndex=ps.length-1){const ds=[0];for(let i=1;i<ps.length;i++)ds.push(ds[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return ps.map((p,i)=>{const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,t=Math.max(0,Math.min(1,(ds[i]-ds[startIndex])/(ds[endIndex]-ds[startIndex]||1))),smooth=t*t*(3-2*t),w=mix(w0,w1,smooth);return{x:p.x+dy/l*w,y:p.y-dx/l*w};});}
 function rightNormal(theta:number):P{return{x:Math.sin(theta),y:-Math.cos(theta)}}
-function highEntrySlip(approachCenter:number,receivingCenter:number,g:number,requestedRadius:number,w:number,requestedAngleDeg:number){
+function highEntrySlip(approachCenter:number,receivingCenter:number,referenceReceivingCenter:number,g:number,requestedRadius:number,w:number,requestedAngleDeg:number){
  const total=Math.PI-g,entryAngle=Math.min(requestedAngleDeg*Math.PI/180,Math.max(5*Math.PI/180,total-5*Math.PI/180)),
  departureMin=Math.max(3,w*.7),r1=Math.max(requestedRadius,4*departureMin),r2=r1/4,
  theta0=Math.PI,thetaM=g+entryAngle,theta2=g,n0=rightNormal(theta0),nm=rightNormal(thetaM),n2=rightNormal(theta2),
- p0Base={x:0,y:approachCenter},p2Base=rotate({x:0,y:receivingCenter},g/(Math.PI/2)),
+ // Seed the approach tangent from an outer reference line so the approach curve and
+ // channelising island remain outside the ordinary corner. A stand-up tangent then
+ // connects to the smaller departure curve at the Give Way control.
+ seed=cornerArc(approachCenter,referenceReceivingCenter,g,r1),p0=seed.points[0],
+ c1={x:p0.x+r1*n0.x,y:p0.y+r1*n0.y},p1={x:c1.x-r1*nm.x,y:c1.y-r1*nm.y},
+ p2Base=rotate({x:0,y:receivingCenter},g/(Math.PI/2)),tm={x:Math.cos(thetaM),y:Math.sin(thetaM)},t2={x:Math.cos(theta2),y:Math.sin(theta2)},
  curveDelta={x:r1*(n0.x-nm.x)+r2*(nm.x-n2.x),y:r1*(n0.y-nm.y)+r2*(nm.y-n2.y)},
- q={x:curveDelta.x-(p2Base.x-p0Base.x),y:curveDelta.y-(p2Base.y-p0Base.y)},
- sinG=Math.sin(g),s2=Math.abs(sinG)>.001?q.y/sinG:0,s0=q.x-s2*Math.cos(g),
- p0={x:p0Base.x-s0,y:p0Base.y},c1={x:p0.x+r1*n0.x,y:p0.y+r1*n0.y},
- control={x:c1.x-r1*nm.x,y:c1.y-r1*nm.y},c2={x:control.x+r2*nm.x,y:control.y+r2*nm.y},
+ q={x:p2Base.x-p0.x-curveDelta.x,y:p2Base.y-p0.y-curveDelta.y},
+ det=tm.x*(-t2.y)-(-t2.x)*tm.y,
+ tangentLength=Math.max(0,Math.abs(det)>.001?(q.x*(-t2.y)-(-t2.x)*q.y)/det:0),
+ control={x:p1.x+tangentLength*tm.x,y:p1.y+tangentLength*tm.y},c2={x:control.x+r2*nm.x,y:control.y+r2*nm.y},
  p2={x:c2.x-r2*n2.x,y:c2.y-r2*n2.y},d1=Math.max(0,theta0-thetaM),d2=Math.max(0,thetaM-theta2),
  sample=(center:P,rad:number,start:number,delta:number,n:number)=>Array.from({length:n+1},(_,j)=>{const theta=start-delta*j/n,nr=rightNormal(theta);return{x:center.x-rad*nr.x,y:center.y-rad*nr.y}}),
- n1=Math.max(6,Math.round(80*d1/Math.max(.001,total))),n2s=Math.max(12,80-n1),
- center=join(sample(c1,r1,theta0,d1,n1),sample(c2,r2,thetaM,d2,n2s)),
- outer=join(sample(c1,Math.max(.2,r1-w/2),theta0,d1,n1),sample(c2,Math.max(.2,r2-w/2),thetaM,d2,n2s)),
- inner=join(sample(c1,r1+w/2,theta0,d1,n1),sample(c2,r2+w/2,thetaM,d2,n2s));
- return{center,outer,inner,islandInner:sample(c1,r1+w/2,theta0,d1,n1),p0,p2,control,controlStation:r1*d1,r1,r2,entryAngleDeg:entryAngle*180/Math.PI,cx:c1.x,cy:c1.y};
+ line=(a:P,b:P,n:number)=>Array.from({length:n+1},(_,j)=>({x:mix(a.x,b.x,j/n),y:mix(a.y,b.y,j/n)})),
+ n1=Math.max(6,Math.round(60*d1/Math.max(.001,total))),n2s=Math.max(12,60-n1),nl=Math.max(4,Math.ceil(tangentLength/2)),
+ centerArc1=sample(c1,r1,theta0,d1,n1),centerLine=line(p1,control,nl),centerArc2=sample(c2,r2,thetaM,d2,n2s),
+ outerArc1=sample(c1,Math.max(.2,r1-w/2),theta0,d1,n1),outerP1={x:p1.x+w/2*nm.x,y:p1.y+w/2*nm.y},outerControl={x:control.x+w/2*nm.x,y:control.y+w/2*nm.y},outerLine=line(outerP1,outerControl,nl),outerArc2=sample(c2,Math.max(.2,r2-w/2),thetaM,d2,n2s),
+ innerArc1=sample(c1,r1+w/2,theta0,d1,n1),innerP1={x:p1.x-w/2*nm.x,y:p1.y-w/2*nm.y},innerControl={x:control.x-w/2*nm.x,y:control.y-w/2*nm.y},innerLine=line(innerP1,innerControl,nl),innerArc2=sample(c2,r2+w/2,thetaM,d2,n2s),
+ center=join(centerArc1,centerLine,centerArc2),outer=join(outerArc1,outerLine,outerArc2),inner=join(innerArc1,innerLine,innerArc2),
+ islandInner=join(innerArc1,innerLine);
+ return{center,outer,inner,islandInner,p0,p2,control,controlStation:r1*d1+tangentLength,r1,r2,entryAngleDeg:entryAngle*180/Math.PI,cx:c1.x,cy:c1.y};
 }
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
 export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipApproachIsland:P[];slipReceivingIsland:P[];slipAccelerationGore:P[];slipLead:P[];slipTrail:P[];slipCenter:P[];slipInner:P[];slipOuterCurve:P[];controlPoint?:P;controlStation:number;entryAngleDeg:number;departureRadius:number;slipFullEnd:number;slipMergeEnd:number;slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
@@ -121,7 +129,8 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  receivingCenter=hasAcceleration?baseReceivingOuter-separatorWidth-w/2:baseReceivingOuter+targetWidth/2,
  normalAngle=angleGap(d,i,next),useHighEntry=!hasAcceleration&&normalAngle>=70&&normalAngle<=110,
  freeArc=cornerArc(approachCenter,receivingCenter,g,R),
- high=useHighEntry?highEntrySlip(approachCenter,receivingCenter,g,R,w,slipEntryAngle(a)):null;
+ referenceReceivingCenter=baseReceivingOuter-w/2,
+ high=useHighEntry?highEntrySlip(approachCenter,receivingCenter,referenceReceivingCenter,g,R,w,slipEntryAngle(a)):null;
  if(high){R=high.r1;cx=high.cx;cy=high.cy;departureRadius=high.r2;entryAngleDeg=high.entryAngleDeg;controlPoint=high.control;controlStation=high.controlStation;slipCenter=high.center;slipOuterCurve=high.outer;slipInner=high.inner;islandBoundary=high.islandInner;}
  else{cx=freeArc.cx;cy=freeArc.cy;slipCenter=freeArc.points;slipOuterCurve=freeArc.points.map((_,j)=>freeArc.polar(R-w/2,j/80));slipInner=freeArc.points.map((_,j)=>freeArc.polar(R+w/2,j/80));islandBoundary=slipInner;}
  const entryTaper=Math.max(15,4*w),smooth=(t:number)=>{const q=Math.max(0,Math.min(1,t));return q*q*(3-2*q);},
