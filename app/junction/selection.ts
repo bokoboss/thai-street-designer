@@ -173,8 +173,8 @@ export function designShapes(d:Design,es=edges(d)){
     if(e?.slip){
       const s=slipArcState(e,a);
       add({kind:'slip',arm:i},[
-        ...Array.from({length:41},(_,j)=>s.point(s.inner,e.sweep*j/40)),
-        ...Array.from({length:41},(_,j)=>s.point(s.outer,e.sweep*(40-j)/40))
+        ...Array.from({length:41},(_,j)=>s.point(s.inner,s.centerLength*j/40)),
+        ...Array.from({length:41},(_,j)=>s.point(s.outer,s.centerLength*(40-j)/40))
       ],20);
       if(a.slipCrossing)add({kind:'slipCrossing',arm:i},[
         ...Array.from({length:13},(_,j)=>s.point(s.inner-.35,s.crossT-s.crossHalf-.02+(2*s.crossHalf+.04)*j/12)),
