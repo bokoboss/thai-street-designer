@@ -1,4 +1,4 @@
-import {allocate,pocketFactorAt,type TreatmentOrigins} from './allocation';
+import {allocate,pocketFactorAt} from './allocation';
 import {armTreatmentOrigins,bandWidths,edges,type Edge} from './geometry';
 import {
   pocketLaneWidth,pocketsFor,sectionFor,
@@ -36,7 +36,7 @@ export type ResolvedDirection={
 export type ResolvedStreetSection={
   arm:number;
   x:number;
-  origins:ReturnType<typeof armTreatmentOrigins>;
+  origins:{incoming:number;outgoing:number};
   incoming:ResolvedDirection;
   outgoing:ResolvedDirection;
   medianWidth:number;
@@ -51,7 +51,7 @@ function resolveDirection(
   armId:number,
   direction:Direction,
   x:number,
-  origins:TreatmentOrigins,
+  origins:{incoming:number;outgoing:number},
   edgeSet:Edge[],
   slipPieces=slipSectionAt(d,armId,x,edgeSet,slipGeometries(d,edgeSet))
 ):ResolvedDirection{
