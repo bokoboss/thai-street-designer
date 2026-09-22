@@ -1,5 +1,5 @@
 import {allocate,pocketFactorAt} from './allocation';
-import {armTreatmentOrigins,bandWidths,edges,type Edge} from './geometry';
+import {armTreatmentOrigins,bandWidths,edges,innerEdge,type Edge} from './geometry';
 import {
   pocketLaneWidth,pocketsFor,sectionFor,
   type Arm,type Design,type Direction
@@ -145,10 +145,9 @@ export function resolvedLaneBoundaries(d:Design,armId:number,direction:Direction
         :rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,direction,'right')+section.width*a[direction]+w*j*pocketFactorAt(pocket,x,origins,direction,which)
     });
   }
-  return out.map(v=>({...v,y:(x:number)=> {
-    // Boundary offsets are returned from the median edge so renderers do not re-derive lane semantics.
+  return out.map(v=>({...v,y:(x:number)=>{
     const offset=v.y(x);
-    return direction==='incoming'?offset:-offset;
+    return innerEdge(a,side,x,origins)+side*Math.abs(offset);
   }}));
 }
 
