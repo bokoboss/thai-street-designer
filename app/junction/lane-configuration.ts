@@ -151,6 +151,33 @@ export function resolvedLaneBoundaries(d:Design,armId:number,direction:Direction
   }}));
 }
 
+export type ArrowLaneRef={direction:Direction;role:'main'|'aux-left'|'aux-right';laneIndex:number};
+
+export function configuredArrowLanes(a:Arm,direction?:Direction):ArrowLaneRef[]{
+  const out:ArrowLaneRef[]=[];
+  for(const dir of direction?[direction]:['incoming','outgoing'] as const){
+    for(let i=0;i<a[dir];i++)out.push({direction:dir,role:'main',laneIndex:i});
+    const p=pocketsFor(a,dir);
+    for(let i=0;i<p.left.lanes;i++)out.push({direction:dir,role:'aux-left',laneIndex:i});
+    for(let i=0;i<p.right.lanes;i++)out.push({direction:dir,role:'aux-right',laneIndex:i});
+  }
+  return out;
+}
+
+export function resolvedLaneCenterY(
+  d:Design,armId:number,direction:Direction,role:'main'|'aux-left'|'aux-right',laneIndex:number,x:number,edgeSet=edges(d)
+){
+  const section=resolveStreetSection(d,armId,x,edgeSet)[direction],
+    target=section.lanes.find(v=>
+      role==='main'?v.source==='arm'&&v.laneIndex===laneIndex:
+      v.source==='pocket'&&v.side===(role==='aux-left'?'left':'right')&&v.laneIndex===laneIndex
+    );
+  if(!target||target.width<=1e-6)return null;
+  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
+    index=section.lanes.indexOf(target),before=section.lanes.slice(0,index).reduce((sum,v)=>sum+v.width,0);
+  return innerEdge(a,side,x,origins)+side*(before+target.width/2);
+}
+
 export function junctionLaneCount(d:Design,armId:number,direction:Direction,edgeSet=edges(d)){
   const origins=armTreatmentOrigins(d,armId,edgeSet);
   return resolveStreetSection(d,armId,origins[direction],edgeSet)[direction].activeLaneCount;
