@@ -4,6 +4,8 @@
 
 รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
 
+สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [HANDOFF.md](HANDOFF.md) แล้วอ่าน [Architecture](docs/ARCHITECTURE.md) และ [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+
 ## เริ่มใช้งาน
 
 เลือกทางแยกหรือวงเวียน เปิด/ปิดขาถนนให้เหลือ 3 หรือ 4 ขา จากนั้นคลิกขาถนนบนแบบเพื่อแก้ไข
@@ -29,13 +31,23 @@
 
 ## Source
 
-- `app/junction/model.ts`: ข้อมูลแบบ การตรวจและแปลง JSON รุ่นเก่า
-- `app/junction/geometry.ts`: ขอบถนน ทางเท้า โค้ง Slip lane เส้นหยุด
-- `app/junction/drawing.tsx`: ผัง SVG และลูกศร
-- `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D
-- `app/junction/scene3d.tsx`: รูปทรงยกสูงและกล้อง 3D
+- `app/junction/model.ts`: ข้อมูลแบบหลัก, schema v6, validation ระดับข้อมูล และ migration JSON รุ่นเก่า
+- `app/junction/geometry.ts`: **base junction geometry เท่านั้น** — ขอบถนน ทางเท้า ปากแยก median/pocket datums; ห้ามนำ Slip logic กลับเข้ามา
+- `app/junction/slip-model.ts`: source of truth ของ `Design.slips: SlipLane[]` และ lifecycle เพิ่ม/ลบ/แก้ Slip
+- `app/junction/slip-geometry.ts`: Slip overlay geometry, tangent/width transition, approach auxiliary, departure/acceleration, crossing และ validation เฉพาะ Slip
+- `app/junction/design-validation.ts`: รวม base-junction validation กับ Slip-overlay validation
+- `app/junction/drawing.tsx`: ผัง SVG; render base junction และ Slip overlay แยกกัน
+- `app/junction/selection.ts` / `object-layer.tsx`: selection และ drag interaction ที่อ้าง geometry ชุดเดียวกับ renderer
+- `app/junction/section-view.tsx` / `scene3d.tsx`: หน้าตัดและ 3D ที่ consume Slip overlay โดยไม่แก้ base road
+- `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D และหลบพื้นที่ Slip overlay
 - `app/junction/page.tsx`: เครื่องมือ ประวัติการแก้ไข autosave และส่งออก
 - `app/roads/page.tsx`: พื้นที่ทำงานวาดถนนอิสระ (Free Draw / Network)
+
+### Slip lane architecture (schema v6)
+
+Slip lane เป็น **design-level overlay** ไม่ใช่ field ใน `Arm` และไม่ใช้ generic `Pocket` เป็น source of truth อีกต่อไป กฎเหล็กคือการเพิ่ม/ลบ/ปรับ Slip ต้องไม่เปลี่ยน `edges(d)` ของ base junction; regression test ตรวจ `edges(withSlip) === edges(base)` แบบโครงสร้างตรงกัน
+
+Baseline Slip ไม่มีทางข้าม, auxiliary lane หรือ acceleration lane โดยอัตโนมัติ Treatment ต่าง ๆ ต้องเปิดอย่าง explicit ผ่าน `SlipLane.approach`, `SlipLane.departure` และ `SlipLane.crossing`. ดูรายละเอียดและข้อห้ามใน [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) และหลักวิศวกรรมใน [docs/SLIP_LANE_DESIGN_BASIS.md](docs/SLIP_LANE_DESIGN_BASIS.md)
 
 ## Development
 
