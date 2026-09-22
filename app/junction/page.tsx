@@ -28,7 +28,17 @@ const [sectionDirection,setSectionDirection]=useState<Direction>('incoming');
 const [object,setObject]=useState<Selection>({kind:'approach',arm:0}),[addOpen,setAddOpen]=useState(false),[structureOpen,setStructureOpen]=useState(false),[displayOpen,setDisplayOpen]=useState(false),[reviewOpen,setReviewOpen]=useState(false),[searchOpen,setSearchOpen]=useState(false),[sectionStation,setSectionStation]=useState(18),[geometryIssue,setGeometryIssue]=useState(''),[objectMenu,setObjectMenu]=useState<{items:HitShape[];x:number;y:number}|null>(null);
 const selection:Selection={...object,arm:selectedId,...(['approach','lane'].includes(object.kind)?{direction:sectionDirection}:{})},display=displayFor(d),reviews=useMemo(()=>designReviews(d),[d]),issueReviews=reviews.filter(r=>r.level!=='note');
 function selectObject(s:Selection){setSelected(s.arm);setObject(s);if(s.direction)setSectionDirection(s.direction);setObjectMenu(null);}
-function addPocket(side:'left'|'right'){const key=sectionDirection==='incoming'?'incomingPockets':'outgoingPockets',pockets=pocketsFor(arm,sectionDirection),nextPockets={...pockets,[side]:{...pockets[side],lanes:Math.max(1,pockets[side].lanes),allocation:'auto' as const}},next={...arm,[key]:nextPockets};edit({[key]:nextPockets,laneMarkings:markingsFor(next)});selectObject({kind:'pocket',arm:selectedId,direction:sectionDirection,side,laneIndex:0,role:side==='left'?'aux-left':'aux-right'});}
+function addPocket(side:'left'|'right'){
+ const key=sectionDirection==='incoming'?'incomingPockets':'outgoingPockets',pockets=pocketsFor(arm,sectionDirection),nextPockets={...pockets,[side]:{...pockets[side],lanes:Math.max(1,pockets[side].lanes),allocation:'auto' as const}},next={...arm,[key]:nextPockets};
+ if(side==='left'&&sectionDirection==='outgoing'){
+  const sourceEdge=edges(d).find(e=>e.next===selectedId&&e.slip);
+  if(sourceEdge){
+   const source=d.arms[sourceEdge.i],receiver={...next,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)};
+   change({...d,arms:d.arms.map((v,i)=>i===selectedId?receiver:i===sourceEdge.i?{...source,slipReceivingMode:'added'}:v)});
+  }else edit({[key]:nextPockets,laneMarkings:markingsFor(next)});
+ }else edit({[key]:nextPockets,...(side==='left'&&sectionDirection==='incoming'&&arm.slip?{slipApproachMode:'added' as const}:{}),laneMarkings:markingsFor(next)});
+ selectObject({kind:'pocket',arm:selectedId,direction:sectionDirection,side,laneIndex:0,role:side==='left'?'aux-left':'aux-right'});
+}
 function addTrees(){edit({medianTrees:{...medianTreeDefaults(),...arm.medianTrees,enabled:true}});selectObject({kind:'landscape',arm:selectedId});}
 function enableCrossing(){if(!arm.crossing)edit({crossing:true});selectObject({kind:'crossing',arm:selectedId});}
 function enableSignal(){if(!arm.signal)edit({signal:true});selectObject({kind:'signal',arm:selectedId});}
