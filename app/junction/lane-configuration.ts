@@ -9,15 +9,16 @@ import {slipGeometries,slipSectionAt} from './slip-geometry';
 export type ResolvedLaneKind='main'|'pocket-median'|'aux-curb'|'slip-aux'|'slip-accel'|'separator';
 export type LaneMovement='through'|'left'|'right'|'left-through'|'through-right'|'left-right'|'all'|'right-uturn'|'uturn'|'through-uturn'|'merge'|'none';
 
-export const movementFromArrowCode=(code:LaneArrowCode):LaneMovement=>({
+const MOVEMENT_BY_ARROW:Record<LaneArrowCode,LaneMovement>={
   straight:'through',left:'left',right:'right',sl:'left-through',sr:'through-right',lr:'left-right',
   all:'all',ru:'right-uturn',uturn:'uturn',su:'through-uturn',merge:'merge',none:'none'
-}[code]);
-
-export const arrowCodeFromMovement=(movement:LaneMovement):LaneArrowCode=>({
+};
+const ARROW_BY_MOVEMENT:Record<LaneMovement,LaneArrowCode>={
   through:'straight',left:'left',right:'right','left-through':'sl','through-right':'sr','left-right':'lr',
   all:'all','right-uturn':'ru',uturn:'uturn','through-uturn':'su',merge:'merge',none:'none'
-}[movement]);
+};
+export const movementFromArrowCode=(code:LaneArrowCode):LaneMovement=>MOVEMENT_BY_ARROW[code];
+export const arrowCodeFromMovement=(movement:LaneMovement):LaneArrowCode=>ARROW_BY_MOVEMENT[movement];
 
 export const configuredLaneMovement=(a:Arm,direction:Direction,role:LaneRole,laneIndex:number)=>
   movementFromArrowCode(laneArrowFor(a,direction,role,laneIndex));
