@@ -32,7 +32,7 @@ const validPockets=(p:Pockets)=>!!p&&['left','right'].every(k=>{
   const v=p[k as keyof Pockets];
   return !!v
     &&(v.allocation===undefined||['auto','median','retain','widen','reallocate','legacy-preserve'].includes(v.allocation))
-    &&(v.retainedMedian===undefined||(Number.isFinite(v.retainedMedian)&&v.retainedMedian>=0&&v.retainedMedian<=8))
+    &&(v.retainedMedian===undefined||(Number.isFinite(v.retainedMedian)&&v.retainedMedian>=0&&v.retainedMedian<=12))
     &&(v.width===undefined||(Number.isFinite(v.width)&&v.width>=2.5&&v.width<=4.5))
     &&[0,1,2,3].includes(v.lanes)
     &&Number.isFinite(v.length)&&v.length>=5&&v.length<=140
@@ -195,7 +195,7 @@ function validMarkings(v:LaneMarkings|undefined){
 export const initial=():Design=>{
   const arms:Arm[]=names.map((name,i)=>({
     dividerMode:"solid",
-    solidLength:30,
+    solidLength:36,
     angle:i*90,
     length:92,
     bands:[],
@@ -239,7 +239,7 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
         median:2
       }:{median:Math.max(2,a.median)}),
       medianOffset:0,
-      crossOffset:6,
+      crossOffset:9,
       signal:false,
       stop:true,
       arrows:['straight','straight','straight','straight'],
@@ -255,7 +255,7 @@ export function valid(d:unknown):d is Design{
   if(!d||typeof d!=='object')return false;
   const v=d as Design;
   return v.schemaVersion===6
-    &&Array.isArray(v.slips)&&v.slips.length<=4&&new Set(v.slips.map(s=>s.fromArm)).size===v.slips.length&&v.slips.every(s=>validSlip(s,v.arms?.length??4))
+    &&Array.isArray(v.slips)&&v.slips.length<=4&&new Set(v.slips.map(s=>s.fromArm)).size===v.slips.length&&new Set(v.slips.map(s=>s.id)).size===v.slips.length&&v.slips.every(s=>validSlip(s,v.arms?.length??4))
     &&(v.roundabout===undefined||Object.entries({apron:[0,4],entryRadius:[6,35],exitRadius:[8,45],splitterLength:[12,40],splitterWidth:[1,6],yieldOffset:[.3,3]}).every(([k,[lo,hi]])=>{
       const n=v.roundabout![k as keyof RoundaboutSettings];
       return Number.isFinite(n)&&n>=lo&&n<=hi;
