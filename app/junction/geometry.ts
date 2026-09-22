@@ -121,15 +121,18 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  accelerationWidth=slipAccelerationWidth(a),accelerationLength=slipAccelerationLength(a),mergeLength=slipAccelerationMerge(a),
  separatorType=slipAccelerationSeparator(a),separatorWidth=hasAcceleration?slipSeparatorWidth(a.slipReceivingSeparator):0,
  aMain={...a,incomingPockets:{...aP,left:{...aP.left,lanes:0}}},
- // The receiving road keeps any general departure auxiliary lane. It starts at the junction mouth,
- // independently of the Slip acceleration treatment.
- baseApproachOuter=bounds(aMain)[1],baseReceivingOuter=bounds(b)[0],
+ bMain={...b,outgoingPockets:{...bP,left:{...bP.left,lanes:0}}},
+ // Keep three independent concepts separate:
+ // 1) the main receiving carriageway, 2) a general departure auxiliary lane,
+ // 3) a Slip-specific acceleration lane.
+ baseApproachOuter=bounds(aMain)[1],mainReceivingOuter=bounds(bMain)[0],
+ addedReceivingOuter=departureMode==='added'&&departureAux.lanes?bounds(b)[0]:mainReceivingOuter,
  approachCenter=baseApproachOuter+w/2,
  targetWidth=departureMode==='added'&&departureAux.lanes?pocketLaneWidth(b,'outgoing','left'):sectionFor(b,'outgoing').width,
- receivingCenter=hasAcceleration?baseReceivingOuter-separatorWidth-w/2:baseReceivingOuter+targetWidth/2,
- normalAngle=angleGap(d,i,next),useHighEntry=!hasAcceleration&&normalAngle>=70&&normalAngle<=110,
+ receivingCenter=hasAcceleration?mainReceivingOuter-separatorWidth-w/2:addedReceivingOuter+targetWidth/2,
+ normalAngle=angleGap(d,i,next),useHighEntry=a.slipEntryAngle!==undefined&&!hasAcceleration&&normalAngle>=70&&normalAngle<=110,
  freeArc=cornerArc(approachCenter,receivingCenter,g,R),
- referenceReceivingCenter=baseReceivingOuter-w/2,
+ referenceReceivingCenter=mainReceivingOuter-w/2,
  high=useHighEntry?highEntrySlip(approachCenter,receivingCenter,referenceReceivingCenter,g,R,w,slipEntryAngle(a)):null;
  if(high){R=high.r1;cx=high.cx;cy=high.cy;departureRadius=high.r2;entryAngleDeg=high.entryAngleDeg;controlPoint=high.control;controlStation=high.controlStation;slipCenter=high.center;slipOuterCurve=high.outer;slipInner=high.inner;islandBoundary=high.islandInner;}
  else{cx=freeArc.cx;cy=freeArc.cy;slipCenter=freeArc.points;slipOuterCurve=freeArc.points.map((_,j)=>freeArc.polar(R-w/2,j/80));slipInner=freeArc.points.map((_,j)=>freeArc.polar(R+w/2,j/80));islandBoundary=slipInner;}
@@ -152,7 +155,8 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  originsB={incoming:stopPosition(b,mouths[next]),outgoing:mainOutgoing},
  outerExit=rotate(outerArc.at(-1)!,-gap),
  trailXs=[...new Set([...approachSamples(b,originsB,exitX,b.length),slipFullEnd,slipMergeEnd])].filter(x=>x>=Math.min(exitX,b.length)&&x<=Math.max(exitX,b.length)).sort((x,y)=>x-y),
- mainOuter=(x:number)=>bounds(b,x,originsB)[0],
+ mainOuter=(x:number)=>bounds(bMain,x,originsB)[0],
+ receivingRoadOuter=(x:number)=>departureMode==='added'&&departureAux.lanes?bounds(b,x,originsB)[0]:mainOuter(x),
  goreLength=hasAcceleration?Math.min(accelerationLength,Math.max(8,Math.min(18,accelerationLength*.35))):0,
  goreEnd=Math.min(b.length,exitX+goreLength),
  goreSep=(x:number)=>!hasAcceleration||x>=goreEnd?0:separatorWidth*(1-smooth((x-exitX)/Math.max(.001,goreEnd-exitX))),
@@ -162,7 +166,7 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
   if(x>=slipMergeEnd)return 0;
   return accelerationWidth*(1-smooth((x-slipFullEnd)/Math.max(.001,slipMergeEnd-slipFullEnd)));
  },
- baseOuter=(x:number)=>mainOuter(x)-goreSep(x)-accelOffset(x),
+ baseOuter=(x:number)=>hasAcceleration?mainOuter(x)-goreSep(x)-accelOffset(x):receivingRoadOuter(x),
  matchEnd=Math.min(b.length,exitX+Math.max(5,2*w)),exitDelta=outerExit.y-baseOuter(exitX),
  trailOuter=trailXs.map(x=>rotate({x,y:baseOuter(x)+exitDelta*(1-smooth((x-exitX)/Math.max(.001,matchEnd-exitX)))},gap));
  trailCount=trailOuter.length;
