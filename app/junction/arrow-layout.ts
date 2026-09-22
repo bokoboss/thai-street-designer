@@ -1,6 +1,6 @@
 import {
   type Arm,type Design,type Direction,type LaneRole,type LaneArrowCode,type LaneArrowPlacement,
-  laneArrowFor,pocketsFor
+  pocketsFor
 } from './model';
 import {originFor,pocketOriginFor} from './allocation';
 import {
