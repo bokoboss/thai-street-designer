@@ -6,6 +6,9 @@ export type Band={id:string;type:"shoulder"|"bike"|"motorcycle"|"buffer";width:n
 export type Direction='incoming'|'outgoing';
 export type Section={width:number;walk:number;bands:Band[]};
 export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;lanes:number;length:number;taper:number};
+export type SlipAuxMode='direct'|'added'|'channelized';
+export const slipAuxMode=(value:SlipAuxMode|undefined,hasLane:boolean):SlipAuxMode=>value??(hasLane?'added':'direct');
+export const slipSeparatorWidth=(value:number|undefined)=>Math.max(.5,Math.min(4,value??1.5));
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -84,6 +87,13 @@ export type Arm={
   slipCrossOffset:number;
   /** Optional centerline distance from Slip entry tangent; omitted = automatic mid-arc placement. */
   slipArrowOffset?:number;
+  /** Slip approach treatment: direct from curbside lane, adjacent added lane, or physically separated lane. */
+  slipApproachMode?:SlipAuxMode;
+  /** Slip departure treatment stored on the Slip source arm; receiving lane geometry lives on the next arm. */
+  slipReceivingMode?:SlipAuxMode;
+  /** Separator-island width for a channelized approach/departure. */
+  slipApproachSeparator?:number;
+  slipReceivingSeparator?:number;
   medianOffset:number;
   crossOffset:number;
   slipWidth:number;
@@ -254,6 +264,10 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
       stop:true,
       slip:false,
       slipCrossing:false,
+      slipApproachMode:undefined,
+      slipReceivingMode:undefined,
+      slipApproachSeparator:undefined,
+      slipReceivingSeparator:undefined,
       arrows:['straight','straight','straight','straight'],
       laneMarkings:undefined,
       arrowOverrides:undefined
@@ -312,6 +326,10 @@ export function valid(d:unknown):d is Design{
       &&typeof a.slipCrossing==='boolean'
       &&Number.isFinite(a.slipCrossOffset)&&a.slipCrossOffset>=2&&a.slipCrossOffset<=MAX_SLIP_CROSS_OFFSET
       &&(a.slipArrowOffset===undefined||(Number.isFinite(a.slipArrowOffset)&&a.slipArrowOffset>=2&&a.slipArrowOffset<=MAX_SLIP_CROSS_OFFSET))
+      &&(a.slipApproachMode===undefined||['direct','added','channelized'].includes(a.slipApproachMode))
+      &&(a.slipReceivingMode===undefined||['direct','added','channelized'].includes(a.slipReceivingMode))
+      &&(a.slipApproachSeparator===undefined||(Number.isFinite(a.slipApproachSeparator)&&a.slipApproachSeparator>=.5&&a.slipApproachSeparator<=4))
+      &&(a.slipReceivingSeparator===undefined||(Number.isFinite(a.slipReceivingSeparator)&&a.slipReceivingSeparator>=.5&&a.slipReceivingSeparator<=4))
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
