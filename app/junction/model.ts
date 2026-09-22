@@ -1,5 +1,6 @@
 import type {AllocationMode} from './allocation';
 import type {RoundaboutSettings} from './roundabout';
+import {defaultSlip,validSlip,type SlipLane} from './slip-model';
 
 export const MAX_SLIP_CROSS_OFFSET=600;
 export type Band={id:string;type:"shoulder"|"bike"|"motorcycle"|"buffer";width:number};
@@ -132,6 +133,7 @@ export type Arm={
 };
 
 export type Design={
+  slips:SlipLane[];
   display?:Partial<Display>;
   roundabout?:RoundaboutSettings;
   schemaVersion:number;
@@ -255,7 +257,8 @@ export const initial=():Design=>{
   }));
   arms.forEach(a=>a.laneMarkings=markingsFor(a));
   return {
-    schemaVersion:5,
+    schemaVersion:6,
+    slips:[],
     trees:false,lights:false,objectSpacing:15,objectOffset:.5,objectStart:10,stagger:false,
     showNames:true,showScale:true,showArrows:true,
     enabled:[true,true,true,true],
@@ -298,13 +301,14 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
     };
     return {...base,laneMarkings:markingsFor(base)};
   });
-  return {...d,type:'roundabout',...(singleLane?{ring:1,circulation:5.5,radius:15}:{}),arms};
+  return {...d,type:'roundabout',slips:[],...(singleLane?{ring:1,circulation:5.5,radius:15}:{}),arms};
 }
 
 export function valid(d:unknown):d is Design{
   if(!d||typeof d!=='object')return false;
   const v=d as Design;
-  return v.schemaVersion===5
+  return v.schemaVersion===6
+    &&Array.isArray(v.slips)&&v.slips.length<=4&&new Set(v.slips.map(s=>s.fromArm)).size===v.slips.length&&v.slips.every(s=>validSlip(s,v.arms?.length??4))
     &&(v.roundabout===undefined||Object.entries({apron:[0,4],entryRadius:[6,35],exitRadius:[8,45],splitterLength:[12,40],splitterWidth:[1,6],yieldOffset:[.3,3]}).every(([k,[lo,hi]])=>{
       const n=v.roundabout![k as keyof RoundaboutSettings];
       return Number.isFinite(n)&&n>=lo&&n<=hi;
@@ -393,11 +397,11 @@ function preserveSchema4Allocation(a:Arm){
   return {...a,incomingPockets:convert(a.incomingPockets),outgoingPockets:convert(a.outgoingPockets)};
 }
 
-type LegacyDesignInput=Partial<Design>&{type:string;arms:Partial<Arm>[];schemaVersion?:number;omitted?:number};
+type LegacyDesignInput=Partial<Design>&{type:string;arms:Partial<Arm>[];schemaVersion?:number;omitted?:number;slips?:SlipLane[]};
 export function migrate(raw:unknown):Design{
   if(!raw||typeof raw!=='object')throw Error('Invalid design');
   const candidate=raw as Partial<LegacyDesignInput>;
-  if((candidate.schemaVersion??0)>5)throw Error('Unsupported future schema');
+  if((candidate.schemaVersion??0)>6)throw Error('Unsupported future schema');
   if(typeof candidate.type!=='string'||!Array.isArray(candidate.arms))throw Error('Invalid design');
   const source=candidate as LegacyDesignInput,version=source.schemaVersion??0,defaults=initial(),r=source.type.startsWith('round');
   const arms=source.arms.map((input,i)=>{
@@ -433,17 +437,27 @@ export function migrate(raw:unknown):Design{
         slipArrowOffset:undefined
       };
     }
-    // Schema-5 files otherwise round-trip byte-for-structure: derived defaults are filled at read/use time.
+    // Schema-5/6 files otherwise round-trip byte-for-structure: derived defaults are filled at read/use time.
     // Older schemas receive an explicit marking model during migration.
-    if(version!==5||input.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
+    if(version<5||input.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
     return a;
   });
+  const enabled=source.enabled??[0,1,2,3].map(i=>!['three','round3'].includes(source.type)||i!==(source.omitted??3));
+  const active=enabled.map((v,i)=>v?i:-1).filter(i=>i>=0);
+  const legacySlips:SlipLane[]=version>=6
+    ?(source.slips??[])
+    :source.arms.flatMap((input,i)=>{
+      if(!input.slip||!enabled[i])return[];
+      const k=active.indexOf(i),to=k<0?null:active[(k+1)%active.length];
+      return to===null||to===undefined?[]:[defaultSlip(i,to,input.slipWidth??4,input.slipRadius??32)];
+    });
   const d:Design={
     ...defaults,
     ...source,
-    schemaVersion:5,
+    schemaVersion:6,
+    slips:r?[]:legacySlips,
     type:r?'roundabout':'junction',
-    enabled:source.enabled??[0,1,2,3].map(i=>!['three','round3'].includes(source.type)||i!==(source.omitted??3)),
+    enabled,
     circulation:source.circulation??(source.ring??defaults.ring)*3.5,
     arms
   };
