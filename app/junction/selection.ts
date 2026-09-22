@@ -1,11 +1,12 @@
 import {roundSettings} from './roundabout';
 import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
+import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,type P} from './geometry';
 import {slipGeometries,slipArcState} from './slip-geometry';
 import {slipForArm} from './slip-model';
 import {pocketFactorAt,originFor,pocketOriginFor} from './allocation';
 import {roadObjects} from './objects';
 import {resolvedArrowsForArm} from './arrow-layout';
+import {resolvedBandEdge,resolvedSidewalkEdges} from './lane-configuration';
 
 export type ObjectKind='approach'|'lane'|'arrow'|'sidewalk'|'band'|'median'|'pocket'|'crossing'|'stop'|'yield'|'signal'|'slip'|'slipCrossing'|'slipArrow'|'opening'|'central'|'splitter'|'trees'|'lights'|'landscape';
 export type Selection={
@@ -103,7 +104,7 @@ export function designShapes(d:Design,es=edges(d)){
 
       add(
         {kind:'sidewalk',arm:i,direction:dir},
-        strip(x=>bounds(a,x,origins)[idx],x=>bounds(a,x,origins)[idx]+side*c.walk),
+        strip(x=>resolvedSidewalkEdges(d,i,dir,x,es).inner,x=>resolvedSidewalkEdges(d,i,dir,x,es).outer),
         10
       );
 
@@ -122,8 +123,8 @@ export function designShapes(d:Design,es=edges(d)){
       c.bands.forEach((b,k)=>add(
         {kind:'band',arm:i,direction:dir,id:b.id},
         strip(
-          x=>carBounds(a,x,origins)[idx]+side*bandWidths(a,dir,x,origins).slice(0,k).reduce((n,v)=>n+v,0),
-          x=>carBounds(a,x,origins)[idx]+side*bandWidths(a,dir,x,origins).slice(0,k+1).reduce((n,v)=>n+v,0)
+          x=>resolvedBandEdge(d,i,dir,x,k,0,es),
+          x=>resolvedBandEdge(d,i,dir,x,k,1,es)
         ),
         15
       ));
