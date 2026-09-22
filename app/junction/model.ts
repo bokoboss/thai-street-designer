@@ -95,6 +95,8 @@ export type Arm={
   stopOffset:number;
   slipCrossing:boolean;
   slipCrossOffset:number;
+  /** Slip geometry/state contract revision. Missing means a pre-revision experimental Slip state. */
+  slipModelRevision?:1;
   /** Optional centerline distance from Slip entry tangent; omitted = automatic mid-arc placement. */
   slipArrowOffset?:number;
   /** Slip approach: direct from curbside lane or an adjacent auxiliary left-turn lane. Legacy 'channelized' reads as 'added'. */
@@ -348,6 +350,7 @@ export function valid(d:unknown):d is Design{
       &&typeof a.slipCrossing==='boolean'
       &&Number.isFinite(a.slipCrossOffset)&&a.slipCrossOffset>=2&&a.slipCrossOffset<=MAX_SLIP_CROSS_OFFSET
       &&(a.slipArrowOffset===undefined||(Number.isFinite(a.slipArrowOffset)&&a.slipArrowOffset>=2&&a.slipArrowOffset<=MAX_SLIP_CROSS_OFFSET))
+      &&(a.slipModelRevision===undefined||a.slipModelRevision===1)
       &&(a.slipApproachMode===undefined||['direct','added','channelized'].includes(a.slipApproachMode))
       &&(a.slipReceivingMode===undefined||['direct','added','channelized'].includes(a.slipReceivingMode))
       &&(a.slipApproachSeparator===undefined||(Number.isFinite(a.slipApproachSeparator)&&a.slipApproachSeparator>=.5&&a.slipApproachSeparator<=4))
@@ -410,7 +413,27 @@ export function migrate(raw:unknown):Design{
       crossOffset:input.crossOffset??(r?14:4)
     };
     if(version===4)a=preserveSchema4Allocation(a);
-    // Schema-5 files round-trip byte-for-structure: derived defaults are filled at read/use time.
+    if(a.slip&&a.slipModelRevision!==1){
+      // Slip geometry changed materially while remaining in schema 5 during development.
+      // Old hidden treatment state is unsafe to reinterpret under the current geometry model,
+      // so migrate once to the deterministic baseline and let the user re-enable treatments explicitly.
+      a={
+        ...a,
+        slipModelRevision:1,
+        slipCrossing:false,
+        slipApproachMode:'direct',
+        slipReceivingMode:'direct',
+        slipApproachSeparator:undefined,
+        slipReceivingSeparator:undefined,
+        slipAccelerationWidth:undefined,
+        slipAccelerationLength:undefined,
+        slipAccelerationMerge:undefined,
+        slipAccelerationSeparator:undefined,
+        slipEntryAngle:undefined,
+        slipArrowOffset:undefined
+      };
+    }
+    // Schema-5 files otherwise round-trip byte-for-structure: derived defaults are filled at read/use time.
     // Older schemas receive an explicit marking model during migration.
     if(version!==5||input.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
     return a;
