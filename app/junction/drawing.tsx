@@ -1,7 +1,7 @@
 import {roundSettings} from './roundabout';
 import {roadObjects} from './objects';
 import {type Design,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,curbBoundsAt,armIslands,innerEdge,bandWidths,direction,laneY,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,armTreatmentOrigins,dividerRange,STOP_LINE_WIDTH} from './geometry';
+import {activeIds,curbBoundsAt,armIslands,innerEdge,direction,laneY,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,armTreatmentOrigins,dividerRange,STOP_LINE_WIDTH} from './geometry';
 import {slipGeometries,slipArcState} from './slip-geometry';
 import {slipForArm} from './slip-model';
 import {resolvedArrowsForArm} from './arrow-layout';
