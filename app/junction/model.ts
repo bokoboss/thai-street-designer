@@ -2,24 +2,6 @@ import type {AllocationMode} from './allocation';
 import type {RoundaboutSettings} from './roundabout';
 import {defaultSlip,validSlip,type SlipLane} from './slip-model';
 
-export const MAX_SLIP_CROSS_OFFSET=600;
-export type Band={id:string;type:"shoulder"|"bike"|"motorcycle"|"buffer";width:number};
-export type Direction='incoming'|'outgoing';
-export type Section={width:number;walk:number;bands:Band[]};
-export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;lanes:number;length:number;taper:number};
-export type SlipAuxMode='direct'|'added'|'channelized';
-export type SlipAccelerationSeparator='chevron'|'raised';
-/** Legacy channelized approach values are interpreted as an ordinary adjacent auxiliary lane. */
-export const slipApproachMode=(value:SlipAuxMode|undefined,hasLane:boolean):'direct'|'added'=>value==='direct'?'direct':(value||hasLane?'added':'direct');
-/** Departure modes are explicit. A general outgoing auxiliary lane must not silently become a Slip receiving treatment. */
-export const slipDepartureMode=(value:SlipAuxMode|undefined,_hasDepartureAux:boolean):SlipAuxMode=>value??'direct';
-export const slipSeparatorWidth=(value:number|undefined)=>Math.max(.5,Math.min(4,value??1.5));
-export const slipAccelerationWidth=(a:Arm)=>Math.max(2.5,Math.min(6,a.slipAccelerationWidth??a.slipWidth));
-export const slipAccelerationLength=(a:Arm)=>Math.max(5,Math.min(200,a.slipAccelerationLength??40));
-export const slipAccelerationMerge=(a:Arm)=>Math.max(5,Math.min(120,a.slipAccelerationMerge??25));
-export const slipAccelerationSeparator=(a:Arm):SlipAccelerationSeparator=>a.slipAccelerationSeparator??'chevron';
-/** Concept high-entry angle at the Give Way control point; 70° is the Austroads A1 desirable value. */
-export const slipEntryAngle=(a:Arm)=>Math.max(55,Math.min(90,a.slipEntryAngle??70));
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -94,26 +76,6 @@ export type Arm={
   length:number;
   bands:Band[];
   stopOffset:number;
-  slipCrossing:boolean;
-  slipCrossOffset:number;
-  /** Slip geometry/state contract revision. Missing means a pre-revision experimental Slip state. */
-  slipModelRevision?:1;
-  /** Optional centerline distance from Slip entry tangent; omitted = automatic mid-arc placement. */
-  slipArrowOffset?:number;
-  /** Slip approach: direct from curbside lane or an adjacent auxiliary left-turn lane. Legacy 'channelized' reads as 'added'. */
-  slipApproachMode?:SlipAuxMode;
-  /** Slip departure: direct, added auxiliary lane from junction mouth, or protected Slip acceleration lane ('channelized'). */
-  slipReceivingMode?:SlipAuxMode;
-  /** Deprecated legacy approach separator; retained only for schema compatibility. */
-  slipApproachSeparator?:number;
-  /** Width of the departure gore/raised separator protecting a Slip acceleration lane. */
-  slipReceivingSeparator?:number;
-  slipAccelerationWidth?:number;
-  slipAccelerationLength?:number;
-  slipAccelerationMerge?:number;
-  slipAccelerationSeparator?:SlipAccelerationSeparator;
-  /** Stand-up angle to the receiving-road direction for non-acceleration Slip geometry. */
-  slipEntryAngle?:number;
   medianOffset:number;
   crossOffset:number;
   slipWidth:number;
@@ -237,13 +199,8 @@ export const initial=():Design=>{
     length:92,
     bands:[],
     stopOffset:2,
-    slipCrossing:false,
-    slipCrossOffset:10,
     medianOffset:9,
     crossOffset:4,
-    slipWidth:4,
-    slipRadius:32,
-    slip:false,
     name,
     incoming:2,
     outgoing:2,
@@ -284,17 +241,6 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
       crossOffset:6,
       signal:false,
       stop:true,
-      slip:false,
-      slipCrossing:false,
-      slipApproachMode:undefined,
-      slipReceivingMode:undefined,
-      slipApproachSeparator:undefined,
-      slipReceivingSeparator:undefined,
-      slipAccelerationWidth:undefined,
-      slipAccelerationLength:undefined,
-      slipAccelerationMerge:undefined,
-      slipAccelerationSeparator:undefined,
-      slipEntryAngle:undefined,
       arrows:['straight','straight','straight','straight'],
       laneMarkings:undefined,
       arrowOverrides:undefined
@@ -351,19 +297,6 @@ export function valid(d:unknown):d is Design{
       &&Number.isFinite(a.length)&&a.length>=45&&a.length<=400
       &&Array.isArray(a.bands)&&a.bands.length<=6&&a.bands.every(b=>typeof b.id==='string'&&['shoulder','bike','motorcycle','buffer'].includes(b.type)&&Number.isFinite(b.width)&&b.width>=.25&&b.width<=4.5)
       &&Number.isFinite(a.stopOffset)&&a.stopOffset>=0&&a.stopOffset<=35
-      &&typeof a.slipCrossing==='boolean'
-      &&Number.isFinite(a.slipCrossOffset)&&a.slipCrossOffset>=2&&a.slipCrossOffset<=MAX_SLIP_CROSS_OFFSET
-      &&(a.slipArrowOffset===undefined||(Number.isFinite(a.slipArrowOffset)&&a.slipArrowOffset>=2&&a.slipArrowOffset<=MAX_SLIP_CROSS_OFFSET))
-      &&(a.slipModelRevision===undefined||a.slipModelRevision===1)
-      &&(a.slipApproachMode===undefined||['direct','added','channelized'].includes(a.slipApproachMode))
-      &&(a.slipReceivingMode===undefined||['direct','added','channelized'].includes(a.slipReceivingMode))
-      &&(a.slipApproachSeparator===undefined||(Number.isFinite(a.slipApproachSeparator)&&a.slipApproachSeparator>=.5&&a.slipApproachSeparator<=4))
-      &&(a.slipReceivingSeparator===undefined||(Number.isFinite(a.slipReceivingSeparator)&&a.slipReceivingSeparator>=.5&&a.slipReceivingSeparator<=4))
-      &&(a.slipAccelerationWidth===undefined||(Number.isFinite(a.slipAccelerationWidth)&&a.slipAccelerationWidth>=2.5&&a.slipAccelerationWidth<=6))
-      &&(a.slipAccelerationLength===undefined||(Number.isFinite(a.slipAccelerationLength)&&a.slipAccelerationLength>=5&&a.slipAccelerationLength<=200))
-      &&(a.slipAccelerationMerge===undefined||(Number.isFinite(a.slipAccelerationMerge)&&a.slipAccelerationMerge>=5&&a.slipAccelerationMerge<=120))
-      &&(a.slipAccelerationSeparator===undefined||['chevron','raised'].includes(a.slipAccelerationSeparator))
-      &&(a.slipEntryAngle===undefined||(Number.isFinite(a.slipEntryAngle)&&a.slipEntryAngle>=55&&a.slipEntryAngle<=90))
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
@@ -397,7 +330,12 @@ function preserveSchema4Allocation(a:Arm){
   return {...a,incomingPockets:convert(a.incomingPockets),outgoingPockets:convert(a.outgoingPockets)};
 }
 
-type LegacyDesignInput=Partial<Design>&{type:string;arms:Partial<Arm>[];schemaVersion?:number;omitted?:number;slips?:SlipLane[]};
+type LegacyArmInput=Partial<Arm>&{
+  slip?:boolean;slipWidth?:number;slipRadius?:number;slipCrossing?:boolean;slipCrossOffset?:number;slipModelRevision?:number;slipArrowOffset?:number;
+  slipApproachMode?:string;slipReceivingMode?:string;slipApproachSeparator?:number;slipReceivingSeparator?:number;
+  slipAccelerationWidth?:number;slipAccelerationLength?:number;slipAccelerationMerge?:number;slipAccelerationSeparator?:string;slipEntryAngle?:number;
+};
+type LegacyDesignInput=Partial<Omit<Design,'arms'|'slips'>>&{type:string;arms:LegacyArmInput[];schemaVersion?:number;omitted?:number;slips?:SlipLane[]};
 export function migrate(raw:unknown):Design{
   if(!raw||typeof raw!=='object')throw Error('Invalid design');
   const candidate=raw as Partial<LegacyDesignInput>;
@@ -406,9 +344,10 @@ export function migrate(raw:unknown):Design{
   const source=candidate as LegacyDesignInput,version=source.schemaVersion??0,defaults=initial(),r=source.type.startsWith('round');
   const arms=source.arms.map((input,i)=>{
     const fallback=defaults.arms[i]??defaults.arms[0];
+    const {slip:_slip,slipWidth:_slipWidth,slipRadius:_slipRadius,slipCrossing:_slipCrossing,slipCrossOffset:_slipCrossOffset,slipModelRevision:_slipModelRevision,slipArrowOffset:_slipArrowOffset,slipApproachMode:_slipApproachMode,slipReceivingMode:_slipReceivingMode,slipApproachSeparator:_slipApproachSeparator,slipReceivingSeparator:_slipReceivingSeparator,slipAccelerationWidth:_slipAccelerationWidth,slipAccelerationLength:_slipAccelerationLength,slipAccelerationMerge:_slipAccelerationMerge,slipAccelerationSeparator:_slipAccelerationSeparator,slipEntryAngle:_slipEntryAngle,...armInput}=input;
     let a:Arm={
       ...fallback,
-      ...input,
+      ...armInput,
       ...(version>=4?{}:{corridorMode:input.corridorMode??(version===3?'preserve':'widen')}),
       angle:input.angle??i*90,
       length:input.length??92,
@@ -417,26 +356,6 @@ export function migrate(raw:unknown):Design{
       crossOffset:input.crossOffset??(r?14:4)
     };
     if(version===4)a=preserveSchema4Allocation(a);
-    if(a.slip&&a.slipModelRevision!==1){
-      // Slip geometry changed materially while remaining in schema 5 during development.
-      // Old hidden treatment state is unsafe to reinterpret under the current geometry model,
-      // so migrate once to the deterministic baseline and let the user re-enable treatments explicitly.
-      a={
-        ...a,
-        slipModelRevision:1,
-        slipCrossing:false,
-        slipApproachMode:'direct',
-        slipReceivingMode:'direct',
-        slipApproachSeparator:undefined,
-        slipReceivingSeparator:undefined,
-        slipAccelerationWidth:undefined,
-        slipAccelerationLength:undefined,
-        slipAccelerationMerge:undefined,
-        slipAccelerationSeparator:undefined,
-        slipEntryAngle:undefined,
-        slipArrowOffset:undefined
-      };
-    }
     // Schema-5/6 files otherwise round-trip byte-for-structure: derived defaults are filled at read/use time.
     // Older schemas receive an explicit marking model during migration.
     if(version<5||input.laneMarkings===undefined)a={...a,laneMarkings:markingsFor(a)};
