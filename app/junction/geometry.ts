@@ -210,7 +210,6 @@ export function slipAuxModeFor(d:Design,i:number,dir:Direction,segments=edges(d)
 }
 /** Pocket lanes are adjacent to the main carriageway. Slip acceleration separation is Edge geometry, not a pocket offset. */
 export function slipAuxSeparatorAt(_d:Design,_i:number,_dir:Direction,_x:number,_segments?:Edge[]){return 0;}
-
 export function suggestedMedianOpeningStart(d:Design,i:number,type:'opening'|'uturn',length:number){
  const a=d.arms[i],mouth=armMouth(d,i),origins=armTreatmentOrigins(d,i),usable=Math.max(0,a.length-mouth);
  let requested=type==='uturn'?35:45;
