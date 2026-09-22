@@ -13,6 +13,9 @@ export type SlipGeometry={
   gap:number;
   entryX:number;
   exitX:number;
+  entryWidth:number;
+  exitWidth:number;
+  transitionLength:number;
   centerline:P[];
   outerCurve:P[];
   innerCurve:P[];
@@ -87,15 +90,25 @@ export function slipGeometries(d:Design,baseEdges=edges(d)):SlipGeometry[]{
       sourceMainOuter=mainOuter(source,'incoming',sourceMouth,sourceOrigins),
       targetMainOuter=mainOuter(target,'outgoing',targetMouth,targetOrigins),
       sourceMainWidth=sectionFor(source,'incoming').width,targetMainWidth=sectionFor(target,'outgoing').width,
-      approachCenter=s.approach.mode==='auxiliary'?sourceMainOuter+s.approach.width/2:sourceMainOuter-sourceMainWidth/2,
-      departureCenter=s.departure.mode==='direct'?targetMainOuter+targetMainWidth/2
-        :s.departure.mode==='shared-aux'?targetMainOuter-s.departure.width/2
-        :targetMainOuter-s.departure.separatorWidth-s.departure.width/2,
-      radius=Math.max(s.radius,s.width/2+.5),
+      entryWidth=s.approach.mode==='auxiliary'?s.approach.width:sourceMainWidth,
+      exitWidth=s.departure.mode==='direct'?targetMainWidth:s.departure.width,
+      approachCenter=s.approach.mode==='auxiliary'?sourceMainOuter+entryWidth/2:sourceMainOuter-entryWidth/2,
+      departureCenter=s.departure.mode==='direct'?targetMainOuter+exitWidth/2
+        :s.departure.mode==='shared-aux'?targetMainOuter-exitWidth/2
+        :targetMainOuter-s.departure.separatorWidth-exitWidth/2,
+      radius=Math.max(s.radius,Math.max(s.width,entryWidth,exitWidth)/2+.5),
       arc=cornerArc(approachCenter,departureCenter,g,radius),
       centerline=arc.points,
-      outerCurve=arc.points.map((_,j)=>arc.polar(radius-s.width/2,j/80)),
-      innerCurve=arc.points.map((_,j)=>arc.polar(radius+s.width/2,j/80)),
+      arcLength=polylineLength(centerline),
+      transitionLength=Math.min(10,arcLength/3),
+      transitionFraction=transitionLength/Math.max(.001,arcLength),
+      channelWidth=(t:number)=>{
+        if(t<transitionFraction)return mix(entryWidth,s.width,smooth(t/Math.max(.001,transitionFraction)));
+        if(t>1-transitionFraction)return mix(s.width,exitWidth,smooth((t-(1-transitionFraction))/Math.max(.001,transitionFraction)));
+        return s.width;
+      },
+      outerCurve=arc.points.map((_,j)=>arc.polar(radius-channelWidth(j/80)/2,j/80)),
+      innerCurve=arc.points.map((_,j)=>arc.polar(radius+channelWidth(j/80)/2,j/80)),
       entryX=centerline[0].x,
       exitLocal=rotate(centerline.at(-1)!,-gapQuarter),
       exitX=exitLocal.x,
@@ -144,7 +157,7 @@ export function slipGeometries(d:Design,baseEdges=edges(d)):SlipGeometry[]{
     const total=polylineLength(centerline),arrowStation=Math.max(2,Math.min(s.arrowOffset??total/2,Math.max(2,total-2))),
       arrow=pointAlong(centerline,arrowStation).point;
     out.push({
-      id:s.id,fromArm:s.fromArm,toArm:s.toArm,gap:gapQuarter,entryX,exitX,
+      id:s.id,fromArm:s.fromArm,toArm:s.toArm,gap:gapQuarter,entryX,exitX,entryWidth,exitWidth,transitionLength,
       centerline,outerCurve,innerCurve,pavement,sidewalk,island,
       approachPavement,approachDivider,departurePavement,departureDivider,gore,raisedSeparator,
       fullEnd,mergeEnd,arrow
@@ -194,15 +207,25 @@ export function slipCrossLimit(g:SlipGeometry|undefined){
   return Math.max(2,Math.min(600,Math.floor(length-2)));
 }
 
+export function slipWidthAt(g:SlipGeometry,s:SlipLane,station:number){
+  const length=Math.max(.001,polylineLength(g.centerline)),t=Math.max(0,Math.min(1,station/length)),
+    f=g.transitionLength/length;
+  if(t<f)return mix(g.entryWidth,s.width,smooth(t/Math.max(.001,f)));
+  if(t>1-f)return mix(s.width,g.exitWidth,smooth((t-(1-f))/Math.max(.001,f)));
+  return s.width;
+}
+
 export function slipArcState(g:SlipGeometry,s:SlipLane){
-  const centerLength=Math.max(.001,polylineLength(g.centerline)),inner=-s.width/2,outer=s.width/2,
+  const centerLength=Math.max(.001,polylineLength(g.centerline)),
     crossOffset=Math.max(2,Math.min(s.crossing.offset,Math.max(2,centerLength-2))),crossT=centerLength-crossOffset,
     arrowOffset=Math.max(2,Math.min(s.arrowOffset??centerLength/2,Math.max(2,centerLength-2))),arrowT=arrowOffset,
     point=(lateral:number,station:number)=>offsetAt(g.centerline,Math.max(0,Math.min(centerLength,station)),lateral),
+    bounds=(station:number)=>{const w=slipWidthAt(g,s,station);return{inner:-w/2,outer:w/2};},
+    crossBounds=bounds(crossT),inner=crossBounds.inner,outer=crossBounds.outer,
     crossHalf=1.6,stopT=Math.max(.2,crossT-crossHalf-1.5),
     crossPoint=pointAlong(g.centerline,crossT).point,arrowState=pointAlong(g.centerline,arrowT),arrowPoint=arrowState.point,
     arrowAngle=(Math.atan2(arrowState.tangent.y,arrowState.tangent.x)*180/Math.PI+360)%360;
-  return{inner,outer,centerLength,crossOffset,crossT,arrowOffset,arrowT,crossHalf,stopT,point,crossPoint,arrowPoint,arrowAngle};
+  return{inner,outer,centerLength,crossOffset,crossT,arrowOffset,arrowT,crossHalf,stopT,point,bounds,crossPoint,arrowPoint,arrowAngle};
 }
 
 export function slipOffsetAtPoint(g:SlipGeometry,p:P,kind:'crossing'|'arrow'){
