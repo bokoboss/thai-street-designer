@@ -186,7 +186,7 @@ export function designError(d:Design):string|null{if(!valid(d))return 'ข้อ
  if(ids.some(i=>armIslands(d,i,boundaries).some(p=>selfIntersects(p))))return 'Geometry Error — ขอบเกาะตัดกัน กรุณาปรับหน้าตัดและช่วงสอบ';
  const footprint=boundaries.flatMap(e=>e.outer.map(p=>rotate(p,armTurn(d,e.i))));
  const walkFootprint=boundaries.flatMap(e=>e.walk.map(p=>rotate(p,armTurn(d,e.i))));
- if(selfIntersects(footprint)||selfIntersects(walkFootprint)||boundaries.some(e=>selfIntersects(e.base,false)||selfIntersects(e.walk,false)||selfIntersects(e.island)))return 'ขอบถนนหรือทางเท้าตัดกัน — เพิ่มมุมระหว่างขาถนน ปรับขนาดวงเวียน หรือความกว้างถนน';
+ if(selfIntersects(footprint)||selfIntersects(walkFootprint)||boundaries.some(e=>selfIntersects(e.base,false)||selfIntersects(e.walk,false)||selfIntersects(e.island)||selfIntersects(e.slipApproachIsland)||selfIntersects(e.slipReceivingIsland)))return 'ขอบถนนหรือทางเท้าตัดกัน — เพิ่มมุมระหว่างขาถนน ปรับขนาดวงเวียน หรือความกว้างถนน';
  return null;}
 
 export function crossingIntervals(a:Arm,core:number,round:boolean,settings=roundDefaults()){
