@@ -108,7 +108,7 @@ const view={width:813,height:665,extent:115,rotation:23},camera3={yaw:-30,pitch:
  const re=geo.edges(receive),ro=geo.armTreatmentOrigins(receive,0,re),rNear=lc.resolveStreetSection(receive,0,ro.outgoing+5,re),rFar=lc.resolveStreetSection(receive,0,ro.outgoing+70,re);
  assert.equal(rNear.outgoing.activeLaneCount,3);assert.equal(rFar.outgoing.activeLaneCount,2);
  let slip=sm.addSlip(base,0);let se=geo.edges(slip),so=geo.armTreatmentOrigins(slip,0,se),direct=lc.resolveStreetSection(slip,0,so.incoming+5,se);assert.equal(direct.incoming.activeLaneCount,2);
- slip=sm.updateSlip(slip,sm.slipIdForArm(0),{approach:{mode:'auxiliary',width:3.25,storage:35,taper:20}});se=geo.edges(slip);so=geo.armTreatmentOrigins(slip,0,se);const aux=lc.resolveStreetSection(slip,0,so.incoming+5,se);assert(aux.incoming.lanes.some(v=>v.kind==='slip-aux'));
+ slip=sm.updateSlip(slip,sm.slipIdForArm(0),{approach:{mode:'auxiliary',width:3.25,storage:35,taper:20}});se=geo.edges(slip);const slipGeom=sg.slipGeometryForArm(slip,0,se),aux=lc.resolveStreetSection(slip,0,slipGeom.entryX+5,se);assert(aux.incoming.lanes.some(v=>v.kind==='slip-aux'));
 }
 console.log('PASS lane configuration: main vs junction lanes, pocket development, receiving merge and Slip ownership');
 console.log('PASS mouse button mapping, reversed orbit direction, cursor pivot and wheel zoom anchor');
