@@ -23,6 +23,14 @@ const compactGeometry=sg.slipGeometryForArm(compactSlip,0,geo.edges(compactSlip)
 const removedSlip=sm.removeSlip(compactSlip,0);assert.deepEqual(geo.edges(removedSlip),baseSnapshot,'removing Slip must restore the exact same base geometry');assert.deepEqual(removedSlip.arms,baseSlip.arms,'Slip lifecycle must not touch Arm state');
 const directMarkup=renderToStaticMarkup(React.createElement(Drawing,{d:compactSlip,selected:-1,onSelect:()=>{}}));assert(directMarkup.includes('data-slip-overlay="true"')&&directMarkup.includes('data-slip-pavement="true"'));assert(!directMarkup.includes('data-slip-lead-divider="true"')&&!directMarkup.includes('data-slip-trail-divider="true"'),'bare Slip must not invent auxiliary lanes');
 
+// Slip pavement must meet the connected lane width at each tangent, even when the requested Slip width differs.
+const widthBetween=(g,i)=>Math.hypot(g.outerCurve[i].x-g.innerCurve[i].x,g.outerCurve[i].y-g.innerCurve[i].y);
+const wideDirect=sm.updateSlip(compactSlip,sm.slipIdForArm(0),{width:5.5}),wideDirectGeometry=sg.slipGeometryForArm(wideDirect,0,geo.edges(wideDirect));
+assert(Math.abs(widthBetween(wideDirectGeometry,0)-sectionFor(wideDirect.arms[0],'incoming').width)<1e-7,'direct Slip entry must match the curbside source-lane width');
+assert(Math.abs(widthBetween(wideDirectGeometry,40)-5.5)<1e-7,'Slip must reach the requested channel width away from the tangent transitions');
+assert(Math.abs(widthBetween(wideDirectGeometry,80)-sectionFor(wideDirect.arms[wideDirectGeometry.toArm],'outgoing').width)<1e-7,'direct Slip exit must match the curbside receiving-lane width');
+assert.deepEqual(geo.edges(wideDirect),baseSnapshot,'Slip width transitions must remain overlay-only');
+
 const radiusSlip=sm.updateSlip(compactSlip,sm.slipIdForArm(0),{radius:34}),radiusGeometry=sg.slipGeometryForArm(radiusSlip,0,geo.edges(radiusSlip));assert(radiusGeometry.entryX>compactGeometry.entryX,'larger radius must move only the Slip entry tangent');assert.deepEqual(geo.edges(radiusSlip),baseSnapshot,'radius edits must not move the base junction');
 
 const approachSlip=sm.updateSlip(compactSlip,sm.slipIdForArm(0),{approach:{mode:'auxiliary',width:4,storage:35,taper:20}}),approachGeometry=sg.slipGeometryForArm(approachSlip,0,geo.edges(approachSlip));assert(approachGeometry.approachPavement.length>3&&approachGeometry.approachDivider.length>1);assert.deepEqual(geo.edges(approachSlip),baseSnapshot,'Slip approach auxiliary must remain overlay-only');assert.equal(approachSlip.arms[0].incomingPockets,undefined,'Slip auxiliary must not reuse a generic Pocket');
