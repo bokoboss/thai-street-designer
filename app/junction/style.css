@@ -61,3 +61,5 @@
 .j-camera-num{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ws-muted);white-space:nowrap}
 .j-camera-num input{width:60px;height:26px;border:1px solid var(--ws-border);border-radius:5px;padding:3px 5px;text-align:right;font:11px var(--ws-font);color:var(--ws-ink);background:#fff}
 @media(max-width:900px){.j-camera-num span{display:none}.j-camera-num input{width:54px}}
+
+.section-components .separator{background:#aeb8a8;color:#31473c;min-width:7px}
