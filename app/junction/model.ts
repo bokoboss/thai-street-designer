@@ -78,9 +78,6 @@ export type Arm={
   stopOffset:number;
   medianOffset:number;
   crossOffset:number;
-  slipWidth:number;
-  slipRadius:number;
-  slip:boolean;
   name:string;
   incoming:number;
   outgoing:number;
@@ -299,9 +296,6 @@ export function valid(d:unknown):d is Design{
       &&Number.isFinite(a.stopOffset)&&a.stopOffset>=0&&a.stopOffset<=35
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
-      &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
-      &&Number.isFinite(a.slipRadius)&&a.slipRadius>=10&&a.slipRadius<=60
-      &&typeof a.slip==='boolean'
       &&typeof a.name==='string'&&a.name.length<=40
       &&[0,1,2,3,4].includes(a.incoming)
       &&[0,1,2,3,4].includes(a.outgoing)
