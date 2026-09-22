@@ -17,6 +17,8 @@ export const slipAccelerationWidth=(a:Arm)=>Math.max(2.5,Math.min(6,a.slipAccele
 export const slipAccelerationLength=(a:Arm)=>Math.max(5,Math.min(200,a.slipAccelerationLength??40));
 export const slipAccelerationMerge=(a:Arm)=>Math.max(5,Math.min(120,a.slipAccelerationMerge??25));
 export const slipAccelerationSeparator=(a:Arm):SlipAccelerationSeparator=>a.slipAccelerationSeparator??'chevron';
+/** Concept high-entry angle at the Give Way control point; 70° is the Austroads A1 desirable value. */
+export const slipEntryAngle=(a:Arm)=>Math.max(55,Math.min(90,a.slipEntryAngle??70));
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -107,6 +109,8 @@ export type Arm={
   slipAccelerationLength?:number;
   slipAccelerationMerge?:number;
   slipAccelerationSeparator?:SlipAccelerationSeparator;
+  /** Stand-up angle to the receiving-road direction for non-acceleration Slip geometry. */
+  slipEntryAngle?:number;
   medianOffset:number;
   crossOffset:number;
   slipWidth:number;
@@ -285,6 +289,7 @@ export function roundaboutDesign(d:Design,singleLane=false):Design{
       slipAccelerationLength:undefined,
       slipAccelerationMerge:undefined,
       slipAccelerationSeparator:undefined,
+      slipEntryAngle:undefined,
       arrows:['straight','straight','straight','straight'],
       laneMarkings:undefined,
       arrowOverrides:undefined
@@ -351,6 +356,7 @@ export function valid(d:unknown):d is Design{
       &&(a.slipAccelerationLength===undefined||(Number.isFinite(a.slipAccelerationLength)&&a.slipAccelerationLength>=5&&a.slipAccelerationLength<=200))
       &&(a.slipAccelerationMerge===undefined||(Number.isFinite(a.slipAccelerationMerge)&&a.slipAccelerationMerge>=5&&a.slipAccelerationMerge<=120))
       &&(a.slipAccelerationSeparator===undefined||['chevron','raised'].includes(a.slipAccelerationSeparator))
+      &&(a.slipEntryAngle===undefined||(Number.isFinite(a.slipEntryAngle)&&a.slipEntryAngle>=55&&a.slipEntryAngle<=90))
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35
       &&Number.isFinite(a.crossOffset)&&a.crossOffset>=0&&a.crossOffset<=35
       &&Number.isFinite(a.slipWidth)&&a.slipWidth>=3&&a.slipWidth<=6
