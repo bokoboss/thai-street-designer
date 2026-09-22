@@ -1,11 +1,10 @@
-import {sectionFor,type Arm,type Design} from './model';
+import {sectionFor,type Design} from './model';
 import {allocate} from './allocation';
 import {activeIds,armMouth,armTreatmentOrigins} from './geometry';
 import {plantingPlan} from './planting';
 import {roundFeedback} from './roundabout';
 import type {Selection} from './selection';
 export type Review={level:'geometry'|'engineering'|'note';message:string;selection:Selection};
-const sectionHasBands=(a:Arm,dir:'incoming'|'outgoing')=>sectionFor(a,dir).bands.some(b=>b.width>1e-6);
 
 export function designReviews(d:Design):Review[]{
   const out:Review[]=[];
@@ -51,17 +50,6 @@ export function designReviews(d:Design):Review[]{
     }
 
     const slip=d.slips.find(s=>s.fromArm===i);
-    if(slip){
-      const sourceBands=slip.approach.mode==='auxiliary'&&sectionHasBands(d.arms[slip.fromArm],'incoming');
-      const targetBands=slip.departure.mode!=='direct'&&sectionHasBands(d.arms[slip.toArm],'outgoing');
-      if(sourceBands||targetBands){
-        out.push({
-          level:'engineering',
-          selection:{kind:'slip',arm:i},
-          message:`${a.name} · Slip auxiliary/acceleration ซ้อนกับแถบหน้าตัดริมทางที่มีอยู่ — รุ่นนี้ยังไม่ reflow ไหล่ทาง/จักรยาน/คั่นรอบเลน Slip อัตโนมัติ ควรปรับ treatment ก่อนใช้ภาพ concept`
-        });
-      }
-    }
     if(slip?.departure.mode==='acceleration'&&slip.crossing.enabled){
       out.push({
         level:'engineering',
