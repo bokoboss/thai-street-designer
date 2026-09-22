@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
 import {sectionFor,pocketsFor,pocketLaneWidth,type Design,type Direction} from './model';
 import {allocate,pocketFactorAt} from './allocation';
-import {armMouth,armTreatmentOrigins,bandWidths,armIslands,edges,slipAuxSeparatorAt} from './geometry';
+import {armMouth,armTreatmentOrigins,bandWidths,armIslands,edges,slipAccelerationSection} from './geometry';
 import {selectionKey,type Selection} from './selection';
 
 export const sectionStart=(d:Design,id:number)=>d.type==='roundabout'?roundSettings(d).splitterLength+d.arms[id].medianOffset+8:0;
@@ -30,7 +30,7 @@ export function sectionPieces(d:Design,id:number,x:number){
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
   const addDirection=(direction:Direction)=>{
-    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction),slipSeparator=slipAuxSeparatorAt(d,id,direction,x,edgeSet);
+    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction);
     const bands=bandWidths(a,direction,x,origins),sidePieces:Piece[]=[];
     const push=(width:number,label:string,kind:string,selection:Selection,editable?:Editable)=>{
       if(width>.001)sidePieces.push({width,label,kind,group,selection,editable});
@@ -51,7 +51,6 @@ export function sectionPieces(d:Design,id:number,x:number){
         const w=pocketLaneWidth(a,direction,'left')*pocketFactorAt(p.left,x,origins,direction,'left');
         push(w,'เสริมริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
       }
-      if(slipSeparator>.001)push(slipSeparator,'เกาะกั้น Slip','separator',{kind:'slip',arm:id});
       for(let j=a.incoming-1;j>=0;j--)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
       for(let j=p.right.lanes-1;j>=0;j--){
         const w=pocketLaneWidth(a,direction,'right')*pocketFactorAt(p.right,x,origins,direction,'right');
@@ -60,13 +59,17 @@ export function sectionPieces(d:Design,id:number,x:number){
     }else{
       for(let j=0;j<p.right.lanes;j++){
         const w=pocketLaneWidth(a,direction,'right')*pocketFactorAt(p.right,x,origins,direction,'right');
-        push(w,'เลนรับ','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
+        push(w,'เลนเสริมขาออก','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
       }
       for(let j=0;j<a.outgoing;j++)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
-      if(slipSeparator>.001)push(slipSeparator,'เกาะกั้น Slip','separator',{kind:'slip',arm:id});
       for(let j=0;j<p.left.lanes;j++){
         const w=pocketLaneWidth(a,direction,'left')*pocketFactorAt(p.left,x,origins,direction,'left');
-        push(w,'เลนรับริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
+        push(w,'เลนเสริมขาออกริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
+      }
+      const slipAccel=slipAccelerationSection(d,id,x,edgeSet);
+      if(slipAccel){
+        if(slipAccel.separator>.001)push(slipAccel.separator,slipAccel.separatorType==='raised'?'เกาะกั้น Slip':'Chevron Slip','separator',{kind:'slip',arm:slipAccel.sourceArm});
+        if(slipAccel.width>.001)push(slipAccel.width,'Acceleration Slip','slip-accel',{kind:'slip',arm:slipAccel.sourceArm});
       }
       section.bands.forEach((b,k)=>push(
         bands[k],
