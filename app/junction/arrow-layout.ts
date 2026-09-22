@@ -1,12 +1,12 @@
 import {
   type Arm,type Design,type Direction,type LaneRole,type LaneArrowCode,type LaneArrowPlacement,
-  laneArrowFor,pocketsFor,pocketLaneWidth,sectionFor
+  laneArrowFor,pocketsFor
 } from './model';
-import {originFor,pocketOriginFor,pocketFactorAt} from './allocation';
+import {originFor,pocketOriginFor} from './allocation';
 import {
   type Edge,edges,armTreatmentOrigins,armMouth,coreSize,crossingIntervals,
-  laneY,innerEdge
 } from './geometry';
+import {configuredArrowLanes,resolvedLaneCenterY} from './lane-configuration';
 import {roundSettings} from './roundabout';
 
 export type ResolvedLaneArrow={
@@ -36,14 +36,7 @@ export function laneExists(a:Arm,direction:Direction,role:LaneRole,laneIndex:num
 }
 
 export function activeArrowLaneKeys(a:Arm){
-  const keys:string[]=[];
-  for(const direction of ['incoming','outgoing'] as const){
-    for(let i=0;i<a[direction];i++)keys.push(laneArrowKey(direction,'main',i));
-    const pockets=pocketsFor(a,direction);
-    for(let i=0;i<pockets.left.lanes;i++)keys.push(laneArrowKey(direction,'aux-left',i));
-    for(let i=0;i<pockets.right.lanes;i++)keys.push(laneArrowKey(direction,'aux-right',i));
-  }
-  return keys;
+  return configuredArrowLanes(a).map(v=>laneArrowKey(v.direction,v.role,v.laneIndex));
 }
 
 export function normalizeArrowOverrides(a:Arm){
@@ -66,15 +59,7 @@ function laneRange(d:Design,armId:number,direction:Direction,role:LaneRole,laneI
 }
 
 function laneYAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneIndex:number,x:number,edgeSet:Edge[]){
-  const a=d.arms[armId],{origin,origins}=laneRange(d,armId,direction,role,laneIndex,edgeSet),side=direction==='incoming'?1:-1;
-  if(role==='main')return laneY(a,side,laneIndex,x,origins);
-  const section=sectionFor(a,direction),pockets=pocketsFor(a,direction),right=pockets.right,rightWidth=pocketLaneWidth(a,direction,'right');
-  const which=role==='aux-left'?'left':'right',p=pockets[which],w=pocketLaneWidth(a,direction,which),factor=pocketFactorAt(p,x,origins,direction,which);
-  return innerEdge(a,side,x,origins)+side*(
-    which==='right'
-      ?w*(laneIndex+.5)*factor
-      :rightWidth*right.lanes*pocketFactorAt(right,x,origins,direction,'right')+section.width*a[direction]+w*(laneIndex+.5)*factor
-  );
+  return resolvedLaneCenterY(d,armId,direction,role,laneIndex,x,edgeSet);
 }
 
 function resolveAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneIndex:number,p:LaneArrowPlacement,manual:boolean,edgeSet:Edge[]):ResolvedLaneArrow|null{
@@ -85,7 +70,7 @@ function resolveAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneI
   const offset=Math.max(range.minOffset,Math.min(range.maxOffset,p.offset)),x=range.origin+offset;
   return {
     id:p.id,arm:armId,direction,role,laneIndex,code:p.code,offset,x,
-    y:laneYAt(d,armId,direction,role,laneIndex,x,edgeSet),
+    y:laneYAt(d,armId,direction,role,laneIndex,x,edgeSet)!,
     angle:direction==='incoming'?180:0,
     mergeSide:role==='aux-left'?-1:1,
     manual,minOffset:range.minOffset,maxOffset:range.maxOffset
@@ -129,13 +114,8 @@ export function resolvedLaneArrows(d:Design,armId:number,direction:Direction,rol
 }
 
 export function resolvedArrowsForArm(d:Design,armId:number,edgeSet=edges(d)){
-  const a=d.arms[armId],out:ResolvedLaneArrow[]=[];
-  for(const direction of ['incoming','outgoing'] as const){
-    for(let i=0;i<a[direction];i++)out.push(...resolvedLaneArrows(d,armId,direction,'main',i,edgeSet));
-    const p=pocketsFor(a,direction);
-    for(let i=0;i<p.left.lanes;i++)out.push(...resolvedLaneArrows(d,armId,direction,'aux-left',i,edgeSet));
-    for(let i=0;i<p.right.lanes;i++)out.push(...resolvedLaneArrows(d,armId,direction,'aux-right',i,edgeSet));
-  }
+  const out:ResolvedLaneArrow[]=[];
+  for(const lane of configuredArrowLanes(d.arms[armId]))out.push(...resolvedLaneArrows(d,armId,lane.direction,lane.role,lane.laneIndex,edgeSet));
   return out;
 }
 
