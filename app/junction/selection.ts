@@ -1,6 +1,8 @@
 import {roundSettings} from './roundabout';
 import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,slipArcState,slipAuxSeparatorAt,type P} from './geometry';
+import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,type P} from './geometry';
+import {slipGeometries,slipArcState} from './slip-geometry';
+import {slipForArm} from './slip-model';
 import {pocketFactorAt,originFor,pocketOriginFor} from './allocation';
 import {roadObjects} from './objects';
 import {resolvedArrowsForArm} from './arrow-layout';
@@ -71,7 +73,7 @@ const rect=(x:number,y:number,w:number,h:number)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h}
 const circle=(x:number,y:number,r:number)=>Array.from({length:24},(_,i)=>({x:x+r*Math.cos(i/12*Math.PI),y:y+r*Math.sin(i/12*Math.PI)}));
 
 export function designShapes(d:Design,es=edges(d)){
-  const out:HitShape[]=[];
+  const out:HitShape[]=[],slips=slipGeometries(d,es);
   const add=(s:Selection,points:P[],priority:number,local=true,labelSuffix='')=>{
     if(points.length<3)return;
     out.push({
@@ -136,7 +138,7 @@ export function designShapes(d:Design,es=edges(d)){
           const base=(x:number)=>{
             if(which==='right')return innerEdge(a,side,x,origins)+side*w*laneIndex*factor(x);
             const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,dir,'right')+c.width*a[dir]);
-            return outerMain+side*(slipAuxSeparatorAt(d,i,dir,x,es)+w*laneIndex*factor(x));
+            return outerMain+side*w*laneIndex*factor(x);
           };
           add(
             {kind:'pocket',arm:i,direction:dir,side:which,laneIndex,role:which==='left'?'aux-left':'aux-right'},
@@ -169,18 +171,17 @@ export function designShapes(d:Design,es=edges(d)){
       ` · ${arrow.direction==='incoming'?'ขาเข้า':'ขาออก'} · เลน ${arrow.laneIndex+1}`
     );
     if(a.signal)add({kind:'signal',arm:i},rect((d.type==='roundabout'?mouth+5:incomingOrigin)-2,hi+.7,4,2),80);
-    const e=es.find(e=>e.i===i);
-    if(e?.slip){
-      const s=slipArcState(e,a);
-      add({kind:'slip',arm:i},[
-        ...Array.from({length:41},(_,j)=>s.point(s.inner,s.centerLength*j/40)),
-        ...Array.from({length:41},(_,j)=>s.point(s.outer,s.centerLength*(40-j)/40))
-      ],20);
-      if(a.slipCrossing)add({kind:'slipCrossing',arm:i},[
-        ...Array.from({length:13},(_,j)=>s.point(s.inner-.35,s.crossT-s.crossHalf-.02+(2*s.crossHalf+.04)*j/12)),
-        ...Array.from({length:13},(_,j)=>s.point(s.outer+.35,s.crossT+s.crossHalf+.02-(2*s.crossHalf+.04)*j/12))
+    const g=slips.find(g=>g.fromArm===i),slip=slipForArm(d,i);
+    if(g&&slip){
+      const state=slipArcState(g,slip);
+      add({kind:'slip',arm:i},g.pavement,20);
+      if(g.approachPavement.length>3)add({kind:'slip',arm:i},g.approachPavement,20);
+      if(g.departurePavement.length>3)add({kind:'slip',arm:i},g.departurePavement,20);
+      if(slip.crossing.enabled)add({kind:'slipCrossing',arm:i},[
+        ...Array.from({length:13},(_,j)=>state.point(state.inner-.35,state.crossT-state.crossHalf-.02+(2*state.crossHalf+.04)*j/12)),
+        ...Array.from({length:13},(_,j)=>state.point(state.outer+.35,state.crossT+state.crossHalf+.02-(2*state.crossHalf+.04)*j/12))
       ],94);
-      add({kind:'slipArrow',arm:i},circle(s.arrowPoint.x,s.arrowPoint.y,2.7),95);
+      add({kind:'slipArrow',arm:i},circle(state.arrowPoint.x,state.arrowPoint.y,2.7),95);
     }
   }
 
