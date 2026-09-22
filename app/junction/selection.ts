@@ -1,7 +1,7 @@
 import {roundSettings} from './roundabout';
 import {type Arm,type Design,type Direction,type LaneRole,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,slipArcState,type P} from './geometry';
-import {pocketFactor,originFor,pocketOriginFor} from './allocation';
+import {activeIds,armMouth,armTreatmentOrigins,bounds,carBounds,armIslands,curbBoundsAt,edges,rotate,innerEdge,approachSamples,bandWidths,slipArcState,slipAuxSeparatorAt,type P} from './geometry';
+import {pocketFactorAt,originFor,pocketOriginFor} from './allocation';
 import {roadObjects} from './objects';
 import {resolvedArrowsForArm} from './arrow-layout';
 
@@ -107,7 +107,7 @@ export function designShapes(d:Design,es=edges(d)){
 
       const p=pocketsFor(a,dir),rightWidth=pocketLaneWidth(a,dir,'right'),leftWidth=pocketLaneWidth(a,dir,'left');
       for(let laneIndex=0;laneIndex<a[dir];laneIndex++){
-        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,rightOrigin)+c.width*laneIndex);
+        const inner=(x:number)=>innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,dir,'right')+c.width*laneIndex);
         add(
           {kind:'lane',arm:i,direction:dir,laneIndex,role:'main'},
           strip(inner,x=>inner(x)+side*c.width),
@@ -131,12 +131,12 @@ export function designShapes(d:Design,es=edges(d)){
         if(!pocket.lanes)continue;
         const pocketOrigin=pocketOriginFor(origins,dir,which),xx=approachSamples(a,origins,pocketOrigin,pocketOrigin+pocket.length+pocket.taper);
         for(let laneIndex=0;laneIndex<pocket.lanes;laneIndex++){
-          const factor=(x:number)=>pocketFactor(pocket,x,pocketOrigin);
+          const factor=(x:number)=>pocketFactorAt(pocket,x,origins,dir,which);
           const w=which==='right'?rightWidth:leftWidth;
           const base=(x:number)=>{
             if(which==='right')return innerEdge(a,side,x,origins)+side*w*laneIndex*factor(x);
-            const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,rightOrigin)+c.width*a[dir]);
-            return outerMain+side*w*laneIndex*factor(x);
+            const outerMain=innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,dir,'right')+c.width*a[dir]);
+            return outerMain+side*(slipAuxSeparatorAt(d,i,dir,x,es)+w*laneIndex*factor(x));
           };
           add(
             {kind:'pocket',arm:i,direction:dir,side:which,laneIndex,role:which==='left'?'aux-left':'aux-right'},
