@@ -45,7 +45,7 @@ function enableSignal(){if(!arm.signal)edit({signal:true});selectObject({kind:'s
 function enableSlip(){
  if(round){setNotice('Slip lane ใช้กับทางแยกทั่วไปในรุ่นนี้');return;}
  if(!slipEdge||angleGap(d,selectedId,slipEdge.next)>=175||!arm.incoming||!d.arms[slipEdge.next].outgoing){setNotice('เพิ่ม Slip lane ไม่ได้: ต้องมีเลนเข้าและขาทางออกด้านซ้าย');return;}
- if(!arm.slip&&!edit({slip:true,slipCrossing:true}))return;
+ if(!arm.slip&&!edit({slip:true}))return;
  selectObject({kind:'slip',arm:selectedId});
 }
 function nextLocalId(prefix:string,used:string[]){let n=1;while(used.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;}
