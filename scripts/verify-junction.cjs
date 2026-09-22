@@ -31,6 +31,12 @@ assert(Math.abs(widthBetween(wideDirectGeometry,40)-5.5)<1e-7,'Slip must reach t
 assert(Math.abs(widthBetween(wideDirectGeometry,80)-sectionFor(wideDirect.arms[wideDirectGeometry.toArm],'outgoing').width)<1e-7,'direct Slip exit must match the curbside receiving-lane width');
 assert.deepEqual(geo.edges(wideDirect),baseSnapshot,'Slip width transitions must remain overlay-only');
 
+const exitCrossSlip=sm.updateSlip(wideDirect,sm.slipIdForArm(0),{crossing:{enabled:true,offset:3}}),exitCrossGeometry=sg.slipGeometryForArm(exitCrossSlip,0,geo.edges(exitCrossSlip)),exitCrossState=sg.slipArcState(exitCrossGeometry,exitCrossSlip.slips[0]),stopBounds=exitCrossState.bounds(exitCrossState.stopT),crossBounds=exitCrossState.bounds(exitCrossState.crossT);
+assert(Math.abs((stopBounds.outer-stopBounds.inner)-(crossBounds.outer-crossBounds.inner))>.05,'test must exercise different local widths at crossing and stop stations');
+const expectedSlipStop=geo.path([exitCrossState.point(stopBounds.inner+.12,exitCrossState.stopT),exitCrossState.point(stopBounds.outer-.12,exitCrossState.stopT)]);
+const exitCrossMarkup=renderToStaticMarkup(React.createElement(Drawing,{d:exitCrossSlip,selected:-1,onSelect:()=>{}}));
+assert(exitCrossMarkup.includes(`data-slip-stop="true" d="${expectedSlipStop}"`),'Slip stop line must use pavement width at its own station');
+
 const radiusSlip=sm.updateSlip(compactSlip,sm.slipIdForArm(0),{radius:34}),radiusGeometry=sg.slipGeometryForArm(radiusSlip,0,geo.edges(radiusSlip));assert(radiusGeometry.entryX>compactGeometry.entryX,'larger radius must move only the Slip entry tangent');assert.deepEqual(geo.edges(radiusSlip),baseSnapshot,'radius edits must not move the base junction');
 
 const approachSlip=sm.updateSlip(compactSlip,sm.slipIdForArm(0),{approach:{mode:'auxiliary',width:4,storage:35,taper:20}}),approachGeometry=sg.slipGeometryForArm(approachSlip,0,geo.edges(approachSlip));assert(approachGeometry.approachPavement.length>3&&approachGeometry.approachDivider.length>1);assert.deepEqual(geo.edges(approachSlip),baseSnapshot,'Slip approach auxiliary must remain overlay-only');assert.equal(approachSlip.arms[0].incomingPockets,undefined,'Slip auxiliary must not reuse a generic Pocket');
