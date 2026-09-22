@@ -46,6 +46,7 @@ export type ResolvedDirection={
   mainLaneCount:number;
   activeLaneCount:number;
   trafficWidth:number;
+  edgeShift:number;
   outerWidth:number;
 };
 export type ResolvedStreetSection={
@@ -107,10 +108,12 @@ function resolveDirection(
 
   const widths=bandWidths(a,direction,x,origins);
   const bands=section.bands.map((b,i)=>({id:b.id,type:b.type,width:widths[i],sourceIndex:i})).filter(b=>b.width>1e-6);
-  const trafficWidth=lanes.reduce((sum,v)=>sum+v.width,0),outerWidth=trafficWidth+bands.reduce((sum,v)=>sum+v.width,0)+section.walk;
+  const trafficWidth=lanes.reduce((sum,v)=>sum+v.width,0),
+    edgeShift=lanes.filter(v=>v.source==='slip').reduce((sum,v)=>sum+v.width,0),
+    outerWidth=trafficWidth+bands.reduce((sum,v)=>sum+v.width,0)+section.walk;
   return {
     direction,lanes,bands,sidewalk:section.walk,mainLaneCount:a[direction],
-    activeLaneCount:lanes.filter(v=>v.kind!=='separator').length,trafficWidth,outerWidth
+    activeLaneCount:lanes.filter(v=>v.kind!=='separator').length,trafficWidth,edgeShift,outerWidth
   };
 }
 
@@ -192,6 +195,33 @@ export function resolvedLaneCenterY(
   const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
     index=section.lanes.indexOf(target),before=section.lanes.slice(0,index).reduce((sum,v)=>sum+v.width,0);
   return innerEdge(a,side,x,origins)+side*(before+target.width/2);
+}
+
+export function resolvedEdgeShift(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d)){
+  return resolveStreetSection(d,armId,x,edgeSet)[direction].edgeShift;
+}
+
+export function resolvedBandEdge(
+  d:Design,armId:number,direction:Direction,x:number,bandIndex:number,fraction:number,edgeSet=edges(d)
+){
+  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
+    resolved=resolveStreetSection(d,armId,x,edgeSet)[direction],
+    before=resolved.bands.slice(0,bandIndex).reduce((sum,v)=>sum+v.width,0),
+    band=resolved.bands[bandIndex],base=innerEdge(a,side,x,origins)+side*(
+      resolved.lanes.filter(v=>v.source!=='slip').reduce((sum,v)=>sum+v.width,0)+resolved.edgeShift
+    );
+  if(!band)return base;
+  return base+side*(before+band.width*Math.max(0,Math.min(1,fraction)));
+}
+
+export function resolvedSidewalkEdges(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d)){
+  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
+    resolved=resolveStreetSection(d,armId,x,edgeSet)[direction],
+    base=innerEdge(a,side,x,origins)+side*(
+      resolved.lanes.filter(v=>v.source!=='slip').reduce((sum,v)=>sum+v.width,0)+resolved.edgeShift+
+      resolved.bands.reduce((sum,v)=>sum+v.width,0)
+    );
+  return {inner:base,outer:base+side*resolved.sidewalk};
 }
 
 export function junctionLaneCount(d:Design,armId:number,direction:Direction,edgeSet=edges(d)){
