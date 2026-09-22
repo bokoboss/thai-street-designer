@@ -6,14 +6,21 @@ export type TreatmentOrigins=number|Partial<Record<TreatmentOriginKey,number>>;
 export type FeatureAllocation={requested:number;medianUsed:number;reallocated:number;widening:number;start:number;end:number;mode:AllocationMode};
 
 export const originFor=(origins:TreatmentOrigins,dir:Direction)=>typeof origins==='number'?origins:(origins[dir]??0);
+const treatmentOriginKey=(dir:Direction,side:'left'|'right')=>`${dir}${side==='left'?'Left':'Right'}` as TreatmentOriginKey;
 export const pocketOriginFor=(origins:TreatmentOrigins,dir:Direction,side:'left'|'right')=>{
   if(typeof origins==='number')return origins;
-  const key=`${dir}${side==='left'?'Left':'Right'}` as TreatmentOriginKey;
+  const key=treatmentOriginKey(dir,side);
   return origins[key]??origins[dir]??0;
 };
 export const pocketFactor=(p:{length:number;taper:number},x:number,origin:number)=>{
   const t=Math.max(0,Math.min(1,(x-origin-p.length)/p.taper));
   return 1-t*t*(3-2*t);
+};
+export const pocketFactorAt=(p:{length:number;taper:number},x:number,origins:TreatmentOrigins,dir:Direction,side:'left'|'right')=>{
+  const origin=pocketOriginFor(origins,dir,side);
+  const custom=typeof origins!=='number'&&Object.prototype.hasOwnProperty.call(origins,treatmentOriginKey(dir,side));
+  if(custom&&x<origin-1e-8)return 0;
+  return pocketFactor(p,x,origin);
 };
 export const allocationMode=(a:Arm,p:Pocket):AllocationMode=>p.allocation??(
   a.corridorMode==='preserve'?'legacy-preserve':
@@ -44,7 +51,7 @@ export function allocate(a:Arm,x=0,origins:TreatmentOrigins=0){
     result[dir]={} as Record<'left'|'right',FeatureAllocation>;
     for(const side of ['left','right'] as const){
       const origin=pocketOriginFor(origins,dir,side),p=pocketsFor(a,dir)[side],mode=allocationMode(a,p);
-      const requested=pocketLaneWidth(a,dir,side)*p.lanes*pocketFactor(p,x,origin);
+      const requested=pocketLaneWidth(a,dir,side)*p.lanes*pocketFactorAt(p,x,origins,dir,side);
       result[dir][side]={
         requested,medianUsed:0,reallocated:0,widening:requested,
         start:origin,end:origin+p.length+p.taper,mode
