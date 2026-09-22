@@ -1,9 +1,9 @@
 const ts=require('typescript'),fs=require('fs'),assert=require('node:assert/strict');
 
 // Compile the shared junction allocation/model dependencies plus Free Draw modules.
-for(const name of ['allocation','model','cross-section']){
+for(const name of ['allocation','slip-model','model','cross-section']){
   const code=ts.transpileModule(fs.readFileSync('app/junction/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
-    .outputText.replace(/require\("\.\/(allocation|model|cross-section)"\)/g,'require("./$1.cjs")');
+    .outputText.replace(/require\("\.\/([a-z-]+)"\)/g,'require("./$1.cjs")');
   fs.writeFileSync('.sites-runtime/'+name+'.cjs',code);
 }
 for(const name of ['alignment','network','geometry']){
