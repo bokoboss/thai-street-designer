@@ -49,7 +49,33 @@ function addArrowToSelection(){
  const dir=selection.direction??sectionDirection,laneIndex=selection.laneIndex??0,role:LaneRole=selection.role??(selection.kind==='pocket'?(selection.side==='left'?'aux-left':'aux-right'):'main'),key=laneArrowKey(dir,role,laneIndex),list=manualPlacementsForLane(d,selectedId,dir,role,laneIndex),id=nextArrowId(list),semantic=laneArrowFor(arm,dir,role,laneIndex),base=list.at(-1)?.offset??12,offset=clampArrowOffset(d,selectedId,dir,role,laneIndex,base+(list.length?8:0));
  if(edit({arrowOverrides:{...(arm.arrowOverrides??{}),[key]:[...list,{id,code:semantic==='none'?'straight':semantic,offset:+offset.toFixed(3)}]}}))selectObject({kind:'arrow',arm:selectedId,direction:dir,role,laneIndex,id});
 }
-function removeObject(){const kind=selection.kind;if(kind==='arrow'&&selection.id){const dir=selection.direction??sectionDirection,role=selection.role??'main',laneIndex=selection.laneIndex??0,key=laneArrowKey(dir,role,laneIndex),list=manualPlacementsForLane(d,selectedId,dir,role,laneIndex).filter(v=>v.id!==selection.id);edit({arrowOverrides:{...(arm.arrowOverrides??{}),[key]:list}});selectObject({kind:role==='main'?'lane':'pocket',arm:selectedId,direction:dir,role,laneIndex,...(role==='aux-left'?{side:'left' as const}:role==='aux-right'?{side:'right' as const}:{})});return;}if(kind==='pocket'){const dir=selection.direction??sectionDirection,key=dir==='incoming'?'incomingPockets':'outgoingPockets',ps=pocketsFor(arm,dir),nextPockets={...ps,[selection.side??'right']:{...ps[selection.side??'right'],lanes:0}},next={...arm,[key]:nextPockets};edit({[key]:nextPockets,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)});}else if(kind==='opening')edit({medianOpenings:arm.medianOpenings?.filter(o=>o.id!==selection.id)});else if(kind==='landscape')edit({medianTrees:{...medianTreeDefaults(),...arm.medianTrees,enabled:false}});else if(kind==='slipCrossing')edit({slipCrossing:false});else if(kind==='slipArrow')edit({slipArrowOffset:undefined});else if(['crossing','signal','slip','stop','yield'].includes(kind))edit({[kind==='yield'?'stop':kind]:false});else if(kind==='band'){const dir=selection.direction??sectionDirection,sec=sectionFor(arm,dir);edit({[dir==='incoming'?'incomingSection':'outgoingSection']:{...sec,bands:sec.bands.filter(b=>b.id!==selection.id)}});}selectObject({kind:'approach',arm:selectedId});}
+function removeObject(){
+ const kind=selection.kind;
+ if(kind==='arrow'&&selection.id){
+  const dir=selection.direction??sectionDirection,role=selection.role??'main',laneIndex=selection.laneIndex??0,key=laneArrowKey(dir,role,laneIndex),list=manualPlacementsForLane(d,selectedId,dir,role,laneIndex).filter(v=>v.id!==selection.id);
+  edit({arrowOverrides:{...(arm.arrowOverrides??{}),[key]:list}});
+  selectObject({kind:role==='main'?'lane':'pocket',arm:selectedId,direction:dir,role,laneIndex,...(role==='aux-left'?{side:'left' as const}:role==='aux-right'?{side:'right' as const}:{})});
+  return;
+ }
+ if(kind==='pocket'){
+  const dir=selection.direction??sectionDirection,side=selection.side??'right',key=dir==='incoming'?'incomingPockets':'outgoingPockets',ps=pocketsFor(arm,dir),nextPockets={...ps,[side]:{...ps[side],lanes:0}},nextArm={...arm,[key]:nextPockets};
+  if(side==='left'&&dir==='outgoing'){
+   const sourceEdge=edges(d).find(e=>e.next===selectedId&&e.slip);
+   if(sourceEdge){
+    const source=d.arms[sourceEdge.i],receiverPatch={...nextArm,laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)};
+    change({...d,arms:d.arms.map((v,i)=>i===selectedId?receiverPatch:i===sourceEdge.i?{...source,slipReceivingMode:'direct'}:v)});
+   }else edit({[key]:nextPockets,laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)});
+  }else{
+   edit({[key]:nextPockets,...(side==='left'&&dir==='incoming'&&arm.slip?{slipApproachMode:'direct' as const}:{}),laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)});
+  }
+ }else if(kind==='opening')edit({medianOpenings:arm.medianOpenings?.filter(o=>o.id!==selection.id)});
+ else if(kind==='landscape')edit({medianTrees:{...medianTreeDefaults(),...arm.medianTrees,enabled:false}});
+ else if(kind==='slipCrossing')edit({slipCrossing:false});
+ else if(kind==='slipArrow')edit({slipArrowOffset:undefined});
+ else if(['crossing','signal','slip','stop','yield'].includes(kind))edit({[kind==='yield'?'stop':kind]:false});
+ else if(kind==='band'){const dir=selection.direction??sectionDirection,sec=sectionFor(arm,dir);edit({[dir==='incoming'?'incomingSection':'outgoingSection']:{...sec,bands:sec.bands.filter(b=>b.id!==selection.id)}});}
+ selectObject({kind:'approach',arm:selectedId});
+}
 const selectedSection=sectionFor(arm,sectionDirection),selectedPockets=pocketsFor(arm,sectionDirection);
 function editSection(p:Partial<Section>){edit({incomingSection:{...sectionFor(arm,'incoming'),...(sectionDirection==='incoming'?p:{})},outgoingSection:{...sectionFor(arm,'outgoing'),...(sectionDirection==='outgoing'?p:{})}});}
 function editFromSection(s:Selection,value:number,currentWidth:number){
