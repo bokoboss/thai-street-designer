@@ -2,11 +2,25 @@ import {allocate,pocketFactorAt} from './allocation';
 import {armTreatmentOrigins,bandWidths,edges,innerEdge,type Edge} from './geometry';
 import {
   pocketLaneWidth,pocketsFor,sectionFor,
-  type Arm,type Design,type Direction
+  laneArrowFor,type Arm,type Design,type Direction,type LaneArrowCode,type LaneRole
 } from './model';
 import {slipGeometries,slipSectionAt} from './slip-geometry';
 
 export type ResolvedLaneKind='main'|'pocket-median'|'aux-curb'|'slip-aux'|'slip-accel'|'separator';
+export type LaneMovement='through'|'left'|'right'|'left-through'|'through-right'|'left-right'|'all'|'right-uturn'|'uturn'|'through-uturn'|'merge'|'none';
+
+export const movementFromArrowCode=(code:LaneArrowCode):LaneMovement=>({
+  straight:'through',left:'left',right:'right',sl:'left-through',sr:'through-right',lr:'left-right',
+  all:'all',ru:'right-uturn',uturn:'uturn',su:'through-uturn',merge:'merge',none:'none'
+}[code]);
+
+export const arrowCodeFromMovement=(movement:LaneMovement):LaneArrowCode=>({
+  through:'straight',left:'left',right:'right','left-through':'sl','through-right':'sr','left-right':'lr',
+  all:'all','right-uturn':'ru',uturn:'uturn','through-uturn':'su',merge:'merge',none:'none'
+}[movement]);
+
+export const configuredLaneMovement=(a:Arm,direction:Direction,role:LaneRole,laneIndex:number)=>
+  movementFromArrowCode(laneArrowFor(a,direction,role,laneIndex));
 export type ResolvedLane={
   id:string;
   direction:Direction;
@@ -16,6 +30,7 @@ export type ResolvedLane={
   source:'arm'|'pocket'|'slip';
   side?:'left'|'right';
   sourceArm?:number;
+  movement:LaneMovement;
 };
 export type ResolvedEdgeZone={
   id:string;
@@ -64,18 +79,18 @@ function resolveDirection(
   for(let i=0;i<p.right.lanes;i++){
     const v=lane({
       id:`${direction}:pocket:right:${i}`,direction,kind:'pocket-median',width:rightWidth,
-      laneIndex:i,source:'pocket',side:'right'
+      laneIndex:i,source:'pocket',side:'right',movement:configuredLaneMovement(a,direction,'aux-right',i)
     });
     if(v)lanes.push(v);
   }
   for(let i=0;i<a[direction];i++)lanes.push({
     id:`${direction}:main:${i}`,direction,kind:'main',width:section.width,
-    laneIndex:i,source:'arm'
+    laneIndex:i,source:'arm',movement:configuredLaneMovement(a,direction,'main',i)
   });
   for(let i=0;i<p.left.lanes;i++){
     const v=lane({
       id:`${direction}:pocket:left:${i}`,direction,kind:'aux-curb',width:leftWidth,
-      laneIndex:i,source:'pocket',side:'left'
+      laneIndex:i,source:'pocket',side:'left',movement:configuredLaneMovement(a,direction,'aux-left',i)
     });
     if(v)lanes.push(v);
   }
@@ -84,7 +99,8 @@ function resolveDirection(
     const kind:ResolvedLaneKind=piece.kind==='separator'?'separator':piece.kind==='slip-accel'?'slip-accel':'slip-aux';
     const v=lane({
       id:`${direction}:slip:${piece.sourceArm}:${kind}`,direction,kind,width:piece.width,
-      laneIndex:lanes.filter(x=>x.source==='slip').length,source:'slip',sourceArm:piece.sourceArm
+      laneIndex:lanes.filter(x=>x.source==='slip').length,source:'slip',sourceArm:piece.sourceArm,
+      movement:piece.kind==='slip-accel'?'merge':piece.kind==='separator'?'none':'left'
     });
     if(v)lanes.push(v);
   }
