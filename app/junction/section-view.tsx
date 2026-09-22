@@ -59,13 +59,13 @@ export function sectionPieces(d:Design,id:number,x:number){
       }
     }else{
       for(let j=0;j<p.right.lanes;j++){
-        const w=pocketLaneWidth(a,direction,'right')*pocketFactor(p.right,x,origin);
+        const w=pocketLaneWidth(a,direction,'right')*pocketFactorAt(p.right,x,origins,direction,'right');
         push(w,'เลนรับ','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
       }
       for(let j=0;j<a.outgoing;j++)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
       if(slipSeparator>.001)push(slipSeparator,'เกาะกั้น Slip','separator',{kind:'slip',arm:id});
       for(let j=0;j<p.left.lanes;j++){
-        const w=pocketLaneWidth(a,direction,'left')*pocketFactor(p.left,x,origin);
+        const w=pocketLaneWidth(a,direction,'left')*pocketFactorAt(p.left,x,origins,direction,'left');
         push(w,'เลนรับริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
       }
       section.bands.forEach((b,k)=>push(
