@@ -124,20 +124,21 @@ export function slipGeometries(d:Design,baseEdges=edges(d)):SlipGeometry[]{
       departurePavement=stripPolygon(targetOuter,start,fullEnd,mergeEnd,-1,s.departure.width,rot);
       departureDivider=lineAt(targetOuter,start,mergeEnd,rot);
     }else if(s.departure.mode==='acceleration'){
-      fullEnd=Math.min(target.length,exitX+s.departure.length);
-      mergeEnd=Math.min(target.length,fullEnd+s.departure.merge);
-      const goreLength=Math.min(s.departure.length,Math.max(8,Math.min(18,s.departure.length*.35))),
+      const departure=s.departure;
+      fullEnd=Math.min(target.length,exitX+departure.length);
+      mergeEnd=Math.min(target.length,fullEnd+departure.merge);
+      const goreLength=Math.min(departure.length,Math.max(8,Math.min(18,departure.length*.35))),
         goreEnd=Math.min(target.length,exitX+goreLength),
-        sep=(x:number)=>x>=goreEnd?0:s.departure.separatorWidth*(1-smooth((x-exitX)/Math.max(.001,goreEnd-exitX))),
+        sep=(x:number)=>x>=goreEnd?0:departure.separatorWidth*(1-smooth((x-exitX)/Math.max(.001,goreEnd-exitX))),
         laneFactor=(x:number)=>x<=fullEnd?1:Math.max(0,1-(x-fullEnd)/Math.max(.001,mergeEnd-fullEnd)),
         xs=sampleXs(exitX,mergeEnd),
         innerLine=(x:number)=>targetOuter(x)-sep(x),
-        outside=xs.slice().reverse().map(x=>rot({x,y:innerLine(x)-s.departure.width*laneFactor(x)}));
+        outside=xs.slice().reverse().map(x=>rot({x,y:innerLine(x)-departure.width*laneFactor(x)}));
       departurePavement=[...xs.map(x=>rot({x,y:targetOuter(x)})),...outside];
       departureDivider=sampleXs(goreEnd,mergeEnd,24).map(x=>rot({x,y:targetOuter(x)}));
       const gx=sampleXs(exitX,goreEnd,16),
         gp=[...gx.map(x=>rot({x,y:targetOuter(x)})),...gx.slice().reverse().map(x=>rot({x,y:targetOuter(x)-sep(x)}))];
-      if(s.departure.separator==='raised')raisedSeparator=gp;else gore=gp;
+      if(departure.separator==='raised')raisedSeparator=gp;else gore=gp;
     }
 
     const total=polylineLength(centerline),arrowStation=Math.max(2,Math.min(s.arrowOffset??total/2,Math.max(2,total-2))),
