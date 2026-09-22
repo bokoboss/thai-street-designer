@@ -10,8 +10,8 @@ export type SlipAuxMode='direct'|'added'|'channelized';
 export type SlipAccelerationSeparator='chevron'|'raised';
 /** Legacy channelized approach values are interpreted as an ordinary adjacent auxiliary lane. */
 export const slipApproachMode=(value:SlipAuxMode|undefined,hasLane:boolean):'direct'|'added'=>value==='direct'?'direct':(value||hasLane?'added':'direct');
-/** Departure modes: direct = enter existing curb lane, added = junction departure auxiliary, channelized = protected Slip acceleration lane. */
-export const slipDepartureMode=(value:SlipAuxMode|undefined,hasDepartureAux:boolean):SlipAuxMode=>value??(hasDepartureAux?'added':'direct');
+/** Departure modes are explicit. A general outgoing auxiliary lane must not silently become a Slip receiving treatment. */
+export const slipDepartureMode=(value:SlipAuxMode|undefined,_hasDepartureAux:boolean):SlipAuxMode=>value??'direct';
 export const slipSeparatorWidth=(value:number|undefined)=>Math.max(.5,Math.min(4,value??1.5));
 export const slipAccelerationWidth=(a:Arm)=>Math.max(2.5,Math.min(6,a.slipAccelerationWidth??a.slipWidth));
 export const slipAccelerationLength=(a:Arm)=>Math.max(5,Math.min(200,a.slipAccelerationLength??40));
