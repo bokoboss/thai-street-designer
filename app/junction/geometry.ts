@@ -144,6 +144,25 @@ export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  outgoing=previous?.slip?normalOutgoing:(previous?.exitX??normalOutgoing);
  return {incoming,outgoing,...(own?.slip?{incomingLeft:own.entryX}:{}),...(previous?.slip?{outgoingLeft:previous.exitX}:{})} as const;
 }
+export function slipAuxModeFor(d:Design,i:number,dir:Direction,segments=edges(d)){
+ const a=d.arms[i];
+ if(dir==='incoming'){
+  const e=segments.find(e=>e.i===i&&e.slip);
+  return e?slipAuxMode(a.slipApproachMode,pocketsFor(a,'incoming').left.lanes>0):null;
+ }
+ const e=segments.find(e=>e.next===i&&e.slip);
+ if(!e)return null;
+ const source=d.arms[e.i];
+ return slipAuxMode(source.slipReceivingMode,pocketsFor(a,'outgoing').left.lanes>0);
+}
+export function slipAuxSeparatorAt(d:Design,i:number,dir:Direction,x:number,segments=edges(d)){
+ const mode=slipAuxModeFor(d,i,dir,segments);
+ if(mode!=='channelized')return 0;
+ const a=d.arms[i],origins=armTreatmentOrigins(d,i,segments),p=pocketsFor(a,dir).left,source=dir==='incoming'?a:d.arms[segments.find(e=>e.next===i&&e.slip)!.i],
+ width=dir==='incoming'?slipSeparatorWidth(source.slipApproachSeparator):slipSeparatorWidth(source.slipReceivingSeparator);
+ return width*pocketFactorAt(p,x,origins,dir,'left');
+}
+
 export function suggestedMedianOpeningStart(d:Design,i:number,type:'opening'|'uturn',length:number){
  const a=d.arms[i],mouth=armMouth(d,i),origins=armTreatmentOrigins(d,i),usable=Math.max(0,a.length-mouth);
  let requested=type==='uturn'?35:45;
