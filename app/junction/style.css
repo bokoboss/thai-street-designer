@@ -63,3 +63,5 @@
 @media(max-width:900px){.j-camera-num span{display:none}.j-camera-num input{width:54px}}
 
 .section-components .separator{background:#aeb8a8;color:#31473c;min-width:7px}
+
+.section-components .slip-accel{background:#455d68}.section-components .separator{background:#aeb8a8;color:#31473c;min-width:7px}
