@@ -81,7 +81,7 @@ export function addSlip(d:Design,fromArm:number):Design{
   if(toArm===null)return d;
   const source=d.arms[fromArm],target=d.arms[toArm];
   if(!source?.incoming||!target?.outgoing)return d;
-  return{...d,slips:[...d.slips,defaultSlip(fromArm,toArm,source.slipWidth??4,source.slipRadius??32)]};
+  return{...d,slips:[...d.slips,defaultSlip(fromArm,toArm)]};
 }
 
 export function removeSlip(d:Design,fromArm:number):Design{
