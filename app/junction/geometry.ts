@@ -2,7 +2,7 @@ import {outerRadius,roundSettings,roundFillet,splitterPolygon,splitterHalfAt,rou
 import {pocketFactor,medianEdges,innerEdge,bandWidths,corridorWarning} from './cross-section';
 import {originFor,pocketOriginFor,pocketFactorAt,type TreatmentOrigins} from './allocation';
 export {pocketFactor,medianEdges,innerEdge,bandWidths} from './cross-section';
-import {valid,MAX_SLIP_CROSS_OFFSET,sectionFor,pocketsFor,pocketLaneWidth,slipApproachMode,slipDepartureMode,slipSeparatorWidth,slipAccelerationWidth,slipAccelerationLength,slipAccelerationMerge,slipAccelerationSeparator,type Direction} from './model';
+import {valid,MAX_SLIP_CROSS_OFFSET,sectionFor,pocketsFor,pocketLaneWidth,slipApproachMode,slipDepartureMode,slipSeparatorWidth,slipAccelerationWidth,slipAccelerationLength,slipAccelerationMerge,slipAccelerationSeparator,slipEntryAngle,type Direction} from './model';
 import type {Arm,Design} from './model';
 export type P={x:number;y:number};
 export const activeIds=(d:Design)=>[0,1,2,3].filter(i=>d.enabled[i]).sort((a,b)=>d.arms[a].angle-d.arms[b].angle);
@@ -72,8 +72,27 @@ export const armMouth=(d:Design,i:number)=>armMouths(d)[i];
 /** Overall envelope is retained only for whole-junction bounds/roundabout geometry. */
 export const coreSize=(d:Design)=>Math.max(...armMouths(d));
 export function offset(ps:P[],w0:number,w1:number,startIndex=0,endIndex=ps.length-1){const ds=[0];for(let i=1;i<ps.length;i++)ds.push(ds[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return ps.map((p,i)=>{const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,t=Math.max(0,Math.min(1,(ds[i]-ds[startIndex])/(ds[endIndex]-ds[startIndex]||1))),smooth=t*t*(3-2*t),w=mix(w0,w1,smooth);return{x:p.x+dy/l*w,y:p.y-dx/l*w};});}
+function rightNormal(theta:number):P{return{x:Math.sin(theta),y:-Math.cos(theta)}}
+function highEntrySlip(approachCenter:number,receivingCenter:number,g:number,requestedRadius:number,w:number,requestedAngleDeg:number){
+ const total=Math.PI-g,entryAngle=Math.min(requestedAngleDeg*Math.PI/180,Math.max(5*Math.PI/180,total-5*Math.PI/180)),
+ departureMin=Math.max(3,w*.7),r1=Math.max(requestedRadius,4*departureMin),r2=r1/4,
+ theta0=Math.PI,thetaM=g+entryAngle,theta2=g,n0=rightNormal(theta0),nm=rightNormal(thetaM),n2=rightNormal(theta2),
+ p0Base={x:0,y:approachCenter},p2Base=rotate({x:0,y:receivingCenter},g/(Math.PI/2)),
+ curveDelta={x:r1*(n0.x-nm.x)+r2*(nm.x-n2.x),y:r1*(n0.y-nm.y)+r2*(nm.y-n2.y)},
+ q={x:curveDelta.x-(p2Base.x-p0Base.x),y:curveDelta.y-(p2Base.y-p0Base.y)},
+ sinG=Math.sin(g),s2=Math.abs(sinG)>.001?q.y/sinG:0,s0=q.x-s2*Math.cos(g),
+ p0={x:p0Base.x-s0,y:p0Base.y},c1={x:p0.x+r1*n0.x,y:p0.y+r1*n0.y},
+ control={x:c1.x-r1*nm.x,y:c1.y-r1*nm.y},c2={x:control.x+r2*nm.x,y:control.y+r2*nm.y},
+ p2={x:c2.x-r2*n2.x,y:c2.y-r2*n2.y},d1=Math.max(0,theta0-thetaM),d2=Math.max(0,thetaM-theta2),
+ sample=(center:P,rad:number,start:number,delta:number,n:number)=>Array.from({length:n+1},(_,j)=>{const theta=start-delta*j/n,nr=rightNormal(theta);return{x:center.x-rad*nr.x,y:center.y-rad*nr.y}}),
+ n1=Math.max(6,Math.round(80*d1/Math.max(.001,total))),n2s=Math.max(12,80-n1),
+ center=join(sample(c1,r1,theta0,d1,n1),sample(c2,r2,thetaM,d2,n2s)),
+ outer=join(sample(c1,Math.max(.2,r1-w/2),theta0,d1,n1),sample(c2,Math.max(.2,r2-w/2),thetaM,d2,n2s)),
+ inner=join(sample(c1,r1+w/2,theta0,d1,n1),sample(c2,r2+w/2,thetaM,d2,n2s));
+ return{center,outer,inner,p0,p2,control,r1,r2,entryAngleDeg:entryAngle*180/Math.PI,cx:c1.x,cy:c1.y};
+}
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
-export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipApproachIsland:P[];slipReceivingIsland:P[];slipAccelerationGore:P[];slipLead:P[];slipTrail:P[];slipFullEnd:number;slipMergeEnd:number;slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
+export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipApproachIsland:P[];slipReceivingIsland:P[];slipAccelerationGore:P[];slipLead:P[];slipTrail:P[];slipCenter:P[];slipInner:P[];slipOuterCurve:P[];controlPoint?:P;entryAngleDeg:number;departureRadius:number;slipFullEnd:number;slipMergeEnd:number;slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
 export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout',roundCfg=round?roundSettings(d):roundDefaults();return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(junctionProfileArm(d,i,ids))[1],nlo=bounds(junctionProfileArm(d,next,ids))[0];let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round,roundCfg),originA=originsA.incoming;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap),originsB={incoming:stopPosition(b,mouths[next]),outgoing:local.x};const ps=approachSamples(b,local.x,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
 if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius),exit=roundFillet(core,-nlo,settings.exitRadius),ta=entry.theta,tb=g-exit.theta;
  const arc=Array.from({length:81},(_,j)=>{const t=mix(ta,tb,j/80);return{x:core*Math.cos(t),y:core*Math.sin(t)}}),exitPoints=exit.points.map(p=>rotate({x:p.x,y:-p.y},gap)).reverse();
@@ -81,7 +100,7 @@ if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius
 
 else if(g<Math.PI-.08){const arc=cornerArc(hi,nlo,g,d.corner).points;base=join(lead(arc[0]),arc,trail(arc.at(-1)!));}
 else {const p={x:mouths[i],y:hi},q=rotate({x:mouths[next],y:nlo},gap);base=join(lead(p),cubic(p,{x:0,y:hi},rotate({x:0,y:nlo},gap),q),trail(q));}
-const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],slipApproachIsland:P[]=[],slipReceivingIsland:P[]=[],slipAccelerationGore:P[]=[],slipLead:P[]=[],slipTrail:P[]=[],arrow:P|undefined,R=0,cx=0,cy=0,slipFullEnd=0,slipMergeEnd=0;const sweep=Math.PI-g;
+const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],slipApproachIsland:P[]=[],slipReceivingIsland:P[]=[],slipAccelerationGore:P[]=[],slipLead:P[]=[],slipTrail:P[]=[],slipCenter:P[]=[],slipInner:P[]=[],slipOuterCurve:P[]=[],controlPoint:P|undefined,arrow:P|undefined,R=0,cx=0,cy=0,entryAngleDeg=0,departureRadius=0,slipFullEnd=0,slipMergeEnd=0;const sweep=Math.PI-g;
 if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core/Math.sin(g/2)+w+3):0);
  // slipRadius is the turning-centerline radius. A bare Slip lane branches from
  // and rejoins the existing curbside lane. Optional approach/receiving lanes are
@@ -98,11 +117,16 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  // independently of the Slip acceleration treatment.
  baseApproachOuter=bounds(aMain)[1],baseReceivingOuter=bounds(b)[0],
  approachCenter=baseApproachOuter+w/2,
- receivingCenter=baseReceivingOuter-(hasAcceleration?separatorWidth:0)-w/2,
- arc=cornerArc(approachCenter,receivingCenter,g,R);cx=arc.cx;cy=arc.cy;
+ targetWidth=departureMode==='added'&&departureAux.lanes?pocketLaneWidth(b,'outgoing','left'):sectionFor(b,'outgoing').width,
+ receivingCenter=hasAcceleration?baseReceivingOuter-separatorWidth-w/2:baseReceivingOuter+targetWidth/2,
+ normalAngle=angleGap(d,i,next),useHighEntry=!hasAcceleration&&normalAngle>=70&&normalAngle<=110,
+ freeArc=cornerArc(approachCenter,receivingCenter,g,R),
+ high=useHighEntry?highEntrySlip(approachCenter,receivingCenter,g,R,w,slipEntryAngle(a)):null;
+ if(high){R=high.r1;cx=high.cx;cy=high.cy;departureRadius=high.r2;entryAngleDeg=high.entryAngleDeg;controlPoint=high.control;slipCenter=high.center;slipOuterCurve=high.outer;slipInner=high.inner;}
+ else{cx=freeArc.cx;cy=freeArc.cy;slipCenter=freeArc.points;slipOuterCurve=freeArc.points.map((_,j)=>freeArc.polar(R-w/2,j/80));slipInner=freeArc.points.map((_,j)=>freeArc.polar(R+w/2,j/80));}
  const entryTaper=Math.max(15,4*w),smooth=(t:number)=>{const q=Math.max(0,Math.min(1,t));return q*q*(3-2*q);},
- outerArc=arc.points.map((_,j)=>arc.polar(R-w/2,j/80)),inner=arc.points.map((_,j)=>arc.polar(R+w/2,j/80));
- entryX=arc.points[0].x;
+ outerArc=slipOuterCurve,inner=slipInner;
+ entryX=slipCenter[0].x;
  const slipOriginsA={...originsA,incomingLeft:entryX},leadBreak=Math.min(a.length,entryX+entryTaper),
  leadXs=[...new Set([...approachSamples(a,slipOriginsA,a.length,entryX),leadBreak])].filter(x=>x>=Math.min(entryX,a.length)&&x<=Math.max(entryX,a.length)).sort((x,y)=>y-x),
  entryDelta=outerArc[0].y-bounds(a,entryX,slipOriginsA)[1],
@@ -112,7 +136,7 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  // The only raised island on the approach is the corner channelising island, not a long parallel separator.
  slipLead=hasApproach?leadXs.filter(x=>x<=leadBreak+1e-8&&x>=entryX-1e-8).map(x=>({x,y:bounds(aMain,x,originsA)[1]})):[];
  slipApproachIsland=[];
- const exitLocal=rotate(arc.points.at(-1)!,-gap);exitX=exitLocal.x;
+ const exitLocal=rotate(slipCenter.at(-1)!,-gap);exitX=exitLocal.x;
  slipFullEnd=Math.min(b.length,exitX+(hasAcceleration?accelerationLength:0));
  slipMergeEnd=Math.min(b.length,slipFullEnd+(hasAcceleration?mergeLength:0));
  const mainOutgoing=departurePosition(b,mouths[next],round,roundCfg),
@@ -144,9 +168,9 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  outer=join(leadOuter,outerArc,trailOuter);
  const pairs=inner.map(p=>({p,b:radialHit(base,p)})).filter(({p,b})=>Math.hypot(b.x,b.y)>1&&Math.hypot(p.x,p.y)-Math.hypot(b.x,b.y)>.45);
  if(pairs.length>3)island=[...pairs.map(v=>v.p),...pairs.map(v=>v.b).reverse()];
- const centerLength=R*sweep,arrowOffset=Math.max(2,Math.min(a.slipArrowOffset??centerLength/2,Math.max(2,centerLength-2)));
- arrow=arc.polar(R,arrowOffset/Math.max(.001,centerLength));}
-const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island,slipApproachIsland,slipReceivingIsland,slipAccelerationGore,slipLead,slipTrail,slipFullEnd,slipMergeEnd,slip,arrow,radius:R,sweep,cx,cy};});}
+ const centerLength=polylineLength(slipCenter),arrowOffset=Math.max(2,Math.min(a.slipArrowOffset??centerLength/2,Math.max(2,centerLength-2)));
+ arrow=pointAlong(slipCenter,arrowOffset).point;}
+const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island,slipApproachIsland,slipReceivingIsland,slipAccelerationGore,slipLead,slipTrail,slipCenter,slipInner,slipOuterCurve,controlPoint,entryAngleDeg,departureRadius,slipFullEnd,slipMergeEnd,slip,arrow,radius:R,sweep,cx,cy};});}
 
 export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  const a=d.arms[i],mouth=armMouth(d,i),incoming=stopPosition(a,mouth),own=segments.find(e=>e.i===i),previous=segments.find(e=>e.next===i),
@@ -246,6 +270,16 @@ export function selfIntersects(ps:P[],closed=true):boolean {
  if(cross(a,b,c)*cross(a,b,d)<-1e-8&&cross(c,d,a)*cross(c,d,b)<-1e-8)return true;
  }}return false;
 }
+function polylineLength(ps:P[]){let n=0;for(let i=1;i<ps.length;i++)n+=Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y);return n;}
+function pointAlong(ps:P[],station:number){
+ if(!ps.length)return{point:{x:0,y:0},tangent:{x:1,y:0},station:0};
+ const total=polylineLength(ps),s=Math.max(0,Math.min(total,station));let acc=0;
+ for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1;if(acc+l>=s){const t=(s-acc)/l;return{point:{x:a.x+dx*t,y:a.y+dy*t},tangent:{x:dx/l,y:dy/l},station:s};}acc+=l;}
+ const a=ps[Math.max(0,ps.length-2)],b=ps.at(-1)!,dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1;return{point:b,tangent:{x:dx/l,y:dy/l},station:s};
+}
+function offsetAt(ps:P[],station:number,lateral:number){const q=pointAlong(ps,station),n={x:q.tangent.y,y:-q.tangent.x};return{x:q.point.x+n.x*lateral,y:q.point.y+n.y*lateral};}
+function projectStation(ps:P[],p:P){let best=0,bestD=Infinity,acc=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy,l=Math.sqrt(l2)||1,t=Math.max(0,Math.min(1,l2?( (p.x-a.x)*dx+(p.y-a.y)*dy)/l2:0)),x=a.x+t*dx,y=a.y+t*dy,d=(p.x-x)**2+(p.y-y)**2;if(d<bestD){bestD=d;best=acc+t*l;}acc+=l;}return best;}
+
 export function slipCrossLimit(e:Edge|undefined,a:Arm){return Math.max(2,Math.min(MAX_SLIP_CROSS_OFFSET,Math.floor(((e?.radius??20)+a.slipWidth/2)*(e?.sweep??Math.PI/2)-2)));}
 export function slipArcState(e:Edge,a:Arm){
  const center=e.radius,inner=Math.max(.1,center-a.slipWidth/2),outer=center+a.slipWidth/2,outerLength=outer*e.sweep,centerLength=center*e.sweep,
