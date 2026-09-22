@@ -20,23 +20,20 @@ import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@
 import {Tabs,TabsList,TabsTrigger} from '@/components/ui/tabs';
 import {Accordion,AccordionItem,AccordionTrigger,AccordionContent} from '@/components/ui/accordion';
 import {MoveUpRight,Layers,Route,TreePine,Undo2,Redo2,Box,Map,MousePointer2,Plus} from 'lucide-react';
-import {activeIds,armMouth,crossingIntervals,edges,designError,angleGap,bounds,rotate,slipCrossLimit,armTreatmentOrigins,suggestedMedianOpeningStart} from './geometry';
+import {activeIds,armMouth,crossingIntervals,edges,angleGap,bounds,rotate,armTreatmentOrigins,suggestedMedianOpeningStart} from './geometry';
+import {designError} from './design-validation';
+import {slipGeometryForArm,slipCrossLimit} from './slip-geometry';
+import {addSlip,removeSlip,updateSlip,slipForArm,nextActiveArm,slipIdForArm} from './slip-model';
 import {type Arm,type Design,type Band,type Section,type Pocket,type Direction,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,type Roadside,roadsideFor,names,options,laneArrowFor,withLaneArrow,markingsFor,initial,migrate,roundaboutDesign} from './model';
 export type {Arm,Design} from './model';
-export default function Junction(){const [d,setD]=useState<Design>(initial),[selected,setSelected]=useState(0),[past,setPast]=useState<Design[]>([]),[future,setFuture]=useState<Design[]>([]),[zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกขาถนนบนภาพ แล้วปรับค่าที่แผงด้านขวา');const svg=useRef<SVGSVGElement>(null),upload=useRef<HTMLInputElement>(null),gestures=useRef(new PointerGesture()),scene=useRef<SceneHandle|null>(null),camera2=useRef({zoom:1,pan:{x:0,y:0}});const round=d.type==='roundabout',ids=activeIds(d),arm=d.arms[ids.includes(selected)?selected:ids[0]],selectedId=ids.includes(selected)?selected:ids[0];const slipEdge=edges(d).find(e=>e.i===selectedId);const maxSlipCrossOffset=slipCrossLimit(slipEdge,arm);
+export default function Junction(){const [d,setD]=useState<Design>(initial),[selected,setSelected]=useState(0),[past,setPast]=useState<Design[]>([]),[future,setFuture]=useState<Design[]>([]),[zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกขาถนนบนภาพ แล้วปรับค่าที่แผงด้านขวา');const svg=useRef<SVGSVGElement>(null),upload=useRef<HTMLInputElement>(null),gestures=useRef(new PointerGesture()),scene=useRef<SceneHandle|null>(null),camera2=useRef({zoom:1,pan:{x:0,y:0}});const round=d.type==='roundabout',ids=activeIds(d),arm=d.arms[ids.includes(selected)?selected:ids[0]],selectedId=ids.includes(selected)?selected:ids[0],baseEdges=edges(d),selectedSlip=slipForArm(d,selectedId),slipGeometry=slipGeometryForArm(d,selectedId,baseEdges),maxSlipCrossOffset=slipCrossLimit(slipGeometry);
 const [sectionDirection,setSectionDirection]=useState<Direction>('incoming');
 const [object,setObject]=useState<Selection>({kind:'approach',arm:0}),[addOpen,setAddOpen]=useState(false),[structureOpen,setStructureOpen]=useState(false),[displayOpen,setDisplayOpen]=useState(false),[reviewOpen,setReviewOpen]=useState(false),[searchOpen,setSearchOpen]=useState(false),[sectionStation,setSectionStation]=useState(18),[geometryIssue,setGeometryIssue]=useState(''),[objectMenu,setObjectMenu]=useState<{items:HitShape[];x:number;y:number}|null>(null);
 const selection:Selection={...object,arm:selectedId,...(['approach','lane'].includes(object.kind)?{direction:sectionDirection}:{})},display=displayFor(d),reviews=useMemo(()=>designReviews(d),[d]),issueReviews=reviews.filter(r=>r.level!=='note');
 function selectObject(s:Selection){setSelected(s.arm);setObject(s);if(s.direction)setSectionDirection(s.direction);setObjectMenu(null);}
 function addPocket(side:'left'|'right'){
  const key=sectionDirection==='incoming'?'incomingPockets':'outgoingPockets',pockets=pocketsFor(arm,sectionDirection),nextPockets={...pockets,[side]:{...pockets[side],lanes:Math.max(1,pockets[side].lanes),allocation:'auto' as const}},next={...arm,[key]:nextPockets};
- if(side==='left'&&sectionDirection==='outgoing'){
-  const sourceEdge=edges(d).find(e=>e.next===selectedId&&e.slip);
-  if(sourceEdge){
-   const source=d.arms[sourceEdge.i],receiver={...next,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)};
-   change({...d,arms:d.arms.map((v,i)=>i===selectedId?receiver:i===sourceEdge.i?{...source,slipReceivingMode:'added'}:v)});
-  }else edit({[key]:nextPockets,laneMarkings:markingsFor(next)});
- }else edit({[key]:nextPockets,...(side==='left'&&sectionDirection==='incoming'&&arm.slip?{slipApproachMode:'added' as const}:{}),laneMarkings:markingsFor(next)});
+ edit({[key]:nextPockets,laneMarkings:markingsFor(next)});
  selectObject({kind:'pocket',arm:selectedId,direction:sectionDirection,side,laneIndex:0,role:side==='left'?'aux-left':'aux-right'});
 }
 function addTrees(){edit({medianTrees:{...medianTreeDefaults(),...arm.medianTrees,enabled:true}});selectObject({kind:'landscape',arm:selectedId});}
@@ -44,9 +41,14 @@ function enableCrossing(){if(!arm.crossing)edit({crossing:true});selectObject({k
 function enableSignal(){if(!arm.signal)edit({signal:true});selectObject({kind:'signal',arm:selectedId});}
 function enableSlip(){
  if(round){setNotice('Slip lane ใช้กับทางแยกทั่วไปในรุ่นนี้');return;}
- if(!slipEdge||angleGap(d,selectedId,slipEdge.next)>=175||!arm.incoming||!d.arms[slipEdge.next].outgoing){setNotice('เพิ่ม Slip lane ไม่ได้: ต้องมีเลนเข้าและขาทางออกด้านซ้าย');return;}
- if(!arm.slip&&!edit({slip:true,slipModelRevision:1,slipCrossing:false,slipApproachMode:'direct',slipReceivingMode:'direct',slipApproachSeparator:undefined,slipReceivingSeparator:undefined,slipAccelerationWidth:undefined,slipAccelerationLength:undefined,slipAccelerationMerge:undefined,slipAccelerationSeparator:undefined,slipEntryAngle:undefined,slipArrowOffset:undefined}))return;
+ const toArm=nextActiveArm(d,selectedId);
+ if(toArm===null||angleGap(d,selectedId,toArm)>=175||!arm.incoming||!d.arms[toArm].outgoing){setNotice('เพิ่ม Slip lane ไม่ได้: ต้องมีเลนเข้าและขาทางออกด้านซ้าย');return;}
+ if(!selectedSlip&&!change(addSlip(d,selectedId)))return;
  selectObject({kind:'slip',arm:selectedId});
+}
+function editSlip(patch:Parameters<typeof updateSlip>[2]){
+ const s=slipForArm(d,selectedId);if(!s)return false;
+ return change(updateSlip(d,s.id,patch));
 }
 function nextLocalId(prefix:string,used:string[]){let n=1;while(used.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;}
 function addOpening(type:'opening'|'uturn'='opening'){if(arm.median<=0){setNotice('ต้องมีเกาะกลางก่อนเพิ่มช่องเปิด');return;}if(type==='uturn'&&!arm.incoming){setNotice('ช่องกลับรถต้องมีช่องจราจรขาเข้าในขานี้');return;}const id=nextLocalId(type==='uturn'?'uturn':'opening',(arm.medianOpenings??[]).map(o=>o.id)),length=type==='uturn'?8:6,start=suggestedMedianOpeningStart(d,selectedId,type,length);if(edit({medianOpenings:[...(arm.medianOpenings??[]),{id,start,length,type}]}))selectObject({kind:'opening',arm:selectedId,id});}
@@ -69,20 +71,12 @@ function removeObject(){
  }
  if(kind==='pocket'){
   const dir=selection.direction??sectionDirection,side=selection.side??'right',key=dir==='incoming'?'incomingPockets':'outgoingPockets',ps=pocketsFor(arm,dir),nextPockets={...ps,[side]:{...ps[side],lanes:0}},nextArm={...arm,[key]:nextPockets};
-  if(side==='left'&&dir==='outgoing'){
-   const sourceEdge=edges(d).find(e=>e.next===selectedId&&e.slip);
-   if(sourceEdge){
-    const source=d.arms[sourceEdge.i],receiverPatch={...nextArm,laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)};
-    change({...d,arms:d.arms.map((v,i)=>i===selectedId?receiverPatch:i===sourceEdge.i?{...source,slipReceivingMode:'direct'}:v)});
-   }else edit({[key]:nextPockets,laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)});
-  }else{
-   edit({[key]:nextPockets,...(side==='left'&&dir==='incoming'&&arm.slip?{slipApproachMode:'direct' as const}:{}),laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)});
-  }
+  edit({[key]:nextPockets,laneMarkings:markingsFor(nextArm),arrowOverrides:normalizeArrowOverrides(nextArm)});
  }else if(kind==='opening')edit({medianOpenings:arm.medianOpenings?.filter(o=>o.id!==selection.id)});
  else if(kind==='landscape')edit({medianTrees:{...medianTreeDefaults(),...arm.medianTrees,enabled:false}});
- else if(kind==='slipCrossing')edit({slipCrossing:false});
- else if(kind==='slipArrow')edit({slipArrowOffset:undefined});
- else if(kind==='slip')edit({slip:false,slipModelRevision:1,slipCrossing:false,slipApproachMode:'direct',slipReceivingMode:'direct',slipApproachSeparator:undefined,slipReceivingSeparator:undefined,slipAccelerationWidth:undefined,slipAccelerationLength:undefined,slipAccelerationMerge:undefined,slipAccelerationSeparator:undefined,slipEntryAngle:undefined,slipArrowOffset:undefined});
+ else if(kind==='slipCrossing'&&selectedSlip)editSlip({crossing:{...selectedSlip.crossing,enabled:false}});
+ else if(kind==='slipArrow'&&selectedSlip)editSlip({arrowOffset:undefined});
+ else if(kind==='slip')change(removeSlip(d,selectedId));
  else if(['crossing','signal','stop','yield'].includes(kind))edit({[kind==='yield'?'stop':kind]:false});
  else if(kind==='band'){const dir=selection.direction??sectionDirection,sec=sectionFor(arm,dir);edit({[dir==='incoming'?'incomingSection':'outgoingSection']:{...sec,bands:sec.bands.filter(b=>b.id!==selection.id)}});}
  selectObject({kind:'approach',arm:selectedId});
@@ -122,11 +116,34 @@ useEffect(()=>{if(!ready.current)return;const timer=setTimeout(()=>{try{localSto
 function startArmDrag(e:React.PointerEvent<SVGCircleElement>,id:number){e.stopPropagation();if(gestures.current.count>1)return;armDrag.current={id,before:d,latest:d};svg.current?.setPointerCapture(e.pointerId);}
 function moveArm(e:React.PointerEvent<SVGSVGElement>){const state=armDrag.current,m=svg.current?.getScreenCTM();if(!state||!m)return;const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());const local=rotate(p,-d.rotation/90),raw=(Math.atan2(local.y,local.x)*180/Math.PI+360)%360,step=+snap||1,angle=(Math.round(raw/step)*step)%360,length=lockLength?state.before.arms[state.id].length:Math.max(45,Math.min(400,Math.round(Math.hypot(local.x,local.y))));const v=clean({...state.before,arms:state.before.arms.map((a,i)=>i===state.id?{...a,angle,length}:lockOpposite&&i===(state.id+2)%4?{...a,angle:(angle+180)%360}:a)}),error=designError(v);if(error){setNotice(error);return;}state.latest=v;if(!recovery)ready.current=true;setD(v);const usable=Math.max(0,v.arms[state.id].length-armMouth(v,state.id));setNotice(`${v.arms[state.id].name} · ${angle}° · จากปากแยก ${usable.toFixed(1)} ม.`);}
 function endArm(cancel=false){const state=armDrag.current;if(!state)return;if(cancel)setD(state.before);else if(JSON.stringify(state.latest)!==JSON.stringify(state.before)){setPast(p=>[...p.slice(-49),state.before]);setFuture([]);}armDrag.current=null;}
-function clean(next:Design){const ids=activeIds(next);return {...next,arms:next.arms.map((a,i)=>{const j=ids[(ids.indexOf(i)+1)%ids.length],base={...a,slip:a.slip&&next.type!=='roundabout'&&next.enabled[i]&&j!==undefined&&angleGap(next,i,j)<175&&a.incoming>0&&next.arms[j].outgoing>0};return {...base,arrowOverrides:normalizeArrowOverrides(base)};})};}
+function clean(next:Design){
+ const ids=activeIds(next),slips=next.type==='roundabout'?[]:next.slips.filter(s=>{
+  const k=ids.indexOf(s.fromArm),to=k<0?undefined:ids[(k+1)%ids.length];
+  return next.enabled[s.fromArm]&&next.enabled[s.toArm]&&to===s.toArm&&angleGap(next,s.fromArm,s.toArm)<175&&next.arms[s.fromArm].incoming>0&&next.arms[s.toArm].outgoing>0;
+ });
+ return {...next,slips,arms:next.arms.map(a=>({...a,arrowOverrides:normalizeArrowOverrides(a)}))};
+}
 function change(next:Design){const v=clean(next),error=designError(v);if(error){setGeometryIssue(error);setNotice(error.startsWith('Engineering')||error.startsWith('Geometry')?error:'Geometry Error — '+error);return false;}setGeometryIssue('');if(JSON.stringify(v)===JSON.stringify(d))return true;if(!recovery)ready.current=true;setPast(p=>[...p.slice(-49),d]);setFuture([]);setD(v);setNotice('ปรับแบบแล้ว');return true;}
 function edit(p:Partial<Arm>){return change({...d,arms:d.arms.map((a,i)=>i===selectedId?{...a,...p}:lockOpposite&&p.angle!==undefined&&i===(selectedId+2)%4?{...a,angle:(p.angle+180)%360}:a)});}
 function resetDesign(){setObject({kind:'approach',arm:0});endArm(true);gestures.current.clear();if(change(initial())){setSelected(0);apply2DView({zoom:1,pan:{x:0,y:0}});setView('2d');setLockOpposite(false);setResetKey(k=>k+1);setNotice('รีเซ็ตเป็นสี่แยกแล้ว — กดย้อนกลับเพื่อคืนแบบก่อนรีเซ็ต');}}
-function copyProperties(){const groups:Record<string,(keyof Arm)[]>={section:['incoming','outgoing','width','walk','bands','incomingSection','outgoingSection','incomingPockets','outgoingPockets'],markings:['median','medianOffset','crossing','crossOffset','signal','stop','stopOffset','dividerMode','solidLength','outgoingDividerMode','outgoingSolidLength'],arrows:['arrows','laneMarkings','arrowOverrides'],slip:['slip','slipModelRevision','slipWidth','slipRadius','slipCrossing','slipCrossOffset','slipApproachMode','slipReceivingMode','slipApproachSeparator','slipReceivingSeparator','slipAccelerationWidth','slipAccelerationLength','slipAccelerationMerge','slipAccelerationSeparator','slipEntryAngle']};const keys=groups[copyGroup],target=ids.some(i=>i!==selectedId&&String(i)===copyTarget)?copyTarget:'all';const arms=d.arms.map((a,i)=>{if(i===selectedId||!d.enabled[i]||(target!=='all'&&String(i)!==target))return a;const patch=Object.fromEntries(keys.map(k=>[k,arm[k]===undefined?undefined:JSON.parse(JSON.stringify(arm[k]))]));const next={...a,...patch};return copyGroup==='section'||copyGroup==='arrows'?{...next,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)}:next;});if(change({...d,arms}))setNotice('คัดลอกค่าหมวดที่เลือกแล้ว');}
+function copyProperties(){
+ const target=ids.some(i=>i!==selectedId&&String(i)===copyTarget)?copyTarget:'all';
+ if(copyGroup==='slip'){
+  const source=slipForArm(d,selectedId);
+  let slips=d.slips.filter(s=>s.fromArm===selectedId||(target!=='all'&&String(s.fromArm)!==target)||!d.enabled[s.fromArm]);
+  if(source)for(const i of ids){
+   if(i===selectedId||(target!=='all'&&String(i)!==target))continue;
+   const to=nextActiveArm(d,i);if(to===null||!d.arms[i].incoming||!d.arms[to].outgoing)continue;
+   slips=slips.filter(s=>s.fromArm!==i);
+   slips.push({...JSON.parse(JSON.stringify(source)),id:slipIdForArm(i),fromArm:i,toArm:to});
+  }
+  if(change({...d,slips}))setNotice('คัดลอกค่า Slip lane แล้ว');
+  return;
+ }
+ const groups:Record<string,(keyof Arm)[]>={section:['incoming','outgoing','width','walk','bands','incomingSection','outgoingSection','incomingPockets','outgoingPockets'],markings:['median','medianOffset','crossing','crossOffset','signal','stop','stopOffset','dividerMode','solidLength','outgoingDividerMode','outgoingSolidLength'],arrows:['arrows','laneMarkings','arrowOverrides']};
+ const keys=groups[copyGroup]??groups.section,arms=d.arms.map((a,i)=>{if(i===selectedId||!d.enabled[i]||(target!=='all'&&String(i)!==target))return a;const patch=Object.fromEntries(keys.map(k=>[k,arm[k]===undefined?undefined:JSON.parse(JSON.stringify(arm[k]))]));const next={...a,...patch};return copyGroup==='section'||copyGroup==='arrows'?{...next,laneMarkings:markingsFor(next),arrowOverrides:normalizeArrowOverrides(next)}:next;});
+ if(change({...d,arms}))setNotice('คัดลอกค่าหมวดที่เลือกแล้ว');
+}
 function pointerDown(e:React.PointerEvent<SVGSVGElement>){if(e.button===2)return;if((e.target as Element).closest('[data-grip]')?.getAttribute('data-grip')==='true')return;gestures.current.down(e.pointerId,{x:e.clientX,y:e.clientY});e.currentTarget.setPointerCapture(e.pointerId);if(gestures.current.count>1)endArm(true);}
 function pointerMove(e:React.PointerEvent<SVGSVGElement>){const g=gestures.current.move(e.pointerId,{x:e.clientX,y:e.clientY});if(!g)return;if(armDrag.current&&g.count===1){moveArm(e);return;}const r=e.currentTarget.getBoundingClientRect(),next=panZoom2D(camera2.current.pan,camera2.current.zoom,g,{x:r.x+r.width/2,y:r.y+r.height/2},Math.min(r.width,r.height));camera2.current=next;setZoom(next.zoom);setPan(next.pan);}
 function pointerEnd(e:React.PointerEvent<SVGSVGElement>,cancel=false){gestures.current.up(e.pointerId);endArm(cancel);}
