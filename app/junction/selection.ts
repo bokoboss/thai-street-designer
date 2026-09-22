@@ -92,7 +92,7 @@ export function designShapes(d:Design,es=edges(d)){
     for(const o of a.medianOpenings??[])add({kind:'opening',arm:i,id:o.id},rect(mouth+o.start,-a.median/2,o.length,a.median),65,true,(o.type??'opening')==='uturn'?' · ช่องกลับรถ':'');
 
     for(const dir of ['incoming','outgoing'] as const){
-      const side=dir==='incoming'?1:-1,idx=side===1?1:0,c=sectionFor(a,dir),origin=originFor(origins,dir),rightOrigin=pocketOriginFor(origins,dir,'right');
+      const side=dir==='incoming'?1:-1,idx=side===1?1:0,c=sectionFor(a,dir),origin=originFor(origins,dir);
       const xs=approachSamples(a,origins,origin,a.length);
       const strip=(f:(x:number)=>number,g:(x:number)=>number)=>[
         ...xs.map(x=>({x,y:f(x)})),
