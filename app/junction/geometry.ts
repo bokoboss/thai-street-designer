@@ -86,13 +86,13 @@ export function suggestedMedianOpeningStart(d:Design,i:number,type:'opening'|'ut
  for(const o of a.medianOpenings??[])requested=Math.max(requested,o.start+o.length+6);
  return Math.max(4,Math.min(requested,Math.max(4,usable-length-2)));
 }
-export function designError(d:Design):string|null{if(!valid(d))return 'ข้อมูลแบบมีค่าที่ไม่รองรับ กรุณาตรวจตัวเลขและไฟล์แบบ';const ids=activeIds(d);for(let k=0;k<ids.length;k++){const g=angleGap(d,ids[k],ids[(k+1)%ids.length]);if(g<40)return 'ขาถนนชิดกันเกินไป — เว้นมุมอย่างน้อย 40°';}
+export function designError(d:Design):string|null{if(!valid(d))return 'ข้อมูลแบบมีค่าที่ไม่รองรับ กรุณาตรวจตัวเลขและไฟล์แบบ';const ids=activeIds(d);for(let k=0;k<ids.length;k++){const g=angleGap(d,ids[k],ids[(k+1)%ids.length]);if(g<40)return 'Geometry Error — มุมระหว่างขาถนนต่ำกว่า 40° อยู่นอกขอบเขต geometry ที่เครื่องมือรองรับ';}
  for(const i of ids){const warning=corridorWarning(d.arms[i]);if(warning)return warning;}
  if(d.type==='roundabout'){const R=outerRadius(d),s=roundSettings(d);for(const i of ids){const a=d.arms[i],b=d.arms[ids[(ids.indexOf(i)+1)%ids.length]],entry=roundFillet(R,bounds(a)[1],s.entryRadius),exit=roundFillet(R,-bounds(b)[0],s.exitRadius);if(!entry.valid||!exit.valid||entry.theta+exit.theta>=angleGap(d,i,ids[(ids.indexOf(i)+1)%ids.length])*Math.PI/180-.01)return 'Geometry Error — ทางเข้าวงเวียนซ้อนกัน เพิ่มรัศมีเกาะ ลดความกว้างถนน หรือเว้นมุมขามากขึ้น';if(R+s.splitterLength+6>a.length)return 'Geometry Error — ขาถนนสั้นเกินไปสำหรับ splitter island';if(s.splitterWidth>Math.min(bounds(a)[1],-bounds(a)[0])*2-2)return 'Geometry Error — splitter island กว้างเกินช่องทางเข้า/ออก';}}
  for(const i of ids){const a=d.arms[i],openings=[...(a.medianOpenings??[])].sort((x,y)=>x.start-y.start);for(const o of openings){if(a.median<=0)return 'ต้องมีเกาะกลางก่อนเพิ่มช่องเปิด';if((o.type??'opening')==='uturn'&&!a.incoming)return 'ช่องกลับรถต้องมีช่องจราจรขาเข้า';if(armMouth(d,i)+o.start+o.length>a.length-1)return 'ช่องเปิดยาวเกินขาถนน';}for(let j=1;j<openings.length;j++)if(openings[j].start<openings[j-1].start+openings[j-1].length+1)return 'ช่องเปิดเกาะกลางซ้อนหรือชิดกันเกินไป — เว้นระยะระหว่างช่องเปิด';}
  const core=coreSize(d);if(!Number.isFinite(core)||core>80)return 'มุมและความกว้างนี้ทำให้ปากทางแยกกว้างเกินพื้นที่แบบ';
  const boundaries=edges(d);
- for(const i of ids){const a=d.arms[i],core=armMouth(d,i),origins=armTreatmentOrigins(d,i,boundaries);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?(a.dividerMode??'solid'):(a.outgoingDividerMode??'dashed'),length=side===1?(a.solidLength??30):(a.outgoingSolidLength??30),range=dividerRange(a,core,d.type==='roundabout',side,d.type==='roundabout'?roundSettings(d):roundDefaults(),origins.outgoing);if(a.length<Math.max(core+12,range.start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
+ for(const i of ids){const a=d.arms[i],core=armMouth(d,i),origins=armTreatmentOrigins(d,i,boundaries);for(const side of [1,-1]){if(laneCount(a,side)<2)continue;const mode=side===1?(a.dividerMode??'solid'):(a.outgoingDividerMode??'dashed'),length=side===1?(a.solidLength??36):(a.outgoingSolidLength??30),range=dividerRange(a,core,d.type==='roundabout',side,d.type==='roundabout'?roundSettings(d):roundDefaults(),origins.outgoing);if(a.length<Math.max(core+12,range.start+(mode==='dashed'?5:length+2)))return 'ขาถนนสั้นเกินไปสำหรับเส้นหยุดและช่วงเส้นแบ่งเลนที่กำหนด — เพิ่มความยาวหรือลดความยาวเส้นทึบ';}}
 
  for(const i of ids){const a=d.arms[i],origins=armTreatmentOrigins(d,i,boundaries);for(const dir of ['incoming','outgoing'] as const){const p=pocketsFor(a,dir);if((p.left.lanes||p.right.lanes)&&!a[dir])return 'ต้องมีเลนหลักในทิศทางนี้ก่อนเพิ่ม Pocket / เลนรับ';for(const side of ['left','right'] as const){const pocket=p[side],origin=pocketOriginFor(origins,dir,side);if(pocket.lanes&&origin+pocket.length+pocket.taper>a.length-2)return dir==='incoming'?'พื้นที่เลนรอเลี้ยวไม่พอ — เพิ่มความยาวขาถนน หรือลด Storage / Taper':'พื้นที่เลนรับไม่พอ — เพิ่มความยาวขาถนน หรือลด Receiving length / Merge taper';}}}
  for(const e of boundaries){for(const [id,dir,tangent] of [[e.i,'incoming',e.entryX],[e.next,'outgoing',e.exitX]] as const){const a=d.arms[id],origins=armTreatmentOrigins(d,id,boundaries),p=pocketsFor(a,dir);for(const side of ['left','right'] as const){const pocket=p[side],origin=pocketOriginFor(origins,dir,side);if(pocket.lanes&&origin+pocket.length<tangent+1)return dir==='incoming'?'ช่วงเต็มของเลนรอเลี้ยวอยู่ในโค้งทางแยก — เพิ่มความยาวช่วงเต็ม':'ช่วงเต็มของเลนรับสั้นกว่าพื้นที่ทางออก — เพิ่ม Receiving length';}}}
@@ -127,10 +127,10 @@ export function junctionMarkingStart(a:Arm,core:number,round=false){
 }
 export function dividerRange(a:Arm,core:number,round:boolean,side=1,settings=roundDefaults(),outgoingOrigin=departurePosition(a,core,round,settings)){
  const mode=side===1?(a.dividerMode??'solid'):(a.outgoingDividerMode??'dashed'),
- length=side===1?(a.solidLength??30):(a.outgoingSolidLength??30),
+ length=side===1?(a.solidLength??36):(a.outgoingSolidLength??30),
  shared=junctionMarkingStart(a,core,round),
  crossingClear=side===-1&&a.crossing?crossingIntervals(a,core,round,settings).x+3.4:outgoingOrigin,
- start=side===1?shared:(round?Math.max(outgoingOrigin,crossingClear):shared);
+ start=side===1?shared:Math.max(outgoingOrigin,crossingClear);
  return {mode,start,end:Math.min(a.length,start+(mode==='dashed'?0:length))};
 }
 
