@@ -11,11 +11,12 @@ Code baseline immediately before this handoff documentation commit: `516b2f9315a
 ## Start here
 
 1. Checkout/read `chatgpt/full-engineering-ui-audit`. **Do not start from `main`.**
-2. Read this file completely.
-3. Read `docs/ARCHITECTURE.md`.
-4. Read `docs/SLIP_LANE_DESIGN_BASIS.md`.
-5. Inspect PR #1 and the latest branch commit/status before modifying anything.
-6. Run the full quality gates before accepting a code change.
+2. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
+3. Read this file completely for the current work/status.
+4. Read `docs/ARCHITECTURE.md`.
+5. Read `docs/SLIP_LANE_DESIGN_BASIS.md`.
+6. Inspect PR #1 and the latest branch commit/status before modifying anything.
+7. Run the full quality gates before accepting a code change.
 
 ## Current project state
 
@@ -193,6 +194,7 @@ Read `VERCEL.md`.
 
 - `README.md`
 - `HANDOFF.md`
+- `docs/PROJECT_CONTEXT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SLIP_LANE_DESIGN_BASIS.md`
 - `app/junction/model.ts`

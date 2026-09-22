@@ -4,7 +4,7 @@
 
 รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
 
-สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [HANDOFF.md](HANDOFF.md) แล้วอ่าน [Architecture](docs/ARCHITECTURE.md) และ [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md) และ [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
 
 ## เริ่มใช้งาน
 
