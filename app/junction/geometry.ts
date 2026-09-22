@@ -89,7 +89,7 @@ function highEntrySlip(approachCenter:number,receivingCenter:number,g:number,req
  center=join(sample(c1,r1,theta0,d1,n1),sample(c2,r2,thetaM,d2,n2s)),
  outer=join(sample(c1,Math.max(.2,r1-w/2),theta0,d1,n1),sample(c2,Math.max(.2,r2-w/2),thetaM,d2,n2s)),
  inner=join(sample(c1,r1+w/2,theta0,d1,n1),sample(c2,r2+w/2,thetaM,d2,n2s));
- return{center,outer,inner,p0,p2,control,controlStation:r1*d1,r1,r2,entryAngleDeg:entryAngle*180/Math.PI,cx:c1.x,cy:c1.y};
+ return{center,outer,inner,islandInner:sample(c1,r1+w/2,theta0,d1,n1),p0,p2,control,controlStation:r1*d1,r1,r2,entryAngleDeg:entryAngle*180/Math.PI,cx:c1.x,cy:c1.y};
 }
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
 export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipApproachIsland:P[];slipReceivingIsland:P[];slipAccelerationGore:P[];slipLead:P[];slipTrail:P[];slipCenter:P[];slipInner:P[];slipOuterCurve:P[];controlPoint?:P;controlStation:number;entryAngleDeg:number;departureRadius:number;slipFullEnd:number;slipMergeEnd:number;slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
@@ -100,7 +100,7 @@ if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius
 
 else if(g<Math.PI-.08){const arc=cornerArc(hi,nlo,g,d.corner).points;base=join(lead(arc[0]),arc,trail(arc.at(-1)!));}
 else {const p={x:mouths[i],y:hi},q=rotate({x:mouths[next],y:nlo},gap);base=join(lead(p),cubic(p,{x:0,y:hi},rotate({x:0,y:nlo},gap),q),trail(q));}
-const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],slipApproachIsland:P[]=[],slipReceivingIsland:P[]=[],slipAccelerationGore:P[]=[],slipLead:P[]=[],slipTrail:P[]=[],slipCenter:P[]=[],slipInner:P[]=[],slipOuterCurve:P[]=[],controlPoint:P|undefined,controlStation=0,arrow:P|undefined,R=0,cx=0,cy=0,entryAngleDeg=0,departureRadius=0,slipFullEnd=0,slipMergeEnd=0;const sweep=Math.PI-g;
+const slip=a.slip&&g<Math.PI-.08&&a.incoming>0&&b.outgoing>0;let outer=base,island:P[]=[],islandBoundary:P[]=[],slipApproachIsland:P[]=[],slipReceivingIsland:P[]=[],slipAccelerationGore:P[]=[],slipLead:P[]=[],slipTrail:P[]=[],slipCenter:P[]=[],slipInner:P[]=[],slipOuterCurve:P[]=[],controlPoint:P|undefined,controlStation=0,arrow:P|undefined,R=0,cx=0,cy=0,entryAngleDeg=0,departureRadius=0,slipFullEnd=0,slipMergeEnd=0;const sweep=Math.PI-g;
 if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core/Math.sin(g/2)+w+3):0);
  // slipRadius is the turning-centerline radius. A bare Slip lane branches from
  // and rejoins the existing curbside lane. Optional approach/receiving lanes are
@@ -122,8 +122,8 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
  normalAngle=angleGap(d,i,next),useHighEntry=!hasAcceleration&&normalAngle>=70&&normalAngle<=110,
  freeArc=cornerArc(approachCenter,receivingCenter,g,R),
  high=useHighEntry?highEntrySlip(approachCenter,receivingCenter,g,R,w,slipEntryAngle(a)):null;
- if(high){R=high.r1;cx=high.cx;cy=high.cy;departureRadius=high.r2;entryAngleDeg=high.entryAngleDeg;controlPoint=high.control;controlStation=high.controlStation;slipCenter=high.center;slipOuterCurve=high.outer;slipInner=high.inner;}
- else{cx=freeArc.cx;cy=freeArc.cy;slipCenter=freeArc.points;slipOuterCurve=freeArc.points.map((_,j)=>freeArc.polar(R-w/2,j/80));slipInner=freeArc.points.map((_,j)=>freeArc.polar(R+w/2,j/80));}
+ if(high){R=high.r1;cx=high.cx;cy=high.cy;departureRadius=high.r2;entryAngleDeg=high.entryAngleDeg;controlPoint=high.control;controlStation=high.controlStation;slipCenter=high.center;slipOuterCurve=high.outer;slipInner=high.inner;islandBoundary=high.islandInner;}
+ else{cx=freeArc.cx;cy=freeArc.cy;slipCenter=freeArc.points;slipOuterCurve=freeArc.points.map((_,j)=>freeArc.polar(R-w/2,j/80));slipInner=freeArc.points.map((_,j)=>freeArc.polar(R+w/2,j/80));islandBoundary=slipInner;}
  const entryTaper=Math.max(15,4*w),smooth=(t:number)=>{const q=Math.max(0,Math.min(1,t));return q*q*(3-2*q);},
  outerArc=slipOuterCurve,inner=slipInner;
  entryX=slipCenter[0].x;
@@ -166,7 +166,7 @@ if(slip){const w=a.slipWidth;R=Math.max(a.slipRadius,d.corner+1.15*w,round?(core
   slipTrail=dividerXs.map(x=>rotate({x,y:mainOuter(x)},gap));
  }else slipTrail=[];
  outer=join(leadOuter,outerArc,trailOuter);
- const pairs=inner.map(p=>({p,b:radialHit(base,p)})).filter(({p,b})=>Math.hypot(b.x,b.y)>1&&Math.hypot(p.x,p.y)-Math.hypot(b.x,b.y)>.45);
+ const pairs=islandBoundary.map(p=>({p,b:radialHit(base,p)})).filter(({p,b})=>Math.hypot(b.x,b.y)>1&&Math.hypot(p.x,p.y)-Math.hypot(b.x,b.y)>.45);
  if(pairs.length>3)island=[...pairs.map(v=>v.p),...pairs.map(v=>v.b).reverse()];
  const centerLength=polylineLength(slipCenter),arrowOffset=Math.max(2,Math.min(a.slipArrowOffset??centerLength/2,Math.max(2,centerLength-2)));
  arrow=pointAlong(slipCenter,arrowOffset).point;}
