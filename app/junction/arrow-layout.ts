@@ -6,7 +6,7 @@ import {originFor,pocketOriginFor} from './allocation';
 import {
   type Edge,edges,armTreatmentOrigins,armMouth,coreSize,crossingIntervals,
 } from './geometry';
-import {configuredArrowLanes,resolvedLaneCenterY} from './lane-configuration';
+import {arrowCodeFromMovement,configuredArrowLanes,configuredLaneMovement,resolvedLaneCenterY} from './lane-configuration';
 import {roundSettings} from './roundabout';
 
 export type ResolvedLaneArrow={
@@ -80,7 +80,7 @@ function resolveAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneI
 export function autoLaneArrowPlacements(d:Design,armId:number,direction:Direction,role:LaneRole,laneIndex:number,edgeSet=edges(d)):LaneArrowPlacement[]{
   const a=d.arms[armId];
   if(!laneExists(a,direction,role,laneIndex))return [];
-  const range=laneRange(d,armId,direction,role,laneIndex,edgeSet),code=laneArrowFor(a,direction,role,laneIndex);
+  const range=laneRange(d,armId,direction,role,laneIndex,edgeSet),code=arrowCodeFromMovement(configuredLaneMovement(a,direction,role,laneIndex));
   if(code==='none'||range.maxX<range.minX)return [];
   const positions:number[]=[];
   if(role==='main'&&direction==='incoming'){
