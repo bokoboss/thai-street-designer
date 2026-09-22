@@ -1,10 +1,10 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
-import {sectionFor,pocketsFor,pocketLaneWidth,type Design,type Direction} from './model';
-import {allocate,pocketFactorAt} from './allocation';
-import {armMouth,armTreatmentOrigins,bandWidths,armIslands,edges} from './geometry';
-import {slipSectionAt,slipGeometries} from './slip-geometry';
+import {sectionFor,pocketsFor,type Design,type Direction} from './model';
+import {allocate} from './allocation';
+import {armMouth,armTreatmentOrigins,armIslands,edges} from './geometry';
+import {resolveStreetSection,type ResolvedLane} from './lane-configuration';
 import {selectionKey,type Selection} from './selection';
 
 export const sectionStart=(d:Design,id:number)=>d.type==='roundabout'?roundSettings(d).splitterLength+d.arms[id].medianOffset+8:0;
@@ -26,55 +26,39 @@ type Piece={
 };
 
 export function sectionPieces(d:Design,id:number,x:number){
-  const a=d.arms[id],mouth=armMouth(d,id),edgeSet=edges(d),origins=armTreatmentOrigins(d,id,edgeSet),slipGeoms=slipGeometries(d,edgeSet),slipPieces=slipSectionAt(d,id,x,edgeSet,slipGeoms);
-  const allocation=allocate(a,x,origins),pieces:Piece[]=[];
+  const a=d.arms[id],mouth=armMouth(d,id),edgeSet=edges(d),resolved=resolveStreetSection(d,id,x,edgeSet),origins=resolved.origins;
+  const allocation=resolved.allocation,pieces:Piece[]=[];
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
   const addDirection=(direction:Direction)=>{
-    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction);
-    const bands=bandWidths(a,direction,x,origins),sidePieces:Piece[]=[];
+    const group=direction,section=sectionFor(a,direction),p=pocketsFor(a,direction),sidePieces:Piece[]=[];
     const push=(width:number,label:string,kind:string,selection:Selection,editable?:Editable)=>{
       if(width>.001)sidePieces.push({width,label,kind,group,selection,editable});
     };
     const mainLaneEdit:Editable={value:section.width,min:2.5,max:4.5,step:.25,label:`ความกว้างเลนหลัก${direction==='incoming'?'ขาเข้า':'ขาออก'}`};
     const auxEdit=(which:'left'|'right'):Editable=>({value:p[which].width??section.width,min:2.5,max:4.5,step:.25,label:`ความกว้าง${direction==='incoming'?'เลนเสริม':'เลนรับ'}${which==='right'?'ชิดเกาะกลาง':'ริมทาง'}`});
+    const lanePiece=(v:ResolvedLane)=>{
+      if(v.source==='arm')return push(v.width,`เลน ${v.laneIndex+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:v.laneIndex,role:'main'},mainLaneEdit);
+      if(v.source==='pocket'){
+        const side=v.side!,role=side==='left'?'aux-left':'aux-right',
+          label=direction==='incoming'?(side==='right'?'เลนเลี้ยว':'เสริมริมทาง'):(side==='right'?'เลนเสริมขาออก':'เลนเสริมขาออกริมทาง');
+        return push(v.width,label,'aux',{kind:'pocket',arm:id,direction,side,laneIndex:v.laneIndex,role},auxEdit(side));
+      }
+      return push(v.width,v.kind==='separator'?'ตัวคั่น Slip':v.kind==='slip-accel'?'Acceleration Slip':direction==='incoming'?'Auxiliary Slip':'Departure auxiliary Slip',v.kind,{kind:'slip',arm:v.sourceArm??id});
+    };
 
     if(direction==='incoming'){
       push(section.walk,'ทางเท้า','walk',{kind:'sidewalk',arm:id,direction},{value:section.walk,min:0,max:8,step:.25,label:'ความกว้างทางเท้าขาเข้า'});
-      [...section.bands].map((b,k)=>({b,k})).reverse().forEach(({b,k})=>push(
-        bands[k],
-        {bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'}[b.type],
-        b.type,
-        {kind:'band',arm:id,direction,id:b.id},
-        {value:b.width,min:.25,max:4.5,step:.25,label:`ความกว้าง${b.type}`}
+      [...resolved.incoming.bands].reverse().forEach(b=>push(
+        b.width,{bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'}[b.type],b.type,
+        {kind:'band',arm:id,direction,id:b.id},{value:section.bands[b.sourceIndex].width,min:.25,max:4.5,step:.25,label:`ความกว้าง${b.type}`}
       ));
-      slipPieces.filter(v=>v.group==='incoming').forEach(v=>push(v.width,'Auxiliary Slip','slip-aux',{kind:'slip',arm:v.sourceArm}));
-      for(let j=p.left.lanes-1;j>=0;j--){
-        const w=pocketLaneWidth(a,direction,'left')*pocketFactorAt(p.left,x,origins,direction,'left');
-        push(w,'เสริมริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
-      }
-      for(let j=a.incoming-1;j>=0;j--)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
-      for(let j=p.right.lanes-1;j>=0;j--){
-        const w=pocketLaneWidth(a,direction,'right')*pocketFactorAt(p.right,x,origins,direction,'right');
-        push(w,'เลนเลี้ยว','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
-      }
+      [...resolved.incoming.lanes].reverse().forEach(lanePiece);
     }else{
-      for(let j=0;j<p.right.lanes;j++){
-        const w=pocketLaneWidth(a,direction,'right')*pocketFactorAt(p.right,x,origins,direction,'right');
-        push(w,'เลนเสริมขาออก','aux',{kind:'pocket',arm:id,direction,side:'right',laneIndex:j,role:'aux-right'},auxEdit('right'));
-      }
-      for(let j=0;j<a.outgoing;j++)push(section.width,`เลน ${j+1}`,'lane',{kind:'lane',arm:id,direction,laneIndex:j,role:'main'},mainLaneEdit);
-      for(let j=0;j<p.left.lanes;j++){
-        const w=pocketLaneWidth(a,direction,'left')*pocketFactorAt(p.left,x,origins,direction,'left');
-        push(w,'เลนเสริมขาออกริมทาง','aux',{kind:'pocket',arm:id,direction,side:'left',laneIndex:j,role:'aux-left'},auxEdit('left'));
-      }
-      slipPieces.filter(v=>v.group==='outgoing').forEach(v=>push(v.width,v.kind==='separator'?'ตัวคั่น Slip':v.kind==='slip-accel'?'Acceleration Slip':'Departure auxiliary Slip',v.kind,{kind:'slip',arm:v.sourceArm}));
-      section.bands.forEach((b,k)=>push(
-        bands[k],
-        {bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'}[b.type],
-        b.type,
-        {kind:'band',arm:id,direction,id:b.id},
-        {value:b.width,min:.25,max:4.5,step:.25,label:`ความกว้าง${b.type}`}
+      resolved.outgoing.lanes.forEach(lanePiece);
+      resolved.outgoing.bands.forEach(b=>push(
+        b.width,{bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'}[b.type],b.type,
+        {kind:'band',arm:id,direction,id:b.id},{value:section.bands[b.sourceIndex].width,min:.25,max:4.5,step:.25,label:`ความกว้าง${b.type}`}
       ));
       push(section.walk,'ทางเท้า','walk',{kind:'sidewalk',arm:id,direction},{value:section.walk,min:0,max:8,step:.25,label:'ความกว้างทางเท้าขาออก'});
     }
