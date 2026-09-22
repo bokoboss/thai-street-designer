@@ -151,3 +151,8 @@ export function clampArrowOffset(d:Design,armId:number,direction:Direction,role:
   const r=laneRange(d,armId,direction,role,laneIndex,edgeSet);
   return Math.max(r.minOffset,Math.min(r.maxOffset,offset));
 }
+
+export function arrowOffsetAtX(d:Design,armId:number,direction:Direction,role:LaneRole,laneIndex:number,x:number,edgeSet=edges(d)){
+  const r=laneRange(d,armId,direction,role,laneIndex,edgeSet);
+  return Math.max(r.minOffset,Math.min(r.maxOffset,x-r.origin));
+}
