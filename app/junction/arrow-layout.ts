@@ -2,10 +2,10 @@ import {
   type Arm,type Design,type Direction,type LaneRole,type LaneArrowCode,type LaneArrowPlacement,
   laneArrowFor,pocketsFor,pocketLaneWidth,sectionFor
 } from './model';
-import {originFor,pocketOriginFor,pocketFactor} from './allocation';
+import {originFor,pocketOriginFor,pocketFactorAt} from './allocation';
 import {
   type Edge,edges,armTreatmentOrigins,armMouth,coreSize,crossingIntervals,
-  laneY,innerEdge
+  laneY,innerEdge,slipAuxSeparatorAt
 } from './geometry';
 import {roundSettings} from './roundabout';
 
@@ -69,11 +69,12 @@ function laneYAt(d:Design,armId:number,direction:Direction,role:LaneRole,laneInd
   const a=d.arms[armId],{origin,origins}=laneRange(d,armId,direction,role,laneIndex,edgeSet),side=direction==='incoming'?1:-1;
   if(role==='main')return laneY(a,side,laneIndex,x,origins);
   const section=sectionFor(a,direction),pockets=pocketsFor(a,direction),right=pockets.right,rightWidth=pocketLaneWidth(a,direction,'right');
-  const which=role==='aux-left'?'left':'right',p=pockets[which],w=pocketLaneWidth(a,direction,which),factor=pocketFactor(p,x,origin),rightOrigin=pocketOriginFor(origins,direction,'right');
+  const which=role==='aux-left'?'left':'right',p=pockets[which],w=pocketLaneWidth(a,direction,which),factor=pocketFactorAt(p,x,origins,direction,which),
+    separator=which==='left'?slipAuxSeparatorAt(d,armId,direction,x,edgeSet):0;
   return innerEdge(a,side,x,origins)+side*(
     which==='right'
       ?w*(laneIndex+.5)*factor
-      :rightWidth*right.lanes*pocketFactor(right,x,rightOrigin)+section.width*a[direction]+w*(laneIndex+.5)*factor
+      :rightWidth*right.lanes*pocketFactorAt(right,x,origins,direction,'right')+section.width*a[direction]+separator+w*(laneIndex+.5)*factor
   );
 }
 
