@@ -1,6 +1,6 @@
 import {outerRadius,roundSettings,roundFillet,splitterPolygon,splitterHalfAt,roundDefaults} from './roundabout';
 import {pocketFactor,medianEdges,innerEdge,bandWidths,corridorWarning} from './cross-section';
-import {originFor,pocketOriginFor,type TreatmentOrigins} from './allocation';
+import {originFor,pocketOriginFor,pocketFactorAt,type TreatmentOrigins} from './allocation';
 export {pocketFactor,medianEdges,innerEdge,bandWidths} from './cross-section';
 import {valid,MAX_SLIP_CROSS_OFFSET,sectionFor,pocketsFor,pocketLaneWidth,type Direction} from './model';
 import type {Arm,Design} from './model';
@@ -10,9 +10,11 @@ export const direction=(side:number):Direction=>side===1?'incoming':'outgoing';
 export const extraWidth=(a:Arm,side:Direction='incoming')=>sectionFor(a,side).bands.reduce((sum,b)=>sum+b.width,0);
 export const laneCount=(a:Arm,side:number)=>a[direction(side)]+pocketsFor(a,direction(side)).left.lanes+pocketsFor(a,direction(side)).right.lanes;
 export function carriageWidth(a:Arm,side:number,x=0,origins:TreatmentOrigins=0){
- const d=direction(side),origin=originFor(origins,d),p=pocketsFor(a,d),s=sectionFor(a,d),
+ const d=direction(side),p=pocketsFor(a,d),s=sectionFor(a,d),
  leftWidth=pocketLaneWidth(a,d,'left'),rightWidth=pocketLaneWidth(a,d,'right');
- return s.width*a[d]+leftWidth*p.left.lanes*pocketFactor(p.left,x,origin)+rightWidth*p.right.lanes*pocketFactor(p.right,x,origin);
+ return s.width*a[d]
+  +leftWidth*p.left.lanes*pocketFactorAt(p.left,x,origins,d,'left')
+  +rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,d,'right');
 }
 export const carBounds=(a:Arm,x=0,origins:TreatmentOrigins=0)=>[
  innerEdge(a,-1,x,origins)-carriageWidth(a,-1,x,origins),
@@ -26,8 +28,8 @@ export const bounds=(a:Arm,x=0,origins:TreatmentOrigins=0)=>{
  ];
 };
 export const laneY=(a:Arm,side:number,lane:number,x:number,origins:TreatmentOrigins)=>{
- const dir=direction(side),rightOrigin=pocketOriginFor(origins,dir,'right'),p=pocketsFor(a,dir),w=sectionFor(a,dir).width,rightWidth=pocketLaneWidth(a,dir,'right');
- return innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactor(p.right,x,rightOrigin)+w*(lane+.5));
+ const dir=direction(side),p=pocketsFor(a,dir),w=sectionFor(a,dir).width,rightWidth=pocketLaneWidth(a,dir,'right');
+ return innerEdge(a,side,x,origins)+side*(rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,dir,'right')+w*(lane+.5));
 };
 /** Sample at exact taper breakpoints as well as regular intervals. */
 export function approachSamples(a:Arm,origins:TreatmentOrigins,start:number,end:number){const xs=Array.from({length:41},(_,i)=>start+(end-start)*i/40);for(const d of ['incoming','outgoing'] as const)for(const side of ['left','right'] as const){const p=pocketsFor(a,d)[side],origin=pocketOriginFor(origins,d,side);if(p.lanes)for(const x of [origin+p.length,origin+p.length+p.taper])if(x>Math.min(start,end)&&x<Math.max(start,end))xs.push(x);}return [...new Set(xs)].sort((a,b)=>start<end?a-b:b-a);}
@@ -45,10 +47,23 @@ export function cornerArc(hi:number,lo:number,g:number,r:number){
 }
 /** Longitudinal mouth of each approach, measured at its own two curb tangencies.
  * An acute corner affects only its two incident arms, never a shared node radius. */
+function withoutPocket(a:Arm,dir:Direction,side:'left'|'right'){
+ const key=dir==='incoming'?'incomingPockets':'outgoingPockets',p=pocketsFor(a,dir);
+ return {...a,[key]:{...p,[side]:{...p[side],lanes:0}}} as Arm;
+}
+function junctionProfileArm(d:Design,i:number,ids=activeIds(d)){
+ const k=ids.indexOf(i),next=ids[(k+1)%ids.length],prev=ids[(k-1+ids.length)%ids.length];
+ let a=d.arms[i];
+ const ownSlip=next!==undefined&&a.slip&&a.incoming>0&&d.arms[next].outgoing>0&&angleGap(d,i,next)<175;
+ const previousSlip=prev!==undefined&&d.arms[prev].slip&&d.arms[prev].incoming>0&&a.outgoing>0&&angleGap(d,prev,i)<175;
+ if(ownSlip)a=withoutPocket(a,'incoming','left');
+ if(previousSlip)a=withoutPocket(a,'outgoing','left');
+ return a;
+}
 export function armMouths(d:Design):number[]{
  if(d.type==='roundabout')return d.arms.map(()=>outerRadius(d));
  const mouths=d.arms.map(()=>0),ids=activeIds(d);
- ids.forEach((i,k)=>{const j=ids[(k+1)%ids.length],g=angleGap(d,i,j)*Math.PI/180,hi=bounds(d.arms[i])[1],lo=bounds(d.arms[j])[0];
+ ids.forEach((i,k)=>{const j=ids[(k+1)%ids.length],g=angleGap(d,i,j)*Math.PI/180,hi=bounds(junctionProfileArm(d,i,ids))[1],lo=bounds(junctionProfileArm(d,j,ids))[0];
  if(g>=Math.PI-.08){const reach=Math.max(hi,-lo)+d.corner;mouths[i]=Math.max(mouths[i],reach);mouths[j]=Math.max(mouths[j],reach);return;}
  const c=cornerArc(hi,lo,g,d.corner),end=rotate(c.points.at(-1)!,-g/(Math.PI/2));mouths[i]=Math.max(mouths[i],c.points[0].x);mouths[j]=Math.max(mouths[j],end.x);
  });return mouths;
@@ -59,7 +74,7 @@ export const coreSize=(d:Design)=>Math.max(...armMouths(d));
 export function offset(ps:P[],w0:number,w1:number,startIndex=0,endIndex=ps.length-1){const ds=[0];for(let i=1;i<ps.length;i++)ds.push(ds[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return ps.map((p,i)=>{const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,t=Math.max(0,Math.min(1,(ds[i]-ds[startIndex])/(ds[endIndex]-ds[startIndex]||1))),smooth=t*t*(3-2*t),w=mix(w0,w1,smooth);return{x:p.x+dy/l*w,y:p.y-dx/l*w};});}
 function radialHit(ps:P[],p:P):P{const angle=Math.atan2(p.y,p.x),ux=Math.cos(angle),uy=Math.sin(angle);let best={x:0,y:0},radius=0;for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,den=dx*uy-dy*ux;if(Math.abs(den)<1e-8)continue;const t=(a.y*ux-a.x*uy)/den;if(t<0||t>1)continue;const hit={x:a.x+t*dx,y:a.y+t*dy},r=hit.x*ux+hit.y*uy;if(r>radius){radius=r;best=hit;}}return best;}
 export type Edge={entryX:number;exitX:number;i:number;next:number;base:P[];outer:P[];walk:P[];island:P[];slipLead:P[];slipTrail:P[];slipFullEnd:number;slipMergeEnd:number;slip:boolean;arrow?:P;radius:number;sweep:number;cx:number;cy:number;};
-export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout',roundCfg=round?roundSettings(d):roundDefaults();return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(a)[1],nlo=bounds(b)[0];let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round,roundCfg),originA=originsA.incoming;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap),originsB={incoming:stopPosition(b,mouths[next]),outgoing:local.x};const ps=approachSamples(b,local.x,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
+export function edges(d:Design):Edge[]{const ids=activeIds(d),mouths=armMouths(d),core=coreSize(d),round=d.type==='roundabout',roundCfg=round?roundSettings(d):roundDefaults();return ids.map((i,k)=>{const next=ids[(k+1)%ids.length],a=d.arms[i],b=d.arms[next],gap=angleGap(d,i,next)/90,g=gap*Math.PI/2,hi=bounds(junctionProfileArm(d,i,ids))[1],nlo=bounds(junctionProfileArm(d,next,ids))[0];let base:P[],leadCount=0,trailCount=0,entryX=0,exitX=0;const originsA=treatmentOrigins(a,mouths[i],round,roundCfg),originA=originsA.incoming;const lead=(target:P)=>{const ps=approachSamples(a,originA,a.length,target.x).map(x=>({x,y:bounds(a,x,originsA)[1]}));leadCount=ps.length;entryX=target.x;return ps;},trail=(target:P)=>{const local=rotate(target,-gap),originsB={incoming:stopPosition(b,mouths[next]),outgoing:local.x};const ps=approachSamples(b,local.x,local.x,b.length).map(x=>rotate({x,y:bounds(b,x,originsB)[0]},gap));trailCount=ps.length;exitX=local.x;return ps;};
 if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius),exit=roundFillet(core,-nlo,settings.exitRadius),ta=entry.theta,tb=g-exit.theta;
  const arc=Array.from({length:81},(_,j)=>{const t=mix(ta,tb,j/80);return{x:core*Math.cos(t),y:core*Math.sin(t)}}),exitPoints=exit.points.map(p=>rotate({x:p.x,y:-p.y},gap)).reverse();
  base=join(lead(entry.points[0]),entry.points,arc,exitPoints,trail(exitPoints.at(-1)!));}
@@ -109,7 +124,8 @@ const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').w
 
 export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  const a=d.arms[i],mouth=armMouth(d,i),incoming=stopPosition(a,mouth),own=segments.find(e=>e.i===i),previous=segments.find(e=>e.next===i),
- outgoing=previous?.exitX??departurePosition(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults());
+ normalOutgoing=departurePosition(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults()),
+ outgoing=previous?.slip?normalOutgoing:(previous?.exitX??normalOutgoing);
  return {incoming,outgoing,...(own?.slip?{incomingLeft:own.entryX}:{}),...(previous?.slip?{outgoingLeft:previous.exitX}:{})} as const;
 }
 export function suggestedMedianOpeningStart(d:Design,i:number,type:'opening'|'uturn',length:number){
