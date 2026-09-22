@@ -156,6 +156,20 @@ export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  // Departure auxiliary lanes use the normal junction departure datum.
  return {incoming,outgoing,...(approachAdded?{incomingLeft:own!.entryX}:{})} as const;
 }
+export function slipAccelerationSection(d:Design,i:number,x:number,segments=edges(d)){
+ const e=segments.find(e=>e.next===i&&e.slip);
+ if(!e)return null;
+ const source=d.arms[e.i],receiver=d.arms[i],departureAux=pocketsFor(receiver,'outgoing').left,
+ mode=slipDepartureMode(source.slipReceivingMode,departureAux.lanes>0);
+ if(mode!=='channelized'||x<e.exitX||x>e.slipMergeEnd)return null;
+ const width=slipAccelerationWidth(source),fullEnd=e.slipFullEnd,mergeEnd=e.slipMergeEnd,
+ lane=x<=fullEnd?width:width*Math.max(0,1-(x-fullEnd)/Math.max(.001,mergeEnd-fullEnd)),
+ accelerationLength=slipAccelerationLength(source),goreLength=Math.min(accelerationLength,Math.max(8,Math.min(18,accelerationLength*.35))),
+ goreEnd=e.exitX+goreLength,q=Math.max(0,Math.min(1,(x-e.exitX)/Math.max(.001,goreEnd-e.exitX))),smooth=q*q*(3-2*q),
+ separator=x>=goreEnd?0:slipSeparatorWidth(source.slipReceivingSeparator)*(1-smooth);
+ return {edge:e,sourceArm:e.i,width:lane,separator,separatorType:slipAccelerationSeparator(source)};
+}
+
 export function slipAuxModeFor(d:Design,i:number,dir:Direction,segments=edges(d)){
  if(dir!=='incoming')return null;
  const a=d.arms[i],e=segments.find(e=>e.i===i&&e.slip);
