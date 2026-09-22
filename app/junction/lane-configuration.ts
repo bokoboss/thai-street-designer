@@ -119,6 +119,39 @@ export function resolveStreetSection(d:Design,armId:number,x:number,edgeSet=edge
   };
 }
 
+export type ResolvedBoundary={
+  id:string;
+  direction:Direction;
+  kind:'main-divider'|'pocket-divider';
+  first?:number;
+  last:number;
+  y:(x:number)=>number;
+};
+
+export function resolvedLaneBoundaries(d:Design,armId:number,direction:Direction,edgeSet=edges(d)):ResolvedBoundary[]{
+  const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),section=sectionFor(a,direction),p=pocketsFor(a,direction),
+    side=direction==='incoming'?1:-1,rightWidth=pocketLaneWidth(a,direction,'right'),leftWidth=pocketLaneWidth(a,direction,'left'),
+    out:ResolvedBoundary[]=[];
+  for(let j=1;j<a[direction];j++)out.push({
+    id:`${direction}:main-divider:${j}`,direction,kind:'main-divider',last:a.length,
+    y:x=>section.width*j+rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,direction,'right')
+  });
+  for(const which of ['right','left'] as const){
+    const pocket=p[which],w=which==='right'?rightWidth:leftWidth,first=origins[direction],last=first+pocket.length+pocket.taper;
+    for(let j=0;j<pocket.lanes;j++)out.push({
+      id:`${direction}:pocket-divider:${which}:${j}`,direction,kind:'pocket-divider',first,last,
+      y:x=>which==='right'
+        ?w*(j+1)*pocketFactorAt(pocket,x,origins,direction,which)
+        :rightWidth*p.right.lanes*pocketFactorAt(p.right,x,origins,direction,'right')+section.width*a[direction]+w*j*pocketFactorAt(pocket,x,origins,direction,which)
+    });
+  }
+  return out.map(v=>({...v,y:(x:number)=> {
+    // Boundary offsets are returned from the median edge so renderers do not re-derive lane semantics.
+    const offset=v.y(x);
+    return direction==='incoming'?offset:-offset;
+  }}));
+}
+
 export function junctionLaneCount(d:Design,armId:number,direction:Direction,edgeSet=edges(d)){
   const origins=armTreatmentOrigins(d,armId,edgeSet);
   return resolveStreetSection(d,armId,origins[direction],edgeSet)[direction].activeLaneCount;
