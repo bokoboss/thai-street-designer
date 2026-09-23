@@ -43,5 +43,5 @@ const drawingSource=fs.readFileSync('app/junction/drawing.tsx','utf8'),objectLay
 assert(drawingSource.includes('export default memo(Drawing'),'2D drawing must stay memoized during viewport-only motion');
 assert(drawingSource.includes('roadObjects(d,segments,slips)'),'2D roadside rendering must reuse the resolved edge/Slip geometry');
 assert(objectLayerSource.includes('export const ObjectLayer=memo(ObjectLayerImpl'),'object hit layer must stay memoized during viewport-only motion');
-assert(pageSource.includes('baseEdges=useMemo(()=>edges(d),[d])'),'workspace must not rebuild junction edges for pan/zoom-only state changes');
+assert(pageSource.includes('baseEdges=cachedEdges(d)'),'workspace must not rebuild junction edges for pan/zoom-only state changes');
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
