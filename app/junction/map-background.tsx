@@ -36,6 +36,11 @@ export function validMapReference(v:unknown):v is MapReference{
     Number.isFinite(m.opacity)&&Number.isFinite(m.offsetX)&&Number.isFinite(m.offsetY)&&typeof m.locked==='boolean';
 }
 
+export function mapDragOffset(reference:MapReference,dxPixels:number,dyPixels:number,workspaceZoom:number,pixelsPerView:number){
+  const metersPerScreenPixel=250/Math.max(.35,workspaceZoom)/Math.max(1,pixelsPerView);
+  return {...reference,offsetX:reference.offsetX+dxPixels*metersPerScreenPixel,offsetY:reference.offsetY+dyPixels*metersPerScreenPixel};
+}
+
 export function mapReferenceDefaults():MapReference{
   return {enabled:false,lat:13.7563,lng:100.5018,zoom:17,opacity:.55,offsetX:0,offsetY:0,locked:false};
 }
