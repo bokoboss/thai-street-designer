@@ -190,7 +190,7 @@ const commands:Command[]=[
  {label:'ส่งออก SVG',group:'ไฟล์และส่งออก',hint:'SVG',keywords:'export vector ส่งออก',run:()=>exportImage('svg')},
  {label:'ส่งออก PNG',group:'ไฟล์และส่งออก',hint:'PNG',keywords:'export image ส่งออก',run:()=>exportImage('png')},
  {label:'ส่งออก JPEG',group:'ไฟล์และส่งออก',hint:'JPEG',keywords:'export image ส่งออก',run:()=>exportImage('jpeg')},
- {label:'ไปพื้นที่วาดถนนอิสระ',group:'พื้นที่ทำงาน',hint:'Free Draw',keywords:'free draw network roads วาดถนน',run:()=>window.location.assign('/roads')}
+ {label:'กลับ Network Workspace',group:'พื้นที่ทำงาน',hint:'Network',keywords:'network project โครงข่าย',run:()=>window.location.assign('../')},{label:'ไป Road Alignment Lab',group:'พื้นที่ทำงาน',hint:'Roads',keywords:'free draw roads วาดถนน alignment',run:()=>window.location.assign('../roads/')}
 ];
 useEffect(()=>{function key(e:KeyboardEvent){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setSearchOpen(v=>!v);return;}if((e.target as HTMLElement).closest('input,textarea,[role=dialog]'))return;if(e.key==='Escape'){const transient=!!objectMenu||reviewOpen||addOpen||structureOpen||displayOpen;setObjectMenu(null);setReviewOpen(false);setAddOpen(false);setStructureOpen(false);setDisplayOpen(false);if(!transient)setObject({kind:'approach',arm:selectedId});return;}if(e.key.toLowerCase()==='f'&&!e.ctrlKey&&!e.metaKey)fit();if(e.key==='Delete')removeObject();}window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[d,selection]);
 
