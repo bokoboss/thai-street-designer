@@ -16,7 +16,9 @@ export type JunctionInstance={
   design:Design;
 };
 export type LinkVia=WorldPoint&{radius:number};
-export type LinkSectionProfile={mode:'review'|'linear'};
+export type LinkDirection='forward'|'backward';
+export type LinkLaneTransition={side:'curb'|'median';center:number;length:number};
+export type LinkSectionProfile={mode:'review'|'linear';forwardLaneTransition?:LinkLaneTransition;backwardLaneTransition?:LinkLaneTransition};
 export type RoadLink={
   id:string;
   name:string;
@@ -136,22 +138,52 @@ export function linkEndSection(project:NetworkProject,link:RoadLink,end:'from'|'
     :{forwardLanes:arm.incoming,backwardLanes:arm.outgoing,forwardLaneWidth:incoming.width,backwardLaneWidth:outgoing.width,forwardBands:incoming.bands,backwardBands:outgoing.bands,forwardWalk:incoming.walk,backwardWalk:outgoing.walk,median:arm.median};
 }
 const sameBandTypes=(x:Band[],y:Band[])=>x.length===y.length&&x.every((band,i)=>band.type===y[i].type);
+const laneTransitionKey=(direction:LinkDirection)=>direction==='forward'?'forwardLaneTransition':'backwardLaneTransition';
+export function linkLaneCounts(project:NetworkProject,link:RoadLink,direction:LinkDirection){
+  const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
+  return !a||!b?null:direction==='forward'?{from:a.forwardLanes,to:b.forwardLanes}:{from:a.backwardLanes,to:b.backwardLanes};
+}
+export function linkLaneTransitionPossible(project:NetworkProject,link:RoadLink,direction:LinkDirection){
+  const counts=linkLaneCounts(project,link,direction);
+  return !!counts&&counts.from>0&&counts.to>0&&Math.abs(counts.from-counts.to)===1;
+}
+export function linkLaneTransitionValid(project:NetworkProject,link:RoadLink,direction:LinkDirection){
+  const counts=linkLaneCounts(project,link,direction);
+  if(!counts)return false;
+  if(counts.from===counts.to)return true;
+  const transition=link.sectionProfile[laneTransitionKey(direction)];
+  return linkLaneTransitionPossible(project,link,direction)&&!!transition&&['curb','median'].includes(transition.side)&&Number.isFinite(transition.center)&&Number.isFinite(transition.length)&&transition.center>=0&&transition.length>=3;
+}
+export function updateLinkLaneTransition(project:NetworkProject,id:string,direction:LinkDirection,transition:LinkLaneTransition|null):NetworkProject{
+  const link=project.links.find(l=>l.id===id);if(!link)return project;
+  const key=laneTransitionKey(direction);
+  if(transition&&!linkLaneTransitionPossible(project,link,direction))return project;
+  const length=Math.max(3,linkLength(project,link)),next=transition?{side:transition.side,center:Math.max(0,Math.min(length,transition.center)),length:Math.max(3,Math.min(length,transition.length))}:undefined,
+    profile={...link.sectionProfile,[key]:next};
+  if(!next)delete profile[key];
+  return{...project,links:project.links.map(l=>l.id===id?{...l,sectionProfile:profile}:l)};
+}
+export function defaultLinkLaneTransition(project:NetworkProject,link:RoadLink,direction:LinkDirection,side:LinkLaneTransition['side']){
+  const total=Math.max(3,linkLength(project,link)),length=Math.max(3,Math.min(40,total*.3));
+  return updateLinkLaneTransition(project,link.id,direction,{side,center:total/2,length});
+}
 export function linkLinearTransitionPossible(project:NetworkProject,link:RoadLink){
   const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
-  return !!a&&!!b&&a.forwardLanes===b.forwardLanes&&a.backwardLanes===b.backwardLanes&&sameBandTypes(a.forwardBands,b.forwardBands)&&sameBandTypes(a.backwardBands,b.backwardBands);
+  return !!a&&!!b&&sameBandTypes(a.forwardBands,b.forwardBands)&&sameBandTypes(a.backwardBands,b.backwardBands)&&linkLaneTransitionValid(project,link,'forward')&&linkLaneTransitionValid(project,link,'backward');
 }
 export function updateLinkSectionProfile(project:NetworkProject,id:string,mode:LinkSectionProfile['mode']):NetworkProject{
   const link=project.links.find(l=>l.id===id);if(!link)return project;
   if(mode==='linear'&&!linkLinearTransitionPossible(project,link))return project;
-  return{...project,links:project.links.map(l=>l.id===id?{...l,sectionProfile:{mode}}:l)};
+  return{...project,links:project.links.map(l=>l.id===id?{...l,sectionProfile:{...l.sectionProfile,mode}}:l)};
 }
 export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
   if(!a||!b)return[{kind:'missing-port',message:'Road Link อ้างถึง arm/port ที่ไม่มีอยู่'}];
   const out:LinkIssue[]=[],linear=link.sectionProfile.mode==='linear'&&linkLinearTransitionPossible(project,link);
-  if(a.forwardLanes!==b.forwardLanes||a.backwardLanes!==b.backwardLanes)out.push({
+  const forwardLaneResolved=linear&&linkLaneTransitionValid(project,link,'forward'),backwardLaneResolved=linear&&linkLaneTransitionValid(project,link,'backward');
+  if((a.forwardLanes!==b.forwardLanes&&!forwardLaneResolved)||(a.backwardLanes!==b.backwardLanes&&!backwardLaneResolved))out.push({
     kind:'lane-count',
-    message:`จำนวนเลนปลาย Link ไม่ตรงกัน · ไป ${a.forwardLanes}→${b.forwardLanes} / กลับ ${a.backwardLanes}→${b.backwardLanes} · ต้องกำหนด transition ก่อนใช้เป็น concept สุดท้าย`
+    message:`จำนวนเลนปลาย Link ไม่ตรงกัน · ไป ${a.forwardLanes}→${b.forwardLanes} / กลับ ${a.backwardLanes}→${b.backwardLanes} · ระบุฝั่งและช่วง lane transition ให้ครบก่อน`
   });
   if(!linear&&(Math.abs(a.forwardLaneWidth-b.forwardLaneWidth)>.01||Math.abs(a.backwardLaneWidth-b.backwardLaneWidth)>.01))out.push({
     kind:'lane-width',
@@ -301,7 +333,8 @@ export function validateNetworkProject(project:NetworkProject){
   }
   const occupied=new Set<string>();
   for(const l of project.links){
-    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode))return'Road Link ไม่สมบูรณ์';
+    const validTransition=(t:LinkLaneTransition|undefined)=>!t||(['curb','median'].includes(t.side)&&Number.isFinite(t.center)&&t.center>=0&&Number.isFinite(t.length)&&t.length>=3&&t.length<=1000);
+    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition))return'Road Link ไม่สมบูรณ์';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
@@ -341,6 +374,11 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       to=item.to&&typeof item.to==='object'?item.to as Record<string,unknown>:null,
       profile=item.sectionProfile&&typeof item.sectionProfile==='object'?item.sectionProfile as Record<string,unknown>:null,
       mode:LinkSectionProfile['mode']=profile?.mode==='linear'?'linear':'review',
+      readTransition=(value:unknown):LinkLaneTransition|undefined=>{
+        if(!value||typeof value!=='object')return undefined;
+        const t=value as Record<string,unknown>,side=t.side==='median'?'median':t.side==='curb'?'curb':null,center=Number(t.center),length=Number(t.length);
+        return side&&Number.isFinite(center)&&Number.isFinite(length)?{side,center,length}:undefined;
+      },
       via=Array.isArray(item.via)?item.via.map(point=>{
         const p=point&&typeof point==='object'?point as Record<string,unknown>:{};
         return{x:Number(p.x),y:Number(p.y),radius:source.schemaVersion===1?0:linkRadius(p.radius)};
@@ -351,7 +389,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       from:{junctionId:String(from?.junctionId??''),armId:Number(from?.armId)},
       to:{junctionId:String(to?.junctionId??''),armId:Number(to?.armId)},
       via,
-      sectionProfile:{mode}
+      sectionProfile:{mode,forwardLaneTransition:readTransition(profile?.forwardLaneTransition),backwardLaneTransition:readTransition(profile?.backwardLaneTransition)}
     };
   });
   const project:NetworkProject={schemaVersion:2,title:String(source.title??'Thai Street Network Concept'),junctions,links};
