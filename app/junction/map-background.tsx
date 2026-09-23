@@ -223,10 +223,11 @@ function RasterFallback({reference,view}:{reference:MapReference;view:{zoom:numb
 }
 
 function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
-  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),cameraRef=useRef({center:{lat:0,lng:0},zoom:0}),[generation,setGeneration]=useState(0),[status,setStatus]=useState<'loading'|'ready'|'failed'>('loading'),[pixels,setPixels]=useState(800);
+  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[generation,setGeneration]=useState(0),[status,setStatus]=useState<'loading'|'ready'|'failed'>('loading'),[pixels,setPixels]=useState(800);
   const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
-    center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels);
-  cameraRef.current={center,zoom:cameraZoom};
+    center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels),
+    cameraRef=useRef({center,zoom:cameraZoom});
+  useEffect(()=>{cameraRef.current={center,zoom:cameraZoom};},[center.lat,center.lng,cameraZoom]);
 
   useEffect(()=>{
     const node=container.current;
