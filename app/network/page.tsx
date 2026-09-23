@@ -8,6 +8,7 @@ import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import NetworkScene3D from './network-scene3d';
+import NetworkSectionDock from './network-section-dock';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,moveJunction,moveLinkVia,portKey,
   projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkViaRadius,type LinkDirection,type NetworkProject,type PortRef,type WorldPoint
@@ -246,6 +247,7 @@ export default function NetworkWorkspace(){
           <div className="network-zoom" hidden={view==='3d'}><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
           <div className="network-status">{notice}</div>
         </div>
+        {view==='2d'&&<NetworkSectionDock project={project} junction={selectedJunction} armId={selectedArm} link={selectedLink}/>}
       </section>
       <aside className="network-inspector">
         <div className="network-inspector-title"><span>NETWORK OBJECT</span><b>{selectedJunction?.name??selectedLink?.name??'ยังไม่ได้เลือกวัตถุ'}</b></div>
