@@ -43,12 +43,13 @@ export function RoadLinkDrawing({
 }
 
 export function JunctionInstanceDrawing({
-  junction,selected,linkMode,onSelect,onPort
+  junction,selected,linkMode,onSelect,onMoveStart,onPort
 }:{
   junction:JunctionInstance;
   selected:boolean;
   linkMode:boolean;
   onSelect:()=>void;
+  onMoveStart:(e:React.PointerEvent<SVGCircleElement>)=>void;
   onPort:(ref:PortRef)=>void;
 }){
   const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction);
@@ -57,7 +58,7 @@ export function JunctionInstanceDrawing({
       <Drawing d={display} selected={-1} onSelect={()=>{}} handlesEnabled={false}/>
     </g>
     <circle cx={junction.x} cy={junction.y} r={selected?7:5.2} fill={selected?'#0f7d77':'#ffffffdd'} stroke="#0f7d77" strokeWidth=".7"
-      onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'move'}}/>
+      onPointerDown={e=>{e.stopPropagation();onSelect();onMoveStart(e);}} style={{cursor:'move'}}/>
     {selected&&<g pointerEvents="none"><circle cx={junction.x} cy={junction.y} r="10" fill="none" stroke="#0f7d77" strokeWidth=".25" strokeDasharray="1.2 1.2"/></g>}
     {activeArmIds(junction).map(armId=>{
       const p=portPoint(junction,armId),ref={junctionId:junction.id,armId};
@@ -69,16 +70,17 @@ export function JunctionInstanceDrawing({
 }
 
 export function NetworkDrawing({
-  project,selection,linkMode,onSelect,onPort
+  project,selection,linkMode,onSelect,onJunctionMoveStart,onPort
 }:{
   project:NetworkProject;
   selection:NetworkSelection;
   linkMode:boolean;
   onSelect:(selection:NetworkSelection)=>void;
+  onJunctionMoveStart:(id:string,e:React.PointerEvent<SVGCircleElement>)=>void;
   onPort:(ref:PortRef)=>void;
 }){
   return <g>
     {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} onSelect={()=>onSelect({kind:'link',id:link.id})}/>)}
-    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} linkMode={linkMode} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onPort={onPort}/>)}
+    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} linkMode={linkMode} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onPort={onPort}/>)}
   </g>;
 }
