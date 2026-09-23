@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {roundSettings} from './roundabout';
 import {sectionFor,pocketsFor,type Design,type Direction} from './model';
 import {allocate} from './allocation';
-import {armMouth,armTreatmentOrigins,armIslands,edges} from './geometry';
+import {armMouth,armTreatmentOrigins,armIslands,edges,type Edge} from './geometry';
 import {resolveStreetSection,type ResolvedLane} from './lane-configuration';
 import {selectionKey,type Selection} from './selection';
 
@@ -25,8 +25,8 @@ type Piece={
   editable?:Editable;
 };
 
-export function sectionPieces(d:Design,id:number,x:number){
-  const a=d.arms[id],mouth=armMouth(d,id),edgeSet=edges(d),resolved=resolveStreetSection(d,id,x,edgeSet),origins=resolved.origins;
+export function sectionPieces(d:Design,id:number,x:number,edgeSet:Edge[]=edges(d)){
+  const a=d.arms[id],mouth=armMouth(d,id),resolved=resolveStreetSection(d,id,x,edgeSet),origins=resolved.origins;
   const allocation=resolved.allocation,pieces:Piece[]=[];
   const add=(piece:Piece)=>{if(piece.width>.001)pieces.push(piece);};
 
@@ -99,7 +99,7 @@ function InlineWidth({piece,onCommit,onCancel}:{piece:Piece;onCommit:(v:number)=
 }
 
 export function CrossSection({
-  d,id,x,onX,selection,onSelect,onEdit
+  d,id,x,onX,selection,onSelect,onEdit,edgeSet
 }:{
   d:Design;
   id:number;
@@ -108,8 +108,9 @@ export function CrossSection({
   selection:Selection;
   onSelect:(s:Selection)=>void;
   onEdit?:(s:Selection,value:number,currentWidth:number)=>void;
+  edgeSet?:Edge[];
 }){
-  const a=d.arms[id],mouth=armMouth(d,id),{pieces,allocation}=sectionPieces(d,id,x),[editing,setEditing]=useState<string|null>(null);
+  const a=d.arms[id],mouth=armMouth(d,id),{pieces,allocation}=sectionPieces(d,id,x,edgeSet),[editing,setEditing]=useState<string|null>(null);
   useEffect(()=>setEditing(null),[id,x]);
 
   return <section className="precision-section" aria-label="หน้าตัดถนนแบบโต้ตอบ">
