@@ -32,6 +32,7 @@ export type LinkEndSection={
 };
 export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'missing-port';message:string};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
+export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
 
 const rad=(deg:number)=>deg*Math.PI/180;
 const copyDesign=(d:Design):Design=>structuredClone(d);
@@ -119,6 +120,9 @@ export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef){
   const ids=[...project.junctions.map(j=>j.id),...project.links.map(l=>l.id)],id=nextId('L',ids);
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[]};
   return{project:{...project,links:[...project.links,link]},link,error:null};
+}
+export function updateJunctionDesign(project:NetworkProject,id:string,design:Design):NetworkProject{
+  return{...project,junctions:project.junctions.map(j=>j.id===id?{...j,design:copyDesign(design)}:j)};
 }
 export function removeJunction(project:NetworkProject,id:string):NetworkProject{
   return{...project,junctions:project.junctions.filter(j=>j.id!==id),links:project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id)};
