@@ -172,10 +172,12 @@ export function validateNetworkProject(project:NetworkProject){
 }
 export function createNetworkProject():NetworkProject{
   let project:NetworkProject={schemaVersion:1,title:'Thai Street Network Concept',junctions:[],links:[]};
-  let a;({project,junction:a}=addJunction(project,{x:-105,y:0}));
-  let b;({project,junction:b}=addJunction(project,{x:105,y:0}));
+  const first=addJunction(project,{x:-105,y:0}),a=first.junction;
+  project=first.project;
+  const second=addJunction(project,{x:105,y:0}),b=second.junction;
+  project=second.project;
   // East arm of A to west arm of B. Both ports own only the local junction approach; the Link owns the corridor between them.
-  const connected=connectPorts(project,{junctionId:a!.id,armId:0},{junctionId:b!.id,armId:2});
+  const connected=connectPorts(project,{junctionId:a.id,armId:0},{junctionId:b.id,armId:2});
   return connected.project;
 }
 
