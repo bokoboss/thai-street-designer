@@ -58,6 +58,7 @@ assert(networkSource.includes('data-network-zoom-action="in"')&&networkSource.in
 assert(networkSource.includes('span:NETWORK_VIEW_SPAN')&&networkSource.includes('NETWORK_VIEW_SPAN/zoom'),'Network MapBackground, pan scale and SVG view must share the same Network world span');
 assert(network3dSource.includes('PointerGesture')&&network3dSource.includes('groundAt')&&network3dSource.includes('orbitGround')&&network3dSource.includes('anchorGround'),'Network 3D must use anchored Pan/Orbit/Zoom camera primitives');
 assert(network3dSource.includes('data-network-camera-control="pan"')&&network3dSource.includes('data-network-camera-control="orbit"')&&network3dSource.includes('data-network-camera-control="fit"')&&network3dSource.includes('data-network-camera-control="top"'),'Network 3D must expose explicit Pan / Orbit / Fit / Top controls');
+assert(network3dSource.includes("g.count===1&&drag.current?.action==='rotate'")&&network3dSource.includes('nextPan={'),'Network 3D pointer wiring must retain separate Orbit and Pan gesture paths');
 assert(networkDrawingSource.includes('data-network-port-occupied'),'link mode must visually distinguish ports already owned by Road Links');
 assert(networkDrawingSource.includes('data-network-junction-hit'),'Network overview must make the visible Junction arms directly selectable');
 assert(networkDrawingSource.includes('data-network-arm-handle')&&networkDrawingSource.includes('data-network-arm-selection'),'selected Junction arms must expose direct stretch/rotate interaction in the primary workspace');
