@@ -54,7 +54,8 @@ const afterRotate=n.linkPoints(p,p.links[0])[0],movedA=p.junctions.find(j=>j.id=
 assert.equal(movedA.rotation,90);
 assert(Math.hypot(afterRotate.x-movedA.x,afterRotate.y-movedA.y)>40);
 assert.notDeepEqual(afterRotate,beforeRotate,'rotating the Junction instance must move its port and attached Link endpoint');
-const collapsed=n.moveJunction(p,b.id,{x:movedA.x,y:movedA.y});
+const collapseLink=p.links[0],collapseFrom=n.worldPort(p,collapseLink.from),collapseTo=n.worldPort(p,collapseLink.to),currentB=p.junctions.find(j=>j.id===b.id);
+const collapsed=n.moveJunction(p,b.id,{x:currentB.x+(collapseFrom.x-collapseTo.x),y:currentB.y+(collapseFrom.y-collapseTo.y)});
 assert(n.linkIssues(collapsed,collapsed.links[0]).some(v=>v.kind==='alignment'),'moving Junctions into an invalid Link alignment must be surfaced explicitly');
 
 const display=n.junctionDisplayDesign(movedA);
