@@ -27,6 +27,13 @@ assert.equal(n.linkEndSection(directional,directional.links[0],'to').forwardLane
 assert(!n.linkIssues(directional,directional.links[0]).some(v=>v.kind==='lane-width'),'matching directional section widths must remain compatible');
 dirB.incomingSection={width:3.25,walk:2,bands:[]};
 assert(n.linkIssues(directional,directional.links[0]).some(v=>v.kind==='lane-width'),'Road Link width review must use directional Junction sections, not Arm.width');
+const edgeSections=structuredClone(p),edgeA=edgeSections.junctions[0].design.arms[0],edgeB=edgeSections.junctions[1].design.arms[2];
+edgeA.outgoingSection={width:3.25,walk:2.5,bands:[{id:'bike-a',type:'bike',width:1.5},{id:'buf-a',type:'buffer',width:.5}]};
+edgeB.incomingSection={width:3.25,walk:2.5,bands:[{id:'bike-b',type:'bike',width:1.5},{id:'buf-b',type:'buffer',width:.5}]};
+assert(!n.linkIssues(edgeSections,edgeSections.links[0]).some(v=>v.kind==='edge-section'),'matching semantic edge zones must continue across a Road Link');
+assert.equal(n.linkEndSection(edgeSections,edgeSections.links[0],'from').forwardBands[0].type,'bike');
+edgeB.incomingSection={...edgeB.incomingSection,walk:3};
+assert(n.linkIssues(edgeSections,edgeSections.links[0]).some(v=>v.kind==='edge-section'),'edge-zone mismatch must be explicit rather than silently reflowed');
 const overview1=n.junctionDisplayDesign(a),overview2=n.junctionDisplayDesign(a);
 assert.equal(overview1,overview2,'unchanged Junction instance should reuse cached overview Design');
 assert.equal(overview1.showNames,false);assert.equal(overview1.showScale,false);assert.equal(overview1.trees,false);assert.equal(overview1.lights,false);
@@ -84,4 +91,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, move/rotate transforms, semantic ports, directional section widths, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, detail round-trip and cleanup');
+console.log('PASS network project: instances, move/rotate transforms, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, detail round-trip and cleanup');
