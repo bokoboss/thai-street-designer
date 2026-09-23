@@ -1,4 +1,5 @@
 import {initial,type Arm,type Design} from '../app/junction/model';
+import {lengthOf,validAlignment} from './alignment';
 
 export type WorldPoint={x:number;y:number};
 export type PortRef={junctionId:string;armId:number};
@@ -76,6 +77,28 @@ export function worldPort(project:NetworkProject,ref:PortRef){
 export function linkPoints(project:NetworkProject,link:RoadLink){
   const from=worldPort(project,link.from),to=worldPort(project,link.to);
   return from&&to?[from,...link.via,to]:[];
+}
+export function linkLength(project:NetworkProject,link:RoadLink){
+  const points=linkPoints(project,link);return points.length>=2?lengthOf(points):0;
+}
+export function setLinkVia(project:NetworkProject,id:string,via:WorldPoint[]):NetworkProject{
+  const link=project.links.find(l=>l.id===id);if(!link)return project;
+  const candidate={...link,via:via.map(p=>({...p}))},points=linkPoints(project,candidate);
+  if(points.length<2||!validAlignment(points))return project;
+  return{...project,links:project.links.map(l=>l.id===id?candidate:l)};
+}
+export function insertLinkVia(project:NetworkProject,id:string,index:number,point:WorldPoint){
+  const link=project.links.find(l=>l.id===id);if(!link)return project;
+  const via=[...link.via];via.splice(Math.max(0,Math.min(index,via.length)),0,point);
+  return setLinkVia(project,id,via);
+}
+export function moveLinkVia(project:NetworkProject,id:string,index:number,point:WorldPoint){
+  const link=project.links.find(l=>l.id===id);if(!link||!link.via[index])return project;
+  return setLinkVia(project,id,link.via.map((p,i)=>i===index?point:p));
+}
+export function removeLinkVia(project:NetworkProject,id:string,index:number){
+  const link=project.links.find(l=>l.id===id);if(!link||!link.via[index])return project;
+  return setLinkVia(project,id,link.via.filter((_,i)=>i!==index));
 }
 export function linkEndSection(project:NetworkProject,link:RoadLink,end:'from'|'to'):LinkEndSection|null{
   const arm=armForPort(project,end==='from'?link.from:link.to);
