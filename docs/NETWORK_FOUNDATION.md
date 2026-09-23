@@ -121,7 +121,9 @@ Alignment ownership is also explicit:
 - R0 reproduces the legacy sharp polyline;
 - R>0 resolves tangent–arc–tangent geometry;
 - the requested radius is clamped when adjacent tangent lengths are insufficient;
-- renderer, Link length and Fit consume the resolved alignment rather than inventing separate curves.
+- renderer, Link length and Fit consume the resolved alignment rather than inventing separate curves;
+- each attached Link derives short non-persistent tangent controls from the semantic Arm headings, so the corridor leaves/enters the Junction tangent to the selected port;
+- Review mode uses only short endpoint collars to match the exact Arm section at each port; mismatch warnings remain unresolved until the user explicitly configures a real section/lane transition.
 
 ## Current interaction
 
@@ -197,7 +199,14 @@ Phase 3B removes the remaining flat Junction plan texture from Network 3D. The N
 - RoadLink surfaces continue to use the schema-v2 resolved section/alignment geometry;
 - the reference map remains a ground texture.
 
-The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation. Lane markings, arrows and roadside furniture remain presentation layers for a later visual-polish phase; they are intentionally not re-created inside the geometry resolver.
+The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation.
+
+Phase 4C restores the missing presentation detail without weakening geometry ownership:
+
+- lane dividers, curb lines, crossings, stop/yield markings and arrows are tagged by the existing 2D semantic renderers and projected as a **detail-only transparent overlay** above the resolved road surfaces;
+- traffic signals, configured trees and lights use the existing `furnitureFaces()` resolver and are transformed into Network world coordinates as actual 3D faces;
+- the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
+- raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
 ### Phase 4A contextual direct editing
 

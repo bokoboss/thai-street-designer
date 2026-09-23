@@ -218,8 +218,9 @@ try{
   mark('resolved-3d');
   await clickSelector('[data-network-view="3d"]');
   await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
-  const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0)};})()`);
-  assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');
+  await waitFor(()=>evalValue(`document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-scene-detail-texture')==='true'`),'3D semantic marking detail overlay');
+  const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0),detail:c?.getAttribute('data-network-scene-detail-texture')==='true',furniture:Number(c?.getAttribute('data-network-scene-furniture-faces')||0)};})()`);
+  assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');assert.equal(sceneCounts.detail,true,'Resolved 3D must restore exact semantic markings through the detail-only overlay');
   const cameraBefore=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {mode:c?.getAttribute('data-network-camera-mode'),zoom:Number(c?.getAttribute('data-network-camera-zoom')||0)};})()`);
   assert.equal(cameraBefore.mode,'pan','Network 3D should start in Pan mode');
   await clickSelector('[data-network-camera-control="orbit"]');
@@ -241,7 +242,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: collapsible Inspector + contextual direct edit → persistence → section dock → resolved 3D camera controls');
+  console.log('PASS browser acceptance: contextual edit → port-tangent Link continuity → persistence → resolved 3D geometry + semantic marking detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
