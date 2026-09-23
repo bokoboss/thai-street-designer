@@ -1,4 +1,4 @@
-import {initial,type Arm,type Design} from '../app/junction/model';
+import {initial,migrate,valid,type Arm,type Design} from '../app/junction/model';
 import {lengthOf,validAlignment} from './alignment';
 
 export type WorldPoint={x:number;y:number};
@@ -31,13 +31,14 @@ export type LinkEndSection={
   median:number;
   walk:number;
 };
-export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'missing-port';message:string};
+export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'alignment'|'missing-port';message:string};
 export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
 
 const rad=(deg:number)=>deg*Math.PI/180;
 const copyDesign=(d:Design):Design=>structuredClone(d);
+const displayDesignCache=new WeakMap<JunctionInstance,Design>();
 const nextId=(prefix:string,ids:string[])=>{let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;};
 export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)=>enabled?i:-1).filter(i=>i>=0);
 
@@ -53,11 +54,16 @@ export function portPoint(j:JunctionInstance,armId:number):WorldPoint{
   return{x:j.x+Math.cos(angle)*distance,y:j.y+Math.sin(angle)*distance};
 }
 export function junctionDisplayDesign(j:JunctionInstance):Design{
+  const cached=displayDesignCache.get(j);if(cached)return cached;
   const d=copyDesign(j.design);
   d.rotation=0;
+  d.showNames=false;
   d.showScale=false;
-  d.display={...d.display,dimensions:false,reviews:false,handles:false};
+  d.trees=false;
+  d.lights=false;
+  d.display={...d.display,grid:false,trees:false,lights:false,dimensions:false,reviews:false,handles:false};
   d.arms=d.arms.map((arm,i)=>({...arm,length:portDistance(j,i)}));
+  displayDesignCache.set(j,d);
   return d;
 }
 export function worldJunctionRotation(j:JunctionInstance){
@@ -117,6 +123,8 @@ export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   });
   if(Math.abs(a.laneWidth-b.laneWidth)>.01)out.push({kind:'lane-width',message:`ความกว้างเลนปลาย Link ต่างกัน ${a.laneWidth.toFixed(2)}→${b.laneWidth.toFixed(2)} ม.`});
   if(Math.abs(a.median-b.median)>.01)out.push({kind:'median',message:`เกาะกลางปลาย Link ต่างกัน ${a.median.toFixed(2)}→${b.median.toFixed(2)} ม. · ยังไม่สร้าง median transition อัตโนมัติ`});
+  const points=linkPoints(project,link);
+  if(points.length>=2&&!validAlignment(points))out.push({kind:'alignment',message:'แนว Road Link หักกลับ ตัดตัวเอง หรือมีช่วงสั้นเกินไป · ปรับตำแหน่ง Junction หรือจุดแนว'});
   return out;
 }
 export function portKey(ref:PortRef){return `${ref.junctionId}:${ref.armId}`;}
@@ -164,10 +172,20 @@ export function projectBounds(project:NetworkProject,padding=35){
 }
 export function validateNetworkProject(project:NetworkProject){
   if(project.schemaVersion!==1||!Array.isArray(project.junctions)||!Array.isArray(project.links))return'Network schema ไม่รองรับ';
+  if(typeof project.title!=='string'||project.title.length>120)return'ชื่อ Network ไม่ถูกต้อง';
+  if(project.junctions.length>200||project.links.length>500)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
   if(new Set(project.junctions.map(j=>j.id)).size!==project.junctions.length)return'Junction ID ซ้ำ';
   if(new Set(project.links.map(l=>l.id)).size!==project.links.length)return'Road Link ID ซ้ำ';
-  for(const j of project.junctions)if(!j.id||!Number.isFinite(j.x)||!Number.isFinite(j.y)||!Number.isFinite(j.rotation)||!j.design)return'Junction instance ไม่สมบูรณ์';
-  for(const l of project.links)if(!l.id||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return'Road Link ไม่สมบูรณ์';
+  for(const j of project.junctions){
+    if(!j.id||j.id.length>40||typeof j.name!=='string'||j.name.length>80||!Number.isFinite(j.x)||!Number.isFinite(j.y)||!Number.isFinite(j.rotation)||j.rotation<0||j.rotation>=360||!valid(j.design))return'Junction instance ไม่สมบูรณ์';
+  }
+  const occupied=new Set<string>();
+  for(const l of project.links){
+    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return'Road Link ไม่สมบูรณ์';
+    for(const ref of [l.from,l.to]){
+      const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
+    }
+  }
   return null;
 }
 export function createNetworkProject():NetworkProject{
@@ -181,10 +199,35 @@ export function createNetworkProject():NetworkProject{
   return connected.project;
 }
 
+export function normalizeNetworkProject(raw:unknown):NetworkProject{
+  if(!raw||typeof raw!=='object')throw Error('Invalid network project');
+  const source=raw as Partial<NetworkProject>;
+  if(source.schemaVersion!==1||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('Unsupported network schema');
+  const junctions=source.junctions.map(input=>{
+    if(!input||typeof input!=='object')throw Error('Invalid junction instance');
+    const rotation=((Number(input.rotation)%360)+360)%360;
+    return{
+      id:String(input.id??''),
+      name:String(input.name??''),
+      x:Number(input.x),
+      y:Number(input.y),
+      rotation,
+      design:migrate(input.design)
+    };
+  });
+  const links=source.links.map(input=>({
+    id:String(input?.id??''),
+    name:String(input?.name??''),
+    from:{junctionId:String(input?.from?.junctionId??''),armId:Number(input?.from?.armId)},
+    to:{junctionId:String(input?.to?.junctionId??''),armId:Number(input?.to?.armId)},
+    via:Array.isArray(input?.via)?input.via.map(p=>({x:Number(p.x),y:Number(p.y)})):[]
+  }));
+  const project:NetworkProject={schemaVersion:1,title:String(source.title??'Thai Street Network Concept'),junctions,links};
+  const error=validateNetworkProject(project);if(error)throw Error(error);
+  return project;
+}
 export function restoreNetworkProject(raw:string|null):NetworkProject{
   if(!raw)return createNetworkProject();
-  try{
-    const parsed=JSON.parse(raw) as NetworkProject;
-    return validateNetworkProject(parsed)?createNetworkProject():parsed;
-  }catch{return createNetworkProject();}
+  try{return normalizeNetworkProject(JSON.parse(raw));}
+  catch{return createNetworkProject();}
 }
