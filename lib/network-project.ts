@@ -1,4 +1,6 @@
-import {initial,migrate,sectionFor,valid,type Arm,type Band,type Design} from '../app/junction/model';
+import {initial,markingsFor,migrate,sectionFor,valid,type Arm,type Band,type Design} from '../app/junction/model';
+import {normalizeArrowOverrides} from '../app/junction/arrow-layout';
+import {designError} from '../app/junction/design-validation';
 import {lengthOf,validAlignment} from './alignment';
 
 export type WorldPoint={x:number;y:number};
@@ -37,6 +39,7 @@ export type LinkEndSection={
 };
 export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'edge-section'|'alignment'|'missing-port';message:string};
 export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
+export type NetworkEditResult={project:NetworkProject;error:string|null};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
 
@@ -48,7 +51,7 @@ export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)
 
 export function portDistance(j:JunctionInstance,armId:number){
   const arm=j.design.arms[armId];
-  return Math.min(arm?.length??45,45);
+  return arm?.length??45;
 }
 export function portHeading(j:JunctionInstance,armId:number){
   return (j.rotation+j.design.rotation+(j.design.arms[armId]?.angle??0)+3600)%360;
@@ -66,7 +69,7 @@ export function junctionDisplayDesign(j:JunctionInstance):Design{
   d.trees=false;
   d.lights=false;
   d.display={...d.display,grid:false,trees:false,lights:false,dimensions:false,reviews:false,handles:false};
-  d.arms=d.arms.map((arm,i)=>({...arm,length:portDistance(j,i)}));
+
   displayDesignCache.set(j.design,d);
   return d;
 }
@@ -166,6 +169,25 @@ export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):Con
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[]};
   return{project:{...project,links:[...project.links,link]},link,error:null};
 }
+export function updateJunctionArmGeometry(project:NetworkProject,id:string,armId:number,angle:number,length:number):NetworkEditResult{
+  const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
+  const design=copyDesign(junction.design),normalized=((angle%360)+360)%360,nextLength=Math.max(45,Math.min(400,length));
+  design.arms[armId]={...design.arms[armId],angle:+normalized.toFixed(2),length:+nextLength.toFixed(2)};
+  const error=designError(design);if(error)return{project,error};
+  return{project:updateJunctionDesign(project,id,design),error:null};
+}
+export function updateJunctionArmBasics(project:NetworkProject,id:string,armId:number,patch:Partial<Pick<Arm,'name'|'incoming'|'outgoing'|'median'>>):NetworkEditResult{
+  const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
+  const design=copyDesign(junction.design),current=design.arms[armId],next={...current,...patch};
+  if(next.incoming+next.outgoing<1)return{project,error:'ขาถนนต้องมีอย่างน้อย 1 ช่องจราจร'};
+  if(patch.incoming!==undefined||patch.outgoing!==undefined){
+    next.laneMarkings=markingsFor(next);
+    next.arrowOverrides=normalizeArrowOverrides(next);
+  }
+  design.arms[armId]=next;
+  const error=designError(design);if(error)return{project,error};
+  return{project:updateJunctionDesign(project,id,design),error:null};
+}
 export function linkedArmIds(project:NetworkProject,junctionId:string){
   return [...new Set(project.links.flatMap(link=>[
     ...(link.from.junctionId===junctionId?[link.from.armId]:[]),
@@ -214,9 +236,9 @@ export function validateNetworkProject(project:NetworkProject){
 }
 export function createNetworkProject():NetworkProject{
   let project:NetworkProject={schemaVersion:1,title:'Thai Street Network Concept',junctions:[],links:[]};
-  const first=addJunction(project,{x:-105,y:0}),a=first.junction;
+  const first=addJunction(project,{x:-150,y:0}),a=first.junction;
   project=first.project;
-  const second=addJunction(project,{x:105,y:0}),b=second.junction;
+  const second=addJunction(project,{x:150,y:0}),b=second.junction;
   project=second.project;
   // East arm of A to west arm of B. Both ports own only the local junction approach; the Link owns the corridor between them.
   const connected=connectPorts(project,{junctionId:a.id,armId:0},{junctionId:b.id,armId:2});
