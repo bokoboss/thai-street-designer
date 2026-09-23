@@ -206,8 +206,9 @@ function RasterFallback({reference,view}:{reference:MapReference;view:{zoom:numb
 }
 
 function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
-  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[ready,setReady]=useState(false),[failed,setFailed]=useState(false),[pixels,setPixels]=useState(800);
-  const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap];
+  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[generation,setGeneration]=useState(0),[failed,setFailed]=useState(false),[pixels,setPixels]=useState(800);
+  const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
+    center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels);
 
   useEffect(()=>{
     const node=container.current;
@@ -222,24 +223,23 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
 
   useEffect(()=>{
     let cancelled=false;
-    setReady(false);setFailed(false);
     loadMapLibre().then(lib=>{
       if(cancelled||!container.current)return;
       const instance=new lib.Map({
         container:container.current,style,center:[0,0],zoom:0,bearing:0,pitch:0,
         interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false
       });
-      map.current=instance;setReady(true);
+      map.current=instance;setFailed(false);setGeneration(v=>v+1);
     }).catch(()=>{if(!cancelled)setFailed(true);});
     return()=>{cancelled=true;map.current?.remove();map.current=null;};
   },[style]);
 
   useEffect(()=>{
-    if(!ready||!map.current)return;
-    const center=mapCenterForView(reference,view.pan),zoom=mapZoomForViewport(center.lat,view.zoom,pixels);
-    map.current.resize();
-    map.current.jumpTo({center:[center.lng,center.lat],zoom,bearing:0,pitch:0});
-  },[ready,reference.lat,reference.lng,reference.offsetX,reference.offsetY,view.zoom,view.pan.x,view.pan.y,pixels]);
+    const instance=map.current;
+    if(!instance)return;
+    instance.resize();
+    instance.jumpTo({center:[center.lng,center.lat],zoom:cameraZoom,bearing:0,pitch:0});
+  },[generation,center.lng,center.lat,cameraZoom]);
 
   return <div ref={container} data-map-background="true" data-map-provider="openfreemap" data-map-basemap={reference.basemap}
     className="map-reference-map">{failed&&<div className="map-reference-error">OpenFreeMap โหลดไม่ได้ · เลือก OSM Raster เพื่อใช้งานสำรอง</div>}</div>;
