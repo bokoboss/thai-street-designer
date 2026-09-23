@@ -50,8 +50,7 @@ export async function searchMapPlaces(query:string):Promise<MapPlace[]>{
   if(q.length<2)return [];
   const key='thai-street-geocode:'+q.toLocaleLowerCase('th');
   try{
-    if(typeof sessionStorage==='undefined')throw new Error('no session storage');
-    const cached=sessionStorage.getItem(key);
+    const cached=typeof sessionStorage!=='undefined'?sessionStorage.getItem(key):null;
     if(cached){
       const parsed=JSON.parse(cached);
       if(Array.isArray(parsed))return parsed.slice(0,5);
