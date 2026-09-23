@@ -29,7 +29,7 @@ function metersPerPixel(lat:number,z:number){
   return Math.cos(clamp(lat,-MAX_LAT,MAX_LAT)*Math.PI/180)*2*Math.PI*R/(TILE*2**z);
 }
 function wrap(v:number,n:number){return ((v%n)+n)%n;}
-function validMapReference(v:unknown):v is MapReference{
+export function validMapReference(v:unknown):v is MapReference{
   if(!v||typeof v!=='object')return false;
   const m=v as Partial<MapReference>;
   return typeof m.enabled==='boolean'&&Number.isFinite(m.lat)&&Number.isFinite(m.lng)&&Number.isFinite(m.zoom)&&
