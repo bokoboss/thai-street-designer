@@ -31,6 +31,8 @@ const overview1=n.junctionDisplayDesign(a),overview2=n.junctionDisplayDesign(a);
 assert.equal(overview1,overview2,'unchanged Junction instance should reuse cached overview Design');
 assert.equal(overview1.showNames,false);assert.equal(overview1.showScale,false);assert.equal(overview1.trees,false);assert.equal(overview1.lights,false);
 assert.equal(overview1.display.trees,false);assert.equal(overview1.display.lights,false);
+const cacheMove=n.moveJunction(p,a.id,{x:a.x+1,y:a.y+1}),cacheMovedJunction=cacheMove.junctions.find(j=>j.id===a.id);
+assert.equal(n.junctionDisplayDesign(cacheMovedJunction),overview1,'moving/rotating an instance must reuse overview geometry when its Design is unchanged');
 
 const originalDesign=structuredClone(a.design),oldEnd=points[0],beforeMove=structuredClone(p);
 p=n.moveJunction(p,a.id,{x:a.x+20,y:a.y+15});
