@@ -59,6 +59,11 @@ export function JunctionInstanceDrawing({
     <g transform={`translate(${junction.x} ${junction.y}) rotate(${rotation})`} pointerEvents="none">
       <Drawing d={display} selected={-1} onSelect={()=>{}} handlesEnabled={false}/>
     </g>
+    {activeArmIds(junction).map(armId=>{
+      const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(14,arm.median+(arm.incoming+arm.outgoing)*arm.width+8);
+      return <line key={'hit-'+armId} data-network-junction-hit={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
+        stroke="transparent" strokeWidth={hitWidth} pointerEvents={linkMode?'none':'stroke'} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:linkMode?undefined:'pointer'}}/>;
+    })}
     <circle data-network-instance-handle="true" cx={junction.x} cy={junction.y} r={selected?7:5.2} fill={selected?'#0f7d77':'#ffffffdd'} stroke="#0f7d77" strokeWidth=".7"
       onPointerDown={e=>{e.stopPropagation();onSelect();onMoveStart(e);}} style={{cursor:'move'}}/>
     {selected&&<g data-network-instance-selection="true" pointerEvents="none"><circle cx={junction.x} cy={junction.y} r="10" fill="none" stroke="#0f7d77" strokeWidth=".25" strokeDasharray="1.2 1.2"/></g>}
