@@ -99,8 +99,35 @@ export function linkControlPoints(project:NetworkProject,link:RoadLink){
   const from=worldPort(project,link.from),to=worldPort(project,link.to);
   return from&&to?[from,...link.via.map(v=>({x:v.x,y:v.y,radius:v.radius})),to]:[];
 }
+const pointDistance=(a:WorldPoint,b:WorldPoint)=>Math.hypot(a.x-b.x,a.y-b.y);
+const tangentStub=(port:WorldPoint,target:WorldPoint,heading:number)=>{
+  const available=pointDistance(port,target);
+  if(available<12)return null;
+  const length=Math.min(18,Math.max(5,available*.22)),a=rad(heading);
+  return{x:port.x+Math.cos(a)*length,y:port.y+Math.sin(a)*length,radius:Math.min(35,Math.max(12,length*2))};
+};
+/** Derived controls keep Link endpoint tangency aligned to semantic Arm headings. */
+export function linkAlignmentControls(project:NetworkProject,link:RoadLink){
+  const raw=linkControlPoints(project,link),fromJ=junctionById(project,link.from.junctionId),toJ=junctionById(project,link.to.junctionId);
+  if(raw.length<2||!fromJ||!toJ)return raw;
+  const from=raw[0],to=raw.at(-1)!,fromTarget=link.via[0]??to,toTarget=link.via.at(-1)??from,
+    fromStub=tangentStub(from,fromTarget,portHeading(fromJ,link.from.armId)),
+    toStub=tangentStub(to,toTarget,portHeading(toJ,link.to.armId));
+  const build=(useFrom:boolean,useTo:boolean,curved:boolean)=>{
+    const out:(WorldPoint&{radius?:number})[]=[from];
+    if(useFrom&&fromStub)out.push({...fromStub,radius:curved?fromStub.radius:0});
+    out.push(...link.via.map(v=>({x:v.x,y:v.y,radius:v.radius})));
+    if(useTo&&toStub)out.push({...toStub,radius:curved?toStub.radius:0});
+    out.push(to);
+    return out;
+  };
+  for(const candidate of [build(true,true,true),build(true,true,false),build(true,false,true),build(false,true,true)]){
+    if(candidate.length>=2&&validAlignment(candidate))return candidate;
+  }
+  return raw;
+}
 export function linkPoints(project:NetworkProject,link:RoadLink){
-  const controls=linkControlPoints(project,link);
+  const controls=linkAlignmentControls(project,link);
   return controls.length>=2?smoothAlignment(controls):[];
 }
 export function linkLength(project:NetworkProject,link:RoadLink){

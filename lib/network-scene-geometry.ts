@@ -4,6 +4,7 @@ import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
 } from '../app/junction/scene-surfaces';
+import {furnitureFaces} from '../app/junction/furniture3d';
 import {worldJunctionRotation,type JunctionInstance,type NetworkProject,type WorldPoint} from './network-project';
 
 export type NetworkSceneSurfaceKind=JunctionSceneSurfaceKind;
@@ -12,6 +13,11 @@ export type NetworkSceneSurface={
   kind:NetworkSceneSurfaceKind;
   points:WorldPoint[];
   z:number;
+};
+export type NetworkSceneFace={
+  id:string;
+  points:{x:number;y:number;z:number}[];
+  color:string;
 };
 
 const strip=(center:WorldPoint[],inner:number[],outer:number[])=>[
@@ -34,6 +40,16 @@ export function resolveJunctionSceneSurfaces(project:NetworkProject):NetworkScen
       z:surface.z
     }))
   ).filter(surface=>surface.points.length>=3&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
+
+export function resolveJunctionSceneFaces(project:NetworkProject):NetworkSceneFace[]{
+  return project.junctions.flatMap(junction=>
+    furnitureFaces(junction.design).map((face,index)=>({
+      id:`${junction.id}:furniture:${index}`,
+      color:face.color,
+      points:face.points.map(p=>({...transformPoint(junction,p),z:p.z}))
+    }))
+  ).filter(face=>face.points.length>=3&&face.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z)));
 }
 
 export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
