@@ -144,8 +144,13 @@ try{
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
-  const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0};})()`);
+  const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
   assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
+  assert.equal(initial2d.inspector,'open','Inspector should open by default');
+  await clickSelector('[data-network-action="toggle-inspector"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'collapse Inspector');
+  await clickSelector('[data-network-action="toggle-inspector"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='open'`),'reopen Inspector');
   for(let i=0;i<7;i++)await clickSelector('[data-network-zoom-action="out"]');
   await waitFor(()=>evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)<.35`),'2D zoom below legacy 35% floor');
   await clickSelector('[data-network-zoom-action="fit"]');await sleep(180);
@@ -166,7 +171,8 @@ try{
 
   mark('edit-alignment');
   await clickSelector('[data-network-link="L-2"]');
-  await clickSelector('[data-network-link-action="add-pi"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='link'`),'RoadLink contextual command bar');
+  await clickSelector('[data-network-context-action="add-pi"]');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.via?.length===1;},'add PI');
   const beforeDrag=await project(),beforeVia=beforeDrag.links.find(l=>l.id==='L-2').via[0];
   await dragSelector('[data-link-via="0"]',34,-24);
@@ -174,9 +180,10 @@ try{
 
   mark('create-lane-mismatch');
   await clickSelector('[data-network-junction-hit="J-3:3"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='arm'`),'Arm contextual command bar');
   const laneBefore=(await project()).junctions.find(j=>j.id==='J-3').design.arms[3].incoming;
   assert(laneBefore<4,'Golden flow needs room to add one incoming lane');
-  await clickSelector('[data-network-lane-step="incoming-inc"]');
+  await clickSelector('[data-network-context-action="incoming-inc"]');
   await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-3')?.design?.arms?.[3]?.incoming===laneBefore+1;},'lane mismatch edit');
 
   mark('resolve-section');
@@ -234,7 +241,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: wide 2D zoom → create/connect/edit → persistence → section dock → resolved 3D Pan/Orbit/Fit');
+  console.log('PASS browser acceptance: collapsible Inspector + contextual direct edit → persistence → section dock → resolved 3D camera controls');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
