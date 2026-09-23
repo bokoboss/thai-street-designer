@@ -50,8 +50,14 @@ type MapLibreGlobal={
 };
 
 const TILE=256,MAPLIBRE_TILE=512,R=6378137,MAX_LAT=85.05112878;
-const MAPLIBRE_JS='https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js';
-const MAPLIBRE_CSS='https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css';
+const MAPLIBRE_JS=[
+  'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js'
+];
+const MAPLIBRE_CSS=[
+  'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css',
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css'
+];
 const STYLE_URLS:Record<Exclude<MapBasemap,'osm-raster'>,string>={
   positron:'https://tiles.openfreemap.org/styles/positron',
   bright:'https://tiles.openfreemap.org/styles/bright',
@@ -71,20 +77,26 @@ function loadMapLibre(){
   mapLibrePromise=new Promise<MapLibreGlobal>((resolve,reject)=>{
     if(!document.querySelector('link[data-thai-street-maplibre]')){
       const link=document.createElement('link');
-      link.rel='stylesheet';link.href=MAPLIBRE_CSS;link.dataset.thaiStreetMaplibre='true';
+      link.rel='stylesheet';link.href=MAPLIBRE_CSS[0];link.dataset.thaiStreetMaplibre='true';
+      link.addEventListener('error',()=>{link.href=MAPLIBRE_CSS[1];},{once:true});
       document.head.appendChild(link);
     }
     const done=()=>{
       const lib=(window as typeof window&{maplibregl?:MapLibreGlobal}).maplibregl;
       if(lib)resolve(lib);else reject(new Error('MapLibre loaded without global'));
     };
+    const trySource=(index:number)=>{
+      if(index>=MAPLIBRE_JS.length){reject(new Error('MapLibre CDN unavailable'));return;}
+      document.querySelectorAll('script[data-thai-street-maplibre]').forEach(node=>node.remove());
+      const script=document.createElement('script');
+      script.src=MAPLIBRE_JS[index];script.async=true;script.dataset.thaiStreetMaplibre='true';
+      script.addEventListener('load',done,{once:true});
+      script.addEventListener('error',()=>{script.remove();trySource(index+1);},{once:true});
+      document.head.appendChild(script);
+    };
     const existing=document.querySelector<HTMLScriptElement>('script[data-thai-street-maplibre]');
-    if(existing){existing.addEventListener('load',done,{once:true});existing.addEventListener('error',()=>reject(new Error('MapLibre CDN unavailable')),{once:true});return;}
-    const script=document.createElement('script');
-    script.src=MAPLIBRE_JS;script.async=true;script.dataset.thaiStreetMaplibre='true';
-    script.addEventListener('load',done,{once:true});
-    script.addEventListener('error',()=>reject(new Error('MapLibre CDN unavailable')),{once:true});
-    document.head.appendChild(script);
+    if(existing){existing.remove();}
+    trySource(0);
   }).catch(error=>{mapLibrePromise=null;throw error;});
   return mapLibrePromise;
 }
