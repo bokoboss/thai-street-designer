@@ -38,7 +38,7 @@ export function validMapReference(v:unknown):v is MapReference{
 
 export function mapDragOffset(reference:MapReference,dxPixels:number,dyPixels:number,workspaceZoom:number,pixelsPerView:number){
   const metersPerScreenPixel=250/Math.max(.35,workspaceZoom)/Math.max(1,pixelsPerView);
-  return {...reference,offsetX:reference.offsetX+dxPixels*metersPerScreenPixel,offsetY:reference.offsetY+dyPixels*metersPerScreenPixel};
+  return {...reference,offsetX:reference.offsetX-dxPixels*metersPerScreenPixel,offsetY:reference.offsetY-dyPixels*metersPerScreenPixel};
 }
 
 export function mapReferenceDefaults():MapReference{
