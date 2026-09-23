@@ -6,6 +6,7 @@ import './style.css';
 import MapBackground,{BASEMAP_OPTIONS,MAP_REFERENCE_STORAGE,mapReferenceDefaults,restoreMapReference,type MapBasemap,type MapReference} from '../junction/map-background';
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
+import NetworkScene3D from './network-scene3d';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,insertLinkVia,junctionById,linkIssues,linkLength,linkPoints,moveJunction,moveLinkVia,portKey,
   projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,type NetworkProject,type PortRef,type WorldPoint
@@ -31,7 +32,7 @@ export default function NetworkWorkspace(){
     [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
-    [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults);
+    [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[view,setView]=useState<'2d'|'3d'>('2d');
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project);
 
   useEffect(()=>{projectRef.current=project;},[project]);
@@ -131,19 +132,20 @@ export default function NetworkWorkspace(){
     <div className="network-body">
       <aside className="network-tools">{tools.map(([id,label,Icon])=><button key={id} className={tool===id?'active':''} title={label} onClick={()=>choose(id)}><Icon size={20}/><span>{label}</span></button>)}</aside>
       <section className="network-canvas-wrap">
-        <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-links"><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
+        <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
         <div className="network-canvas">
           <MapBackground reference={mapReference} view={{zoom,pan}}/>
-          <svg ref={svg} viewBox={[(-125/zoom+pan.x),(-125/zoom+pan.y),(250/zoom),(250/zoom)].join(' ')}
+          <svg ref={svg} data-network-plan="true" className={view==='3d'?'network-plan-hidden':''} viewBox={[(-125/zoom+pan.x),(-125/zoom+pan.y),(250/zoom),(250/zoom)].join(' ')}
             onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer}
             onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.9:1.1,{x:e.clientX,y:e.clientY});}}>
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
-            <rect x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
-            <rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
+            <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
+            <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
             <NetworkDrawing project={project} selection={selection} linkMode={tool==='link'} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onJunctionMoveStart={startJunctionMove} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=Math.min(j.design.arms[pendingPort.armId].length,45);return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
           </svg>
-          <div className="network-zoom"><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
+          <NetworkScene3D project={project} mapReference={mapReference} active={view==='3d'}/>
+          <div className="network-zoom" hidden={view==='3d'}><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
           <div className="network-status">{notice}</div>
         </div>
       </section>
