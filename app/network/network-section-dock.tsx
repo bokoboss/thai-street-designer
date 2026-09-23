@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useMemo,useState} from 'react';
 import {CrossSection,sectionStart} from '../junction/section-view';
 import {armMouth} from '../junction/geometry';
 import type {Selection} from '../junction/selection';
@@ -37,8 +37,7 @@ function lanePieces(count:number,width:number,prefix:string){
 }
 
 function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
-  const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(0);
-  useEffect(()=>{setStation(resolved?resolved.total/2:0);},[link.id,resolved?.total]);
+  const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(()=>resolveLinkSectionGeometry(project,link)?.total/2??0);
   if(!resolved)return <section className="network-section-dock"><div className="network-section-empty">Road Link นี้ยังไม่มี resolved section geometry</div></section>;
   const s=Math.max(0,Math.min(resolved.total,station)),median=sample(resolved.stations,resolved.medianHalf,s)*2,
     fw=sample(resolved.stations,resolved.forwardLaneWidth,s),bw=sample(resolved.stations,resolved.backwardLaneWidth,s),
@@ -72,18 +71,19 @@ function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
   </section>;
 }
 
+function initialJunctionX(junction:JunctionInstance,armId:number){
+  const mouth=armMouth(junction.design,armId),start=sectionStart(junction.design,armId);
+  return mouth+Math.min(Math.max(start,10),Math.max(start,junction.design.arms[armId].length-mouth-1));
+}
+function JunctionSection({junction,armId,onJunctionEdit}:{junction:JunctionInstance;armId:number;onJunctionEdit?:Props['onJunctionEdit']}){
+  const [x,setX]=useState(()=>initialJunctionX(junction,armId)),selection:Selection={kind:'approach',arm:armId},mouth=armMouth(junction.design,armId),
+    start=sectionStart(junction.design,armId),maxX=mouth+Math.max(start,junction.design.arms[armId].length-mouth-1),
+    effectiveX=Math.max(mouth+start,Math.min(maxX,x));
+  return <div className="network-section-junction"><CrossSection d={junction.design} id={armId} x={effectiveX} onX={setX} selection={selection} onSelect={()=>{}} onEdit={onJunctionEdit}/></div>;
+}
+
 export default function NetworkSectionDock({project,junction,armId,link,onJunctionEdit}:Props){
-  const [x,setX]=useState(0);
-  useEffect(()=>{
-    if(!junction||armId===null)return;
-    const mouth=armMouth(junction.design,armId),start=sectionStart(junction.design,armId);
-    setX(mouth+Math.min(Math.max(start,10),Math.max(start,junction.design.arms[armId].length-mouth-1)));
-  },[junction?.id,armId,junction?.design]);
-  if(link)return <LinkSection project={project} link={link}/>;
-  if(junction&&armId!==null){
-    const selection:Selection={kind:'approach',arm:armId},mouth=armMouth(junction.design,armId),start=sectionStart(junction.design,armId),
-      fallback=mouth+Math.min(Math.max(start,10),Math.max(start,junction.design.arms[armId].length-mouth-1)),effectiveX=x>mouth?x:fallback;
-    return <div className="network-section-junction"><CrossSection d={junction.design} id={armId} x={effectiveX} onX={setX} selection={selection} onSelect={()=>{}} onEdit={onJunctionEdit}/></div>;
-  }
+  if(link)return <LinkSection key={link.id} project={project} link={link}/>;
+  if(junction&&armId!==null)return <JunctionSection key={junction.id+':'+armId} junction={junction} armId={armId} onJunctionEdit={onJunctionEdit}/>;
   return null;
 }
