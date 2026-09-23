@@ -44,10 +44,10 @@ export default function NetworkScene3D({
   useEffect(()=>{
     if(!active)return;
     const source=document.querySelector<SVGSVGElement>('svg[data-network-plan="true"]');
-    if(!source){setDetailImage(null);return;}
+    if(!source)return;
     let stale=false,url='';
     const copy=source.cloneNode(true) as SVGSVGElement,details=[...copy.querySelectorAll('[data-scene-detail="true"]')];
-    if(!details.length){setDetailImage(null);return;}
+    if(!details.length)return;
     const ancestors=new Set<Element>();
     for(const detail of details){
       let parent:Element|null=detail.parentElement;
