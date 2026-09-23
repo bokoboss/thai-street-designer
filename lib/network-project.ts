@@ -1,4 +1,4 @@
-import {initial,migrate,sectionFor,valid,type Arm,type Design} from '../app/junction/model';
+import {initial,migrate,sectionFor,valid,type Arm,type Band,type Design} from '../app/junction/model';
 import {lengthOf,validAlignment} from './alignment';
 
 export type WorldPoint={x:number;y:number};
@@ -29,9 +29,13 @@ export type LinkEndSection={
   backwardLanes:number;
   forwardLaneWidth:number;
   backwardLaneWidth:number;
+  forwardBands:Band[];
+  backwardBands:Band[];
+  forwardWalk:number;
+  backwardWalk:number;
   median:number;
 };
-export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'alignment'|'missing-port';message:string};
+export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'edge-section'|'alignment'|'missing-port';message:string};
 export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
@@ -111,8 +115,8 @@ export function linkEndSection(project:NetworkProject,link:RoadLink,end:'from'|'
   if(!arm)return null;
   const incoming=sectionFor(arm,'incoming'),outgoing=sectionFor(arm,'outgoing');
   return end==='from'
-    ?{forwardLanes:arm.outgoing,backwardLanes:arm.incoming,forwardLaneWidth:outgoing.width,backwardLaneWidth:incoming.width,median:arm.median}
-    :{forwardLanes:arm.incoming,backwardLanes:arm.outgoing,forwardLaneWidth:incoming.width,backwardLaneWidth:outgoing.width,median:arm.median};
+    ?{forwardLanes:arm.outgoing,backwardLanes:arm.incoming,forwardLaneWidth:outgoing.width,backwardLaneWidth:incoming.width,forwardBands:outgoing.bands,backwardBands:incoming.bands,forwardWalk:outgoing.walk,backwardWalk:incoming.walk,median:arm.median}
+    :{forwardLanes:arm.incoming,backwardLanes:arm.outgoing,forwardLaneWidth:incoming.width,backwardLaneWidth:outgoing.width,forwardBands:incoming.bands,backwardBands:outgoing.bands,forwardWalk:incoming.walk,backwardWalk:outgoing.walk,median:arm.median};
 }
 export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
@@ -127,6 +131,11 @@ export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
     message:`ความกว้างเลนปลาย Link ต่างกัน · ไป ${a.forwardLaneWidth.toFixed(2)}→${b.forwardLaneWidth.toFixed(2)} / กลับ ${a.backwardLaneWidth.toFixed(2)}→${b.backwardLaneWidth.toFixed(2)} ม.`
   });
   if(Math.abs(a.median-b.median)>.01)out.push({kind:'median',message:`เกาะกลางปลาย Link ต่างกัน ${a.median.toFixed(2)}→${b.median.toFixed(2)} ม. · ยังไม่สร้าง median transition อัตโนมัติ`});
+  const sameBands=(x:Band[],y:Band[])=>x.length===y.length&&x.every((band,i)=>band.type===y[i].type&&Math.abs(band.width-y[i].width)<.01);
+  if(Math.abs(a.forwardWalk-b.forwardWalk)>.01||Math.abs(a.backwardWalk-b.backwardWalk)>.01||!sameBands(a.forwardBands,b.forwardBands)||!sameBands(a.backwardBands,b.backwardBands))out.push({
+    kind:'edge-section',
+    message:'องค์ประกอบริมทางปลาย Link ไม่ตรงกัน · bike / shoulder / buffer / sidewalk ต้องกำหนด transition ก่อน'
+  });
   const points=linkPoints(project,link);
   if(points.length>=2&&!validAlignment(points))out.push({kind:'alignment',message:'แนว Road Link หักกลับ ตัดตัวเอง หรือมีช่วงสั้นเกินไป · ปรับตำแหน่ง Junction หรือจุดแนว'});
   return out;
