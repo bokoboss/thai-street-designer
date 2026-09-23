@@ -31,6 +31,7 @@ export type LinkEndSection={
   walk:number;
 };
 export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'missing-port';message:string};
+export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 
 const rad=(deg:number)=>deg*Math.PI/180;
 const copyDesign=(d:Design):Design=>structuredClone(d);
@@ -148,4 +149,12 @@ export function createNetworkProject():NetworkProject{
   // East arm of A to west arm of B. Both ports own only the local junction approach; the Link owns the corridor between them.
   const connected=connectPorts(project,{junctionId:a!.id,armId:0},{junctionId:b!.id,armId:2});
   return connected.project;
+}
+
+export function restoreNetworkProject(raw:string|null):NetworkProject{
+  if(!raw)return createNetworkProject();
+  try{
+    const parsed=JSON.parse(raw) as NetworkProject;
+    return validateNetworkProject(parsed)?createNetworkProject():parsed;
+  }catch{return createNetworkProject();}
 }
