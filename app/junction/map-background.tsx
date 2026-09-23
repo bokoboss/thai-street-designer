@@ -28,6 +28,10 @@ type MapLibreMap={
   jumpTo:(options:{center:[number,number];zoom:number;bearing:number;pitch:number})=>void;
   resize:()=>void;
   remove:()=>void;
+  once:(event:string,handler:()=>void)=>void;
+  on:(event:string,handler:(event?:unknown)=>void)=>void;
+  off:(event:string,handler:(event?:unknown)=>void)=>void;
+  getCanvas:()=>HTMLCanvasElement;
 };
 type MapLibreGlobal={
   Map:new(options:{
@@ -41,12 +45,13 @@ type MapLibreGlobal={
     attributionControl:boolean;
     maplibreLogo:boolean;
     renderWorldCopies:boolean;
+    preserveDrawingBuffer?:boolean;
   })=>MapLibreMap;
 };
 
 const TILE=256,MAPLIBRE_TILE=512,R=6378137,MAX_LAT=85.05112878;
-const MAPLIBRE_JS='https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.js';
-const MAPLIBRE_CSS='https://unpkg.com/maplibre-gl@6.10.0/dist/maplibre-gl.css';
+const MAPLIBRE_JS='https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js';
+const MAPLIBRE_CSS='https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css';
 const STYLE_URLS:Record<Exclude<MapBasemap,'osm-raster'>,string>={
   positron:'https://tiles.openfreemap.org/styles/positron',
   bright:'https://tiles.openfreemap.org/styles/bright',
@@ -80,7 +85,7 @@ function loadMapLibre(){
     script.addEventListener('load',done,{once:true});
     script.addEventListener('error',()=>reject(new Error('MapLibre CDN unavailable')),{once:true});
     document.head.appendChild(script);
-  });
+  }).catch(error=>{mapLibrePromise=null;throw error;});
   return mapLibrePromise;
 }
 
@@ -206,9 +211,10 @@ function RasterFallback({reference,view}:{reference:MapReference;view:{zoom:numb
 }
 
 function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
-  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[generation,setGeneration]=useState(0),[failed,setFailed]=useState(false),[pixels,setPixels]=useState(800);
+  const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),cameraRef=useRef({center:{lat:0,lng:0},zoom:0}),[generation,setGeneration]=useState(0),[status,setStatus]=useState<'loading'|'ready'|'failed'>('loading'),[pixels,setPixels]=useState(800);
   const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
     center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels);
+  cameraRef.current={center,zoom:cameraZoom};
 
   useEffect(()=>{
     const node=container.current;
@@ -222,16 +228,20 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
   },[]);
 
   useEffect(()=>{
-    let cancelled=false;
+    let cancelled=false,timer=0;
     loadMapLibre().then(lib=>{
       if(cancelled||!container.current)return;
+      const initial=cameraRef.current;
       const instance=new lib.Map({
-        container:container.current,style,center:[0,0],zoom:0,bearing:0,pitch:0,
+        container:container.current,style,center:[initial.center.lng,initial.center.lat],zoom:initial.zoom,bearing:0,pitch:0,
         interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false
       });
-      map.current=instance;setFailed(false);setGeneration(v=>v+1);
-    }).catch(()=>{if(!cancelled)setFailed(true);});
-    return()=>{cancelled=true;map.current?.remove();map.current=null;};
+      map.current=instance;
+      const loaded=()=>{if(cancelled)return;window.clearTimeout(timer);setStatus('ready');setGeneration(v=>v+1);};
+      instance.once('load',loaded);
+      timer=window.setTimeout(()=>{if(!cancelled)setStatus('failed');},12000);
+    }).catch(()=>{if(!cancelled)setStatus('failed');});
+    return()=>{cancelled=true;window.clearTimeout(timer);map.current?.remove();map.current=null;};
   },[style]);
 
   useEffect(()=>{
@@ -241,8 +251,67 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
     instance.jumpTo({center:[center.lng,center.lat],zoom:cameraZoom,bearing:0,pitch:0});
   },[generation,center.lng,center.lat,cameraZoom]);
 
-  return <div ref={container} data-map-background="true" data-map-provider="openfreemap" data-map-basemap={reference.basemap}
-    className="map-reference-map">{failed&&<div className="map-reference-error">OpenFreeMap โหลดไม่ได้ · เลือก OSM Raster เพื่อใช้งานสำรอง</div>}</div>;
+  return <div ref={container} data-map-background="true" data-map-provider="openfreemap" data-map-basemap={reference.basemap} data-map-status={status}
+    className="map-reference-map">{status==='loading'&&<div className="map-reference-loading">กำลังโหลด OpenFreeMap…</div>}{status==='failed'&&<div className="map-reference-error">OpenFreeMap โหลดไม่ได้ · เลือก OSM Raster เพื่อใช้งานสำรอง</div>}</div>;
+}
+
+
+function loadRasterImage(src:string){
+  return new Promise<HTMLImageElement|null>(resolve=>{
+    const image=new Image();
+    image.crossOrigin='anonymous';
+    image.onload=()=>resolve(image);
+    image.onerror=()=>resolve(null);
+    image.src=src;
+  });
+}
+
+async function renderRasterTexture(reference:MapReference,extent:number,size:number){
+  const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
+  const ctx=canvas.getContext('2d');if(!ctx)return null;
+  const z=Math.round(clamp(reference.zoom,12,19)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
+    minWorld=-extent,maxWorld=extent,
+    px0=center.x+(minWorld-reference.offsetX)/mpp,px1=center.x+(maxWorld-reference.offsetX)/mpp,
+    py0=center.y+(minWorld-reference.offsetY)/mpp,py1=center.y+(maxWorld-reference.offsetY)/mpp,
+    tx0=Math.floor(Math.min(px0,px1)/TILE)-1,tx1=Math.floor(Math.max(px0,px1)/TILE)+1,
+    ty0=Math.max(0,Math.floor(Math.min(py0,py1)/TILE)-1),ty1=Math.min(n-1,Math.floor(Math.max(py0,py1)/TILE)+1),
+    worldToPixel=size/(extent*2),tileWorld=TILE*mpp;
+  const jobs:Promise<void>[]=[];
+  for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
+    const wx=wrap(tx,n),worldX=(tx*TILE-center.x)*mpp+reference.offsetX,worldY=(ty*TILE-center.y)*mpp+reference.offsetY;
+    jobs.push(loadRasterImage(tileUrl(z,wx,ty)).then(image=>{if(!image)return;ctx.drawImage(image,(worldX+extent)*worldToPixel,(worldY+extent)*worldToPixel,tileWorld*worldToPixel,tileWorld*worldToPixel);}));
+  }
+  await Promise.all(jobs);
+  return canvas;
+}
+
+async function renderVectorTexture(reference:MapReference,extent:number,size:number){
+  const lib=await loadMapLibre(),holder=document.createElement('div');
+  Object.assign(holder.style,{position:'fixed',left:'-20000px',top:'0',width:size+'px',height:size+'px',pointerEvents:'none'});
+  document.body.appendChild(holder);
+  const center=mapCenterForView(reference,{x:0,y:0}),workspaceZoom=250/(extent*2),zoom=mapZoomForViewport(center.lat,workspaceZoom,size),
+    style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap];
+  const map=new lib.Map({container:holder,style,center:[center.lng,center.lat],zoom,bearing:0,pitch:0,interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false,preserveDrawingBuffer:true});
+  try{
+    await new Promise<void>((resolve,reject)=>{
+      let settled=false;
+      const finish=()=>{if(settled)return;settled=true;window.clearTimeout(timer);resolve();};
+      const fail=()=>{if(settled)return;settled=true;window.clearTimeout(timer);reject(new Error('MapLibre texture failed'));};
+      const timer=window.setTimeout(fail,15000);
+      map.once('idle',finish);
+      map.once('load',()=>{window.setTimeout(finish,1200);});
+    });
+    const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
+    const ctx=canvas.getContext('2d');if(!ctx)return null;
+    ctx.drawImage(map.getCanvas(),0,0,size,size);
+    return canvas;
+  }finally{map.remove();holder.remove();}
+}
+
+export async function renderMapTexture(reference:MapReference,extent:number,size=1200){
+  if(!reference.enabled||typeof document==='undefined')return null;
+  try{return reference.basemap==='osm-raster'?await renderRasterTexture(reference,extent,size):await renderVectorTexture(reference,extent,size);}
+  catch{return null;}
 }
 
 export default function MapBackground({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
