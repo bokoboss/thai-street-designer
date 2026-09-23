@@ -4,7 +4,7 @@ import {
   pocketLaneWidth,pocketsFor,sectionFor,
   laneArrowFor,type Arm,type Design,type Direction,type LaneArrowCode,type LaneRole
 } from './model';
-import {slipGeometries,slipSectionAt} from './slip-geometry';
+import {slipGeometries,slipSectionAt,type SlipGeometry} from './slip-geometry';
 
 export type ResolvedLaneKind='main'|'pocket-median'|'aux-curb'|'slip-aux'|'slip-accel'|'separator';
 export type LaneMovement='through'|'left'|'right'|'left-through'|'through-right'|'left-right'|'all'|'right-uturn'|'uturn'|'through-uturn'|'merge'|'none';
@@ -118,10 +118,11 @@ function resolveDirection(
   };
 }
 
-export function resolveStreetSection(d:Design,armId:number,x:number,edgeSet=edges(d)):ResolvedStreetSection{
+export function resolveStreetSection(d:Design,armId:number,x:number,edgeSet=edges(d),geometries:SlipGeometry[]=slipGeometries(d,edgeSet)):ResolvedStreetSection{
   const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),allocation=allocate(a,x,origins),
-    incoming=resolveDirection(d,armId,'incoming',x,origins,edgeSet),
-    outgoing=resolveDirection(d,armId,'outgoing',x,origins,edgeSet),
+    slipPieces=slipSectionAt(d,armId,x,edgeSet,geometries),
+    incoming=resolveDirection(d,armId,'incoming',x,origins,edgeSet,slipPieces),
+    outgoing=resolveDirection(d,armId,'outgoing',x,origins,edgeSet,slipPieces),
     conflicts:string[]=[];
 
   const source=d.slips.find(s=>s.fromArm===armId);
@@ -198,15 +199,15 @@ export function resolvedLaneCenterY(
   return innerEdge(a,side,x,origins)+side*(before+target.width/2);
 }
 
-export function resolvedEdgeShift(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d)){
-  return resolveStreetSection(d,armId,x,edgeSet)[direction].edgeShift;
+export function resolvedEdgeShift(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d),geometries?:SlipGeometry[]){
+  return resolveStreetSection(d,armId,x,edgeSet,geometries)[direction].edgeShift;
 }
 
 export function resolvedBandEdge(
-  d:Design,armId:number,direction:Direction,x:number,bandIndex:number,fraction:number,edgeSet=edges(d)
+  d:Design,armId:number,direction:Direction,x:number,bandIndex:number,fraction:number,edgeSet=edges(d),geometries?:SlipGeometry[]
 ){
   const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
-    resolved=resolveStreetSection(d,armId,x,edgeSet)[direction],
+    resolved=resolveStreetSection(d,armId,x,edgeSet,geometries)[direction],
     before=resolved.bands.slice(0,bandIndex).reduce((sum,v)=>sum+v.width,0),
     band=resolved.bands[bandIndex],base=innerEdge(a,side,x,origins)+side*(
       resolved.lanes.filter(v=>v.source!=='slip').reduce((sum,v)=>sum+v.width,0)+resolved.edgeShift
@@ -215,9 +216,9 @@ export function resolvedBandEdge(
   return base+side*(before+band.width*Math.max(0,Math.min(1,fraction)));
 }
 
-export function resolvedSidewalkEdges(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d)){
+export function resolvedSidewalkEdges(d:Design,armId:number,direction:Direction,x:number,edgeSet=edges(d),geometries?:SlipGeometry[]){
   const a=d.arms[armId],origins=armTreatmentOrigins(d,armId,edgeSet),side=direction==='incoming'?1:-1,
-    resolved=resolveStreetSection(d,armId,x,edgeSet)[direction],
+    resolved=resolveStreetSection(d,armId,x,edgeSet,geometries)[direction],
     base=innerEdge(a,side,x,origins)+side*(
       resolved.lanes.filter(v=>v.source!=='slip').reduce((sum,v)=>sum+v.width,0)+resolved.edgeShift+
       resolved.bands.reduce((sum,v)=>sum+v.width,0)
@@ -225,9 +226,9 @@ export function resolvedSidewalkEdges(d:Design,armId:number,direction:Direction,
   return {inner:base,outer:base+side*resolved.sidewalk};
 }
 
-export function junctionLaneCount(d:Design,armId:number,direction:Direction,edgeSet=edges(d)){
+export function junctionLaneCount(d:Design,armId:number,direction:Direction,edgeSet=edges(d),geometries?:SlipGeometry[]){
   const origins=armTreatmentOrigins(d,armId,edgeSet);
-  return resolveStreetSection(d,armId,origins[direction],edgeSet)[direction].activeLaneCount;
+  return resolveStreetSection(d,armId,origins[direction],edgeSet,geometries)[direction].activeLaneCount;
 }
 
 export function resolvedLaneSummary(section:ResolvedStreetSection){
