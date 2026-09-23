@@ -6,6 +6,14 @@ export function station(ps:P[],distance:number){let remain=Math.max(0,distance);
 export function projectAlignment(ps:P[],p:P){let before=0,best={t:0,distance:Infinity,point:ps[0],index:0};const total=lengthOf(ps);for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),u=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len||1))),q={x:a.x+u*dx,y:a.y+u*dy},distance=Math.hypot(q.x-p.x,q.y-p.y);if(distance<best.distance)best={t:(before+u*len)/(total||1),distance,point:q,index:i-1};before+=len;}return best;}
 export const parallel=(ps:P[],leftOffset:number)=>offset(ps,-leftOffset,-leftOffset);
 export const variableParallel=(ps:P[],leftStart:number,leftEnd:number)=>offset(ps,-leftStart,-leftEnd);
+export function profiledParallel(ps:P[],leftOffsets:number[]):P[]{
+ if(ps.length!==leftOffsets.length)return ps.map(p=>({...p}));
+ return ps.map((p,i)=>{
+  const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,w=leftOffsets[i];
+  return{x:p.x-dy/l*w,y:p.y+dx/l*w};
+ });
+}
+
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const unit=(x:number,y:number)=>{const l=Math.hypot(x,y)||1;return{x:x/l,y:y/l};};
