@@ -1,5 +1,7 @@
 import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../app/junction/model';
 import {normalizeArrowOverrides} from '../app/junction/arrow-layout';
+import {cachedEdges} from '../app/junction/geometry';
+import {slipGeometries} from '../app/junction/slip-geometry';
 import {designError} from '../app/junction/design-validation';
 import {lengthOf,validAlignment} from './alignment';
 
@@ -240,8 +242,28 @@ export function removeLink(project:NetworkProject,id:string):NetworkProject{
 }
 export function projectBounds(project:NetworkProject,padding=35){
   const points:WorldPoint[]=[];
-  for(const j of project.junctions){points.push({x:j.x,y:j.y});for(const armId of activeArmIds(j))points.push(portPoint(j,armId));}
-  for(const link of project.links)points.push(...linkPoints(project,link));
+  const addLocal=(j:JunctionInstance,armId:number,p:{x:number;y:number})=>{
+    const angle=rad(worldJunctionRotation(j)+(j.design.arms[armId]?.angle??0)),cos=Math.cos(angle),sin=Math.sin(angle);
+    points.push({x:j.x+p.x*cos-p.y*sin,y:j.y+p.x*sin+p.y*cos});
+  };
+  for(const j of project.junctions){
+    points.push({x:j.x,y:j.y});
+    const segments=cachedEdges(j.design);
+    for(const edge of segments)for(const p of [...edge.outer,...edge.walk])addLocal(j,edge.i,p);
+    for(const slip of slipGeometries(j.design,segments)){
+      const polygons=[slip.pavement,slip.sidewalk,slip.approachPavement,slip.departurePavement,slip.island,slip.gore,slip.raisedSeparator];
+      for(const polygon of polygons)for(const p of polygon)addLocal(j,slip.fromArm,p);
+    }
+  }
+  for(const link of project.links){
+    const ps=linkPoints(project,link),ends=[linkEndSection(project,link,'from'),linkEndSection(project,link,'to')].filter((v):v is LinkEndSection=>!!v);
+    const sideReach=(s:LinkEndSection,forward:boolean)=>{
+      const lanes=forward?s.forwardLanes:s.backwardLanes,width=forward?s.forwardLaneWidth:s.backwardLaneWidth,bands=forward?s.forwardBands:s.backwardBands,walk=forward?s.forwardWalk:s.backwardWalk;
+      return s.median/2+lanes*width+bands.reduce((sum,b)=>sum+b.width,0)+walk;
+    };
+    const reach=ends.length?Math.max(...ends.flatMap(s=>[sideReach(s,true),sideReach(s,false)])):5;
+    for(const p of ps)points.push({x:p.x-reach,y:p.y-reach},{x:p.x+reach,y:p.y+reach});
+  }
   if(!points.length)return{x:-125,y:-125,w:250,h:250};
   const xs=points.map(p=>p.x),ys=points.map(p=>p.y),minX=Math.min(...xs)-padding,maxX=Math.max(...xs)+padding,minY=Math.min(...ys)-padding,maxY=Math.max(...ys)+padding;
   return{x:minX,y:minY,w:Math.max(100,maxX-minX),h:Math.max(100,maxY-minY)};
