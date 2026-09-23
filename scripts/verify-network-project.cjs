@@ -107,4 +107,5 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
+const wideBoundsProject=structuredClone(removed),wideJ=wideBoundsProject.junctions[0];wideJ.design.arms[1].incomingSection={width:4.5,walk:5,bands:[{id:'wide-bike',type:'bike',width:3},{id:'wide-shoulder',type:'shoulder',width:4}]};const wideBounds=n.projectBounds(wideBoundsProject);assert(wideBounds.w>=bounds.w&&wideBounds.h>=bounds.h,'fit bounds must include resolved carriageway/edge-zone footprint, not only Junction centers and ports');
 console.log('PASS network project: instances, direct Arm stretch/rotate/basic/section/pocket/topology edits, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
