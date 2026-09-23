@@ -11,7 +11,7 @@ export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 
 const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
   if(!section)return{left:5,right:5,total:10};
-  const left=section.median/2+section.forwardLanes*section.laneWidth,right=section.median/2+section.backwardLanes*section.laneWidth;
+  const left=section.median/2+section.forwardLanes*section.forwardLaneWidth,right=section.median/2+section.backwardLanes*section.backwardLaneWidth;
   return{left,right,total:left+right};
 };
 
@@ -27,8 +27,8 @@ export function RoadLinkDrawing({
     midpoint=ps[Math.floor(ps.length/2)];
   const laneLines:number[]=[];
   if(from&&compatible){
-    for(let i=1;i<from.forwardLanes;i++)laneLines.push(from.median/2+i*from.laneWidth);
-    for(let i=1;i<from.backwardLanes;i++)laneLines.push(-(from.median/2+i*from.laneWidth));
+    for(let i=1;i<from.forwardLanes;i++)laneLines.push(from.median/2+i*from.forwardLaneWidth);
+    for(let i=1;i<from.backwardLanes;i++)laneLines.push(-(from.median/2+i*from.backwardLaneWidth));
   }
   return <g data-network-link={link.id} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
     <path d={center} stroke={selected?'#1c7974':'#9aa8ae'} strokeWidth={roadWidth+1.2} fill="none" strokeLinejoin="round"/>
