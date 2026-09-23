@@ -43,3 +43,5 @@
 .network-scene-note{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:2px;padding:7px 9px;border:1px solid var(--ws-border);border-radius:6px;background:#ffffffdf;color:var(--ws-muted);font-size:10px;pointer-events:none}.network-scene-note b{color:var(--ws-ink);font-size:11px}
 .network-scene-tools{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:6px;padding:5px;border:1px solid var(--ws-border);border-radius:7px;background:#ffffffeb}.network-scene-tools button{border:0;background:transparent;border-radius:5px;padding:5px 7px;color:var(--ws-ink)}.network-scene-tools span{font-size:10px;color:var(--ws-muted)}
 .network-zoom[hidden]{display:none}
+
+.network-map-reset{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--ws-border);background:#fff;border-radius:6px;color:var(--ws-ink)}.network-map-reset:disabled{opacity:.4;cursor:not-allowed}
