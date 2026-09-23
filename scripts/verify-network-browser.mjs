@@ -35,7 +35,7 @@ async function waitForJson(url,timeout=30000){
 
 const server=spawn(process.execPath,['scripts/run-next.mjs','start','-p',String(port)],{cwd:root,env:{...process.env,TSD_BUILD_TARGET:'vercel'},stdio:['ignore','pipe','pipe']});
 let serverLog='';server.stdout.on('data',d=>serverLog+=d);server.stderr.on('data',d=>serverLog+=d);
-let chrome=null,ws=null;
+let chrome=null,ws=null,seq=0;const pending=new Map();let runtimeErrors=[];
 const shutdown=()=>{
   try{ws?.close();}catch{}
   try{chrome?.kill('SIGTERM');}catch{}
@@ -58,7 +58,7 @@ try{
 
   ws=new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
-  let seq=0;const pending=new Map(),runtimeErrors=[];
+  runtimeErrors=[];
   ws.addEventListener('message',event=>{
     const msg=JSON.parse(String(event.data));
     if(msg.id){
