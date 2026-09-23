@@ -79,3 +79,5 @@
 .j-drawing>svg{z-index:1}
 .j-drawing>.j-scene{z-index:2}
 .j-drawing>.j-zoom{z-index:4}
+
+.map-reference-loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:7px 10px;border:1px solid #c9d8de;border-radius:6px;background:#ffffffdf;color:#526a75;font-size:11px;box-shadow:0 1px 5px #23333c18}
