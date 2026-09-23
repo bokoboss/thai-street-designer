@@ -29,7 +29,7 @@ export default function NetworkScene3D({
     const source=document.querySelector<SVGSVGElement>('svg[data-network-plan="true"]');if(!source)return;
     let stale=false,url='';
     const copy=source.cloneNode(true) as SVGSVGElement;
-    copy.querySelectorAll('[data-network-background],[data-network-grid],[data-network-port],[data-link-via],[data-network-instance-handle],[data-network-instance-selection],[data-network-link-warning]').forEach(n=>n.remove());
+    copy.querySelectorAll('[data-network-background],[data-network-grid],[data-network-port],[data-link-via],[data-network-instance-handle],[data-network-instance-selection],[data-network-junction-hit],[data-network-arm-selection],[data-network-arm-handle],[data-network-link-warning]').forEach(n=>n.remove());
     copy.setAttribute('xmlns','http://www.w3.org/2000/svg');
     copy.setAttribute('viewBox',[center.x-extent,center.y-extent,extent*2,extent*2].join(' '));
     copy.setAttribute('width','1600');copy.setAttribute('height','1600');
