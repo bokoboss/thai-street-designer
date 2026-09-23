@@ -53,7 +53,7 @@ export function designReviews(d:Design):Review[]{
 
     const slip=d.slips.find(s=>s.fromArm===i);
     if(slip){
-      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.slip.fromArm===i),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.entryX+5):armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
+      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.fromArm===i),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.entryX+5):armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
       if(g.conflicts.includes('incoming-curb-treatment-overlap')){
         out.push({
           level:'engineering',
@@ -64,7 +64,7 @@ export function designReviews(d:Design):Review[]{
     }
     const receivingSlip=d.slips.find(s=>s.toArm===i);
     if(receivingSlip){
-      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.slip.id===receivingSlip.id),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.exitX+5):armTreatmentOrigins(d,i,edgeSet).outgoing+5,edgeSet);
+      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.id===receivingSlip.id),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.exitX+5):armTreatmentOrigins(d,i,edgeSet).outgoing+5,edgeSet);
       if(g.conflicts.includes('outgoing-curb-treatment-overlap')){
         out.push({
           level:'engineering',
