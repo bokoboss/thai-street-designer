@@ -287,3 +287,33 @@ If a visual problem is found, first determine whether the defect is in:
 - or the UI state binding
 
 Do not use base-junction mutations as a visual fix.
+
+
+## 13. Network foundation
+
+The application now has a project layer above the single-junction `Design v6` model.
+
+```
+NetworkProject
+├─ JunctionInstance[]
+│  └─ Design v6
+└─ RoadLink[]
+   └─ PortRef → PortRef
+```
+
+A Junction instance owns world placement (`x`, `y`, `rotation`) while the embedded Design remains local semantic geometry.
+
+A Road Link owns the corridor between two semantic arm ports. Link endpoint coordinates are derived from `junctionId + armId`; they are not copied into a second independent geometry source.
+
+Important invariants:
+
+- moving a Junction instance must not mutate its Design
+- rotating a Junction instance must not mutate its Design
+- attached Link endpoints follow transformed ports automatically
+- deleting a Junction removes its attached Links
+- section mismatches are surfaced explicitly; the foundation does not invent a lane/median transition
+- detailed Junction editing round-trips back into the Network project
+
+The root application opens the Network workspace. The existing `/junction/` and `/roads/` routes remain available as detailed editing/laboratory surfaces while migration continues.
+
+See `docs/NETWORK_FOUNDATION.md` for the ownership model, frontage-road boundary and roadmap.
