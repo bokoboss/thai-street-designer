@@ -73,7 +73,7 @@ export default function NetworkScene3D({
   return <div className="network-scene3d">
     <canvas ref={canvas} aria-label="Network 3D overview" onPointerDown={e=>{drag.current={x:e.clientX,y:e.clientY,yaw,pitch};e.currentTarget.setPointerCapture(e.pointerId);}}
       onPointerMove={e=>{const d=drag.current;if(!d)return;setYaw(d.yaw+(e.clientX-d.x)*.28);setPitch(clamp(d.pitch-(e.clientY-d.y)*.2,15,82));}}
-      onPointerUp={e=>{drag.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}} onPointerCancel={()=>{drag.current=null;}}
+      onPointerUp={e=>{drag.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}}} onPointerCancel={()=>{drag.current=null;}}
       onWheel={e=>{e.preventDefault();setZoom(v=>clamp(v*Math.exp(-e.deltaY*.0015),.35,4));}}/>
     <div className="network-scene-note"><b>Network 3D foundation</b><span>ลากเพื่อหมุน · ล้อเมาส์ซูม · ใช้ geometry เดียวกับ Network plan</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
     <div className="network-scene-tools"><button onClick={()=>{setYaw(-32);setPitch(56);setZoom(1);}}>มุมเริ่มต้น</button><span>Yaw {Math.round(yaw)}° · Pitch {Math.round(pitch)}° · Zoom {Math.round(zoom*100)}%</span></div>
