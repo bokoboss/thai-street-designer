@@ -75,3 +75,8 @@
 .network-link-profile select{margin-top:4px}
 [data-link-via-group] text{paint-order:stroke;stroke:#edf7f5;stroke-width:1.1px;stroke-linejoin:round}
 [data-network-link-median="true"]{pointer-events:none}
+
+.network-lane-transition{margin:8px 0;padding:8px;border:1px solid #dce8e6;border-radius:6px;background:#fff}
+.network-transition-side{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:7px 0}
+.network-transition-side button{border:1px solid var(--ws-border);background:#fff;border-radius:5px;padding:6px 5px;font-size:9.7px;color:var(--ws-muted)}
+.network-transition-side button.active{border-color:#79b5ad;background:#e8f6f3;color:#0e756e;font-weight:700}
