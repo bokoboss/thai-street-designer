@@ -82,8 +82,10 @@ export function JunctionInstanceDrawing({
       const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(14,arm.median+(arm.incoming+arm.outgoing)*arm.width+8),armSelected=selected&&selectedArm===armId;
       return <g key={'hit-'+armId}>
         <line data-network-junction-hit={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
-          stroke={armSelected?'#0eabb8':'transparent'} strokeWidth={armSelected?1.15:hitWidth} strokeDasharray={armSelected?'2.4 1.5':undefined}
-          pointerEvents={linkMode?'none':'stroke'} onPointerDown={e=>{e.stopPropagation();onSelect();onArmSelect(armId);}} style={{cursor:linkMode?undefined:'pointer'}}/>
+          stroke="transparent" strokeWidth={hitWidth} pointerEvents={linkMode?'none':'stroke'}
+          onPointerDown={e=>{e.stopPropagation();onSelect();onArmSelect(armId);}} style={{cursor:linkMode?undefined:'pointer'}}/>
+        {armSelected&&<line data-network-arm-selection={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
+          stroke="#0eabb8" strokeWidth="1.15" strokeDasharray="2.4 1.5" pointerEvents="none"/>}
         {armSelected&&!linkMode&&<circle data-network-arm-handle={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r="3.4" fill="#ffffff" stroke="#0e8995" strokeWidth=".75"
           onPointerDown={e=>{e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'move'}}>
           <title>ลากเพื่อยืด/หด/หมุนขาถนน</title>
