@@ -11,8 +11,11 @@ fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
 const linkGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-link-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")');
 fs.writeFileSync('.sites-runtime/network-link-geometry.cjs',linkGeometryCode);
+const sceneGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-scene-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
+  .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/network-link-geometry"\)/g,'require("./network-link-geometry.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
+fs.writeFileSync('.sites-runtime/network-scene-geometry.cjs',sceneGeometryCode);
 
-const n=require('../.sites-runtime/network-project.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs');
+const n=require('../.sites-runtime/network-project.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs'),sg=require('../.sites-runtime/network-scene-geometry.cjs');
 
 let p=n.createNetworkProject();
 assert.equal(p.schemaVersion,2);
@@ -114,6 +117,7 @@ const topologyMismatch=structuredClone(transitioned);topologyMismatch.junctions.
 const curbTransition=n.defaultLinkLaneTransition(topologyMismatch,topologyMismatch.links[0],'forward','curb'),curbLink=curbTransition.links[0];assert.equal(curbLink.sectionProfile.forwardLaneTransition.side,'curb');assert(n.linkLinearTransitionPossible(curbTransition,curbLink),'explicit one-lane transition must make Link topology resolvable');assert(!n.linkIssues(curbTransition,curbLink).some(v=>v.kind==='lane-count'),'configured directional lane transition must resolve lane-count review');
 const curbGeometry=lg.resolveLinkSectionGeometry(curbTransition,curbLink);assert(curbGeometry.linear);assert(curbGeometry.laneLines.some(v=>v.id==='forward:curb-extra'),'curb-side lane change must create an outer extra-lane divider only through its transition zone');assert(curbGeometry.laneLines.find(v=>v.id==='forward:curb-extra').offsets.some(v=>v===null),'localized lane taper must not draw its extra divider over the whole Link');
 const medianTransition=n.defaultLinkLaneTransition(topologyMismatch,topologyMismatch.links[0],'forward','median'),medianLink=medianTransition.links[0],medianGeometry=lg.resolveLinkSectionGeometry(medianTransition,medianLink);assert.equal(medianLink.sectionProfile.forwardLaneTransition.side,'median');assert(medianGeometry.laneLines.some(v=>v.id==='forward:median-extra'),'median-side lane change must use a distinct resolved divider profile');
+const sceneSurfaces=sg.resolveRoadLinkSceneSurfaces(transitioned);assert(sceneSurfaces.some(v=>v.kind==='road'),'Network 3D must resolve an explicit RoadLink road surface');assert(sceneSurfaces.some(v=>v.kind==='median'&&v.z>0),'Network 3D must carry raised median surfaces from the same Link section geometry');assert(sceneSurfaces.every(v=>v.points.length>=4&&v.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))),'resolved 3D Link surfaces must be finite polygons');
 
 const duplicatePort=structuredClone(removed);duplicatePort.links.push({...duplicatePort.links[0],id:'L-duplicate'});assert.throws(()=>n.normalizeNetworkProject(duplicatePort),/port ซ้ำ/,'duplicate semantic port ownership must be rejected');
 const badTitle=structuredClone(removed);badTitle.title='x'.repeat(121);assert.throws(()=>n.normalizeNetworkProject(badTitle),/ชื่อ Network/);
