@@ -383,13 +383,17 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const p=point&&typeof point==='object'?point as Record<string,unknown>:{};
         return{x:Number(p.x),y:Number(p.y),radius:source.schemaVersion===1?0:linkRadius(p.radius)};
       }):[];
+    const forwardLaneTransition=readTransition(profile?.forwardLaneTransition),backwardLaneTransition=readTransition(profile?.backwardLaneTransition),
+      sectionProfile:LinkSectionProfile={mode};
+    if(forwardLaneTransition)sectionProfile.forwardLaneTransition=forwardLaneTransition;
+    if(backwardLaneTransition)sectionProfile.backwardLaneTransition=backwardLaneTransition;
     return{
       id:String(item.id??''),
       name:String(item.name??''),
       from:{junctionId:String(from?.junctionId??''),armId:Number(from?.armId)},
       to:{junctionId:String(to?.junctionId??''),armId:Number(to?.armId)},
       via,
-      sectionProfile:{mode,forwardLaneTransition:readTransition(profile?.forwardLaneTransition),backwardLaneTransition:readTransition(profile?.backwardLaneTransition)}
+      sectionProfile
     };
   });
   const project:NetworkProject={schemaVersion:2,title:String(source.title??'Thai Street Network Concept'),junctions,links};
