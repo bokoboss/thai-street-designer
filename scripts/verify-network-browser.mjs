@@ -215,9 +215,12 @@ try{
   assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');
   const cameraBefore=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {mode:c?.getAttribute('data-network-camera-mode'),yaw:Number(c?.getAttribute('data-network-camera-yaw')||0)};})()`);
   assert.equal(cameraBefore.mode,'pan','Network 3D should start in Pan mode');
-  await clickSelector('[data-network-camera-control="orbit"]');await dragSelector('canvas[aria-label="Network 3D overview"]',44,-18);
+  await clickSelector('[data-network-camera-control="orbit"]');
+  await waitFor(()=>evalValue(`document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-mode')==='orbit'`),'3D Orbit mode');
+  await dragSelector('canvas[aria-label="Network 3D overview"]',44,-18);
   await waitFor(()=>evalValue(`Math.abs(Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-yaw')||0)-${cameraBefore.yaw})>2`),'3D Orbit drag changes camera');
   await clickSelector('[data-network-camera-control="pan"]');
+  await waitFor(()=>evalValue(`document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-mode')==='pan'`),'3D Pan mode');
   const panBefore=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {x:Number(c?.getAttribute('data-network-camera-pan-x')||0),y:Number(c?.getAttribute('data-network-camera-pan-y')||0)};})()`);
   await dragSelector('canvas[aria-label="Network 3D overview"]',34,22);
   await waitFor(()=>evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]'),x=Number(c?.getAttribute('data-network-camera-pan-x')||0),y=Number(c?.getAttribute('data-network-camera-pan-y')||0);return Math.hypot(x-${panBefore.x},y-${panBefore.y})>.005;})()`),'3D Pan drag changes camera');

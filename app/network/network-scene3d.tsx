@@ -15,7 +15,7 @@ type DragState={action:'pan'|'rotate';point:{x:number;y:number};screen:{x:number
 export default function NetworkScene3D({
   project,mapReference,active
 }:{project:NetworkProject;mapReference:MapReference;active:boolean}){
-  const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),
+  const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),modeRef=useRef<CameraMode>('pan'),
     [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-35),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(.92),
     [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
     [mapTexture,setMapTexture]=useState<{key:string;image:HTMLCanvasElement|null}|null>(null);
@@ -52,7 +52,7 @@ export default function NetworkScene3D({
   const viewport=(r:DOMRect)=>({width:r.width,height:r.height,extent,rotation:0});
   const applyCamera=(next:typeof camera.current)=>{camera.current=next;setYaw(next.yaw);setPitch(next.pitch);setZoom(next.zoom);setPan(next.pan);};
   const resetGestures=()=>{gestures.current.clear();drag.current=null;};
-  const setCameraMode=(next:CameraMode)=>{resetGestures();setMode(next);};
+  const setCameraMode=(next:CameraMode)=>{modeRef.current=next;resetGestures();setMode(next);};
   const fitView=()=>applyCamera({...camera.current,zoom:.92,pan:{x:0,y:0}});
   const isoView=()=>applyCamera({yaw:-35,pitch:52,zoom:.92,pan:{x:0,y:0}});
   const topView=()=>applyCamera({yaw:0,pitch:78,zoom:.92,pan:{x:0,y:0}});
@@ -97,8 +97,8 @@ export default function NetworkScene3D({
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'
-      ?(e.button===1||e.shiftKey?'rotate':e.button===0?(mode==='orbit'?'rotate':'pan'):'none')
-      :(mode==='orbit'?'rotate':'pan');
+      ?(e.button===1||e.shiftKey?'rotate':e.button===0?(modeRef.current==='orbit'?'rotate':'pan'):'none')
+      :(modeRef.current==='orbit'?'rotate':'pan');
     if(action==='none')return;
     e.preventDefault();
     const r=e.currentTarget.getBoundingClientRect(),screen={x:e.clientX-r.x,y:e.clientY-r.y};
