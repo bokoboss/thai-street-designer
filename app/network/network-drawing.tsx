@@ -16,8 +16,8 @@ const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
 };
 
 export function RoadLinkDrawing({
-  project,link,selected,onSelect
-}:{project:NetworkProject;link:RoadLink;selected:boolean;onSelect:()=>void}){
+  project,link,selected,selectedVertex,onSelect,onVertexMoveStart,onVertexSelect
+}:{project:NetworkProject;link:RoadLink;selected:boolean;selectedVertex:number|null;onSelect:()=>void;onVertexMoveStart:(index:number,e:React.PointerEvent<SVGCircleElement>)=>void;onVertexSelect:(index:number)=>void}){
   const ps=linkPoints(project,link);
   if(ps.length<2)return null;
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),
@@ -39,6 +39,7 @@ export function RoadLinkDrawing({
     {laneLines.map(offset=><path key={offset} d={path(parallel(ps,offset))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
     {!compatible&&<g transform={`translate(${midpoint.x} ${midpoint.y})`} pointerEvents="none"><circle r="3.2" fill="#c3914c" stroke="white" strokeWidth=".6"/><text y=".9" textAnchor="middle" fontSize="2.6" fill="white" fontWeight="700">!</text></g>}
     <path d={center} stroke="transparent" strokeWidth={Math.max(14,roadWidth+8)} fill="none"/>
+    {selected&&link.via.map((p,index)=><circle key={'via-'+index} data-link-via={index} cx={p.x} cy={p.y} r={selectedVertex===index?2.8:2.2} fill={selectedVertex===index?'#0f7d77':'white'} stroke="#0f7d77" strokeWidth=".6" onPointerDown={e=>{e.stopPropagation();onVertexSelect(index);onVertexMoveStart(index,e);}} style={{cursor:'move'}}/>)}
   </g>;
 }
 
@@ -70,17 +71,20 @@ export function JunctionInstanceDrawing({
 }
 
 export function NetworkDrawing({
-  project,selection,linkMode,onSelect,onJunctionMoveStart,onPort
+  project,selection,linkMode,selectedLinkVertex,onSelect,onJunctionMoveStart,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
   project:NetworkProject;
   selection:NetworkSelection;
   linkMode:boolean;
+  selectedLinkVertex:number|null;
   onSelect:(selection:NetworkSelection)=>void;
   onJunctionMoveStart:(id:string,e:React.PointerEvent<SVGCircleElement>)=>void;
+  onLinkVertexMoveStart:(id:string,index:number,e:React.PointerEvent<SVGCircleElement>)=>void;
+  onLinkVertexSelect:(index:number)=>void;
   onPort:(ref:PortRef)=>void;
 }){
   return <g>
-    {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} onSelect={()=>onSelect({kind:'link',id:link.id})}/>)}
+    {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} linkMode={linkMode} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onPort={onPort}/>)}
   </g>;
 }
