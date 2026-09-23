@@ -1,4 +1,4 @@
-import {initial,markingsFor,migrate,sectionFor,valid,type Arm,type Band,type Design} from '../app/junction/model';
+import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../app/junction/model';
 import {normalizeArrowOverrides} from '../app/junction/arrow-layout';
 import {designError} from '../app/junction/design-validation';
 import {lengthOf,validAlignment} from './alignment';
@@ -176,7 +176,7 @@ export function updateJunctionArmGeometry(project:NetworkProject,id:string,armId
   const error=designError(design);if(error)return{project,error};
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
-export function updateJunctionArmBasics(project:NetworkProject,id:string,armId:number,patch:Partial<Pick<Arm,'name'|'incoming'|'outgoing'|'median'>>):NetworkEditResult{
+export function updateJunctionArmBasics(project:NetworkProject,id:string,armId:number,patch:Partial<Pick<Arm,'name'|'incoming'|'outgoing'|'median'|'crossing'|'signal'|'stop'|'crossOffset'|'stopOffset'>>):NetworkEditResult{
   const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
   const design=copyDesign(junction.design),current=design.arms[armId],next={...current,...patch};
   if(next.incoming+next.outgoing<1)return{project,error:'ขาถนนต้องมีอย่างน้อย 1 ช่องจราจร'};
@@ -185,6 +185,24 @@ export function updateJunctionArmBasics(project:NetworkProject,id:string,armId:n
     next.arrowOverrides=normalizeArrowOverrides(next);
   }
   design.arms[armId]=next;
+  const error=designError(design);if(error)return{project,error};
+  return{project:updateJunctionDesign(project,id,design),error:null};
+}
+export function updateJunctionArmSection(project:NetworkProject,id:string,armId:number,direction:Direction,patch:Partial<Section>):NetworkEditResult{
+  const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
+  const design=copyDesign(junction.design),arm=design.arms[armId],current=sectionFor(arm,direction),
+    next:Section={...current,...patch,bands:(patch.bands??current.bands).map(b=>({...b}))},
+    key=direction==='incoming'?'incomingSection':'outgoingSection';
+  design.arms[armId]={...arm,[key]:next};
+  const error=designError(design);if(error)return{project,error};
+  return{project:updateJunctionDesign(project,id,design),error:null};
+}
+export function updateJunctionArmPocket(project:NetworkProject,id:string,armId:number,direction:Direction,side:'left'|'right',patch:Partial<Pocket>):NetworkEditResult{
+  const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
+  const design=copyDesign(junction.design),arm=design.arms[armId],current=pocketsFor(arm,direction),key=direction==='incoming'?'incomingPockets':'outgoingPockets',
+    nextPockets={...current,[side]:{...current[side],...patch}},nextArm={...arm,[key]:nextPockets};
+  if(patch.lanes!==undefined){nextArm.laneMarkings=markingsFor(nextArm);nextArm.arrowOverrides=normalizeArrowOverrides(nextArm);}
+  design.arms[armId]=nextArm;
   const error=designError(design);if(error)return{project,error};
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
