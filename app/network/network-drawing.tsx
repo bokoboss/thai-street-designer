@@ -14,6 +14,10 @@ const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
   const left=section.median/2+section.forwardLanes*section.forwardLaneWidth,right=section.median/2+section.backwardLanes*section.backwardLaneWidth;
   return{left,right,total:left+right};
 };
+const bandFill:Record<string,string>={bike:'#467d70',motorcycle:'#526c91',shoulder:'#66727c',buffer:'#899396'};
+function stripPath(ps:{x:number;y:number}[],inner:number,outer:number){
+  return path([...parallel(ps,inner),...parallel(ps,outer).reverse()],true);
+}
 
 export function RoadLinkDrawing({
   project,link,selected,selectedVertex,onSelect,onVertexMoveStart,onVertexSelect
@@ -21,16 +25,28 @@ export function RoadLinkDrawing({
   const ps=linkPoints(project,link);
   if(ps.length<2)return null;
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),
-    compatible=linkIssues(project,link).length===0,
+    issues=linkIssues(project,link),compatible=issues.length===0,
+    laneCompatible=!issues.some(v=>['lane-count','lane-width','median','alignment','missing-port'].includes(v.kind)),
+    edgeCompatible=!issues.some(v=>['edge-section','alignment','missing-port'].includes(v.kind)),
     left=Math.max(a.left,b.left),right=Math.max(a.right,b.right),roadWidth=left+right,
     center=path(ps),leftEdge=path(parallel(ps,left)),rightEdge=path(parallel(ps,-right)),
     midpoint=ps[Math.floor(ps.length/2)];
   const laneLines:number[]=[];
-  if(from&&compatible){
+  if(from&&laneCompatible){
     for(let i=1;i<from.forwardLanes;i++)laneLines.push(from.median/2+i*from.forwardLaneWidth);
     for(let i=1;i<from.backwardLanes;i++)laneLines.push(-(from.median/2+i*from.backwardLaneWidth));
   }
+  const edgePieces:React.ReactNode[]=[];
+  if(from&&edgeCompatible){
+    let forward=from.median/2+from.forwardLanes*from.forwardLaneWidth;
+    from.forwardBands.forEach((band,index)=>{edgePieces.push(<path key={'f-'+index} data-network-link-band={band.type} data-link-side="forward" d={stripPath(ps,forward,forward+band.width)} fill={bandFill[band.type]}/>);forward+=band.width;});
+    if(from.forwardWalk>0)edgePieces.push(<path key="f-walk" data-network-link-sidewalk="forward" d={stripPath(ps,forward,forward+from.forwardWalk)} fill="#b9c5cc"/>);
+    let backward=from.median/2+from.backwardLanes*from.backwardLaneWidth;
+    from.backwardBands.forEach((band,index)=>{edgePieces.push(<path key={'b-'+index} data-network-link-band={band.type} data-link-side="backward" d={stripPath(ps,-backward,-(backward+band.width))} fill={bandFill[band.type]}/>);backward+=band.width;});
+    if(from.backwardWalk>0)edgePieces.push(<path key="b-walk" data-network-link-sidewalk="backward" d={stripPath(ps,-backward,-(backward+from.backwardWalk))} fill="#b9c5cc"/>);
+  }
   return <g data-network-link={link.id} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
+    {edgePieces}
     <path d={center} stroke={selected?'#1c7974':'#9aa8ae'} strokeWidth={roadWidth+1.2} fill="none" strokeLinejoin="round"/>
     <path d={center} stroke="#35424e" strokeWidth={roadWidth} fill="none" strokeLinejoin="round"/>
     {from?.median&&<path d={center} stroke="#83957a" strokeWidth={Math.max(.5,from.median)} fill="none" strokeLinejoin="round"/>}
