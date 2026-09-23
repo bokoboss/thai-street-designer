@@ -142,7 +142,7 @@ export default function NetworkWorkspace(){
       <section className="network-canvas-wrap">
         <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
         <div className="network-canvas">
-          <MapBackground reference={mapReference} view={{zoom,pan}}/>
+          {view==='2d'&&<MapBackground reference={mapReference} view={{zoom,pan}}/>}
           <svg ref={svg} data-network-plan="true" className={view==='3d'?'network-plan-hidden':''} viewBox={[(-125/zoom+pan.x),(-125/zoom+pan.y),(250/zoom),(250/zoom)].join(' ')}
             onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer}
             onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.9:1.1,{x:e.clientX,y:e.clientY});}}>
