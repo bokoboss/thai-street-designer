@@ -249,9 +249,12 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
         interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false
       });
       map.current=instance;
-      const loaded=()=>{if(cancelled)return;window.clearTimeout(timer);setStatus('ready');setGeneration(v=>v+1);};
+      let styleLoaded=false;
+      const loaded=()=>{if(cancelled)return;styleLoaded=true;window.clearTimeout(timer);setStatus('ready');setGeneration(v=>v+1);};
+      const failed=()=>{if(!cancelled&&!styleLoaded)setStatus('failed');};
       instance.once('load',loaded);
-      timer=window.setTimeout(()=>{if(!cancelled)setStatus('failed');},12000);
+      instance.on('error',failed);
+      timer=window.setTimeout(failed,12000);
     }).catch(()=>{if(!cancelled)setStatus('failed');});
     return()=>{cancelled=true;window.clearTimeout(timer);map.current?.remove();map.current=null;};
   },[style]);
