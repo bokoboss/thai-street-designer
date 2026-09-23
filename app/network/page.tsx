@@ -142,7 +142,7 @@ export default function NetworkWorkspace(){
     if(!next)return;
     if(tool==='delete'){
       const before=projectRef.current,after=next.kind==='junction'?removeJunction(before,next.id):removeLink(before,next.id);
-      commit(after,before);setSelection(null);return;
+      commit(after,before);setSelection(null);setSelectedArm(null);setSelectedLinkVertex(null);return;
     }
     const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id);
     setSelection(next);setSelectedArm(null);if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
