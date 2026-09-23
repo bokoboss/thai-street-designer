@@ -1,8 +1,12 @@
 import {profiledParallel} from './alignment';
 import {resolveLinkSectionGeometry} from './network-link-geometry';
-import type {NetworkProject,WorldPoint} from './network-project';
+import {
+  resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
+  type JunctionSceneSurfaceKind
+} from '../app/junction/scene-surfaces';
+import {worldJunctionRotation,type JunctionInstance,type NetworkProject,type WorldPoint} from './network-project';
 
-export type NetworkSceneSurfaceKind='road'|'median'|'bike'|'motorcycle'|'shoulder'|'buffer'|'sidewalk';
+export type NetworkSceneSurfaceKind=JunctionSceneSurfaceKind;
 export type NetworkSceneSurface={
   id:string;
   kind:NetworkSceneSurfaceKind;
@@ -16,6 +20,21 @@ const strip=(center:WorldPoint[],inner:number[],outer:number[])=>[
 ];
 const bandKind=(type:string):NetworkSceneSurfaceKind=>
   type==='bike'||type==='motorcycle'||type==='shoulder'||type==='buffer'?type:'shoulder';
+const transformPoint=(junction:JunctionInstance,p:WorldPoint)=>{
+  const angle=worldJunctionRotation(junction)*Math.PI/180,cos=Math.cos(angle),sin=Math.sin(angle);
+  return{x:junction.x+p.x*cos-p.y*sin,y:junction.y+p.x*sin+p.y*cos};
+};
+
+export function resolveJunctionSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
+  return project.junctions.flatMap(junction=>
+    resolveLocalJunctionSceneSurfaces(junction.design).map(surface=>({
+      id:`${junction.id}:${surface.id}`,
+      kind:surface.kind,
+      points:surface.points.map(p=>transformPoint(junction,p)),
+      z:surface.z
+    }))
+  ).filter(surface=>surface.points.length>=3&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
 
 export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
   const out:NetworkSceneSurface[]=[];
@@ -60,4 +79,8 @@ export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkScen
     });
   }
   return out.filter(surface=>surface.points.length>=4&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
+
+export function resolveNetworkSceneSurfaces(project:NetworkProject){
+  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project)];
 }

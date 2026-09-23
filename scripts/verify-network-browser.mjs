@@ -206,14 +206,16 @@ try{
 
   mark('resolved-3d');
   await clickSelector('[data-network-view="3d"]');
-  await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
+  await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
+  const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0)};})()`);
+  assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');
   await sleep(600);
   const shot3d=await screenshot('network-browser-3d.png');
 
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
-  writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},finalProject:projectSummary(finalProject)});
+  writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
   console.log('PASS browser acceptance: create → connect → PI drag → lane transition → undo/redo → reload → section dock → resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();

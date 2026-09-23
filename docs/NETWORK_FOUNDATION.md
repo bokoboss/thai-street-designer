@@ -186,15 +186,18 @@ The detailed junction editor reads the selected Junction design and writes chang
 
 ## Network 3D status
 
-Network 3D is now a hybrid resolved scene rather than a single projected screenshot:
+Phase 3B removes the remaining flat Junction plan texture from Network 3D. The Network scene is now resolved from semantic geometry end-to-end:
 
-- RoadLink pavement is resolved directly from the same section geometry used by the 2D Link renderer;
-- median, semantic edge bands and sidewalks become explicit scene polygons with small vertical offsets;
-- RoadLinks are removed from the flat plan texture before the resolved surfaces are drawn, preventing duplicate corridor geometry;
-- the reference map remains a ground texture;
-- Junction geometry is still carried by the plan surface in this phase.
+- Junction main pavement comes directly from the authoritative `edges()` footprint;
+- sidewalks use the same outer/walk edge pairs as the 2D Junction renderer;
+- Complete-Streets edge bands use the shared slip/allocation-aware band-edge resolver;
+- median, splitter and roundabout islands use `armIslands()` / the existing roundabout model;
+- Slip pavement, sidewalk, island, gore and raised separator consume Slip-v6 overlay geometry directly;
+- every Junction surface is transformed to world coordinates only through the `JunctionInstance` transform;
+- RoadLink surfaces continue to use the schema-v2 resolved section/alignment geometry;
+- the reference map remains a ground texture.
 
-The next 3D architecture step is therefore narrow: replace the remaining flat Junction plan surface with resolved Junction polygons from the existing Design-v6 / Slip-v6 engines. It must not introduce a second Junction geometry implementation.
+The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation. Lane markings, arrows and roadside furniture remain presentation layers for a later visual-polish phase; they are intentionally not re-created inside the geometry resolver.
 
 ## Quality gates
 
@@ -250,7 +253,7 @@ Completed foundation milestones now include RoadLink schema-v2 curves, explicit 
 
 Next priorities:
 
-1. Resolve Junction and Slip geometry directly into the Network 3D scene so 2D / section / 3D share geometry ownership end-to-end.
+1. Add 3D presentation polish on top of the resolved geometry: lane markings, arrows and selected roadside furniture without changing geometry ownership.
 2. Expand browser visual regression to a small set of deterministic golden scenarios, including Slip, auxiliary lanes and asymmetric sections.
 3. Fold the remaining useful Road Alignment Lab operations into the root Network workspace, then retire it as a separate user-facing mode.
 4. Profile and stabilize interaction/render performance for networks around 20–50 Junctions.
