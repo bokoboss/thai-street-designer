@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {renderMapTexture,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/lib/network-project';
 import {
@@ -17,9 +17,9 @@ export default function NetworkScene3D({
   const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),
     [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-32),[pitch,setPitch]=useState(56),[zoom,setZoom]=useState(1),
     [mapTexture,setMapTexture]=useState<{key:string;image:HTMLCanvasElement|null}|null>(null);
-  const junctionSurfaces=useMemo(()=>resolveJunctionSceneSurfaces(project),[project]),
-    linkSurfaces=useMemo(()=>resolveRoadLinkSceneSurfaces(project),[project]),
-    sceneSurfaces=useMemo(()=>[...junctionSurfaces,...linkSurfaces],[junctionSurfaces,linkSurfaces]);
+  const junctionSurfaces=resolveJunctionSceneSurfaces(project),
+    linkSurfaces=resolveRoadLinkSceneSurfaces(project),
+    sceneSurfaces=[...junctionSurfaces,...linkSurfaces];
   const bounds=projectBounds(project,45),center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
     mapKey=[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng,mapReference.zoom,mapReference.offsetX,mapReference.offsetY,extent.toFixed(2),center.x.toFixed(2),center.y.toFixed(2)].join(':');
 
