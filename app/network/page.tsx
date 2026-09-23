@@ -34,7 +34,7 @@ export default function NetworkWorkspace(){
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project);
 
   useEffect(()=>{projectRef.current=project;},[project]);
-  useEffect(()=>{try{setProject(restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)));setMapReference(restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)));}catch{}},[]);
+  useEffect(()=>{try{localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);setProject(restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)));setMapReference(restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)));}catch{}},[]);
   useEffect(()=>{try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
   useEffect(()=>{try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
 
@@ -129,7 +129,7 @@ export default function NetworkWorkspace(){
             onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.9:1.1,{x:e.clientX,y:e.clientY});}}>
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
-            <rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?.42:1}/>
+            <rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
             <NetworkDrawing project={project} selection={selection} linkMode={tool==='link'} onSelect={selectObject} onJunctionMoveStart={startJunctionMove} onPort={selectPort}/>
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=Math.min(j.design.arms[pendingPort.armId].length,45);return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
           </svg>
@@ -145,7 +145,7 @@ export default function NetworkWorkspace(){
           <div className="network-coords"><label>X (m)<input type="number" value={+selectedJunction.x.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:n,y:selectedJunction.y}),before);}}}/></label><label>Y (m)<input type="number" value={+selectedJunction.y.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:selectedJunction.x,y:n}),before);}}}/></label></div>
           <label>หมุน Junction ใน world (°)<input type="number" min="0" max="359" step="1" value={Math.round(selectedJunction.rotation)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,n),before);}}}/></label>
           <div className="network-inline-actions"><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation-15),before);}}><RotateCw size={14}/> −15°</button><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation+15),before);}}><RotateCw size={14}/> +15°</button></div>
-          <button className="network-detail-button" onClick={()=>{try{localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}location.href='junction/?from=network';}}>แก้รายละเอียดทางแยก</button><p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
+          <button className="network-detail-button" onClick={()=>{try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(projectRef.current));localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}location.href='junction/?from=network';}}>แก้รายละเอียดทางแยก</button><p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
         </section>}
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
