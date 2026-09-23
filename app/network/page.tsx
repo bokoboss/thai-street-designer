@@ -57,10 +57,10 @@ export default function NetworkWorkspace(){
     if(next===before)return;
     setPast(h=>[...h.slice(-39),before]);setFuture([]);setProjectNow(next);
   }
-  function undo(){const previous=past.at(-1);if(!previous)return;setFuture(f=>[projectRef.current,...f.slice(0,39)]);setPast(p=>p.slice(0,-1));setProjectNow(previous);setSelection(null);setPendingPort(null);}
-  function redo(){const next=future[0];if(!next)return;setPast(p=>[...p.slice(-39),projectRef.current]);setFuture(f=>f.slice(1));setProjectNow(next);setSelection(null);setPendingPort(null);}
+  function undo(){const previous=past.at(-1);if(!previous)return;setFuture(f=>[projectRef.current,...f.slice(0,39)]);setPast(p=>p.slice(0,-1));setProjectNow(previous);setSelection(null);setPendingPort(null);setSelectedLinkVertex(null);}
+  function redo(){const next=future[0];if(!next)return;setPast(p=>[...p.slice(-39),projectRef.current]);setFuture(f=>f.slice(1));setProjectNow(next);setSelection(null);setPendingPort(null);setSelectedLinkVertex(null);}
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
-  function choose(next:Tool){setTool(next);if(next!=='link')setPendingPort(null);setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ของทางแยกต้นทาง แล้วคลิก port ปลายทาง':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='delete'?'คลิกวัตถุแล้วกดลบ หรือกด Delete':'เลือกวัตถุ · ลากจุดกลาง Junction เพื่อย้ายทั้งทางแยก');}
+  function choose(next:Tool){setTool(next);if(next!=='link')setPendingPort(null);if(next!=='select')setSelectedLinkVertex(null);setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ของทางแยกต้นทาง แล้วคลิก port ปลายทาง':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='delete'?'คลิกวัตถุแล้วกดลบ หรือกด Delete':'เลือกวัตถุ · ลากจุดกลาง Junction เพื่อย้ายทั้งทางแยก');}
   function fit(){
     const b=projectBounds(project),center={x:b.x+b.w/2,y:b.y+b.h/2},next=clampZoom(Math.min(4.5,250/Math.max(b.w,b.h)*.88));
     setPan(center);setZoom(next);
@@ -102,7 +102,6 @@ export default function NetworkWorkspace(){
     }
   }
   function startJunctionMove(id:string,e:React.PointerEvent<SVGCircleElement>){
-    if(tool==='delete'){const before=projectRef.current;commit(removeJunction(before,id),before);setSelection(null);return;}
     if(tool!=='select')return;
     const junction=junctionById(projectRef.current,id);if(!junction)return;
     const p=point(e),before=projectRef.current;
@@ -118,7 +117,8 @@ export default function NetworkWorkspace(){
       const before=projectRef.current,after=next.kind==='junction'?removeJunction(before,next.id):removeLink(before,next.id);
       commit(after,before);setSelection(null);return;
     }
-    setSelection(next);if(next.kind!=='link')setSelectedLinkVertex(null);
+    const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id);
+    setSelection(next);if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
   }
   function selectPort(ref:PortRef){
     if(tool!=='link')return;
@@ -128,9 +128,9 @@ export default function NetworkWorkspace(){
     commit(result.project,before);setPendingPort(null);setSelection(result.link?{kind:'link',id:result.link.id}:null);choose('select');setNotice('เชื่อม Road Link แล้ว · ปลาย Link ผูกกับ Junction ports แบบ semantic');
   }
   function deleteSelection(){
-    if(!selection)return;const before=projectRef.current,after=selection.kind==='junction'?removeJunction(before,selection.id):removeLink(before,selection.id);commit(after,before);setSelection(null);
+    if(!selection)return;const before=projectRef.current,after=selection.kind==='junction'?removeJunction(before,selection.id):removeLink(before,selection.id);commit(after,before);setSelection(null);setSelectedLinkVertex(null);
   }
-  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
+  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
 
   return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteSelection();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
@@ -176,7 +176,7 @@ export default function NetworkWorkspace(){
           <p className="network-note">Junction เป็นเจ้าของ geometry ใกล้ปากแยก ส่วน Road Link เป็นเจ้าของ corridor ระหว่าง ports. ถ้าปลายสองด้านมี lane/median ไม่เท่ากัน ระบบจะเตือนแทนการสร้าง transition แบบเดาเอง</p>
         </section>}
         {!selection&&<section><p className="network-note">เลือก Junction หรือ Road Link บนแผน หรือใช้เครื่องมือ “ทางแยก” เพื่อสร้าง instance ใหม่ และ “เชื่อมถนน” เพื่อเชื่อม arm-to-arm.</p></section>}
-        <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><label>Basemap<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label></>}</section>
+        <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><label>Basemap<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><div className="network-coords"><label>Offset X (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetX.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetX:n}));}}/></label><label>Offset Y (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetY.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetY:n}));}}/></label></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={mapReference.locked} onChange={e=>setMapReference(v=>({...v,locked:e.target.checked}))}/> ล็อกตำแหน่งแผนที่</label><button className="network-map-reset" disabled={mapReference.locked} onClick={()=>setMapReference(v=>({...v,offsetX:0,offsetY:0}))}>คืน Offset เป็น 0</button><p className="network-note">Map เป็น reference layer เท่านั้น · X/Y ใช้จัดแนว Network กับแผนที่โดยไม่แก้ geometry ของ Junction หรือ Road Link</p></>}</section>
         {selection&&<button className="network-delete" onClick={deleteSelection}><Trash2 size={15}/> ลบวัตถุที่เลือก</button>}
       </aside>
     </div>
