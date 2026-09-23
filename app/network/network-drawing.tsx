@@ -27,7 +27,7 @@ export function RoadLinkDrawing({
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),
     issues=linkIssues(project,link),compatible=issues.length===0,
     laneCompatible=!issues.some(v=>['lane-count','lane-width','median','alignment','missing-port'].includes(v.kind)),
-    edgeCompatible=!issues.some(v=>['edge-section','alignment','missing-port'].includes(v.kind)),
+    edgeCompatible=!issues.some(v=>['lane-count','lane-width','median','edge-section','alignment','missing-port'].includes(v.kind)),
     left=Math.max(a.left,b.left),right=Math.max(a.right,b.right),roadWidth=left+right,
     center=path(ps),leftEdge=path(parallel(ps,left)),rightEdge=path(parallel(ps,-right)),
     midpoint=ps[Math.floor(ps.length/2)];
