@@ -12,7 +12,7 @@ fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
 const n=require('../.sites-runtime/network-project.cjs');
 
 let p=n.createNetworkProject();
-assert.equal(p.schemaVersion,1);
+assert.equal(p.schemaVersion,2);
 assert.equal(p.junctions.length,2);
 assert.equal(p.links.length,1);
 assert.equal(n.validateNetworkProject(p),null);
@@ -97,15 +97,23 @@ const editedDesign=structuredClone(removed.junctions[0].design);editedDesign.tit
 const linkedId=removed.junctions[0].id,linkedArm=n.linkedArmIds(removed,linkedId)[0],invalidDetail=structuredClone(removed.junctions[0].design);invalidDetail.enabled[linkedArm]=false;
 assert(n.junctionDesignLinkIssue(removed,linkedId,invalidDetail)?.includes('ยังมี Road Link เชื่อมอยู่'),'detail editing must explain why a linked arm cannot be disabled');
 assert.equal(n.updateJunctionDesign(removed,linkedId,invalidDetail),removed,'invalid detail edit must not replace the Network project or create dangling Link refs');
-const editable=structuredClone(removed),editLink=editable.links[0],editPoints=n.linkPoints(editable,editLink),mid={x:(editPoints[0].x+editPoints.at(-1).x)/2,y:(editPoints[0].y+editPoints.at(-1).y)/2+18};const bent=n.insertLinkVia(editable,editLink.id,0,mid);assert.equal(bent.links[0].via.length,1);assert(n.linkLength(bent,bent.links[0])>n.linkLength(editable,editLink));const movedVia=n.moveLinkVia(bent,editLink.id,0,{x:mid.x,y:mid.y+8});assert.equal(movedVia.links[0].via[0].y,mid.y+8);const straightAgain=n.removeLinkVia(movedVia,editLink.id,0);assert.equal(straightAgain.links[0].via.length,0);
+const editable=structuredClone(removed),editLink=editable.links[0],editControls=n.linkControlPoints(editable,editLink),mid={x:(editControls[0].x+editControls.at(-1).x)/2,y:(editControls[0].y+editControls.at(-1).y)/2+18};const bent=n.insertLinkVia(editable,editLink.id,0,mid);assert.equal(bent.links[0].via.length,1);assert.equal(bent.links[0].via[0].radius,25,'new PI must start with a usable concept radius');assert(n.linkPoints(bent,bent.links[0]).length>n.linkControlPoints(bent,bent.links[0]).length,'R25 PI must resolve into sampled curve geometry');assert(n.linkLength(bent,bent.links[0])>n.linkLength(editable,editLink));const radiusEdited=n.updateLinkViaRadius(bent,editLink.id,0,40);assert.equal(radiusEdited.links[0].via[0].radius,40);const movedVia=n.moveLinkVia(radiusEdited,editLink.id,0,{x:mid.x,y:mid.y+8});assert.equal(movedVia.links[0].via[0].y,mid.y+8);assert.equal(movedVia.links[0].via[0].radius,40,'moving a PI must preserve its semantic radius');const straightAgain=n.removeLinkVia(movedVia,editLink.id,0);assert.equal(straightAgain.links[0].via.length,0);
 const saved=JSON.stringify(removed),restored=n.restoreNetworkProject(saved);
 assert.deepEqual(restored,removed);
 const oldNetwork=structuredClone(removed);oldNetwork.junctions[0].design.schemaVersion=5;const migratedNetwork=n.normalizeNetworkProject(oldNetwork);assert.equal(migratedNetwork.junctions[0].design.schemaVersion,6,'Network restore must migrate embedded Junction Designs');
+const legacyV1=JSON.parse(JSON.stringify(removed));legacyV1.schemaVersion=1;legacyV1.links.forEach(link=>{delete link.sectionProfile;link.via=link.via.map(v=>({x:v.x,y:v.y}));});const migratedV1=n.normalizeNetworkProject(legacyV1);assert.equal(migratedV1.schemaVersion,2,'Network v1 must migrate to v2');assert(migratedV1.links.every(link=>link.sectionProfile.mode==='review'));assert(migratedV1.links.every(link=>link.via.every(v=>v.radius===0)),'legacy via points must preserve their old sharp geometry');
+const transitionProject=structuredClone(removed),transitionLink=transitionProject.links[0],transitionA=transitionProject.junctions.find(j=>j.id===transitionLink.from.junctionId),transitionB=transitionProject.junctions.find(j=>j.id===transitionLink.to.junctionId),transitionArmA=transitionA.design.arms[transitionLink.from.armId],transitionArmB=transitionB.design.arms[transitionLink.to.armId];
+transitionArmA.outgoingSection={width:3.5,walk:2.5,bands:[{id:'ta-bike',type:'bike',width:1.5}]};transitionArmB.incomingSection={width:3.25,walk:3,bands:[{id:'tb-bike',type:'bike',width:2}]};transitionArmA.median=4;transitionArmB.median=2;
+assert(n.linkLinearTransitionPossible(transitionProject,transitionLink),'matching lane/band topology must permit geometric section transition');
+assert(n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='lane-width')&&n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='median')&&n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='edge-section'),'review mode must surface dimensional end mismatches');
+const transitioned=n.updateLinkSectionProfile(transitionProject,transitionLink.id,'linear'),transitionedLink=transitioned.links[0];assert.equal(transitionedLink.sectionProfile.mode,'linear');assert(!n.linkIssues(transitioned,transitionedLink).some(v=>['lane-width','median','edge-section'].includes(v.kind)),'linear profile must resolve dimensional continuity when semantic topology matches');
+const topologyMismatch=structuredClone(transitioned);topologyMismatch.junctions.find(j=>j.id===transitionLink.to.junctionId).design.arms[transitionLink.to.armId].incoming=3;assert(n.linkIssues(topologyMismatch,topologyMismatch.links[0]).some(v=>v.kind==='lane-count'),'lane-count transition remains explicit and cannot be hidden by linear width interpolation');
+
 const duplicatePort=structuredClone(removed);duplicatePort.links.push({...duplicatePort.links[0],id:'L-duplicate'});assert.throws(()=>n.normalizeNetworkProject(duplicatePort),/port ซ้ำ/,'duplicate semantic port ownership must be rejected');
 const badTitle=structuredClone(removed);badTitle.title='x'.repeat(121);assert.throws(()=>n.normalizeNetworkProject(badTitle),/ชื่อ Network/);
-assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
+assert.equal(n.restoreNetworkProject('{bad').schemaVersion,2);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
 const wideBoundsProject=structuredClone(removed),wideJ=wideBoundsProject.junctions[0];wideJ.design.arms[1].incomingSection={width:4.5,walk:5,bands:[{id:'wide-bike',type:'bike',width:3},{id:'wide-shoulder',type:'shoulder',width:4}]};const wideBounds=n.projectBounds(wideBoundsProject);assert(wideBounds.w>=bounds.w&&wideBounds.h>=bounds.h,'fit bounds must include resolved carriageway/edge-zone footprint, not only Junction centers and ports');
-console.log('PASS network project: instances, direct Arm stretch/rotate/basic/section/pocket/topology edits, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
+console.log('PASS network project v2: instances, PI radius curves, section continuity profiles, v1 migration, direct Arm edits, semantic ports, Complete Streets continuity, alignment review, persistence and detail round-trip');
