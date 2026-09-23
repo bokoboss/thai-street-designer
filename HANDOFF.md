@@ -1,10 +1,10 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-09-22  
+Updated: 2026-09-23  
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Code baseline immediately before this handoff documentation commit: `516b2f9315a5b4b499258362b4b935bf68c6c80c`
+Code baseline immediately before this handoff documentation commit: `4c7acef26c2c042233bcfff09e7ee6638232b461`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -20,7 +20,19 @@ Code baseline immediately before this handoff documentation commit: `516b2f9315a
 
 ## Current project state
 
-The recent work was a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
+The product is now **Network-first**, while preserving the schema-v6 Junction engine as the local intersection source of truth.
+
+Current Network schema is **v2**:
+
+- each `RoadLink` owns semantic endpoints, `LinkVia[]` control points and a radius per PI;
+- `linkPoints()` resolves PI/radius controls into tangent–arc–tangent geometry;
+- `RoadLink.sectionProfile.mode` is explicit: `review` or `linear`;
+- linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
+- lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
+- Network schema v1 imports migrate conservatively to v2 with legacy via radii set to 0 and `sectionProfile.mode='review'`;
+- plan rendering, link length and Fit consume the same resolved RoadLink alignment.
+
+The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
 
 Current design schema is **v6**:
 
@@ -80,7 +92,7 @@ Do **not** reintroduce old runtime fields such as `Arm.slip`, `slipReceivingMode
 
 ## Latest verification
 
-The last code baseline before this handoff documentation passed the GitHub quality workflow:
+RoadLink schema-v2 code baseline `4c7acef26c2c042233bcfff09e7ee6638232b461` passed the GitHub Quality workflow:
 
 - Geometry/workspace regressions ✅
 - TypeScript ✅
@@ -88,49 +100,25 @@ The last code baseline before this handoff documentation passed the GitHub quali
 - Sites/vinext production build ✅
 - Vercel/Next production build command ✅
 
-Relevant GitHub Actions run: `35740741708`.
+Relevant Quality run: `35833034259`.  
+Audit Preview for the same baseline also deployed successfully: run `35833030822`.
 
-Vercel Git deployment itself was **rate-limited**, not source-failed:
-
-- status: `Deployment rate limited — retry in 24 hours.`
-- therefore the current refactor still needs a real Preview visual/interaction acceptance pass after the limit clears
-- do not create repeated empty commits while the quota is blocked
+These source/build checks do not replace visual/interaction acceptance of the actual geometry.
 
 ## Immediate next work
 
-Do not add more Slip features before visual acceptance.
+1. Complete visual/interaction acceptance for RoadLink v2:
+   - R0 preserves the old polyline exactly;
+   - R>0 produces plausible tangent–arc–tangent geometry;
+   - dragging a PI preserves its radius;
+   - radius is clamped safely when adjacent tangent lengths are insufficient;
+   - Fit, plan and Network 3D projected texture agree.
+2. Add an explicit **lane-count transition model** owned by RoadLink. Do not infer whether a lane is added/dropped on the curb or median side.
+3. Add Network cross-section dock / section-profile visualization so link continuity is visible rather than numeric-only.
+4. Improve Browser E2E / visual regression for create → connect → curve → transition → undo/redo → reload.
+5. Keep Parallel / Frontage Road work after RoadLink topology/section semantics are stable.
 
-After Vercel can deploy again, test a fresh/reset design and verify these scenarios independently:
-
-1. Bare/direct Slip:
-   - main incoming/outgoing lane count unchanged
-   - no Pocket/receiving/crossing appears automatically
-   - corner island, entry tangent and exit tangent look plausible
-2. Radius changes:
-   - Slip overlay moves continuously
-   - base junction remains byte-for-structure unchanged
-3. Width changes:
-   - smooth entry/exit width transition
-   - no abrupt curb jump at tangent
-4. Approach auxiliary:
-   - exists only upstream of Slip
-   - does not become a generic Pocket
-5. Shared departure auxiliary:
-   - main lanes from the junction remain unchanged
-   - auxiliary is owned by Slip
-6. Slip-specific acceleration lane:
-   - begins at Slip exit
-   - full length + merge work independently
-   - chevron vs raised separator differ visually
-7. Crossing/stop line:
-   - both follow local Slip width at their own station
-   - drag behavior remains aligned
-8. Arrow:
-   - appears on the Slip centerline and drags continuously
-9. Cross-section and 3D:
-   - match the 2D overlay semantics
-
-If the picture looks wrong, fix `slip-geometry.ts` or the overlay consumer. **Do not mutate base `geometry.ts` to make the Slip picture look right.**
+For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 
 ## Non-negotiable architecture rules
 
@@ -208,6 +196,12 @@ Read `VERCEL.md`.
 - `app/junction/section-view.tsx`
 - `app/junction/scene3d.tsx`
 - `scripts/verify-junction.cjs`
+- `lib/network-project.ts`
+- `lib/alignment.ts`
+- `app/network/page.tsx`
+- `app/network/network-drawing.tsx`
+- `docs/NETWORK_FOUNDATION.md`
+- `scripts/verify-network-project.cjs`
 - `scripts/verify-workspace.cjs`
 - `VERCEL.md`
 

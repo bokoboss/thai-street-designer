@@ -15,7 +15,10 @@ NetworkProject
 └─ RoadLink[]
    ├─ from PortRef
    ├─ to PortRef
-   └─ via points
+   ├─ LinkVia[] = PI world point + radius
+   └─ sectionProfile
+      ├─ review
+      └─ linear
 ```
 
 A `JunctionInstance` owns:
@@ -29,7 +32,9 @@ A `RoadLink` owns:
 
 - the corridor between two junction ports
 - the connection references
-- future link alignment / section transition state
+- PI/control alignment points and their curve radii
+- the resolved tangent–arc–tangent corridor alignment
+- explicit section-continuity mode
 
 A port is a semantic reference:
 
@@ -74,7 +79,8 @@ The Road Link owns only the corridor between the two referenced Arm endpoints. T
 - drag an Arm endpoint → change the same `Arm.angle` / `Arm.length` used by the Junction engine
 - an attached Road Link endpoint follows automatically
 - move the whole Junction → transform all of its ports without mutating local Junction geometry
-- edit Road Link via points → change only the inter-junction corridor alignment
+- edit Road Link PI points → change only the inter-junction corridor alignment
+- edit PI radius → resolve a tangent–arc–tangent curve without changing Junction geometry
 
 There is no duplicate network-only arm length. The standalone Junction editor and the Network workspace consume the same `Design v6` geometry.
 
@@ -87,15 +93,29 @@ For a Link from Junction A to Junction B:
 - B `incoming` lanes = Link forward lanes at the B end
 - B `outgoing` lanes = Link backward lanes at the B end
 
-The foundation does not silently invent a transition when the two Link ends disagree.
+RoadLink schema v2 does not silently invent lane topology when the two ends disagree.
 
-Current behavior is explicit review:
+Two section-profile modes are explicit:
 
-- lane-count mismatch
-- lane-width mismatch
-- median mismatch
+- `review` — preserve the previous mismatch-review behavior;
+- `linear` — interpolate lane width, median width, sidewalk width and matching edge-band widths along the resolved Link.
 
-A future resolver may create an explicit transition treatment, but it must be a RoadLink-owned semantic feature.
+`linear` is only allowed when:
+
+- forward lane count matches;
+- backward lane count matches;
+- forward edge-band type/order matches;
+- backward edge-band type/order matches.
+
+A lane-count mismatch remains an engineering/topology issue. The program does **not** guess whether an added/dropped lane belongs on the curb side or median side. That requires the next explicit RoadLink-owned transition model.
+
+Alignment ownership is also explicit:
+
+- stored PI = world X/Y + requested radius;
+- R0 reproduces the legacy sharp polyline;
+- R>0 resolves tangent–arc–tangent geometry;
+- the requested radius is clamped when adjacent tangent lengths are insufficient;
+- renderer, Link length and Fit consume the resolved alignment rather than inventing separate curves.
 
 ## Current interaction
 
@@ -116,7 +136,9 @@ Primary-workspace interactions:
 - add/edit incoming Pocket / outgoing receiving-lane treatments from the shared Pocket model
 - connect arm-to-arm using visible semantic ports
 - attached Links follow moved Junctions and edited Arm endpoints
-- edit Road Link polyline via points; double-click a Link to insert a point directly
+- edit Road Link PI points; double-click a Link to insert a PI directly
+- edit each selected PI radius; new PI defaults to R25 m and can be returned to R0
+- choose explicit RoadLink section continuity: Review mismatch or Linear geometric transition
 - delete a selected Link via point before deleting its owning Link
 - delete Junctions and their owned connections
 - undo / redo
@@ -136,9 +158,15 @@ They are implementation surfaces during the transition, not the long-term produc
 
 ## Persistence
 
-Network project storage:
+Network project schema is **v2**. The browser storage key remains:
 
 `thai-street-network-project-v1`
+
+The storage key is intentionally retained so existing local projects are discovered and migrated instead of being orphaned. On restore, schema-v1 projects migrate to v2 with:
+
+- existing via points preserved at R0;
+- section profile set to `review`;
+- embedded Junction Designs migrated through the existing Design migration path.
 
 Temporary detail-edit bridge:
 
@@ -178,11 +206,11 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-1. Continue polishing direct manipulation and selection ergonomics in the root Network workspace.
-2. Add explicit Link section-transition semantics instead of only mismatch review.
-3. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
-4. Fold any remaining useful Road Alignment Lab operations into the root workspace, then retire it as a separate user-facing mode.
-5. Keep the standalone Junction route as a focused concept/advanced editor using the same Design v6 engine.
+1. Visually accept RoadLink schema-v2 curves and linear section interpolation in the root Network workspace.
+2. Add explicit RoadLink lane-count transition semantics (lane add/drop side, station/length and marking behavior).
+3. Add Network cross-section / section-profile visualization and contextual editing.
+4. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
+5. Fold remaining useful Road Alignment Lab operations into the root workspace, then retire it as a separate user-facing mode.
 6. Research and model frontage / parallel roads using Corridor ownership.
 7. Only then expand toward ramps/interchanges or more complex corridor topology.
 
