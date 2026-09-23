@@ -7,7 +7,7 @@ import MapBackground,{BASEMAP_OPTIONS,MAP_REFERENCE_STORAGE,mapReferenceDefaults
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
 import {
-  NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,junctionById,linkIssues,moveJunction,portKey,
+  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,junctionById,linkIssues,moveJunction,portKey,
   projectBounds,removeJunction,removeLink,restoreNetworkProject,rotateJunction,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
@@ -145,7 +145,7 @@ export default function NetworkWorkspace(){
           <div className="network-coords"><label>X (m)<input type="number" value={+selectedJunction.x.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:n,y:selectedJunction.y}),before);}}}/></label><label>Y (m)<input type="number" value={+selectedJunction.y.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:selectedJunction.x,y:n}),before);}}}/></label></div>
           <label>หมุน Junction ใน world (°)<input type="number" min="0" max="359" step="1" value={Math.round(selectedJunction.rotation)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,n),before);}}}/></label>
           <div className="network-inline-actions"><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation-15),before);}}><RotateCw size={14}/> −15°</button><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation+15),before);}}><RotateCw size={14}/> +15°</button></div>
-          <p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
+          <button className="network-detail-button" onClick={()=>{try{localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}location.href='junction/?from=network';}}>แก้รายละเอียดทางแยก</button><p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
         </section>}
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
