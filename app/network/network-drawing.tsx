@@ -3,7 +3,7 @@ import Drawing from '../junction/drawing';
 import {path} from '../junction/geometry';
 import {profiledParallel,variableParallel} from '@/lib/alignment';
 import {
-  activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
+  activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
 } from '@/lib/network-project';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
@@ -77,8 +77,9 @@ export function RoadLinkDrawing({
 }
 
 export function JunctionInstanceDrawing({
-  junction,selected,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort
+  project,junction,selected,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort
 }:{
+  project:NetworkProject;
   junction:JunctionInstance;
   selected:boolean;
   selectedArm:number|null;
@@ -117,14 +118,16 @@ export function JunctionInstanceDrawing({
       const p=portPoint(junction,armId),ref={junctionId:junction.id,armId},key=`${junction.id}:${armId}`,occupied=occupiedPorts.has(key),
         source=!!pendingPort&&pendingPort.junctionId===junction.id&&pendingPort.armId===armId,
         sameJunction=!!pendingPort&&pendingPort.junctionId===junction.id&&!source,
-        interactive=linkMode&&!occupied&&!sameJunction,
-        state=source?'source':occupied?'occupied':sameJunction?'invalid':pendingPort?'target':'available';
-      return <circle key={armId} data-network-port={key} data-network-port-state={state} data-network-port-occupied={occupied?'true':undefined} cx={p.x} cy={p.y}
-        r={linkMode?(source?3:occupied||sameJunction?1.8:2.5):1.5}
-        fill={linkMode?(source?'#e3a33d':occupied||sameJunction?'#9ca9ae':'#ffffff'):'#8ba2aa'}
-        stroke={linkMode?(source?'#fff4d6':occupied||sameJunction?'#ffffff':'#0e8a82'):'white'} strokeWidth={source?'.8':'.55'}
+        facing=pendingPort&&!source&&!sameJunction&&!occupied?assessPortConnection(project,pendingPort,ref):null,
+        facingInvalid=facing?.status==='invalid',facingCaution=facing?.status==='caution',
+        interactive=linkMode&&!occupied&&!sameJunction&&!facingInvalid,
+        state=source?'source':occupied?'occupied':sameJunction?'invalid':facingInvalid?'facing-invalid':facingCaution?'caution':pendingPort?'target':'available';
+      return <circle key={armId} data-network-port={key} data-network-port-state={state} data-network-port-facing={facing?.status} data-network-port-occupied={occupied?'true':undefined} cx={p.x} cy={p.y}
+        r={linkMode?(source?3:occupied||sameJunction||facingInvalid?1.8:facingCaution?2.7:2.5):1.5}
+        fill={linkMode?(source?'#e3a33d':occupied||sameJunction?'#9ca9ae':facingInvalid?'#f1dada':facingCaution?'#fff4d8':'#ffffff'):'#8ba2aa'}
+        stroke={linkMode?(source?'#fff4d6':occupied||sameJunction?'#ffffff':facingInvalid?'#b85858':facingCaution?'#c48a28':'#0e8a82'):'white'} strokeWidth={source?'.8':'.55'}
         pointerEvents={interactive||source?'auto':'none'} onPointerDown={e=>{e.stopPropagation();if(source||interactive)onPort(ref);}} style={{cursor:interactive?'crosshair':source?'pointer':undefined}}>
-        <title>{source?'port ต้นทาง · คลิกซ้ำเพื่อยกเลิก':occupied?'port นี้เชื่อม Road Link อยู่แล้ว':sameJunction?'foundation เชื่อม Road Link ข้ามคนละ Junction เท่านั้น':pendingPort?'ปลายทางที่เชื่อมได้':`port ${key}`}</title>
+        <title>{source?'port ต้นทาง · คลิกซ้ำเพื่อยกเลิก':occupied?'port นี้เชื่อม Road Link อยู่แล้ว':sameJunction?'เชื่อม Road Link ข้ามคนละ Junction เท่านั้น':facingInvalid?`port หันออกจากแนวเชื่อม · FROM ${facing?.fromDeviation.toFixed(0)}° / TO ${facing?.toDeviation.toFixed(0)}°`:facingCaution?`เชื่อมได้ แต่ต้องโค้งเข้าหา port มาก · FROM ${facing?.fromDeviation.toFixed(0)}° / TO ${facing?.toDeviation.toFixed(0)}°`:pendingPort?'ปลายทางที่หันเข้าหากัน · คลิกเพื่อเชื่อม':`port ${key}`}</title>
       </circle>;
     })}
   </g>;
@@ -151,6 +154,6 @@ export function NetworkDrawing({
   const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`]));
   return <g>
     {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
-    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
+    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

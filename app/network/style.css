@@ -67,7 +67,9 @@
 .network-map-results button{text-align:left;border:1px solid #dbe6e5;background:#f8fbfb;border-radius:5px;padding:6px 7px;font-size:9.8px;line-height:1.35;color:var(--ws-ink)}
 .network-map-results button:hover{border-color:#9fc8c3;background:#edf7f5}
 [data-network-port-state="target"]{filter:drop-shadow(0 0 1.2px #0e8a82)}
+[data-network-port-state="caution"]{filter:drop-shadow(0 0 1.5px #c48a28)}
 [data-network-port-state="source"]{filter:drop-shadow(0 0 1.4px #e3a33d)}
+[data-network-port-state="facing-invalid"]{filter:drop-shadow(0 0 1.2px #b85858);opacity:.72}
 [data-network-port-state="invalid"],[data-network-port-state="occupied"]{opacity:.62}
 [data-network-link-preview] path{vector-effect:non-scaling-stroke}
 

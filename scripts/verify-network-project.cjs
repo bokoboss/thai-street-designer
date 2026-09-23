@@ -27,6 +27,8 @@ assert.deepEqual(points[0],n.portPoint(a,0));
 assert.deepEqual(points.at(-1),n.portPoint(b,2));
 assert.equal(n.linkIssues(p,link).length,0,'default linked junctions must be section-compatible');
 assert.equal(n.portDistance(a,0),a.design.arms[0].length,'Network port must use the actual semantic Arm length');
+const defaultFacing=n.assessPortConnection(p,link.from,link.to);assert.equal(defaultFacing.status,'valid');assert(defaultFacing.fromDeviation<1e-8&&defaultFacing.toDeviation<1e-8,'default east-west ports should face each other directly');
+const invalidFacing=n.assessPortConnection(p,{junctionId:a.id,armId:2},{junctionId:b.id,armId:1});assert.equal(invalidFacing.status,'invalid');assert(n.connectPorts(p,{junctionId:a.id,armId:2},{junctionId:b.id,armId:1}).error?.includes('90°'),'new RoadLinks must reject a target port that lies behind an Arm');
 const angleDelta=(x,y)=>Math.abs((((x-y)+540)%360)-180),segmentHeading=(u,v)=>(Math.atan2(v.y-u.y,v.x-u.x)*180/Math.PI+360)%360;
 assert(angleDelta(segmentHeading(points[0],points[1]),n.portHeading(a,0))<.001,'Road Link must leave the FROM Arm tangent to the semantic port heading');
 assert(angleDelta(segmentHeading(points.at(-2),points.at(-1)),(n.portHeading(b,2)+180)%360)<.001,'Road Link must enter the TO Arm tangent to the semantic port heading');
@@ -87,11 +89,12 @@ assert.deepEqual(display.arms.map(arm=>arm.length),movedA.design.arms.map(arm=>a
 let result=n.addJunction(p,{x:0,y:140});
 p=result.project;const c=result.junction;
 assert.equal(p.junctions.length,3);
-let connect=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:a.id,armId:1});
+let connect=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:a.id,armId:3});
 assert.equal(connect.error,null);p=connect.project;
 assert.equal(p.links.length,2);
 const occupied=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:b.id,armId:1});
 assert(occupied.error&&/เชื่อมอยู่แล้ว/.test(occupied.error));
+const facingWarningProject=n.createNetworkProject(),facingWarningLink=facingWarningProject.links[0];facingWarningProject.junctions[0].rotation=180;assert(n.linkIssues(facingWarningProject,facingWarningLink).some(v=>v.kind==='port-facing'),'existing Links must remain editable but surface a facing warning after a Junction rotates behind its corridor');
 
 const mismatched=structuredClone(p),target=mismatched.junctions.find(j=>j.id===b.id);
 target.design.arms[2].incoming=3;
