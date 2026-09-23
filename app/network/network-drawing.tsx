@@ -1,9 +1,9 @@
 'use client';
 import Drawing from '../junction/drawing';
 import {path} from '../junction/geometry';
-import {parallel} from '@/lib/alignment';
+import {parallel,variableParallel} from '@/lib/alignment';
 import {
-  activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkPoints,portPoint,worldJunctionRotation,
+  activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
 } from '@/lib/network-project';
 
@@ -18,6 +18,9 @@ const bandFill:Record<string,string>={bike:'#467d70',motorcycle:'#526c91',should
 function stripPath(ps:{x:number;y:number}[],inner:number,outer:number){
   return path([...parallel(ps,inner),...parallel(ps,outer).reverse()],true);
 }
+function variableStripPath(ps:{x:number;y:number}[],innerStart:number,innerEnd:number,outerStart:number,outerEnd:number){
+  return path([...variableParallel(ps,innerStart,innerEnd),...variableParallel(ps,outerStart,outerEnd).reverse()],true);
+}
 
 export function RoadLinkDrawing({
   project,link,selected,selectedVertex,onSelect,onInsertVertex,onVertexMoveStart,onVertexSelect
@@ -25,37 +28,40 @@ export function RoadLinkDrawing({
   const ps=linkPoints(project,link);
   if(ps.length<2)return null;
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),
-    issues=linkIssues(project,link),compatible=issues.length===0,
+    issues=linkIssues(project,link),compatible=issues.length===0,linear=link.sectionProfile.mode==='linear'&&linkLinearTransitionPossible(project,link),
     laneCompatible=!issues.some(v=>['lane-count','lane-width','median','alignment','missing-port'].includes(v.kind)),
     edgeCompatible=!issues.some(v=>['lane-count','lane-width','median','edge-section','alignment','missing-port'].includes(v.kind)),
-    left=Math.max(a.left,b.left),right=Math.max(a.right,b.right),roadWidth=left+right,
-    center=path(ps),leftEdge=path(parallel(ps,left)),rightEdge=path(parallel(ps,-right)),
+    left0=linear?a.left:Math.max(a.left,b.left),left1=linear?b.left:Math.max(a.left,b.left),
+    right0=linear?a.right:Math.max(a.right,b.right),right1=linear?b.right:Math.max(a.right,b.right),
+    roadWidth=Math.max(left0+right0,left1+right1),center=path(ps),
+    roadSurface=variableStripPath(ps,-right0,-right1,left0,left1),
+    leftEdge=path(variableParallel(ps,left0,left1)),rightEdge=path(variableParallel(ps,-right0,-right1)),
     midpoint=ps[Math.floor(ps.length/2)];
-  const laneLines:number[]=[];
-  if(from&&laneCompatible){
-    for(let i=1;i<from.forwardLanes;i++)laneLines.push(from.median/2+i*from.forwardLaneWidth);
-    for(let i=1;i<from.backwardLanes;i++)laneLines.push(-(from.median/2+i*from.backwardLaneWidth));
+  const laneLines:{start:number;end:number;key:string}[]=[];
+  if(from&&to&&(laneCompatible||linear)){
+    for(let i=1;i<from.forwardLanes;i++)laneLines.push({start:from.median/2+i*from.forwardLaneWidth,end:linear?to.median/2+i*to.forwardLaneWidth:from.median/2+i*from.forwardLaneWidth,key:'f'+i});
+    for(let i=1;i<from.backwardLanes;i++)laneLines.push({start:-(from.median/2+i*from.backwardLaneWidth),end:linear?-(to.median/2+i*to.backwardLaneWidth):-(from.median/2+i*from.backwardLaneWidth),key:'b'+i});
   }
   const edgePieces:React.ReactNode[]=[];
-  if(from&&edgeCompatible){
-    let forward=from.median/2+from.forwardLanes*from.forwardLaneWidth;
-    from.forwardBands.forEach((band,index)=>{edgePieces.push(<path key={'f-'+index} data-network-link-band={band.type} data-link-side="forward" d={stripPath(ps,forward,forward+band.width)} fill={bandFill[band.type]}/>);forward+=band.width;});
-    if(from.forwardWalk>0)edgePieces.push(<path key="f-walk" data-network-link-sidewalk="forward" d={stripPath(ps,forward,forward+from.forwardWalk)} fill="#b9c5cc"/>);
-    let backward=from.median/2+from.backwardLanes*from.backwardLaneWidth;
-    from.backwardBands.forEach((band,index)=>{edgePieces.push(<path key={'b-'+index} data-network-link-band={band.type} data-link-side="backward" d={stripPath(ps,-backward,-(backward+band.width))} fill={bandFill[band.type]}/>);backward+=band.width;});
-    if(from.backwardWalk>0)edgePieces.push(<path key="b-walk" data-network-link-sidewalk="backward" d={stripPath(ps,-backward,-(backward+from.backwardWalk))} fill="#b9c5cc"/>);
+  if(from&&to&&(edgeCompatible||linear)){
+    let f0=a.left,f1=linear?b.left:a.left;
+    from.forwardBands.forEach((band,index)=>{const endBand=to.forwardBands[index]??band,w1=linear?endBand.width:band.width;edgePieces.push(<path key={'f-'+index} data-network-link-band={band.type} data-link-side="forward" d={variableStripPath(ps,f0,f1,f0+band.width,f1+w1)} fill={bandFill[band.type]}/>);f0+=band.width;f1+=w1;});
+    if(from.forwardWalk>0||linear&&to.forwardWalk>0)edgePieces.push(<path key="f-walk" data-network-link-sidewalk="forward" d={variableStripPath(ps,f0,f1,f0+from.forwardWalk,f1+(linear?to.forwardWalk:from.forwardWalk))} fill="#b9c5cc"/>);
+    let b0=-a.right,b1=linear?-b.right:-a.right;
+    from.backwardBands.forEach((band,index)=>{const endBand=to.backwardBands[index]??band,w1=linear?endBand.width:band.width;edgePieces.push(<path key={'b-'+index} data-network-link-band={band.type} data-link-side="backward" d={variableStripPath(ps,b0,b1,b0-band.width,b1-w1)} fill={bandFill[band.type]}/>);b0-=band.width;b1-=w1;});
+    if(from.backwardWalk>0||linear&&to.backwardWalk>0)edgePieces.push(<path key="b-walk" data-network-link-sidewalk="backward" d={variableStripPath(ps,b0,b1,b0-from.backwardWalk,b1-(linear?to.backwardWalk:from.backwardWalk))} fill="#b9c5cc"/>);
   }
   return <g data-network-link={link.id} onPointerDown={e=>{e.stopPropagation();onSelect();}} onDoubleClick={e=>{e.stopPropagation();onInsertVertex(e);}} style={{cursor:'pointer'}}>
     {edgePieces}
-    <path d={center} stroke={selected?'#1c7974':'#9aa8ae'} strokeWidth={roadWidth+1.2} fill="none" strokeLinejoin="round"/>
-    <path d={center} stroke="#35424e" strokeWidth={roadWidth} fill="none" strokeLinejoin="round"/>
-    {from?.median&&<path d={center} stroke="#83957a" strokeWidth={Math.max(.5,from.median)} fill="none" strokeLinejoin="round"/>}
+    {selected&&<path d={roadSurface} stroke="#1c7974" strokeWidth="1.2" fill="#35424e" strokeLinejoin="round"/>}
+    {!selected&&<path d={roadSurface} stroke="#9aa8ae" strokeWidth=".35" fill="#35424e" strokeLinejoin="round"/>}
+    {from&&to&&(from.median>0||to.median>0)&&<path data-network-link-median="true" d={variableStripPath(ps,-from.median/2,linear?-to.median/2:-from.median/2,from.median/2,linear?to.median/2:from.median/2)} fill="#83957a"/>}
     <path d={leftEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path d={rightEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
-    {laneLines.map(offset=><path key={offset} d={path(parallel(ps,offset))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+    {laneLines.map(line=><path key={line.key} d={path(variableParallel(ps,line.start,line.end))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
     {!compatible&&<g transform={`translate(${midpoint.x} ${midpoint.y})`} pointerEvents="none"><circle data-network-link-warning="true" r="3.2" fill="#c3914c" stroke="white" strokeWidth=".6"/><text y=".9" textAnchor="middle" fontSize="2.6" fill="white" fontWeight="700">!</text></g>}
     <path d={center} stroke="transparent" strokeWidth={Math.max(14,roadWidth+8)} fill="none"/>
-    {selected&&link.via.map((p,index)=><circle key={'via-'+index} data-link-via={index} cx={p.x} cy={p.y} r={selectedVertex===index?2.8:2.2} fill={selectedVertex===index?'#0f7d77':'white'} stroke="#0f7d77" strokeWidth=".6" onPointerDown={e=>{e.stopPropagation();onVertexSelect(index);onVertexMoveStart(index,e);}} style={{cursor:'move'}}/>)}
+    {selected&&link.via.map((p,index)=><g key={'via-'+index} data-link-via-group={index}><circle data-link-via={index} cx={p.x} cy={p.y} r={selectedVertex===index?2.8:2.2} fill={selectedVertex===index?'#0f7d77':'white'} stroke="#0f7d77" strokeWidth=".6" onPointerDown={e=>{e.stopPropagation();onVertexSelect(index);onVertexMoveStart(index,e);}} style={{cursor:'move'}}/>{p.radius>0&&<text x={p.x+3.5} y={p.y-2.8} fontSize="2.4" fill="#0f6f69" pointerEvents="none">R{Math.round(p.radius)}</text>}</g>)}
   </g>;
 }
 
