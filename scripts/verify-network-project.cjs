@@ -58,10 +58,11 @@ assert.equal(removed.junctions.length,2);
 assert.equal(removed.links.length,1,'removing a Junction must remove owned Link connections');
 assert.equal(n.validateNetworkProject(removed),null);
 
+const editedDesign=structuredClone(removed.junctions[0].design);editedDesign.title='Network detail round-trip';const edited=n.updateJunctionDesign(removed,removed.junctions[0].id,editedDesign);assert.equal(edited.junctions[0].design.title,'Network detail round-trip');assert.notEqual(edited.junctions[0].design,editedDesign,'network must own a copy of detail-editor design state');assert.equal(removed.junctions[0].design.title!==edited.junctions[0].design.title,true);
 const saved=JSON.stringify(removed),restored=n.restoreNetworkProject(saved);
 assert.deepEqual(restored,removed);
 assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, move/rotate transforms, semantic ports, linked corridor ownership, mismatch review, persistence and cleanup');
+console.log('PASS network project: instances, move/rotate transforms, semantic ports, linked corridor ownership, mismatch review, persistence, detail round-trip and cleanup');
