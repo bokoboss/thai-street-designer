@@ -23,6 +23,8 @@ type Drag=
   |{kind:'link-via';id:string;index:number;before:NetworkProject}
   |null;
 
+const NETWORK_VIEW_SPAN=600,NETWORK_MIN_ZOOM=.2,NETWORK_MAX_ZOOM=5.5;
+
 const tools:[Tool,string,typeof MousePointer2][]=[
   ['select','เลือก',MousePointer2],
   ['junction','ทางแยก',GitBranch],
@@ -96,13 +98,14 @@ export default function NetworkWorkspace(){
     finally{setMapSearching(false);}
   }
   function fit(){
-    const b=projectBounds(project),center={x:b.x+b.w/2,y:b.y+b.h/2},next=clampZoom(Math.min(4.5,250/Math.max(b.w,b.h)*.88));
+    const b=projectBounds(project),center={x:b.x+b.w/2,y:b.y+b.h/2},
+      next=clampZoom(NETWORK_VIEW_SPAN/Math.max(b.w,b.h)*.9,NETWORK_MIN_ZOOM,Math.min(4.5,NETWORK_MAX_ZOOM));
     setPan(center);setZoom(next);
   }
   function zoomAt(factor:number,screen?:{x:number;y:number}){
     const el=svg.current;if(!el)return;
     const r=el.getBoundingClientRect(),p=screen??{x:r.left+r.width/2,y:r.top+r.height/2},
-      g={dx:0,dy:0,factor,before:p,after:p,count:2},next=panZoom2D(pan,zoom,g,{x:r.left+r.width/2,y:r.top+r.height/2},Math.min(r.width,r.height));
+      g={dx:0,dy:0,factor,before:p,after:p,count:2},next=panZoom2D(pan,zoom,g,{x:r.left+r.width/2,y:r.top+r.height/2},Math.min(r.width,r.height),NETWORK_VIEW_SPAN,NETWORK_MIN_ZOOM,NETWORK_MAX_ZOOM);
     setZoom(next.zoom);setPan(next.pan);
   }
   function canvasDown(e:React.PointerEvent<SVGSVGElement>){
@@ -116,7 +119,7 @@ export default function NetworkWorkspace(){
     if(tool==='link'&&pendingPort)setLinkCursor(point(e));
     const current=drag.current;if(!current)return;
     if(current.kind==='pan'){
-      const r=e.currentTarget.getBoundingClientRect(),scale=250/zoom/Math.min(r.width,r.height);
+      const r=e.currentTarget.getBoundingClientRect(),scale=NETWORK_VIEW_SPAN/zoom/Math.min(r.width,r.height);
       setPan({x:current.pan.x-(e.clientX-current.start.x)*scale,y:current.pan.y-(e.clientY-current.start.y)*scale});return;
     }
     const p=point(e);
@@ -270,10 +273,10 @@ export default function NetworkWorkspace(){
       <section className="network-canvas-wrap">
         <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button data-network-view="2d" className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button data-network-view="3d" className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
         <div className="network-canvas">
-          {view==='2d'&&<MapBackground reference={mapReference} view={{zoom,pan}}/>}
-          <svg ref={svg} data-network-plan="true" className={view==='3d'?'network-plan-hidden':''} viewBox={[(-125/zoom+pan.x),(-125/zoom+pan.y),(250/zoom),(250/zoom)].join(' ')}
+          {view==='2d'&&<MapBackground reference={mapReference} view={{zoom,pan,span:NETWORK_VIEW_SPAN,minZoom:NETWORK_MIN_ZOOM}}/>}
+          <svg ref={svg} data-network-plan="true" data-network-view-span={NETWORK_VIEW_SPAN} data-network-zoom={zoom.toFixed(4)} className={view==='3d'?'network-plan-hidden':''} viewBox={[(-NETWORK_VIEW_SPAN/2/zoom+pan.x),(-NETWORK_VIEW_SPAN/2/zoom+pan.y),(NETWORK_VIEW_SPAN/zoom),(NETWORK_VIEW_SPAN/zoom)].join(' ')}
             onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer}
-            onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.9:1.1,{x:e.clientX,y:e.clientY});}}>
+            onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.88:1.14,{x:e.clientX,y:e.clientY});}}>
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
@@ -281,7 +284,12 @@ export default function NetworkWorkspace(){
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=j.design.arms[pendingPort.armId].length,source={x:j.x+Math.cos(angle)*d,y:j.y+Math.sin(angle)*d};return <g data-network-link-preview="true" pointerEvents="none"><circle cx={source.x} cy={source.y} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>{linkCursor&&<path d={`M${source.x} ${source.y}L${linkCursor.x} ${linkCursor.y}`} fill="none" stroke="#e3a33d" strokeWidth=".8" strokeDasharray="3 2"/>}</g>;})()}
           </svg>
           <NetworkScene3D project={project} mapReference={mapReference} active={view==='3d'}/>
-          <div className="network-zoom" hidden={view==='3d'}><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
+          <div className="network-zoom" hidden={view==='3d'} data-network-zoom-value={zoom.toFixed(4)}>
+            <button data-network-zoom-action="in" title="Zoom in" onClick={()=>zoomAt(1.18)}><Plus size={16}/></button>
+            <button className="network-zoom-value" data-network-zoom-action="reset" title="กลับสู่ 100%" onClick={()=>zoomAt(1/zoom)}>{Math.round(zoom*100)}%</button>
+            <button data-network-zoom-action="out" title="Zoom out" onClick={()=>zoomAt(.84)}><Minus size={16}/></button>
+            <button data-network-zoom-action="fit" title="Fit network" onClick={fit}><Maximize2 size={15}/></button>
+          </div>
           <div className="network-status">{notice}</div>
         </div>
         {view==='2d'&&<NetworkSectionDock project={project} junction={selectedJunction} armId={selectedArm} link={selectedLink} onJunctionEdit={editFromNetworkSection}/>}

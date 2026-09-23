@@ -199,6 +199,26 @@ Phase 3B removes the remaining flat Junction plan texture from Network 3D. The N
 
 The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation. Lane markings, arrows and roadside furniture remain presentation layers for a later visual-polish phase; they are intentionally not re-created inside the geometry resolver.
 
+### Phase 3C viewport / camera UX
+
+The Network viewport now uses a wider engineering-scale baseline:
+
+- 2D `100%` spans 600 m instead of 250 m, so the default two-junction project is visible without immediately pressing Fit;
+- Network 2D can zoom out to 20% for multi-junction layout work;
+- map and engineering geometry share the same view-span parameter, preserving overlay registration at every zoom;
+- `+` means zoom in and `−` means zoom out, with local Fit and 100% controls beside the canvas.
+
+Network 3D navigation is explicit:
+
+- default mode = **Pan**;
+- **Orbit** can be selected explicitly;
+- middle-drag or Shift+left-drag always Orbits;
+- wheel zoom is cursor-anchored;
+- two-finger gestures pan and pinch-zoom;
+- Fit recenters without changing orientation;
+- Iso and Top provide deterministic engineering viewpoints;
+- double-click performs Fit.
+
 ## Quality gates
 
 The branch quality workflow now checks all of the following before acceptance:

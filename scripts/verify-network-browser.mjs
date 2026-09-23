@@ -144,7 +144,11 @@ try{
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
-  await clickSelector('[data-network-action="fit"]');await sleep(180);
+  const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0};})()`);
+  assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
+  for(let i=0;i<7;i++)await clickSelector('[data-network-zoom-action="out"]');
+  await waitFor(()=>evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)<.35`),'2D zoom below legacy 35% floor');
+  await clickSelector('[data-network-zoom-action="fit"]');await sleep(180);
 
   mark('create-junction');
   await clickSelector('[data-network-tool="junction"]');
@@ -209,6 +213,16 @@ try{
   await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
   const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0)};})()`);
   assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');
+  const cameraBefore=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {mode:c?.getAttribute('data-network-camera-mode'),yaw:Number(c?.getAttribute('data-network-camera-yaw')||0)};})()`);
+  assert.equal(cameraBefore.mode,'pan','Network 3D should start in Pan mode');
+  await clickSelector('[data-network-camera-control="orbit"]');await dragSelector('canvas[aria-label="Network 3D overview"]',44,-18);
+  await waitFor(()=>evalValue(`Math.abs(Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-yaw')||0)-${cameraBefore.yaw})>2`),'3D Orbit drag changes camera');
+  await clickSelector('[data-network-camera-control="pan"]');
+  const panBefore=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {x:Number(c?.getAttribute('data-network-camera-pan-x')||0),y:Number(c?.getAttribute('data-network-camera-pan-y')||0)};})()`);
+  await dragSelector('canvas[aria-label="Network 3D overview"]',34,22);
+  await waitFor(()=>evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]'),x=Number(c?.getAttribute('data-network-camera-pan-x')||0),y=Number(c?.getAttribute('data-network-camera-pan-y')||0);return Math.hypot(x-${panBefore.x},y-${panBefore.y})>.005;})()`),'3D Pan drag changes camera');
+  await clickSelector('[data-network-camera-control="fit"]');
+  await waitFor(()=>evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return Math.abs(Number(c?.getAttribute('data-network-camera-pan-x')||0))<.001&&Math.abs(Number(c?.getAttribute('data-network-camera-pan-y')||0))<.001;})()`),'3D Fit recenters camera');
   await sleep(600);
   const shot3d=await screenshot('network-browser-3d.png');
 
@@ -216,7 +230,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: create → connect → PI drag → lane transition → undo/redo → reload → section dock → resolved 3D');
+  console.log('PASS browser acceptance: wide 2D zoom → create/connect/edit → persistence → section dock → resolved 3D Pan/Orbit/Fit');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

@@ -127,8 +127,8 @@ export function mapCenterForView(reference:MapReference,pan:{x:number;y:number})
   return fromMercatorMeters(origin.x+dx,origin.y-dy);
 }
 
-export function mapZoomForViewport(lat:number,workspaceZoom:number,pixelsPerView:number){
-  const mpp=250/Math.max(.35,workspaceZoom)/Math.max(1,pixelsPerView),
+export function mapZoomForViewport(lat:number,workspaceZoom:number,pixelsPerView:number,workspaceSpan=250,minWorkspaceZoom=.35){
+  const mpp=workspaceSpan/Math.max(minWorkspaceZoom,workspaceZoom)/Math.max(1,pixelsPerView),
     circumference=Math.cos(clamp(lat,-MAX_LAT,MAX_LAT)*Math.PI/180)*2*Math.PI*R;
   return clamp(Math.log2(circumference/(MAPLIBRE_TILE*mpp)),0,22);
 }
@@ -145,8 +145,8 @@ export function validMapReference(v:unknown):v is MapReference{
   return !!m&&typeof m.basemap==='string'&&BASEMAPS.has(m.basemap as MapBasemap);
 }
 
-export function mapDragOffset(reference:MapReference,dxPixels:number,dyPixels:number,workspaceZoom:number,pixelsPerView:number){
-  const metersPerScreenPixel=250/Math.max(.35,workspaceZoom)/Math.max(1,pixelsPerView);
+export function mapDragOffset(reference:MapReference,dxPixels:number,dyPixels:number,workspaceZoom:number,pixelsPerView:number,workspaceSpan=250,minWorkspaceZoom=.35){
+  const metersPerScreenPixel=workspaceSpan/Math.max(minWorkspaceZoom,workspaceZoom)/Math.max(1,pixelsPerView);
   return {...reference,offsetX:reference.offsetX-dxPixels*metersPerScreenPixel,offsetY:reference.offsetY-dyPixels*metersPerScreenPixel};
 }
 
@@ -197,10 +197,13 @@ function tileUrl(z:number,x:number,y:number){
   return tileTemplate().replace('{z}',String(z)).replace('{x}',String(x)).replace('{y}',String(y));
 }
 
-function RasterFallback({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
+type MapWorkspaceView={zoom:number;pan:{x:number;y:number};span?:number;minZoom?:number};
+
+function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
   const tiles=useMemo(()=>{
-    const z=Math.round(clamp(reference.zoom,12,19)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
-      half=125/Math.max(.35,view.zoom),
+    const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),
+      z=Math.round(clamp(reference.zoom,12,19)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
+      half=span/2/safeZoom,
       minX=view.pan.x-half-reference.offsetX,maxX=view.pan.x+half-reference.offsetX,
       minY=view.pan.y-half-reference.offsetY,maxY=view.pan.y+half-reference.offsetY,
       px0=center.x+minX/mpp,px1=center.x+maxX/mpp,py0=center.y+minY/mpp,py1=center.y+maxY/mpp,
@@ -215,17 +218,18 @@ function RasterFallback({reference,view}:{reference:MapReference;view:{zoom:numb
       out.push({key:`${z}/${wx}/${ty}`,href:tileUrl(z,wx,ty),x,y,size});
     }
     return out;
-  },[reference,view.zoom,view.pan.x,view.pan.y]);
+  },[reference,view.zoom,view.pan.x,view.pan.y,view.span,view.minZoom]);
+  const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),half=span/2/safeZoom;
   return <svg data-map-background="true" data-map-provider="osm-raster" className="map-raster-fallback"
-    viewBox={`${-125/view.zoom+view.pan.x} ${-125/view.zoom+view.pan.y} ${250/view.zoom} ${250/view.zoom}`}>
+    viewBox={`${-half+view.pan.x} ${-half+view.pan.y} ${span/safeZoom} ${span/safeZoom}`}>
     {tiles.map(t=><image key={t.key} href={t.href} x={t.x} y={t.y} width={t.size} height={t.size} preserveAspectRatio="none"/>)}
   </svg>;
 }
 
-function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
+function VectorBasemap({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
   const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[generation,setGeneration]=useState(0),[status,setStatus]=useState<'loading'|'ready'|'failed'>('loading'),[pixels,setPixels]=useState(800);
   const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
-    center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels),
+    center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels,view.span??250,view.minZoom??.35),
     cameraRef=useRef({center,zoom:cameraZoom});
   useEffect(()=>{cameraRef.current={center:{lat:center.lat,lng:center.lng},zoom:cameraZoom};},[center.lat,center.lng,cameraZoom]);
 
@@ -330,7 +334,7 @@ export async function renderMapTexture(reference:MapReference,extent:number,size
   catch{return null;}
 }
 
-export default function MapBackground({reference,view}:{reference:MapReference;view:{zoom:number;pan:{x:number;y:number}}}){
+export default function MapBackground({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
   if(!reference.enabled)return null;
   const raster=reference.basemap==='osm-raster';
   return <div className="map-reference-layer" aria-hidden="true">

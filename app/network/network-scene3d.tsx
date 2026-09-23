@@ -1,5 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {anchorGround,groundAt,orbitGround} from '../junction/camera3d';
+import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/lib/network-project';
 import {
@@ -7,20 +9,23 @@ import {
 } from '@/lib/network-scene-geometry';
 
 type Size={w:number;h:number};
-type DragState={x:number;y:number;yaw:number;pitch:number}|null;
-
-const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
+type CameraMode='pan'|'orbit';
+type DragState={action:'pan'|'rotate';point:{x:number;y:number};screen:{x:number;y:number}}|null;
 
 export default function NetworkScene3D({
   project,mapReference,active
 }:{project:NetworkProject;mapReference:MapReference;active:boolean}){
-  const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),
-    [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-32),[pitch,setPitch]=useState(56),[zoom,setZoom]=useState(1),
+  const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),
+    [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-35),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(.92),
+    [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
     [mapTexture,setMapTexture]=useState<{key:string;image:HTMLCanvasElement|null}|null>(null);
+  const camera=useRef({yaw,pitch,zoom,pan});
+  useEffect(()=>{camera.current={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
+
   const junctionSurfaces=resolveJunctionSceneSurfaces(project),
     linkSurfaces=resolveRoadLinkSceneSurfaces(project),
-    sceneSurfaces=[...junctionSurfaces,...linkSurfaces];
-  const bounds=projectBounds(project,45),center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
+    sceneSurfaces=[...junctionSurfaces,...linkSurfaces],
+    bounds=projectBounds(project,45),center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
     mapKey=[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng,mapReference.zoom,mapReference.offsetX,mapReference.offsetY,extent.toFixed(2),center.x.toFixed(2),center.y.toFixed(2)].join(':');
 
   useEffect(()=>{
@@ -36,7 +41,22 @@ export default function NetworkScene3D({
     return()=>{stale=true;};
   },[active,mapReference,extent,center.x,center.y,mapKey]);
 
+  useEffect(()=>{if(!active){gestures.current.clear();drag.current=null;}},[active]);
+  useEffect(()=>{
+    const el=canvas.current;if(!active||!el)return;
+    const prevent=(e:WheelEvent)=>e.preventDefault();el.addEventListener('wheel',prevent,{passive:false});
+    return()=>el.removeEventListener('wheel',prevent);
+  },[active]);
+
   const mapImage=mapReference.enabled&&mapTexture?.key===mapKey?mapTexture.image:null;
+  const viewport=(r:DOMRect)=>({width:r.width,height:r.height,extent,rotation:0});
+  const applyCamera=(next:typeof camera.current)=>{camera.current=next;setYaw(next.yaw);setPitch(next.pitch);setZoom(next.zoom);setPan(next.pan);};
+  const resetGestures=()=>{gestures.current.clear();drag.current=null;};
+  const setCameraMode=(next:CameraMode)=>{resetGestures();setMode(next);};
+  const fitView=()=>applyCamera({...camera.current,zoom:.92,pan:{x:0,y:0}});
+  const isoView=()=>applyCamera({yaw:-35,pitch:52,zoom:.92,pan:{x:0,y:0}});
+  const topView=()=>applyCamera({yaw:0,pitch:78,zoom:.92,pan:{x:0,y:0}});
+  const zoomBy=(factor:number)=>applyCamera({...camera.current,zoom:clampZoom(camera.current.zoom*factor,.25,5)});
 
   useEffect(()=>{
     if(!active)return;
@@ -45,7 +65,7 @@ export default function NetworkScene3D({
     const w=size.w,h=size.h,a=yaw*Math.PI/180,p=pitch*Math.PI/180,scale=Math.min(w,h)/(extent*2)*zoom;
     const projectPoint=(x:number,y:number,z=0)=>{
       const rx=(x-center.x)*Math.cos(a)-(y-center.y)*Math.sin(a),ry=(x-center.x)*Math.sin(a)+(y-center.y)*Math.cos(a);
-      return{x:w/2+rx*scale,y:h/2+(ry*Math.cos(p)-z*Math.sin(p))*scale};
+      return{x:w/2+pan.x*w+rx*scale,y:h/2+pan.y*h+(ry*Math.cos(p)-z*Math.sin(p))*scale};
     };
     const drawMapPlane=(image:HTMLCanvasElement,z:number,alpha:number)=>{
       const o=projectPoint(center.x-extent,center.y-extent,z),x=projectPoint(center.x+extent,center.y-extent,z),y=projectPoint(center.x-extent,center.y+extent,z);
@@ -61,7 +81,7 @@ export default function NetworkScene3D({
       const depth=(surface:{points:{x:number;y:number}[];z:number})=>surface.points.reduce((sum,q)=>sum+(q.x-center.x)*Math.sin(a)+(q.y-center.y)*Math.cos(a),0)/(surface.points.length||1)-surface.z*.2;
       return depth(u)-depth(v);
     });
-    const drawPoly=(surface:typeof sorted[number])=>{
+    for(const surface of sorted){
       const top=surface.points.map(q=>projectPoint(q.x,q.y,surface.z));
       if(surface.z>.08){
         const bottom=surface.points.map(q=>projectPoint(q.x,q.y,0));
@@ -72,19 +92,67 @@ export default function NetworkScene3D({
       }
       ctx.beginPath();top.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=surfaceFill[surface.kind];ctx.fill();
       ctx.strokeStyle='rgba(245,248,249,.32)';ctx.lineWidth=.45;ctx.stroke();
-    };
-    sorted.forEach(drawPoly);
-  },[active,size,yaw,pitch,zoom,extent,center.x,center.y,mapImage,mapReference.opacity,sceneSurfaces]);
+    }
+  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,sceneSurfaces]);
+
+  function begin(e:React.PointerEvent<HTMLCanvasElement>){
+    const action=e.pointerType==='mouse'
+      ?(e.button===1||e.shiftKey?'rotate':e.button===0?(mode==='orbit'?'rotate':'pan'):'none')
+      :(mode==='orbit'?'rotate':'pan');
+    if(action==='none')return;
+    e.preventDefault();
+    const r=e.currentTarget.getBoundingClientRect(),screen={x:e.clientX-r.x,y:e.clientY-r.y};
+    gestures.current.down(e.pointerId,{x:e.clientX,y:e.clientY});
+    drag.current={action,point:groundAt(camera.current,viewport(r),screen),screen};
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function move(e:React.PointerEvent<HTMLCanvasElement>){
+    const g=gestures.current.move(e.pointerId,{x:e.clientX,y:e.clientY});if(!g)return;
+    const current=camera.current,r=e.currentTarget.getBoundingClientRect(),v=viewport(r);
+    if(g.count===1&&drag.current?.action==='rotate'){
+      applyCamera(orbitGround(current,v,drag.current.point,drag.current.screen,g.dx,g.dy));return;
+    }
+    const nextZoom=clampZoom(current.zoom*g.factor,.25,5),ratio=nextZoom/current.zoom,
+      nextPan={
+        x:(g.after.x-r.x-r.width/2-(g.before.x-r.x-r.width/2-current.pan.x*r.width)*ratio)/r.width,
+        y:(g.after.y-r.y-r.height/2-(g.before.y-r.y-r.height/2-current.pan.y*r.height)*ratio)/r.height
+      };
+    applyCamera({...current,zoom:nextZoom,pan:nextPan});
+  }
+  function end(e:React.PointerEvent<HTMLCanvasElement>){
+    gestures.current.up(e.pointerId);if(!gestures.current.count)drag.current=null;
+    try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
+  }
+  function wheel(e:React.WheelEvent<HTMLCanvasElement>){
+    e.preventDefault();
+    const r=e.currentTarget.getBoundingClientRect(),v=viewport(r),screen={x:e.clientX-r.x,y:e.clientY-r.y},current=camera.current,
+      point=groundAt(current,v,screen),delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?r.height:1),
+      nextZoom=clampZoom(current.zoom*Math.exp(-Math.max(-500,Math.min(500,delta))*.002),.25,5);
+    applyCamera(anchorGround({...current,zoom:nextZoom},v,point,screen));
+  }
 
   if(!active)return null;
   return <div className="network-scene3d">
-    <canvas ref={canvas} aria-label="Network 3D overview" data-network-scene-mode="resolved"
+    <canvas ref={canvas} tabIndex={0} aria-label="Network 3D overview" data-network-scene-mode="resolved"
       data-network-scene-junction-surfaces={junctionSurfaces.length} data-network-scene-link-surfaces={linkSurfaces.length}
-      onPointerDown={e=>{drag.current={x:e.clientX,y:e.clientY,yaw,pitch};e.currentTarget.setPointerCapture(e.pointerId);}}
-      onPointerMove={e=>{const d=drag.current;if(!d)return;setYaw(d.yaw+(e.clientX-d.x)*.28);setPitch(clamp(d.pitch-(e.clientY-d.y)*.2,15,82));}}
-      onPointerUp={e=>{drag.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}}} onPointerCancel={()=>{drag.current=null;}}
-      onWheel={e=>{e.preventDefault();setZoom(v=>clamp(v*Math.exp(-e.deltaY*.0015),.35,4));}}/>
-    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Junction + Slip + RoadLink ใช้ semantic geometry จริงจาก engine เดียวกับ 2D</span><span>Markings / furniture เป็น presentation layer สำหรับ phase ถัดไป · ลากเพื่อหมุน · ล้อเมาส์ซูม</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
-    <div className="network-scene-tools"><button onClick={()=>{setYaw(-32);setPitch(56);setZoom(1);}}>มุมเริ่มต้น</button><span>Yaw {Math.round(yaw)}° · Pitch {Math.round(pitch)}° · Zoom {Math.round(zoom*100)}%</span></div>
+      data-network-camera-mode={mode} data-network-camera-yaw={yaw.toFixed(3)} data-network-camera-pitch={pitch.toFixed(3)}
+      data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
+      onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
+      onAuxClick={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
+    <div className="network-scene-note"><b>Resolved Network 3D</b><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span><span>สองนิ้ว = Pan + Pinch Zoom · Double-click = Fit</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
+    <div className="network-scene-tools">
+      <div className="network-camera-mode">
+        <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>
+        <button data-network-camera-control="orbit" aria-pressed={mode==='orbit'} onClick={()=>setCameraMode('orbit')}>Orbit</button>
+      </div>
+      <div className="network-camera-actions">
+        <button data-network-camera-control="zoom-in" title="Zoom in" onClick={()=>zoomBy(1.18)}>＋</button>
+        <button data-network-camera-control="zoom-out" title="Zoom out" onClick={()=>zoomBy(.84)}>−</button>
+        <button data-network-camera-control="fit" onClick={fitView}>Fit</button>
+        <button data-network-camera-control="iso" onClick={isoView}>Iso</button>
+        <button data-network-camera-control="top" onClick={topView}>Top</button>
+      </div>
+      <span className="network-camera-status">Yaw {Math.round(yaw)}° · Pitch {Math.round(pitch)}° · Zoom {Math.round(zoom*100)}%</span>
+    </div>
   </div>;
 }
