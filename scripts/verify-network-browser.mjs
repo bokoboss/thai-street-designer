@@ -167,7 +167,7 @@ try{
   await clickSelector('[data-network-port="J-1:3"]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-port="J-1:3"]')?.getAttribute('data-network-port-state')==='source'`),'source port state');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-port="J-3:3"]')?.getAttribute('data-network-port-state')==='facing-invalid'`),'reject target port facing away from source');
-  await clickSelector('[data-network-port="J-3:1"]');
+  await clickSelector('[data-network-port="J-3:2"]');
   await waitFor(async()=>{const p=await project();return p?.links?.length===2&&p.links.some(l=>l.id==='L-2');},'connect L-2');
 
   mark('edit-alignment');
@@ -180,12 +180,12 @@ try{
   await waitFor(async()=>{const p=await project(),v=p?.links?.find(l=>l.id==='L-2')?.via?.[0];return v&&Math.hypot(v.x-beforeVia.x,v.y-beforeVia.y)>1;},'drag PI');
 
   mark('create-lane-mismatch');
-  await clickSelector('[data-network-junction-hit="J-3:1"]');
+  await clickSelector('[data-network-junction-hit="J-3:2"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='arm'`),'Arm contextual command bar');
-  const laneBefore=(await project()).junctions.find(j=>j.id==='J-3').design.arms[1].incoming;
+  const laneBefore=(await project()).junctions.find(j=>j.id==='J-3').design.arms[2].incoming;
   assert(laneBefore<4,'Golden flow needs room to add one incoming lane');
   await clickSelector('[data-network-context-action="incoming-inc"]');
-  await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-3')?.design?.arms?.[1]?.incoming===laneBefore+1;},'lane mismatch edit');
+  await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-3')?.design?.arms?.[2]?.incoming===laneBefore+1;},'lane mismatch edit');
 
   mark('resolve-section');
   await clickSelector('[data-network-link="L-2"]');
