@@ -43,7 +43,7 @@ export default function NetworkScene3D({
   useEffect(()=>{
     if(!active||!mapReference.enabled)return;
     let stale=false;
-    renderMapTexture(mapReference,extent,1200,center).then(image=>{if(!stale)setMapTexture({key:mapKey,image});});
+    renderMapTexture(mapReference,extent,1200,{x:center.x,y:center.y}).then(image=>{if(!stale)setMapTexture({key:mapKey,image});});
     return()=>{stale=true;};
   },[active,mapReference,extent,center.x,center.y,mapKey]);
 
