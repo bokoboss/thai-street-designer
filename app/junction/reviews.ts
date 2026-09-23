@@ -2,6 +2,7 @@ import {sectionFor,type Design} from './model';
 import {allocate} from './allocation';
 import {activeIds,armMouth,armTreatmentOrigins,edges} from './geometry';
 import {resolveStreetSection} from './lane-configuration';
+import {slipGeometries} from './slip-geometry';
 import {plantingPlan} from './planting';
 import {roundFeedback} from './roundabout';
 import type {Selection} from './selection';
@@ -52,7 +53,7 @@ export function designReviews(d:Design):Review[]{
 
     const slip=d.slips.find(s=>s.fromArm===i);
     if(slip){
-      const edgeSet=edges(d),g=resolveStreetSection(d,i,slip.approach.mode==='auxiliary'?Math.min(a.length,armMouth(d,i)+slip.approach.storage):armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
+      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.slip.fromArm===i),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.entryX+5):armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
       if(g.conflicts.includes('incoming-curb-treatment-overlap')){
         out.push({
           level:'engineering',
@@ -63,7 +64,7 @@ export function designReviews(d:Design):Review[]{
     }
     const receivingSlip=d.slips.find(s=>s.toArm===i);
     if(receivingSlip){
-      const edgeSet=edges(d),g=resolveStreetSection(d,i,Math.min(a.length,armMouth(d,i)+12),edgeSet);
+      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.slip.id===receivingSlip.id),g=resolveStreetSection(d,i,slipGeom?Math.min(a.length,slipGeom.exitX+5):armTreatmentOrigins(d,i,edgeSet).outgoing+5,edgeSet);
       if(g.conflicts.includes('outgoing-curb-treatment-overlap')){
         out.push({
           level:'engineering',
