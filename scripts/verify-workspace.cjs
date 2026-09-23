@@ -71,6 +71,7 @@ assert(networkSource.includes('data-network-link-preview')&&networkSource.includ
 assert(networkDrawingSource.includes('data-network-port-state')&&networkDrawingSource.includes("sameJunction?'invalid'"),'semantic ports must expose source/target/occupied/invalid connection states');
 assert(networkSource.includes('searchMapPlaces')&&networkSource.includes('ค้นหาสถานที่ / ถนน / ทางแยก'),'Network workspace must support named-place lookup instead of requiring raw lat/lng entry');
 assert(networkSource.includes('beginFieldEdit')&&networkSource.includes('finishFieldEdit'),'Inspector text/numeric edits must be grouped into one undo transaction per editing gesture');
+assert(networkSource.includes('pastRef=useRef<NetworkProject[]>([])')&&networkSource.includes('futureRef=useRef<NetworkProject[]>([])')&&networkSource.includes('function remember(before:NetworkProject)'),'Network history must keep synchronous refs so rapid Undo/Redo cannot race React state rendering');
 assert(networkSource.includes('updateLinkViaRadius')&&networkSource.includes('CURVE AT PI'),'RoadLink PI radius must be directly editable in the root Network workspace');
 assert(networkSource.includes('updateLinkSectionProfile')&&networkSource.includes('Resolved geometric transition'),'RoadLink section continuity mode must be explicit and user-controlled');
 assert(networkSource.includes('linkControlPoints')&&networkSource.includes('R0 = polyline เดิม'),'PI insertion/editing must operate on control geometry while rendering uses the resolved alignment');
