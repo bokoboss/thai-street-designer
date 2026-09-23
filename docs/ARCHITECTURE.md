@@ -307,13 +307,16 @@ A Road Link owns the corridor between two semantic arm ports. Link endpoint coor
 
 Important invariants:
 
+- the semantic Arm endpoint is derived from the same `Design v6 Arm.angle + Arm.length` used by the Junction engine
 - moving a Junction instance must not mutate its Design
 - rotating a Junction instance must not mutate its Design
-- attached Link endpoints follow transformed ports automatically
+- dragging a selected Arm endpoint edits that Arm's shared angle/length rather than a network-only copy
+- attached Link endpoints follow transformed or directly edited ports automatically
+- contextual lane/median edits use the same Arm model and immediately participate in Link compatibility review
 - deleting a Junction removes its attached Links
-- section mismatches are surfaced explicitly; the foundation does not invent a lane/median transition
+- section mismatches are surfaced explicitly; the foundation does not invent a lane/median/edge-zone transition
 - detailed Junction editing round-trips back into the Network project
 
-The root application opens the Network workspace. The existing `/junction/` and `/roads/` routes remain available as detailed editing/laboratory surfaces while migration continues.
+The root application is the primary Network editing workspace. The existing `/junction/` route remains useful as a standalone/advanced Junction editor and `/roads/` remains a migration laboratory, but neither owns an alternate geometry model.
 
 See `docs/NETWORK_FOUNDATION.md` for the ownership model, frontage-road boundary and roadmap.
