@@ -151,6 +151,7 @@ try{
 
   await clickText('.network-header-actions button','Undo');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.mode==='review';},'undo section mode');
+  await waitFor(()=>evalValue(`(()=>{const b=[...document.querySelectorAll('.network-header-actions button')].find(e=>(e.textContent||'').includes('Redo'));return !!b&&!b.disabled;})()`),'Redo enabled after Undo');
   await clickText('.network-header-actions button','Redo');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.mode==='linear';},'redo section mode');
 
