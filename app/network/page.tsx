@@ -157,6 +157,19 @@ export default function NetworkWorkspace(){
   function updateBand(id:string,patch:Partial<Band>){
     if(!selectedSection)return;editSelectedSection({bands:selectedSection.bands.map(b=>b.id===id?{...b,...patch}:b)});
   }
+  function insertLinkVertexAt(id:string,e:React.MouseEvent<SVGGElement>){
+    if(tool!=='select')return;
+    const before=projectRef.current,link=before.links.find(v=>v.id===id);if(!link)return;
+    const cursor=point(e),ps=linkPoints(before,link);let bestIndex=0,bestDistance=Infinity,bestPoint=cursor;
+    for(let i=0;i<ps.length-1;i++){
+      const a=ps[i],b=ps[i+1],vx=b.x-a.x,vy=b.y-a.y,len2=vx*vx+vy*vy,t=len2?Math.max(0,Math.min(1,((cursor.x-a.x)*vx+(cursor.y-a.y)*vy)/len2)):0,
+        q={x:a.x+vx*t,y:a.y+vy*t},distance=Math.hypot(cursor.x-q.x,cursor.y-q.y);
+      if(distance<bestDistance){bestDistance=distance;bestIndex=i;bestPoint=q;}
+    }
+    const next=insertLinkVia(before,id,bestIndex,bestPoint);
+    if(next===before){setNotice('เพิ่มจุดแนวตรงนี้ไม่ได้ — แนวจะสั้นเกินไปหรือหักกลับ');return;}
+    commit(next,before);setSelection({kind:'link',id});setSelectedArm(null);setSelectedLinkVertex(bestIndex);setNotice('เพิ่มจุดแนวแล้ว · ลากวงกลมเพื่อปรับแนวถนน');
+  }
   function startLinkVertexMove(id:string,index:number,e:React.PointerEvent<SVGCircleElement>){
     if(tool!=='select')return;setSelection({kind:'link',id});setSelectedLinkVertex(index);drag.current={kind:'link-via',id,index,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
   }
@@ -176,12 +189,20 @@ export default function NetworkWorkspace(){
     if(result.error){setNotice(result.error);if(portKey(pendingPort)===portKey(ref))setPendingPort(null);return;}
     commit(result.project,before);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelection(result.link?{kind:'link',id:result.link.id}:null);choose('select');setNotice('เชื่อม Road Link แล้ว · ปลาย Link ผูกกับ Junction ports แบบ semantic');
   }
+  function deleteContext(){
+    if(selection?.kind==='link'&&selectedLinkVertex!==null){
+      const before=projectRef.current,next=removeLinkVia(before,selection.id,selectedLinkVertex);
+      if(next!==before){commit(next,before);setSelectedLinkVertex(null);setNotice('ลบจุดแนวแล้ว');}
+      return;
+    }
+    deleteSelection();
+  }
   function deleteSelection(){
     if(!selection)return;const before=projectRef.current,after=selection.kind==='junction'?removeJunction(before,selection.id):removeLink(before,selection.id);commit(after,before);setSelection(null);setSelectedArm(null);setSelectedLinkVertex(null);
   }
   function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
 
-  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteSelection();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
+  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
       <div className="network-header-actions"><button onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset demo</button></div>
@@ -198,7 +219,7 @@ export default function NetworkWorkspace(){
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
-            <NetworkDrawing project={project} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
+            <NetworkDrawing project={project} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=j.design.arms[pendingPort.armId].length;return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
           </svg>
           <NetworkScene3D project={project} mapReference={mapReference} active={view==='3d'}/>
@@ -254,7 +275,7 @@ export default function NetworkWorkspace(){
           <div className="network-inline-actions"><button onClick={()=>{const ps=linkPoints(projectRef.current,selectedLink);let best=0,bestLen=-1;for(let i=0;i<ps.length-1;i++){const len=Math.hypot(ps[i+1].x-ps[i].x,ps[i+1].y-ps[i].y);if(len>bestLen){best=i;bestLen=len;}}const p={x:(ps[best].x+ps[best+1].x)/2,y:(ps[best].y+ps[best+1].y)/2};const before=projectRef.current,next=insertLinkVia(before,selectedLink.id,best,p);if(next!==before){commit(next,before);setSelectedLinkVertex(best);setNotice('เพิ่มจุดแนว Road Link แล้ว · ลากจุดเพื่อปรับ alignment');}}}>＋ จุดแนว</button><button disabled={selectedLinkVertex===null} onClick={()=>{if(selectedLinkVertex===null)return;const before=projectRef.current,next=removeLinkVia(before,selectedLink.id,selectedLinkVertex);if(next!==before){commit(next,before);setSelectedLinkVertex(null);}}}>ลบจุดแนว</button></div>
           <div className="network-link-ends"><span>FROM <b>{portKey(selectedLink.from)}</b></span><span>TO <b>{portKey(selectedLink.to)}</b></span></div>
           {selectedIssues.length?<div className="network-issues">{selectedIssues.map((issue,i)=><p key={i}>! {issue.message}</p>)}</div>:<p className="network-ok">ปลาย Link สอดคล้องกันในระดับ foundation</p>}
-          <p className="network-note">Junction เป็นเจ้าของ geometry ใกล้ปากแยก ส่วน Road Link เป็นเจ้าของ corridor ระหว่าง ports. ถ้าปลายสองด้านมี lane/median ไม่เท่ากัน ระบบจะเตือนแทนการสร้าง transition แบบเดาเอง</p>
+          <p className="network-note">ดับเบิลคลิกบน Road Link เพื่อเพิ่มจุดแนวตรงตำแหน่งนั้น แล้วลากจุดเพื่อปรับ alignment. ปลายทั้งสองยังผูกกับ Junction ports; ถ้าหน้าตัดสองด้านไม่ตรงกันระบบจะเตือนแทนการเดา transition.</p>
         </section>}
         {!selection&&<section><p className="network-note">เลือก Junction หรือ Road Link บนแผน หรือใช้เครื่องมือ “ทางแยก” เพื่อสร้าง instance ใหม่ และ “เชื่อมถนน” เพื่อเชื่อม arm-to-arm.</p></section>}
         <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><label>Basemap<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><div className="network-coords"><label>Offset X (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetX.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetX:n}));}}/></label><label>Offset Y (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetY.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetY:n}));}}/></label></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={mapReference.locked} onChange={e=>setMapReference(v=>({...v,locked:e.target.checked}))}/> ล็อกตำแหน่งแผนที่</label><button className="network-map-reset" disabled={mapReference.locked} onClick={()=>setMapReference(v=>({...v,offsetX:0,offsetY:0}))}>คืน Offset เป็น 0</button><p className="network-note">Map เป็น reference layer เท่านั้น · X/Y ใช้จัดแนว Network กับแผนที่โดยไม่แก้ geometry ของ Junction หรือ Road Link</p></>}</section>
