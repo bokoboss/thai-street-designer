@@ -337,14 +337,21 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
   });
   const links=source.links.map(input=>{
     if(!input||typeof input!=='object')throw Error('Invalid Road Link');
-    const item=input as Record<string,any>,mode=item.sectionProfile?.mode==='linear'?'linear':'review';
+    const item=input as Record<string,unknown>,from=item.from&&typeof item.from==='object'?item.from as Record<string,unknown>:null,
+      to=item.to&&typeof item.to==='object'?item.to as Record<string,unknown>:null,
+      profile=item.sectionProfile&&typeof item.sectionProfile==='object'?item.sectionProfile as Record<string,unknown>:null,
+      mode:LinkSectionProfile['mode']=profile?.mode==='linear'?'linear':'review',
+      via=Array.isArray(item.via)?item.via.map(point=>{
+        const p=point&&typeof point==='object'?point as Record<string,unknown>:{};
+        return{x:Number(p.x),y:Number(p.y),radius:source.schemaVersion===1?0:linkRadius(p.radius)};
+      }):[];
     return{
       id:String(item.id??''),
       name:String(item.name??''),
-      from:{junctionId:String(item.from?.junctionId??''),armId:Number(item.from?.armId)},
-      to:{junctionId:String(item.to?.junctionId??''),armId:Number(item.to?.armId)},
-      via:Array.isArray(item.via)?item.via.map((p:any)=>({x:Number(p?.x),y:Number(p?.y),radius:source.schemaVersion===1?0:linkRadius(p?.radius)})):[],
-      sectionProfile:{mode} as LinkSectionProfile
+      from:{junctionId:String(from?.junctionId??''),armId:Number(from?.armId)},
+      to:{junctionId:String(to?.junctionId??''),armId:Number(to?.armId)},
+      via,
+      sectionProfile:{mode}
     };
   });
   const project:NetworkProject={schemaVersion:2,title:String(source.title??'Thai Street Network Concept'),junctions,links};
