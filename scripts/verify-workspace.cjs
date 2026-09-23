@@ -67,4 +67,9 @@ assert(networkDrawingSource.includes('data-network-link-band')&&networkDrawingSo
 assert(networkSource.includes("view==='2d'&&<MapBackground"),'live MapLibre 2D layer must unmount in 3D to avoid duplicate map rendering');
 assert(networkSource.includes('Offset X (m)')&&networkSource.includes('ล็อกตำแหน่งแผนที่'),'Network map controls must support persistent reference alignment without mutating engineering geometry');
 assert(networkSource.includes("if(tool!=='select')return;")&&!networkSource.includes("if(tool==='delete'){const before=projectRef.current;commit(removeJunction"),'Junction center handle must not double-delete in Delete mode');
+assert(networkSource.includes('data-network-link-preview')&&networkSource.includes('setLinkCursor(point(e))'),'Link mode must show a live source-to-cursor preview after choosing the first semantic port');
+assert(networkDrawingSource.includes('data-network-port-state')&&networkDrawingSource.includes("sameJunction?'invalid'"),'semantic ports must expose source/target/occupied/invalid connection states');
+assert(networkSource.includes('searchMapPlaces')&&networkSource.includes('ค้นหาสถานที่ / ถนน / ทางแยก'),'Network workspace must support named-place lookup instead of requiring raw lat/lng entry');
+assert(networkSource.includes('beginFieldEdit')&&networkSource.includes('finishFieldEdit'),'Inspector text/numeric edits must be grouped into one undo transaction per editing gesture');
+
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
