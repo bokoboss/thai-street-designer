@@ -107,7 +107,13 @@ Two section-profile modes are explicit:
 - forward edge-band type/order matches;
 - backward edge-band type/order matches.
 
-A lane-count mismatch remains an engineering/topology issue. The program does **not** guess whether an added/dropped lane belongs on the curb side or median side. That requires the next explicit RoadLink-owned transition model.
+A one-lane-count mismatch can now be resolved only through an explicit RoadLink-owned transition. The user must choose:
+- direction (`forward` or `backward`);
+- side (`curb` or `median`);
+- transition center station;
+- transition length.
+
+The renderer localizes the added/dropped lane divider to that transition zone. The system still refuses to guess a side automatically, and mismatches larger than one lane remain unresolved topology.
 
 Alignment ownership is also explicit:
 
@@ -139,6 +145,8 @@ Primary-workspace interactions:
 - edit Road Link PI points; double-click a Link to insert a PI directly
 - edit each selected PI radius; new PI defaults to R25 m and can be returned to R0
 - choose explicit RoadLink section continuity: Review mismatch or Linear geometric transition
+- resolve a one-lane count change explicitly on the curb or median side with station/length control
+- inspect the selected Junction arm or RoadLink through the contextual Network section/profile dock; RoadLink sections can be scrubbed by station
 - delete a selected Link via point before deleting its owning Link
 - delete Junctions and their owned connections
 - undo / redo
@@ -206,9 +214,9 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-1. Visually accept RoadLink schema-v2 curves and linear section interpolation in the root Network workspace.
-2. Add explicit RoadLink lane-count transition semantics (lane add/drop side, station/length and marking behavior).
-3. Add Network cross-section / section-profile visualization and contextual editing.
+1. Visually accept RoadLink schema-v2 curves, lane transitions and the Network section/profile dock in the deployed workspace.
+2. Add direct contextual editing from the Network section/profile dock, while keeping the Inspector as the precision editor.
+3. Add stronger browser-level interaction/E2E coverage for create → connect → curve → transition → undo/redo → reload.
 4. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
 5. Fold remaining useful Road Alignment Lab operations into the root workspace, then retire it as a separate user-facing mode.
 6. Research and model frontage / parallel roads using Corridor ownership.
