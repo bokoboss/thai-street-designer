@@ -38,7 +38,8 @@ export default function NetworkWorkspace(){
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[view,setView]=useState<'2d'|'3d'>('2d'),
     [linkCursor,setLinkCursor]=useState<WorldPoint|null>(null),[mapQuery,setMapQuery]=useState(''),[mapPlaces,setMapPlaces]=useState<MapPlace[]>([]),[mapSearching,setMapSearching]=useState(false);
-  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null);
+  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
+    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]);
 
   useEffect(()=>{projectRef.current=project;},[project]);
   useEffect(()=>{
@@ -63,16 +64,30 @@ export default function NetworkWorkspace(){
     linearTransitionPossible=selectedLink?linkLinearTransitionPossible(project,selectedLink):false;
 
   function setProjectNow(next:NetworkProject){projectRef.current=next;setProject(next);}
+  function remember(before:NetworkProject){
+    const nextPast=[...pastRef.current.slice(-39),before];
+    pastRef.current=nextPast;futureRef.current=[];setPast(nextPast);setFuture([]);
+  }
   function commit(next:NetworkProject,before=projectRef.current){
     if(next===before)return;
-    setPast(h=>[...h.slice(-39),before]);setFuture([]);setProjectNow(next);
+    remember(before);setProjectNow(next);
   }
-  function undo(){const previous=past.at(-1);if(!previous)return;setFuture(f=>[projectRef.current,...f.slice(0,39)]);setPast(p=>p.slice(0,-1));setProjectNow(previous);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}
-  function redo(){const next=future[0];if(!next)return;setPast(p=>[...p.slice(-39),projectRef.current]);setFuture(f=>f.slice(1));setProjectNow(next);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}
+  function undo(){
+    const history=pastRef.current,previous=history.at(-1);if(!previous)return;
+    const nextPast=history.slice(0,-1),nextFuture=[projectRef.current,...futureRef.current.slice(0,39)];
+    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);setProjectNow(previous);
+    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
+  }
+  function redo(){
+    const next=futureRef.current[0];if(!next)return;
+    const nextPast=[...pastRef.current.slice(-39),projectRef.current],nextFuture=futureRef.current.slice(1);
+    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);setProjectNow(next);
+    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
+  }
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
   function choose(next:Tool){setTool(next);if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลากจุดกลาง Junction เพื่อย้ายทั้งทางแยก');}
   function beginFieldEdit(){fieldBefore.current=projectRef.current;}
-  function finishFieldEdit(){const before=fieldBefore.current;fieldBefore.current=null;if(before&&before!==projectRef.current){setPast(h=>[...h.slice(-39),before]);setFuture([]);}}
+  function finishFieldEdit(){const before=fieldBefore.current;fieldBefore.current=null;if(before&&before!==projectRef.current)remember(before);}
   async function findPlace(){
     const q=mapQuery.trim();if(q.length<2){setMapPlaces([]);return;}
     setMapSearching(true);
@@ -127,7 +142,7 @@ export default function NetworkWorkspace(){
     if(current?.kind==='junction'||current?.kind==='arm'||current?.kind==='link-via'){
       const after=projectRef.current;
       if(after!==current.before){
-        setPast(h=>[...h.slice(-39),current.before]);setFuture([]);
+        remember(current.before);
         setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':current.kind==='arm'?'ปรับขาถนนแล้ว · ความยาว/มุมและ Road Link ใช้ geometry เดียวกัน':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
       }
     }
