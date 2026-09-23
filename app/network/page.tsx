@@ -6,10 +6,11 @@ import './style.css';
 import MapBackground,{BASEMAP_OPTIONS,MAP_REFERENCE_STORAGE,mapReferenceDefaults,restoreMapReference,type MapBasemap,type MapReference} from '../junction/map-background';
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
+import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import NetworkScene3D from './network-scene3d';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,insertLinkVia,junctionById,linkIssues,linkLength,linkPoints,moveJunction,moveLinkVia,portKey,
-  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,updateJunctionArmBasics,updateJunctionArmGeometry,type NetworkProject,type PortRef,type WorldPoint
+  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'delete';
@@ -30,7 +31,7 @@ const tools:[Tool,string,typeof MousePointer2][]=[
 
 export default function NetworkWorkspace(){
   const [project,setProject]=useState<NetworkProject>(createNetworkProject),[selection,setSelection]=useState<NetworkSelection>({kind:'junction',id:'J-1'}),
-    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedArm,setSelectedArm]=useState<number|null>(null),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),
+    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedArm,setSelectedArm]=useState<number|null>(null),[selectedDirection,setSelectedDirection]=useState<Direction>('incoming'),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[view,setView]=useState<'2d'|'3d'>('2d');
@@ -52,6 +53,8 @@ export default function NetworkWorkspace(){
   const selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
     selectedLink=selection?.kind==='link'?project.links.find(l=>l.id===selection.id):undefined,
     selectedArmData=selectedJunction&&selectedArm!==null&&selectedJunction.design.enabled[selectedArm]?selectedJunction.design.arms[selectedArm]:undefined,
+    selectedSection=selectedArmData?sectionFor(selectedArmData,selectedDirection):undefined,
+    selectedPockets=selectedArmData?pocketsFor(selectedArmData,selectedDirection):undefined,
     selectedIssues=selectedLink?linkIssues(project,selectedLink):[];
 
   function setProjectNow(next:NetworkProject){projectRef.current=next;setProject(next);}
@@ -59,10 +62,10 @@ export default function NetworkWorkspace(){
     if(next===before)return;
     setPast(h=>[...h.slice(-39),before]);setFuture([]);setProjectNow(next);
   }
-  function undo(){const previous=past.at(-1);if(!previous)return;setFuture(f=>[projectRef.current,...f.slice(0,39)]);setPast(p=>p.slice(0,-1));setProjectNow(previous);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedLinkVertex(null);}
-  function redo(){const next=future[0];if(!next)return;setPast(p=>[...p.slice(-39),projectRef.current]);setFuture(f=>f.slice(1));setProjectNow(next);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedLinkVertex(null);}
+  function undo(){const previous=past.at(-1);if(!previous)return;setFuture(f=>[projectRef.current,...f.slice(0,39)]);setPast(p=>p.slice(0,-1));setProjectNow(previous);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}
+  function redo(){const next=future[0];if(!next)return;setPast(p=>[...p.slice(-39),projectRef.current]);setFuture(f=>f.slice(1));setProjectNow(next);setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
-  function choose(next:Tool){setTool(next);if(next!=='link')setPendingPort(null);if(next!=='select'){setSelectedArm(null);setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ของทางแยกต้นทาง แล้วคลิก port ปลายทาง':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='delete'?'คลิกวัตถุแล้วกดลบ หรือกด Delete':'เลือกวัตถุ · ลากจุดกลาง Junction เพื่อย้ายทั้งทางแยก');}
+  function choose(next:Tool){setTool(next);if(next!=='link')setPendingPort(null);if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ของทางแยกต้นทาง แล้วคลิก port ปลายทาง':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='delete'?'คลิกวัตถุแล้วกดลบ หรือกด Delete':'เลือกวัตถุ · ลากจุดกลาง Junction เพื่อย้ายทั้งทางแยก');}
   function fit(){
     const b=projectBounds(project),center={x:b.x+b.w/2,y:b.y+b.h/2},next=clampZoom(Math.min(4.5,250/Math.max(b.w,b.h)*.88));
     setPan(center);setZoom(next);
@@ -78,7 +81,7 @@ export default function NetworkWorkspace(){
     if(tool==='junction'){
       const before=projectRef.current,result=addJunction(before,point(e));commit(result.project,before);setSelection({kind:'junction',id:result.junction.id});choose('select');setNotice('สร้าง Junction instance แล้ว · ลากจุดกลางเพื่อจัดตำแหน่ง');return;
     }
-    if(tool==='select'){setSelection(null);setSelectedArm(null);setSelectedLinkVertex(null);}
+    if(tool==='select'){setSelection(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}
   }
   function movePointer(e:React.PointerEvent<SVGSVGElement>){
     const current=drag.current;if(!current)return;
@@ -122,10 +125,10 @@ export default function NetworkWorkspace(){
     svg.current?.setPointerCapture(e.pointerId);
   }
   function selectArm(id:string,armId:number){
-    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · ลากจุดปลายเพื่อยืด/หด/หมุน หรือปรับค่าที่ Inspector');
+    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · ลากจุดปลายเพื่อยืด/หด/หมุน หรือปรับค่าที่ Inspector');
   }
   function startArmMove(id:string,armId:number,e:React.PointerEvent<SVGCircleElement>){
-    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);drag.current={kind:'arm',id,armId,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
+    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');drag.current={kind:'arm',id,armId,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
   }
   function editSelectedArm(patch:Parameters<typeof updateJunctionArmBasics>[3]){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmBasics(before,selectedJunction.id,selectedArm,patch);
@@ -135,6 +138,25 @@ export default function NetworkWorkspace(){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmGeometry(before,selectedJunction.id,selectedArm,angle,length);
     if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับมุม/ความยาวขาถนนแล้ว');
   }
+  function editSelectedSection(patch:Parameters<typeof updateJunctionArmSection>[4]){
+    if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmSection(before,selectedJunction.id,selectedArm,selectedDirection,patch);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับหน้าตัด'+(selectedDirection==='incoming'?'ขาเข้า':'ขาออก')+'แล้ว');
+  }
+  function editSelectedPocket(side:'left'|'right',patch:Parameters<typeof updateJunctionArmPocket>[5]){
+    if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmPocket(before,selectedJunction.id,selectedArm,selectedDirection,side,patch);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับเลนเสริม'+(side==='left'?'ริมทาง':'ชิดเกาะกลาง')+'แล้ว');
+  }
+  function toggleBand(type:Band['type']){
+    if(!selectedSection)return;
+    const found=selectedSection.bands.find(b=>b.type===type);
+    if(found){editSelectedSection({bands:selectedSection.bands.filter(b=>b.id!==found.id)});return;}
+    const used=new Set(selectedSection.bands.map(b=>b.id));let n=1;while(used.has('network-'+type+'-'+n))n++;
+    const width=type==='bike'?1.5:type==='buffer'?0.5:type==='motorcycle'?1.2:1;
+    editSelectedSection({bands:[...selectedSection.bands,{id:'network-'+type+'-'+n,type,width}]});
+  }
+  function updateBand(id:string,patch:Partial<Band>){
+    if(!selectedSection)return;editSelectedSection({bands:selectedSection.bands.map(b=>b.id===id?{...b,...patch}:b)});
+  }
   function startLinkVertexMove(id:string,index:number,e:React.PointerEvent<SVGCircleElement>){
     if(tool!=='select')return;setSelection({kind:'link',id});setSelectedLinkVertex(index);drag.current={kind:'link-via',id,index,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
   }
@@ -142,22 +164,22 @@ export default function NetworkWorkspace(){
     if(!next)return;
     if(tool==='delete'){
       const before=projectRef.current,after=next.kind==='junction'?removeJunction(before,next.id):removeLink(before,next.id);
-      commit(after,before);setSelection(null);setSelectedArm(null);setSelectedLinkVertex(null);return;
+      commit(after,before);setSelection(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);return;
     }
     const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id);
-    setSelection(next);setSelectedArm(null);if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
+    setSelection(next);setSelectedArm(null);setSelectedDirection('incoming');if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
   }
   function selectPort(ref:PortRef){
     if(tool!=='link')return;
-    if(!pendingPort){setPendingPort(ref);setSelection({kind:'junction',id:ref.junctionId});setSelectedArm(ref.armId);setNotice('เลือกต้นทาง '+portKey(ref)+' แล้ว · เลือก port ของทางแยกปลายทาง');return;}
+    if(!pendingPort){setPendingPort(ref);setSelection({kind:'junction',id:ref.junctionId});setSelectedArm(ref.armId);setSelectedDirection('incoming');setNotice('เลือกต้นทาง '+portKey(ref)+' แล้ว · เลือก port ของทางแยกปลายทาง');return;}
     const before=projectRef.current,result=connectPorts(before,pendingPort,ref);
     if(result.error){setNotice(result.error);if(portKey(pendingPort)===portKey(ref))setPendingPort(null);return;}
-    commit(result.project,before);setPendingPort(null);setSelectedArm(null);setSelection(result.link?{kind:'link',id:result.link.id}:null);choose('select');setNotice('เชื่อม Road Link แล้ว · ปลาย Link ผูกกับ Junction ports แบบ semantic');
+    commit(result.project,before);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelection(result.link?{kind:'link',id:result.link.id}:null);choose('select');setNotice('เชื่อม Road Link แล้ว · ปลาย Link ผูกกับ Junction ports แบบ semantic');
   }
   function deleteSelection(){
     if(!selection)return;const before=projectRef.current,after=selection.kind==='junction'?removeJunction(before,selection.id):removeLink(before,selection.id);commit(after,before);setSelection(null);setSelectedArm(null);setSelectedLinkVertex(null);
   }
-  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setSelectedArm(null);setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
+  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
 
   return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteSelection();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
