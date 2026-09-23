@@ -148,7 +148,7 @@ export function updateLinkSectionProfile(project:NetworkProject,id:string,mode:L
 export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
   if(!a||!b)return[{kind:'missing-port',message:'Road Link อ้างถึง arm/port ที่ไม่มีอยู่'}];
-  const out:LinkIssue[]=[],linear=link.sectionProfile.mode==='linear';
+  const out:LinkIssue[]=[],linear=link.sectionProfile.mode==='linear'&&linkLinearTransitionPossible(project,link);
   if(a.forwardLanes!==b.forwardLanes||a.backwardLanes!==b.backwardLanes)out.push({
     kind:'lane-count',
     message:`จำนวนเลนปลาย Link ไม่ตรงกัน · ไป ${a.forwardLanes}→${b.forwardLanes} / กลับ ${a.backwardLanes}→${b.backwardLanes} · ต้องกำหนด transition ก่อนใช้เป็น concept สุดท้าย`
