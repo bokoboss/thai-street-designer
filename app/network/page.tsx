@@ -33,12 +33,20 @@ export default function NetworkWorkspace(){
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[view,setView]=useState<'2d'|'3d'>('2d');
-  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project);
+  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false);
 
   useEffect(()=>{projectRef.current=project;},[project]);
-  useEffect(()=>{try{localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);setProject(restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)));setMapReference(restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)));}catch{}},[]);
-  useEffect(()=>{try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
-  useEffect(()=>{try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
+  useEffect(()=>{
+    let active=true;
+    try{
+      localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);
+      const restoredProject=restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE));
+      queueMicrotask(()=>{if(!active)return;storageReady.current=true;setProject(restoredProject);setMapReference(restoredMap);});
+    }catch{storageReady.current=true;}
+    return()=>{active=false;};
+  },[]);
+  useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
 
   const selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
     selectedLink=selection?.kind==='link'?project.links.find(l=>l.id===selection.id):undefined,
@@ -124,7 +132,7 @@ export default function NetworkWorkspace(){
   }
   function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
 
-  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteSelection();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();}}}>
+  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteSelection();if(e.key==='Escape'){setPendingPort(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
       <div className="network-header-actions"><button onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset demo</button></div>
