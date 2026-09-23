@@ -7,6 +7,7 @@ import MapBackground,{BASEMAP_OPTIONS,MAP_REFERENCE_STORAGE,mapReferenceDefaults
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
+import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import {
@@ -166,6 +167,27 @@ export default function NetworkWorkspace(){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmPocket(before,selectedJunction.id,selectedArm,selectedDirection,side,patch);
     if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับเลนเสริม'+(side==='left'?'ริมทาง':'ชิดเกาะกลาง')+'แล้ว');
   }
+  function editFromNetworkSection(s:Selection,value:number,currentWidth:number){
+    if(!selectedJunction)return;
+    const before=projectRef.current,junction=junctionById(before,selectedJunction.id),arm=junction?.design.arms[s.arm];
+    if(!junction||!arm)return;
+    const direction=s.direction??selectedDirection;
+    let result:{project:NetworkProject;error:string|null};
+    if(s.kind==='median'){
+      result=updateJunctionArmBasics(before,junction.id,s.arm,{median:Math.max(0,Math.min(12,arm.median+(value-currentWidth)))});
+    }else if(s.kind==='sidewalk'){
+      result=updateJunctionArmSection(before,junction.id,s.arm,direction,{walk:value});
+    }else if(s.kind==='band'){
+      const section=sectionFor(arm,direction);
+      result=updateJunctionArmSection(before,junction.id,s.arm,direction,{bands:section.bands.map(b=>b.id===s.id?{...b,width:value}:b)});
+    }else if(s.kind==='lane'){
+      result=updateJunctionArmSection(before,junction.id,s.arm,direction,{width:value});
+    }else if(s.kind==='pocket'){
+      result=updateJunctionArmPocket(before,junction.id,s.arm,direction,s.side??'right',{width:value});
+    }else return;
+    if(result.error){setNotice(result.error);return;}
+    commit(result.project,before);setSelection({kind:'junction',id:junction.id});setSelectedArm(s.arm);setSelectedDirection(direction);setNotice('ปรับหน้าตัดจาก Cross-section แล้ว');
+  }
   function toggleBand(type:Band['type']){
     if(!selectedSection)return;
     const found=selectedSection.bands.find(b=>b.type===type);
@@ -247,7 +269,7 @@ export default function NetworkWorkspace(){
           <div className="network-zoom" hidden={view==='3d'}><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
           <div className="network-status">{notice}</div>
         </div>
-        {view==='2d'&&<NetworkSectionDock project={project} junction={selectedJunction} armId={selectedArm} link={selectedLink}/>}
+        {view==='2d'&&<NetworkSectionDock project={project} junction={selectedJunction} armId={selectedArm} link={selectedLink} onJunctionEdit={editFromNetworkSection}/>}
       </section>
       <aside className="network-inspector">
         <div className="network-inspector-title"><span>NETWORK OBJECT</span><b>{selectedJunction?.name??selectedLink?.name??'ยังไม่ได้เลือกวัตถุ'}</b></div>
