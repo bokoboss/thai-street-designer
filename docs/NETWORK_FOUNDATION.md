@@ -155,6 +155,8 @@ Primary-workspace interactions:
 - open a selected Junction in the detailed schema-v6 editor for advanced treatments
 - save advanced detail edits back into the same Network project automatically
 
+Undo/redo history is transaction-safe. The Network editor keeps synchronous history refs alongside React render state so commit → Undo → Redo does not depend on render timing. Drag gestures commit once on pointer-up, and grouped field edits enter history as one editing transaction.
+
 The product direction is Network-first. The separate Junction route remains useful for standalone concept figures and advanced focused editing, but it is not a second geometry engine.
 
 Legacy detailed workspaces remain available during migration:
@@ -181,6 +183,34 @@ Temporary detail-edit bridge:
 `thai-street-network-edit-junction-v1`
 
 The detailed junction editor reads the selected Junction design and writes changes back to the same Network project.
+
+## Network 3D status
+
+Network 3D is now a hybrid resolved scene rather than a single projected screenshot:
+
+- RoadLink pavement is resolved directly from the same section geometry used by the 2D Link renderer;
+- median, semantic edge bands and sidewalks become explicit scene polygons with small vertical offsets;
+- RoadLinks are removed from the flat plan texture before the resolved surfaces are drawn, preventing duplicate corridor geometry;
+- the reference map remains a ground texture;
+- Junction geometry is still carried by the plan surface in this phase.
+
+The next 3D architecture step is therefore narrow: replace the remaining flat Junction plan surface with resolved Junction polygons from the existing Design-v6 / Slip-v6 engines. It must not introduce a second Junction geometry implementation.
+
+## Quality gates
+
+The branch quality workflow now checks all of the following before acceptance:
+
+1. geometry/model/workspace regressions;
+2. TypeScript;
+3. lint;
+4. both production build paths — Next/Vercel and original Sites/vinext;
+5. a real headless-Chrome Network workflow through the rendered UI.
+
+The browser acceptance flow covers:
+
+`fresh project → create Junction → connect semantic ports → add/drag PI → create one-lane mismatch → configure curb lane transition → resolve section profile → Undo → Redo → reload → verify persisted state → inspect RoadLink section dock → open resolved Network 3D`
+
+The browser gate uses Chrome DevTools Protocol directly from Node and does not add Playwright/Puppeteer to the application dependency graph. It saves a screenshot artifact on success and diagnostic screenshot/state artifacts on failure.
 
 ## Parallel / frontage roads
 
@@ -214,13 +244,16 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-1. Visually accept RoadLink schema-v2 curves, lane transitions and the Network section/profile dock in the deployed workspace.
-2. Add direct contextual editing from the Network section/profile dock, while keeping the Inspector as the precision editor.
-3. Add stronger browser-level interaction/E2E coverage for create → connect → curve → transition → undo/redo → reload.
-4. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
-5. Fold remaining useful Road Alignment Lab operations into the root workspace, then retire it as a separate user-facing mode.
-6. Research and model frontage / parallel roads using Corridor ownership.
-7. Only then expand toward ramps/interchanges or more complex corridor topology.
+Completed foundation milestones now include RoadLink schema-v2 curves, explicit one-lane transitions, the contextual section/profile dock, direct Junction section editing, transaction-safe Undo/Redo, browser-level acceptance coverage, and resolved RoadLink 3D surfaces.
+
+Next priorities:
+
+1. Resolve Junction and Slip geometry directly into the Network 3D scene so 2D / section / 3D share geometry ownership end-to-end.
+2. Expand browser visual regression to a small set of deterministic golden scenarios, including Slip, auxiliary lanes and asymmetric sections.
+3. Fold the remaining useful Road Alignment Lab operations into the root Network workspace, then retire it as a separate user-facing mode.
+4. Profile and stabilize interaction/render performance for networks around 20–50 Junctions.
+5. Research and model frontage / parallel roads using Corridor ownership.
+6. Only then expand toward ramps/interchanges or more complex corridor topology.
 
 ## Non-goals
 
