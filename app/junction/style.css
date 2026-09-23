@@ -65,3 +65,7 @@
 .section-components .separator{background:#aeb8a8;color:#31473c;min-width:7px}
 
 .section-components .slip-accel{background:#455d68}.section-components .separator{background:#aeb8a8;color:#31473c;min-width:7px}
+
+.map-place-results{display:grid;gap:5px;margin:6px 0 10px;max-height:190px;overflow:auto}
+.map-place-results button{display:block;width:100%;padding:8px 9px;text-align:left;border:1px solid #d6e0e4;border-radius:7px;background:#fff;color:#334b57;font-size:11px;line-height:1.35}
+.map-place-results button:hover{border-color:#7896a4;background:#f5f9fa}
