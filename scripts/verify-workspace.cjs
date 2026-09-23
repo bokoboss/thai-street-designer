@@ -71,5 +71,10 @@ assert(networkSource.includes('data-network-link-preview')&&networkSource.includ
 assert(networkDrawingSource.includes('data-network-port-state')&&networkDrawingSource.includes("sameJunction?'invalid'"),'semantic ports must expose source/target/occupied/invalid connection states');
 assert(networkSource.includes('searchMapPlaces')&&networkSource.includes('ค้นหาสถานที่ / ถนน / ทางแยก'),'Network workspace must support named-place lookup instead of requiring raw lat/lng entry');
 assert(networkSource.includes('beginFieldEdit')&&networkSource.includes('finishFieldEdit'),'Inspector text/numeric edits must be grouped into one undo transaction per editing gesture');
+assert(networkSource.includes('updateLinkViaRadius')&&networkSource.includes('CURVE AT PI'),'RoadLink PI radius must be directly editable in the root Network workspace');
+assert(networkSource.includes('updateLinkSectionProfile')&&networkSource.includes('Linear geometric transition'),'RoadLink section continuity mode must be explicit and user-controlled');
+assert(networkSource.includes('linkControlPoints')&&networkSource.includes('R0 = polyline เดิม'),'PI insertion/editing must operate on control geometry while rendering uses the resolved alignment');
+assert(networkSource.includes('Network schema v2'),'root workspace must expose the migrated Network schema v2 state');
+assert(networkDrawingSource.includes('variableParallel')&&networkDrawingSource.includes('data-network-link-median'),'RoadLink renderer must consume variable-width resolved geometry instead of a constant max-width stroke');
 
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
