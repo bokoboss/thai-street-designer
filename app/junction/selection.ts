@@ -104,7 +104,7 @@ export function designShapes(d:Design,es=edges(d)){
 
       add(
         {kind:'sidewalk',arm:i,direction:dir},
-        strip(x=>resolvedSidewalkEdges(d,i,dir,x,es).inner,x=>resolvedSidewalkEdges(d,i,dir,x,es).outer),
+        strip(x=>resolvedSidewalkEdges(d,i,dir,x,es,slips).inner,x=>resolvedSidewalkEdges(d,i,dir,x,es,slips).outer),
         10
       );
 
@@ -123,8 +123,8 @@ export function designShapes(d:Design,es=edges(d)){
       c.bands.forEach((b,k)=>add(
         {kind:'band',arm:i,direction:dir,id:b.id},
         strip(
-          x=>resolvedBandEdge(d,i,dir,x,k,0,es),
-          x=>resolvedBandEdge(d,i,dir,x,k,1,es)
+          x=>resolvedBandEdge(d,i,dir,x,k,0,es,slips),
+          x=>resolvedBandEdge(d,i,dir,x,k,1,es,slips)
         ),
         15
       ));
