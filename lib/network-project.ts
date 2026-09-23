@@ -31,6 +31,7 @@ export type LinkEndSection={
   walk:number;
 };
 export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'missing-port';message:string};
+export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
 
@@ -112,7 +113,7 @@ export function rotateJunction(project:NetworkProject,id:string,rotation:number)
   const normalized=((rotation%360)+360)%360;
   return{...project,junctions:project.junctions.map(j=>j.id===id?{...j,rotation:normalized}:j)};
 }
-export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef){
+export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):ConnectPortsResult{
   if(portKey(from)===portKey(to))return{project,error:'เลือก port เดิมซ้ำ'};
   if(from.junctionId===to.junctionId)return{project,error:'Road Link รุ่น foundation เชื่อมคนละทางแยกเท่านั้น'};
   if(!armForPort(project,from)||!armForPort(project,to))return{project,error:'ไม่พบ arm/port ที่เลือก'};
