@@ -60,6 +60,9 @@ assert(networkSource.includes('updateJunctionArmBasics')&&networkSource.includes
 assert(networkSource.includes('updateJunctionArmSection')&&networkSource.includes('STREET SECTION')&&networkSource.includes('องค์ประกอบริมทาง'),'Network Inspector must edit shared directional street sections');
 assert(networkSource.includes('updateJunctionArmPocket')&&networkSource.includes('AUXILIARY / TURN LANE'),'Network Inspector must expose contextual Pocket/receiving-lane edits through the shared Junction engine');
 assert(networkSource.includes('ทางข้ามคนเดินเท้า')&&networkSource.includes('สัญญาณไฟจราจร'),'Network Inspector must expose common Junction control edits without leaving the workspace');
+assert(networkSource.includes('setJunctionArmEnabled')&&networkSource.includes('ขาทางแยก'),'Network root must create three-leg/four-leg Junction topology without a separate editor');
+assert(networkDrawingSource.includes('onDoubleClick')&&networkSource.includes('insertLinkVertexAt'),'RoadLink alignment must support direct double-click insertion in the primary workspace');
+assert(networkSource.includes("if(selection?.kind==='link'&&selectedLinkVertex!==null)"),'Delete must remove a selected RoadLink vertex before deleting the whole Link');
 assert(networkDrawingSource.includes('data-network-link-band')&&networkDrawingSource.includes('data-network-link-sidewalk'),'Road Link rendering must carry resolved edge-zone composition instead of dropping Complete Streets bands');
 assert(networkSource.includes("view==='2d'&&<MapBackground"),'live MapLibre 2D layer must unmount in 3D to avoid duplicate map rendering');
 assert(networkSource.includes('Offset X (m)')&&networkSource.includes('ล็อกตำแหน่งแผนที่'),'Network map controls must support persistent reference alignment without mutating engineering geometry');
