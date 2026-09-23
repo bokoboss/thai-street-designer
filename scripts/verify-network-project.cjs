@@ -20,6 +20,13 @@ const link=p.links[0],a=p.junctions[0],b=p.junctions[1],points=n.linkPoints(p,li
 assert.deepEqual(points[0],n.portPoint(a,0));
 assert.deepEqual(points.at(-1),n.portPoint(b,2));
 assert.equal(n.linkIssues(p,link).length,0,'default linked junctions must be section-compatible');
+const directional=structuredClone(p),dirA=directional.junctions[0].design.arms[0],dirB=directional.junctions[1].design.arms[2];
+dirA.outgoingSection={width:3.5,walk:2,bands:[]};dirB.incomingSection={width:3.5,walk:2,bands:[]};
+assert.equal(n.linkEndSection(directional,directional.links[0],'from').forwardLaneWidth,3.5);
+assert.equal(n.linkEndSection(directional,directional.links[0],'to').forwardLaneWidth,3.5);
+assert(!n.linkIssues(directional,directional.links[0]).some(v=>v.kind==='lane-width'),'matching directional section widths must remain compatible');
+dirB.incomingSection={width:3.25,walk:2,bands:[]};
+assert(n.linkIssues(directional,directional.links[0]).some(v=>v.kind==='lane-width'),'Road Link width review must use directional Junction sections, not Arm.width');
 const overview1=n.junctionDisplayDesign(a),overview2=n.junctionDisplayDesign(a);
 assert.equal(overview1,overview2,'unchanged Junction instance should reuse cached overview Design');
 assert.equal(overview1.showNames,false);assert.equal(overview1.showScale,false);assert.equal(overview1.trees,false);assert.equal(overview1.lights,false);
@@ -75,4 +82,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, move/rotate transforms, semantic ports, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, detail round-trip and cleanup');
+console.log('PASS network project: instances, move/rotate transforms, semantic ports, directional section widths, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, detail round-trip and cleanup');
