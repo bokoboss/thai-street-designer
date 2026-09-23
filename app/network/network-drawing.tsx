@@ -3,7 +3,7 @@ import Drawing from '../junction/drawing';
 import {path} from '../junction/geometry';
 import {parallel} from '@/lib/alignment';
 import {
-  activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkPoints,portOccupied,portPoint,worldJunctionRotation,
+  activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
 } from '@/lib/network-project';
 
@@ -60,7 +60,7 @@ export function JunctionInstanceDrawing({
       onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'move'}}/>
     {selected&&<g pointerEvents="none"><circle cx={junction.x} cy={junction.y} r="10" fill="none" stroke="#0f7d77" strokeWidth=".25" strokeDasharray="1.2 1.2"/></g>}
     {activeArmIds(junction).map(armId=>{
-      const p=portPoint(junction,armId),ref={junctionId:junction.id,armId},used=portOccupied((null as unknown) as NetworkProject,ref);
+      const p=portPoint(junction,armId),ref={junctionId:junction.id,armId};
       return <circle key={armId} data-network-port={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r={linkMode?2.4:1.5}
         fill={linkMode?'#ffffff':'#8ba2aa'} stroke={linkMode?'#0e8a82':'white'} strokeWidth=".55"
         pointerEvents={linkMode?'auto':'none'} onPointerDown={e=>{e.stopPropagation();onPort(ref);}} style={{cursor:linkMode?'crosshair':undefined}}/>;
