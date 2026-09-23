@@ -37,7 +37,7 @@ function lanePieces(count:number,width:number,prefix:string){
 }
 
 function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
-  const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(()=>resolveLinkSectionGeometry(project,link)?.total/2??0);
+  const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(()=>(resolveLinkSectionGeometry(project,link)?.total??0)/2);
   if(!resolved)return <section className="network-section-dock"><div className="network-section-empty">Road Link นี้ยังไม่มี resolved section geometry</div></section>;
   const s=Math.max(0,Math.min(resolved.total,station)),median=sample(resolved.stations,resolved.medianHalf,s)*2,
     fw=sample(resolved.stations,resolved.forwardLaneWidth,s),bw=sample(resolved.stations,resolved.backwardLaneWidth,s),
