@@ -50,6 +50,7 @@ export async function searchMapPlaces(query:string):Promise<MapPlace[]>{
   if(q.length<2)return [];
   const key='thai-street-geocode:'+q.toLocaleLowerCase('th');
   try{
+    if(typeof sessionStorage==='undefined')throw new Error('no session storage');
     const cached=sessionStorage.getItem(key);
     if(cached){
       const parsed=JSON.parse(cached);
@@ -66,7 +67,7 @@ export async function searchMapPlaces(query:string):Promise<MapPlace[]>{
   const raw=await response.json() as {display_name?:string;lat?:string;lon?:string}[];
   const places=raw.map(v=>({label:v.display_name??'',lat:Number(v.lat),lng:Number(v.lon)}))
     .filter(v=>v.label&&Number.isFinite(v.lat)&&Number.isFinite(v.lng)).slice(0,5);
-  try{sessionStorage.setItem(key,JSON.stringify(places));}catch{}
+  try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(key,JSON.stringify(places));}catch{}
   return places;
 }
 
