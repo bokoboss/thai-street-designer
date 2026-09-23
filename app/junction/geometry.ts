@@ -70,6 +70,14 @@ else {const p={x:mouths[i],y:hi},q=rotate({x:mouths[next],y:nlo},gap);base=join(
 const outer=base,island:P[]=[];
 const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island};});}
 
+const edgeCache=new WeakMap<Design,Edge[]>();
+export function cachedEdges(d:Design):Edge[]{
+ const hit=edgeCache.get(d);
+ if(hit)return hit;
+ const value=edges(d);
+ edgeCache.set(d,value);
+ return value;
+}
 export function armTreatmentOrigins(d:Design,i:number,segments=edges(d)){
  const a=d.arms[i],mouth=armMouth(d,i),incoming=stopPosition(a,mouth),previous=segments.find(e=>e.next===i),
  normalOutgoing=departurePosition(a,mouth,d.type==='roundabout',d.type==='roundabout'?roundSettings(d):roundDefaults()),
