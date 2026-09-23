@@ -11,6 +11,7 @@ type Props={
   junction?:JunctionInstance;
   armId:number|null;
   link?:RoadLink;
+  onJunctionEdit?:(selection:Selection,value:number,currentWidth:number)=>void;
 };
 
 const bandLabel:Record<string,string>={bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'};
@@ -71,7 +72,7 @@ function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
   </section>;
 }
 
-export default function NetworkSectionDock({project,junction,armId,link}:Props){
+export default function NetworkSectionDock({project,junction,armId,link,onJunctionEdit}:Props){
   const [x,setX]=useState(0);
   useEffect(()=>{
     if(!junction||armId===null)return;
@@ -80,8 +81,9 @@ export default function NetworkSectionDock({project,junction,armId,link}:Props){
   },[junction?.id,armId,junction?.design]);
   if(link)return <LinkSection project={project} link={link}/>;
   if(junction&&armId!==null){
-    const selection:Selection={kind:'approach',arm:armId};
-    return <div className="network-section-junction"><CrossSection d={junction.design} id={armId} x={x} onX={setX} selection={selection} onSelect={()=>{}}/></div>;
+    const selection:Selection={kind:'approach',arm:armId},mouth=armMouth(junction.design,armId),start=sectionStart(junction.design,armId),
+      fallback=mouth+Math.min(Math.max(start,10),Math.max(start,junction.design.arms[armId].length-mouth-1)),effectiveX=x>mouth?x:fallback;
+    return <div className="network-section-junction"><CrossSection d={junction.design} id={armId} x={effectiveX} onX={setX} selection={selection} onSelect={()=>{}} onEdit={onJunctionEdit}/></div>;
   }
   return null;
 }
