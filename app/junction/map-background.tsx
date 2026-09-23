@@ -295,7 +295,7 @@ async function renderRasterTexture(reference:MapReference,extent:number,size:num
   const jobs:Promise<void>[]=[];
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
     const wx=wrap(tx,n),worldX=(tx*TILE-center.x)*mpp+reference.offsetX,worldY=(ty*TILE-center.y)*mpp+reference.offsetY;
-    jobs.push(loadRasterImage(tileUrl(z,wx,ty)).then(image=>{if(!image)return;ctx.drawImage(image,(worldX+extent)*worldToPixel,(worldY+extent)*worldToPixel,tileWorld*worldToPixel,tileWorld*worldToPixel);}));
+    jobs.push(loadRasterImage(tileUrl(z,wx,ty)).then(image=>{if(!image)return;ctx.drawImage(image,(worldX-(worldCenter.x-extent))*worldToPixel,(worldY-(worldCenter.y-extent))*worldToPixel,tileWorld*worldToPixel,tileWorld*worldToPixel);}));
   }
   await Promise.all(jobs);
   return canvas;
