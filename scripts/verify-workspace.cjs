@@ -80,5 +80,6 @@ assert(networkSource.includes('NetworkSectionDock'),'root Network workspace must
 const networkSectionSource=fs.readFileSync('app/network/network-section-dock.tsx','utf8');
 assert(networkSectionSource.includes('CrossSection')&&networkSectionSource.includes('resolveLinkSectionGeometry'),'Network section dock must reuse Junction section semantics and resolved RoadLink geometry');
 assert(networkSectionSource.includes('Station')&&networkSectionSource.includes('Resolved geometric transition'),'RoadLink section dock must expose station-based continuity visualization');
+assert(networkSource.includes('editFromNetworkSection')&&networkSource.includes('onJunctionEdit={editFromNetworkSection}'),'Junction section dock edits must route through the shared Network/Junction update functions');
 
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
