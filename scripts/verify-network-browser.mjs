@@ -116,14 +116,17 @@ try{
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
+  await clickText('.network-header-actions button','Fit');await sleep(180);
 
   await clickSelector('button[title="ทางแยก"]');
   const plan=await rectBySelector('svg[data-network-plan="true"]');
   await clickAt({x:plan.x+plan.w*.25,y:plan.y-plan.h*.27});
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'create J-3');
+  await clickText('.network-header-actions button','Fit');await sleep(180);
 
   await clickSelector('button[title="เชื่อมถนน"]');
-  await clickSelector('[data-network-port="J-2:1"]');
+  await clickSelector('[data-network-port="J-1:1"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-port="J-1:1"]')?.getAttribute('data-network-port-state')==='source'`),'source port state');
   await clickSelector('[data-network-port="J-3:3"]');
   await waitFor(async()=>{const p=await project();return p?.links?.length===2&&p.links.some(l=>l.id==='L-2');},'connect L-2');
 
@@ -167,6 +170,20 @@ try{
 
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   console.log('PASS browser acceptance: create → connect → PI drag → lane transition → undo/redo → reload → section dock → resolved 3D');
+}catch(error){
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    try{
+      const diagnostic=await new Promise((resolve,reject)=>{
+        const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression:`({notice:document.querySelector('.network-status')?.textContent,ports:[...document.querySelectorAll('[data-network-port]')].map(e=>({key:e.getAttribute('data-network-port'),state:e.getAttribute('data-network-port-state')})),storage:localStorage.getItem('thai-street-network-project-v1')})`,returnByValue:true}}));
+      });
+      writeFileSync(artifactDir+'/network-browser-diagnostic.json',JSON.stringify(diagnostic.result?.value??diagnostic,null,2));
+      const shot=await new Promise((resolve,reject)=>{
+        const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method:'Page.captureScreenshot',params:{format:'png',captureBeyondViewport:false}}));
+      });
+      writeFileSync(artifactDir+'/network-browser-failure.png',Buffer.from(shot.data,'base64'));
+    }catch{}
+  }
+  throw error;
 }finally{
   shutdown();
   await sleep(200);
