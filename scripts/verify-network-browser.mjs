@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdirSync,rmSync,writeFileSync} from 'node:fs';
+import {createServer} from 'node:net';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 process.chdir(root);
-const port=3017,debugPort=9227,baseUrl=`http://127.0.0.1:${port}/`,artifactDir='artifacts',profileDir='.sites-runtime/chrome-network-acceptance';
+const artifactDir='artifacts',profileDir='.sites-runtime/chrome-network-acceptance';
 mkdirSync(artifactDir,{recursive:true});rmSync(profileDir,{recursive:true,force:true});
 
 function commandPath(names){
@@ -15,6 +16,27 @@ function commandPath(names){
     if(r.status===0&&r.stdout.trim())return r.stdout.trim();
   }
   return null;
+}
+function freePort(){
+  return new Promise((resolve,reject)=>{
+    const server=createServer();server.unref();server.once('error',reject);
+    server.listen(0,'127.0.0.1',()=>{
+      const address=server.address(),port=typeof address==='object'&&address?address.port:0;
+      server.close(error=>error?reject(error):resolve(port));
+    });
+  });
+}
+const port=Number(process.env.TSD_BROWSER_PORT)||await freePort();
+let debugPort=Number(process.env.TSD_CDP_PORT)||await freePort();
+while(debugPort===port)debugPort=await freePort();
+const baseUrl=`http://127.0.0.1:${port}/`,started=Date.now();
+const report={schema:1,status:'running',startedAt:new Date().toISOString(),baseUrl,checkpoints:[],runtimeErrors:[]};
+let checkpoint='boot';
+function mark(name,details={}){
+  checkpoint=name;report.checkpoints.push({name,atMs:Date.now()-started,...details});
+}
+function writeReport(extra={}){
+  writeFileSync(artifactDir+'/network-browser-report.json',JSON.stringify({...report,...extra,currentCheckpoint:checkpoint},null,2));
 }
 async function waitForHttp(url,timeout=45000){
   const until=Date.now()+timeout;
@@ -45,6 +67,7 @@ process.on('SIGINT',()=>{shutdown();process.exit(130);});
 process.on('SIGTERM',()=>{shutdown();process.exit(143);});
 
 try{
+  mark('server-start');
   await waitForHttp(baseUrl);
   const chromePath=process.env.CHROME_BIN||commandPath(['google-chrome','google-chrome-stable','chromium','chromium-browser']);
   assert(chromePath,'Chrome/Chromium is required for browser acceptance');
@@ -62,17 +85,19 @@ try{
   ws.addEventListener('message',event=>{
     const msg=JSON.parse(String(event.data));
     if(msg.id){
-      const p=pending.get(msg.id);if(!p)return;pending.delete(msg.id);
+      const p=pending.get(msg.id);if(!p)return;pending.delete(msg.id);clearTimeout(p.timer);
       if(msg.error)p.reject(new Error(msg.error.message));else p.resolve(msg.result);
       return;
     }
     if(msg.method==='Runtime.exceptionThrown')runtimeErrors.push(msg.params.exceptionDetails?.text??'Runtime exception');
     if(msg.method==='Runtime.consoleAPICalled'&&msg.params.type==='error')runtimeErrors.push('console.error: '+msg.params.args?.map(v=>v.value??v.description??'').join(' '));
   });
-  const send=(method,params={})=>new Promise((resolve,reject)=>{
-    const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));
+  const send=(method,params={},timeout=15000)=>new Promise((resolve,reject)=>{
+    const id=++seq,timer=globalThis.setTimeout(()=>{pending.delete(id);reject(new Error(`CDP timeout after ${timeout} ms: ${method}`));},timeout);
+    pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}));
   });
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await send('Page.navigate',{url:baseUrl});
 
   async function evalValue(expression){
@@ -91,9 +116,6 @@ try{
   async function rectBySelector(selector,index=0){
     return await evalValue(`(()=>{const e=document.querySelectorAll(${JSON.stringify(selector)})[${index}];if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height};})()`);
   }
-  async function rectByText(selector,text,index=0){
-    return await evalValue(`(()=>{const es=[...document.querySelectorAll(${JSON.stringify(selector)})].filter(e=>(e.textContent||'').includes(${JSON.stringify(text)}));const e=es[${index}];if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height};})()`);
-  }
   async function clickAt(p,count=1){
     assert(p&&Number.isFinite(p.x)&&Number.isFinite(p.y),'Missing click target');
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y});
@@ -101,7 +123,6 @@ try{
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x,y:p.y,button:'left',clickCount:count});
   }
   async function clickSelector(selector,index=0){const p=await waitFor(()=>rectBySelector(selector,index),selector);await clickAt(p);}
-  async function clickText(selector,text,index=0){const p=await waitFor(()=>rectByText(selector,text,index),selector+' text '+text);await clickAt(p);}
   async function dragSelector(selector,dx,dy){
     const p=await waitFor(()=>rectBySelector(selector),selector);
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y});
@@ -110,80 +131,103 @@ try{
     await sleep(80);
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1});
   }
+  async function screenshot(name){
+    const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},20000);
+    const bytes=Buffer.from(shot.data,'base64');assert(bytes.length>5000,'Screenshot is unexpectedly small: '+name);
+    writeFileSync(artifactDir+'/'+name,bytes);return bytes.length;
+  }
   const project=()=>evalValue(`(()=>{try{return JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null')}catch{return null}})()`);
+  const projectSummary=p=>({version:p?.version,junctions:p?.junctions?.length??0,links:p?.links?.length??0,link2:p?.links?.find(v=>v.id==='L-2')??null});
 
+  mark('workspace-load');
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'Network workspace load');
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
-  await clickText('.network-header-actions button','Fit');await sleep(180);
+  await clickSelector('[data-network-action="fit"]');await sleep(180);
 
-  await clickSelector('button[title="ทางแยก"]');
+  mark('create-junction');
+  await clickSelector('[data-network-tool="junction"]');
   const plan=await rectBySelector('svg[data-network-plan="true"]');
   await clickAt({x:plan.x+plan.w*.25,y:plan.y-plan.h*.27});
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'create J-3');
-  await clickText('.network-header-actions button','Fit');await sleep(180);
+  await clickSelector('[data-network-action="fit"]');await sleep(180);
 
-  await clickSelector('button[title="เชื่อมถนน"]');
+  mark('connect-link');
+  await clickSelector('[data-network-tool="link"]');
   await clickSelector('[data-network-port="J-1:1"]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-port="J-1:1"]')?.getAttribute('data-network-port-state')==='source'`),'source port state');
   await clickSelector('[data-network-port="J-3:3"]');
   await waitFor(async()=>{const p=await project();return p?.links?.length===2&&p.links.some(l=>l.id==='L-2');},'connect L-2');
 
+  mark('edit-alignment');
   await clickSelector('[data-network-link="L-2"]');
-  await clickText('button','＋ PI / จุดแนว');
+  await clickSelector('[data-network-link-action="add-pi"]');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.via?.length===1;},'add PI');
   const beforeDrag=await project(),beforeVia=beforeDrag.links.find(l=>l.id==='L-2').via[0];
   await dragSelector('[data-link-via="0"]',34,-24);
   await waitFor(async()=>{const p=await project(),v=p?.links?.find(l=>l.id==='L-2')?.via?.[0];return v&&Math.hypot(v.x-beforeVia.x,v.y-beforeVia.y)>1;},'drag PI');
 
+  mark('create-lane-mismatch');
   await clickSelector('[data-network-junction-hit="J-3:3"]');
-  const lanePlus=await waitFor(()=>evalValue(`(()=>{const row=[...document.querySelectorAll('.network-step-row')].find(e=>(e.textContent||'').includes('เลนเข้า'));const b=row?.querySelectorAll('button');if(!b?.length)return null;const r=b[b.length-1].getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height};})()`),'incoming lane plus');
-  await clickAt(lanePlus);
-  await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-3')?.design?.arms?.[3]?.incoming===3;},'lane mismatch edit');
+  const laneBefore=(await project()).junctions.find(j=>j.id==='J-3').design.arms[3].incoming;
+  assert(laneBefore<4,'Golden flow needs room to add one incoming lane');
+  await clickSelector('[data-network-lane-step="incoming-inc"]');
+  await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-3')?.design?.arms?.[3]?.incoming===laneBefore+1;},'lane mismatch edit');
 
+  mark('resolve-section');
   await clickSelector('[data-network-link="L-2"]');
-  await waitFor(()=>evalValue(`!!document.querySelector('.network-lane-transition')`),'lane transition controls');
-  await clickText('.network-lane-transition button','ริมทาง / Curb');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transition-side="forward-curb"]')`),'lane transition controls');
+  await clickSelector('[data-network-transition-side="forward-curb"]');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.forwardLaneTransition?.side==='curb';},'curb lane transition');
-  await evalValue(`(()=>{const s=[...document.querySelectorAll('label')].find(e=>(e.textContent||'').includes('การต่อหน้าตัด'))?.querySelector('select');if(!s)return false;s.value='linear';s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  const sectionEnabled=await evalValue(`!document.querySelector('select[data-network-section-mode="link"]')?.disabled`);
+  assert.equal(sectionEnabled,true,'Resolved section mode should be enabled after explicit lane transition');
+  await evalValue(`(()=>{const s=document.querySelector('select[data-network-section-mode="link"]');if(!s)return false;s.value='linear';s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.mode==='linear';},'resolved section transition');
 
-  await clickText('.network-header-actions button','Undo');
+  mark('undo-redo');
+  await clickSelector('[data-network-action="undo"]');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.mode==='review';},'undo section mode');
-  await waitFor(()=>evalValue(`(()=>{const b=[...document.querySelectorAll('.network-header-actions button')].find(e=>(e.textContent||'').includes('Redo'));return !!b&&!b.disabled;})()`),'Redo enabled after Undo');
-  await clickText('.network-header-actions button','Redo');
+  await waitFor(()=>evalValue(`(()=>{const b=document.querySelector('[data-network-action="redo"]');return !!b&&!b.disabled;})()`),'Redo enabled after Undo');
+  await clickSelector('[data-network-action="redo"]');
   await waitFor(async()=>{const p=await project();return p?.links?.find(l=>l.id==='L-2')?.sectionProfile?.mode==='linear';},'redo section mode');
 
+  mark('reload-persistence');
   const persisted=await project();
   assert.equal(persisted.junctions.length,3);assert.equal(persisted.links.length,2);assert.equal(persisted.links.find(l=>l.id==='L-2').via.length,1);
   await send('Page.reload',{ignoreCache:true});
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload persisted project');
   await waitFor(async()=>{const p=await project(),l=p?.links?.find(v=>v.id==='L-2');return p?.junctions?.length===3&&p?.links?.length===2&&l?.via?.length===1&&l?.sectionProfile?.mode==='linear'&&l?.sectionProfile?.forwardLaneTransition?.side==='curb';},'persistence after reload');
 
+  mark('section-dock');
   await clickSelector('[data-network-link="L-2"]');
-  await waitFor(()=>evalValue(`!!document.querySelector('.network-section-dock')&&document.querySelector('.network-section-dock')?.textContent?.includes('Station')`),'RoadLink section dock');
-  await clickText('.network-view-mode button','3D Overview');
+  await waitFor(()=>evalValue(`!!document.querySelector('[aria-label="Road Link section profile"]')&&document.querySelector('[aria-label="Road Link section profile"]')?.textContent?.includes('Station')`),'RoadLink section dock');
+  const shot2d=await screenshot('network-browser-2d.png');
+
+  mark('resolved-3d');
+  await clickSelector('[data-network-view="3d"]');
   await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
   await sleep(600);
-  const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
-  writeFileSync(artifactDir+'/network-browser-acceptance.png',Buffer.from(shot.data,'base64'));
+  const shot3d=await screenshot('network-browser-3d.png');
 
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
+  const finalProject=await project();
+  report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
+  writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},finalProject:projectSummary(finalProject)});
   console.log('PASS browser acceptance: create → connect → PI drag → lane transition → undo/redo → reload → section dock → resolved 3D');
 }catch(error){
+  report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
     try{
       const diagnostic=await new Promise((resolve,reject)=>{
-        const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression:`({notice:document.querySelector('.network-status')?.textContent,ports:[...document.querySelectorAll('[data-network-port]')].map(e=>({key:e.getAttribute('data-network-port'),state:e.getAttribute('data-network-port-state')})),storage:localStorage.getItem('thai-street-network-project-v1')})`,returnByValue:true}}));
+        const id=++seq,timer=globalThis.setTimeout(()=>{pending.delete(id);reject(new Error('Diagnostic CDP timeout'));},8000);
+        pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression:`({notice:document.querySelector('.network-status')?.textContent,ports:[...document.querySelectorAll('[data-network-port]')].map(e=>({key:e.getAttribute('data-network-port'),state:e.getAttribute('data-network-port-state')})),storage:localStorage.getItem('thai-street-network-project-v1')})`,returnByValue:true}}));
       });
-      writeFileSync(artifactDir+'/network-browser-diagnostic.json',JSON.stringify(diagnostic.result?.value??diagnostic,null,2));
-      const shot=await new Promise((resolve,reject)=>{
-        const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method:'Page.captureScreenshot',params:{format:'png',captureBeyondViewport:false}}));
-      });
-      writeFileSync(artifactDir+'/network-browser-failure.png',Buffer.from(shot.data,'base64'));
+      writeFileSync(artifactDir+'/network-browser-diagnostic.json',JSON.stringify({checkpoint,runtimeErrors,diagnostic:diagnostic.result?.value??diagnostic},null,2));
+      await screenshot('network-browser-failure.png');
     }catch{}
   }
+  writeReport({durationMs:Date.now()-started,error:error instanceof Error?{name:error.name,message:error.message,stack:error.stack}:String(error),serverLogTail:serverLog.slice(-5000)});
   throw error;
 }finally{
   shutdown();

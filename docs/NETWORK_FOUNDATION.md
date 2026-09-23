@@ -210,7 +210,9 @@ The browser acceptance flow covers:
 
 `fresh project → create Junction → connect semantic ports → add/drag PI → create one-lane mismatch → configure curb lane transition → resolve section profile → Undo → Redo → reload → verify persisted state → inspect RoadLink section dock → open resolved Network 3D`
 
-The browser gate uses Chrome DevTools Protocol directly from Node and does not add Playwright/Puppeteer to the application dependency graph. It saves a screenshot artifact on success and diagnostic screenshot/state artifacts on failure.
+The browser gate uses Chrome DevTools Protocol directly from Node and does not add Playwright/Puppeteer to the application dependency graph. Phase 3A hardening adds stable data-contract selectors, per-command CDP timeouts, deterministic viewport sizing, checkpointed JSON diagnostics, and separate 2D / resolved-3D screenshots. Browser artifacts are retained for only 3 days.
+
+To conserve free CI/deployment quotas, feature-branch Quality runs through the pull-request event rather than duplicating both branch-push and PR runs. The audit Pages preview is manual-only and should be dispatched only at meaningful visual checkpoints. Application changes should be batched before moving the branch ref so external Git integrations such as Vercel also see fewer pushes.
 
 ## Parallel / frontage roads
 

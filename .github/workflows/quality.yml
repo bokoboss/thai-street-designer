@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - main
-      - chatgpt/full-engineering-ui-audit
   pull_request:
+    branches:
+      - main
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
@@ -43,3 +44,4 @@ jobs:
           name: network-browser-acceptance
           path: artifacts/network-browser-*
           if-no-files-found: ignore
+          retention-days: 3
