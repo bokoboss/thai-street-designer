@@ -16,7 +16,8 @@
     "build:vercel": "node scripts/run-next.mjs build",
     "dev:vercel": "node scripts/run-next.mjs dev",
     "start:vercel": "node scripts/run-next.mjs start",
-    "test:builds": "node scripts/verify-build-paths.mjs"
+    "test:builds": "node scripts/verify-build-paths.mjs",
+    "build:pages": "TSD_BUILD_TARGET=pages next build"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
