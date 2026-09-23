@@ -25,6 +25,9 @@ const directBefore=n.linkPoints(p,link)[0],direct=n.updateJunctionArmGeometry(p,
 assert.equal(direct.error,null);assert.equal(direct.project.junctions[0].design.arms[0].length,120);
 const directAfter=n.linkPoints(direct.project,direct.project.links[0])[0];assert(Math.hypot(directAfter.x-directBefore.x,directAfter.y-directBefore.y)>20,'stretching an Arm must move the attached Road Link endpoint');
 const laneEdit=n.updateJunctionArmBasics(p,a.id,0,{incoming:3});assert.equal(laneEdit.error,null);assert.equal(laneEdit.project.junctions[0].design.arms[0].incoming,3);assert(n.linkIssues(laneEdit.project,laneEdit.project.links[0]).some(v=>v.kind==='lane-count'),'direct lane editing must reuse Road Link semantic mismatch review');
+const controlEdit=n.updateJunctionArmBasics(p,a.id,0,{crossing:false,signal:false,stop:true});assert.equal(controlEdit.error,null);assert.equal(controlEdit.project.junctions[0].design.arms[0].crossing,false);assert.equal(controlEdit.project.junctions[0].design.arms[0].signal,false);
+const sectionEdit=n.updateJunctionArmSection(p,a.id,0,'incoming',{width:3.5,walk:2.5,bands:[{id:'quick-bike',type:'bike',width:1.5},{id:'quick-buffer',type:'buffer',width:.5}]});assert.equal(sectionEdit.error,null);const sectionArm=sectionEdit.project.junctions[0].design.arms[0];assert.equal(sectionArm.incomingSection.width,3.5);assert.equal(sectionArm.incomingSection.walk,2.5);assert.deepEqual(sectionArm.incomingSection.bands.map(v=>v.type),['bike','buffer']);
+const pocketEdit=n.updateJunctionArmPocket(p,a.id,0,'incoming','right',{lanes:1,length:25,taper:15});assert.equal(pocketEdit.error,null);const pocketArm=pocketEdit.project.junctions[0].design.arms[0];assert.equal(pocketArm.incomingPockets.right.lanes,1);assert.equal(pocketArm.laneMarkings.incomingAux.right.length,1);assert.equal(pocketArm.laneMarkings.incomingAux.right[0],'right');
 const directional=structuredClone(p),dirA=directional.junctions[0].design.arms[0],dirB=directional.junctions[1].design.arms[2];
 dirA.outgoingSection={width:3.5,walk:2,bands:[]};dirB.incomingSection={width:3.5,walk:2,bands:[]};
 assert.equal(n.linkEndSection(directional,directional.links[0],'from').forwardLaneWidth,3.5);
@@ -100,4 +103,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, direct Arm stretch/rotate/basic edits, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
+console.log('PASS network project: instances, direct Arm stretch/rotate/basic/section/pocket edits, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
