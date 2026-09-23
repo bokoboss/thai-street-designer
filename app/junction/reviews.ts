@@ -1,6 +1,7 @@
 import {sectionFor,type Design} from './model';
 import {allocate} from './allocation';
-import {activeIds,armMouth,armTreatmentOrigins} from './geometry';
+import {activeIds,armMouth,armTreatmentOrigins,edges} from './geometry';
+import {resolveStreetSection} from './lane-configuration';
 import {plantingPlan} from './planting';
 import {roundFeedback} from './roundabout';
 import type {Selection} from './selection';
@@ -50,6 +51,27 @@ export function designReviews(d:Design):Review[]{
     }
 
     const slip=d.slips.find(s=>s.fromArm===i);
+    if(slip){
+      const edgeSet=edges(d),g=resolveStreetSection(d,i,armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
+      if(g.conflicts.includes('incoming-curb-treatment-overlap')){
+        out.push({
+          level:'engineering',
+          selection:{kind:'slip',arm:i},
+          message:`${a.name} · Slip auxiliary และเลนเสริมริมทางใช้พื้นที่ขอบทางเดียวกัน — เลือก treatment หลักหรือจัด lane configuration ใหม่ก่อนใช้ภาพ concept`
+        });
+      }
+    }
+    const receivingSlip=d.slips.find(s=>s.toArm===i);
+    if(receivingSlip){
+      const edgeSet=edges(d),g=resolveStreetSection(d,i,armTreatmentOrigins(d,i,edgeSet).outgoing+5,edgeSet);
+      if(g.conflicts.includes('outgoing-curb-treatment-overlap')){
+        out.push({
+          level:'engineering',
+          selection:{kind:'slip',arm:receivingSlip.fromArm},
+          message:`${a.name} · Slip receiving/acceleration และเลนเสริมขาออกริมทางใช้พื้นที่เดียวกัน — ปรับ receiving treatment ก่อนใช้ภาพ concept`
+        });
+      }
+    }
     if(slip?.departure.mode==='acceleration'&&slip.crossing.enabled){
       out.push({
         level:'engineering',
