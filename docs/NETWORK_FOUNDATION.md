@@ -104,14 +104,20 @@ The root workspace is now the Network workspace.
 Primary-workspace interactions:
 
 - create multiple Junction instances
+- switch a Junction between valid three-leg and four-leg topology with guards for linked Arms / Slip references
 - select a Junction by clicking its visible road arms
 - drag the whole Junction instance
 - rotate the whole Junction instance
 - select an Arm and drag its endpoint to stretch/shrink/rotate it
-- edit basic Arm lane counts and median contextually in the Network Inspector
+- edit Arm lane counts and median contextually in the Network Inspector
+- edit incoming/outgoing lane width and sidewalk from the shared directional Section model
+- add/remove/edit semantic edge bands (bike, buffer, shoulder, motorcycle)
+- toggle crossing, signal and stop/yield presentation for the selected Arm
+- add/edit incoming Pocket / outgoing receiving-lane treatments from the shared Pocket model
 - connect arm-to-arm using visible semantic ports
 - attached Links follow moved Junctions and edited Arm endpoints
-- edit Road Link polyline via points
+- edit Road Link polyline via points; double-click a Link to insert a point directly
+- delete a selected Link via point before deleting its owning Link
 - delete Junctions and their owned connections
 - undo / redo
 - align a map reference underneath the network
@@ -172,11 +178,11 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-1. Continue consolidating direct manipulation in the root Network workspace.
-2. Move more common Junction properties into contextual Network Inspector editing while preserving one shared Design v6 engine.
-3. Add explicit Link section-transition semantics.
-4. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
-5. Fold the useful parts of the Road Alignment Lab into the root workspace.
+1. Continue polishing direct manipulation and selection ergonomics in the root Network workspace.
+2. Add explicit Link section-transition semantics instead of only mismatch review.
+3. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
+4. Fold any remaining useful Road Alignment Lab operations into the root workspace, then retire it as a separate user-facing mode.
+5. Keep the standalone Junction route as a focused concept/advanced editor using the same Design v6 engine.
 6. Research and model frontage / parallel roads using Corridor ownership.
 7. Only then expand toward ramps/interchanges or more complex corridor topology.
 
