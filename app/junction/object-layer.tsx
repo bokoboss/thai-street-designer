@@ -1,7 +1,7 @@
 import {useMemo,useState,useRef,useEffect} from 'react';
 import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displayFor} from './model';
 import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from './selection';
-import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,edges} from './geometry';
+import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,edges,type Edge} from './geometry';
 import {designError} from './design-validation';
 import {slipGeometryForArm,slipArcState,slipOffsetAtPoint} from './slip-geometry';
 import {slipForArm,updateSlip} from './slip-model';
