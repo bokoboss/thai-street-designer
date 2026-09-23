@@ -208,6 +208,19 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4D port-facing guardrail
+
+RoadLink creation now checks whether the selected semantic Arm ports actually face the corridor they are being asked to connect:
+
+- the heading from each port toward the other port is compared with that Arm's world heading;
+- up to 60° deviation is a normal target;
+- 60–90° is shown as a caution target because a noticeable approach curve will be required;
+- more than 90° means the other port lies behind at least one Arm, so new connection is blocked instead of generating an immediate U-turn / hairpin;
+- the connection test is derived from Junction placement and Arm headings only; no extra topology state is stored;
+- an existing Link is never deleted if later Junction movement/rotation makes its ports face incorrectly. It remains editable and receives a `port-facing` review issue instead.
+
+This guardrail complements Phase 4C tangent continuity: **tangency fixes the seam; facing validation prevents choosing a topology that inherently requires the road to reverse direction immediately.**
+
 ### Phase 4A contextual direct editing
 
 The Network workspace now treats the Inspector as a precision panel rather than the only editing surface:
@@ -295,7 +308,7 @@ Completed foundation milestones now include RoadLink schema-v2 curves, explicit 
 
 Next priorities:
 
-1. Add 3D presentation polish on top of the resolved geometry: lane markings, arrows and selected roadside furniture without changing geometry ownership.
+1. Add precision interaction aids in the root workspace: Arm angle snapping/alignment guides and a direct Map Align mode.
 2. Expand browser visual regression to a small set of deterministic golden scenarios, including Slip, auxiliary lanes and asymmetric sections.
 3. Fold the remaining useful Road Alignment Lab operations into the root Network workspace, then retire it as a separate user-facing mode.
 4. Profile and stabilize interaction/render performance for networks around 20–50 Junctions.

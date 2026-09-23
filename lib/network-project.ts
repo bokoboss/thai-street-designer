@@ -44,7 +44,8 @@ export type LinkEndSection={
   backwardWalk:number;
   median:number;
 };
-export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'edge-section'|'alignment'|'missing-port';message:string};
+export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'edge-section'|'alignment'|'port-facing'|'missing-port';message:string};
+export type PortConnectionAssessment={distance:number;fromDeviation:number;toDeviation:number;status:'valid'|'caution'|'invalid'};
 export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
 export type NetworkEditResult={project:NetworkProject;error:string|null};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
@@ -206,7 +207,9 @@ export function updateLinkSectionProfile(project:NetworkProject,id:string,mode:L
 export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   const a=linkEndSection(project,link,'from'),b=linkEndSection(project,link,'to');
   if(!a||!b)return[{kind:'missing-port',message:'Road Link อ้างถึง arm/port ที่ไม่มีอยู่'}];
-  const out:LinkIssue[]=[],linear=link.sectionProfile.mode==='linear'&&linkLinearTransitionPossible(project,link);
+  const out:LinkIssue[]=[],linear=link.sectionProfile.mode==='linear'&&linkLinearTransitionPossible(project,link),
+    facing=assessPortConnection(project,link.from,link.to);
+  if(facing?.status==='invalid')out.push({kind:'port-facing',message:`ปลาย Road Link หันออกจากแนวเชื่อมมากเกินไป · FROM ${facing.fromDeviation.toFixed(0)}° / TO ${facing.toDeviation.toFixed(0)}° · หมุน/ย้าย Junction หรือเลือก arm ใหม่`});
   const forwardLaneResolved=linear&&linkLaneTransitionValid(project,link,'forward'),backwardLaneResolved=linear&&linkLaneTransitionValid(project,link,'backward');
   if((a.forwardLanes!==b.forwardLanes&&!forwardLaneResolved)||(a.backwardLanes!==b.backwardLanes&&!backwardLaneResolved))out.push({
     kind:'lane-count',
@@ -231,6 +234,19 @@ export function portOccupied(project:NetworkProject,ref:PortRef,exceptLinkId?:st
   const key=portKey(ref);
   return project.links.some(link=>link.id!==exceptLinkId&&(portKey(link.from)===key||portKey(link.to)===key));
 }
+const angleDifference=(a:number,b:number)=>Math.abs((((a-b)+540)%360)-180);
+export function assessPortConnection(project:NetworkProject,from:PortRef,to:PortRef):PortConnectionAssessment|null{
+  const fromJ=junctionById(project,from.junctionId),toJ=junctionById(project,to.junctionId),a=worldPort(project,from),b=worldPort(project,to);
+  if(!fromJ||!toJ||!a||!b||from.junctionId===to.junctionId)return null;
+  const dx=b.x-a.x,dy=b.y-a.y,distance=Math.hypot(dx,dy);
+  if(distance<1e-6)return{distance,fromDeviation:180,toDeviation:180,status:'invalid'};
+  const heading=(Math.atan2(dy,dx)*180/Math.PI+360)%360,
+    fromDeviation=angleDifference(portHeading(fromJ,from.armId),heading),
+    toDeviation=angleDifference(portHeading(toJ,to.armId),(heading+180)%360),
+    worst=Math.max(fromDeviation,toDeviation),
+    status:PortConnectionAssessment['status']=worst>90?'invalid':worst>60?'caution':'valid';
+  return{distance,fromDeviation,toDeviation,status};
+}
 export function addJunction(project:NetworkProject,point:WorldPoint,design:Design=initial()){
   const ids=[...project.junctions.map(j=>j.id),...project.links.map(l=>l.id)],id=nextId('J',ids);
   const junction:JunctionInstance={id,name:`Junction ${project.junctions.length+1}`,x:point.x,y:point.y,rotation:0,design:copyDesign(design)};
@@ -248,6 +264,8 @@ export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):Con
   if(from.junctionId===to.junctionId)return{project,error:'Road Link รุ่น foundation เชื่อมคนละทางแยกเท่านั้น'};
   if(!armForPort(project,from)||!armForPort(project,to))return{project,error:'ไม่พบ arm/port ที่เลือก'};
   if(portOccupied(project,from)||portOccupied(project,to))return{project,error:'port นี้มี Road Link เชื่อมอยู่แล้ว'};
+  const facing=assessPortConnection(project,from,to);
+  if(!facing||facing.status==='invalid')return{project,error:'เชื่อมไม่ได้ · port อย่างน้อยหนึ่งด้านหันออกจากแนวเชื่อมเกิน 90° · เลือกขาที่หันเข้าหากันหรือจัดตำแหน่ง Junction ใหม่'};
   const ids=[...project.junctions.map(j=>j.id),...project.links.map(l=>l.id)],id=nextId('L',ids);
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[],sectionProfile:{mode:'review'}};
   return{project:{...project,links:[...project.links,link]},link,error:null};
