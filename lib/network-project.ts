@@ -106,8 +106,8 @@ export function linkLength(project:NetworkProject,link:RoadLink){
 }
 export function setLinkVia(project:NetworkProject,id:string,via:(WorldPoint&{radius?:number})[]):NetworkProject{
   const link=project.links.find(l=>l.id===id);if(!link)return project;
-  const candidate:RoadLink={...link,via:via.map(p=>({x:p.x,y:p.y,radius:linkRadius(p.radius)}))},controls=linkControlPoints(project,candidate),resolved=controls.length>=2?smoothAlignment(controls):[];
-  if(controls.length<2||!validAlignment(controls)||!validAlignment(resolved))return project;
+  const candidate:RoadLink={...link,via:via.map(p=>({x:p.x,y:p.y,radius:linkRadius(p.radius)}))},controls=linkControlPoints(project,candidate);
+  if(controls.length<2||!validAlignment(controls))return project;
   return{...project,links:project.links.map(l=>l.id===id?candidate:l)};
 }
 export function insertLinkVia(project:NetworkProject,id:string,index:number,point:WorldPoint){
