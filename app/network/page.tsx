@@ -221,7 +221,7 @@ export default function NetworkWorkspace(){
   function openSelectedJunctionDetail(){
     if(!selectedJunction)return;
     try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(projectRef.current));localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}
-    location.href='junction/?from=network';
+    window.location.assign('junction/?from=network');
   }
   function addSelectedLinkPi(){
     if(!selectedLink)return;
