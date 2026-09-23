@@ -24,6 +24,10 @@ assert.equal(a.station(r.vertices,55).angle,90);
 assert.equal(g.project(r,{x:42,y:15}).distance,2);
 assert(a.validAlignment(r.vertices));
 assert(!a.validAlignment([{x:0,y:0},{x:20,y:0},{x:1,y:1}]));
+const rounded=a.smoothAlignment([{x:0,y:0},{x:40,y:0,radius:10},{x:40,y:30}]);
+assert(rounded.length>6,'radius point must resolve to sampled tangent-arc-tangent geometry');
+assert(!rounded.some(p=>Math.abs(p.x-40)<1e-8&&Math.abs(p.y)<1e-8),'resolved radius must replace the sharp PI with tangent points');
+assert.deepEqual(a.smoothAlignment([{x:0,y:0},{x:40,y:0,radius:0},{x:40,y:30}]),[{x:0,y:0},{x:40,y:0},{x:40,y:30}],'R0 must preserve legacy polyline geometry');
 
 const snap=n.snapEndpoint([r],{x:42,y:31});
 assert.deepEqual(snap,r.b);
@@ -59,4 +63,4 @@ assert.equal(impact.features.incoming.right.requested,3);
 const oppositeSide={...centered,side:-1,t:.5};
 assert.equal(n.pocketIssue(straight,oppositeSide),null);
 
-console.log('PASS polyline stations/projection, bend validation, endpoint snapping, shared node movement and Free Draw shared Auto pocket allocation');
+console.log('PASS polyline stations/projection, radius-resolved tangent arcs, bend validation, endpoint snapping, shared node movement and Free Draw shared Auto pocket allocation');
