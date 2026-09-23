@@ -8,8 +8,11 @@ for(const file of ['allocation.ts','planting.ts','cross-section.ts','roundabout.
 const projectCode=ts.transpileModule(fs.readFileSync('lib/network-project.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
 fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
+const linkGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-link-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
+  .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")');
+fs.writeFileSync('.sites-runtime/network-link-geometry.cjs',linkGeometryCode);
 
-const n=require('../.sites-runtime/network-project.cjs');
+const n=require('../.sites-runtime/network-project.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs');
 
 let p=n.createNetworkProject();
 assert.equal(p.schemaVersion,2);
@@ -107,7 +110,10 @@ transitionArmA.outgoingSection={width:3.5,walk:2.5,bands:[{id:'ta-bike',type:'bi
 assert(n.linkLinearTransitionPossible(transitionProject,transitionLink),'matching lane/band topology must permit geometric section transition');
 assert(n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='lane-width')&&n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='median')&&n.linkIssues(transitionProject,transitionLink).some(v=>v.kind==='edge-section'),'review mode must surface dimensional end mismatches');
 const transitioned=n.updateLinkSectionProfile(transitionProject,transitionLink.id,'linear'),transitionedLink=transitioned.links[0];assert.equal(transitionedLink.sectionProfile.mode,'linear');assert(!n.linkIssues(transitioned,transitionedLink).some(v=>['lane-width','median','edge-section'].includes(v.kind)),'linear profile must resolve dimensional continuity when semantic topology matches');
-const topologyMismatch=structuredClone(transitioned);topologyMismatch.junctions.find(j=>j.id===transitionLink.to.junctionId).design.arms[transitionLink.to.armId].incoming=3;assert(n.linkIssues(topologyMismatch,topologyMismatch.links[0]).some(v=>v.kind==='lane-count'),'lane-count transition remains explicit and cannot be hidden by linear width interpolation');
+const topologyMismatch=structuredClone(transitioned);topologyMismatch.junctions.find(j=>j.id===transitionLink.to.junctionId).design.arms[transitionLink.to.armId].incoming=3;assert(n.linkIssues(topologyMismatch,topologyMismatch.links[0]).some(v=>v.kind==='lane-count'),'lane-count transition remains explicit and cannot be hidden by width interpolation alone');assert(!n.linkLinearTransitionPossible(topologyMismatch,topologyMismatch.links[0]));
+const curbTransition=n.defaultLinkLaneTransition(topologyMismatch,topologyMismatch.links[0],'forward','curb'),curbLink=curbTransition.links[0];assert.equal(curbLink.sectionProfile.forwardLaneTransition.side,'curb');assert(n.linkLinearTransitionPossible(curbTransition,curbLink),'explicit one-lane transition must make Link topology resolvable');assert(!n.linkIssues(curbTransition,curbLink).some(v=>v.kind==='lane-count'),'configured directional lane transition must resolve lane-count review');
+const curbGeometry=lg.resolveLinkSectionGeometry(curbTransition,curbLink);assert(curbGeometry.linear);assert(curbGeometry.laneLines.some(v=>v.id==='forward:curb-extra'),'curb-side lane change must create an outer extra-lane divider only through its transition zone');assert(curbGeometry.laneLines.find(v=>v.id==='forward:curb-extra').offsets.some(v=>v===null),'localized lane taper must not draw its extra divider over the whole Link');
+const medianTransition=n.defaultLinkLaneTransition(topologyMismatch,topologyMismatch.links[0],'forward','median'),medianLink=medianTransition.links[0],medianGeometry=lg.resolveLinkSectionGeometry(medianTransition,medianLink);assert.equal(medianLink.sectionProfile.forwardLaneTransition.side,'median');assert(medianGeometry.laneLines.some(v=>v.id==='forward:median-extra'),'median-side lane change must use a distinct resolved divider profile');
 
 const duplicatePort=structuredClone(removed);duplicatePort.links.push({...duplicatePort.links[0],id:'L-duplicate'});assert.throws(()=>n.normalizeNetworkProject(duplicatePort),/port ซ้ำ/,'duplicate semantic port ownership must be rejected');
 const badTitle=structuredClone(removed);badTitle.title='x'.repeat(121);assert.throws(()=>n.normalizeNetworkProject(badTitle),/ชื่อ Network/);
@@ -116,4 +122,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,2);
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
 const wideBoundsProject=structuredClone(removed),wideJ=wideBoundsProject.junctions[0];wideJ.design.arms[1].incomingSection={width:4.5,walk:5,bands:[{id:'wide-bike',type:'bike',width:3},{id:'wide-shoulder',type:'shoulder',width:4}]};const wideBounds=n.projectBounds(wideBoundsProject);assert(wideBounds.w>=bounds.w&&wideBounds.h>=bounds.h,'fit bounds must include resolved carriageway/edge-zone footprint, not only Junction centers and ports');
-console.log('PASS network project v2: instances, PI radius curves, section continuity profiles, v1 migration, direct Arm edits, semantic ports, Complete Streets continuity, alignment review, persistence and detail round-trip');
+console.log('PASS network project v2: PI radius curves, explicit curb/median lane transitions, localized section geometry, v1 migration, direct Arm edits, semantic ports, Complete Streets continuity and persistence');
