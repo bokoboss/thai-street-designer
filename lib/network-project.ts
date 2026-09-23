@@ -38,7 +38,7 @@ export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1
 
 const rad=(deg:number)=>deg*Math.PI/180;
 const copyDesign=(d:Design):Design=>structuredClone(d);
-const displayDesignCache=new WeakMap<JunctionInstance,Design>();
+const displayDesignCache=new WeakMap<Design,Design>();
 const nextId=(prefix:string,ids:string[])=>{let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;};
 export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)=>enabled?i:-1).filter(i=>i>=0);
 
@@ -54,7 +54,7 @@ export function portPoint(j:JunctionInstance,armId:number):WorldPoint{
   return{x:j.x+Math.cos(angle)*distance,y:j.y+Math.sin(angle)*distance};
 }
 export function junctionDisplayDesign(j:JunctionInstance):Design{
-  const cached=displayDesignCache.get(j);if(cached)return cached;
+  const cached=displayDesignCache.get(j.design);if(cached)return cached;
   const d=copyDesign(j.design);
   d.rotation=0;
   d.showNames=false;
@@ -63,7 +63,7 @@ export function junctionDisplayDesign(j:JunctionInstance):Design{
   d.lights=false;
   d.display={...d.display,grid:false,trees:false,lights:false,dimensions:false,reviews:false,handles:false};
   d.arms=d.arms.map((arm,i)=>({...arm,length:portDistance(j,i)}));
-  displayDesignCache.set(j,d);
+  displayDesignCache.set(j.design,d);
   return d;
 }
 export function worldJunctionRotation(j:JunctionInstance){
