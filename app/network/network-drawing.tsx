@@ -1,7 +1,7 @@
 'use client';
 import Drawing from '../junction/drawing';
 import {path} from '../junction/geometry';
-import {parallel,variableParallel} from '@/lib/alignment';
+import {variableParallel} from '@/lib/alignment';
 import {
   activeArmIds,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
@@ -15,9 +15,6 @@ const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
   return{left,right,total:left+right};
 };
 const bandFill:Record<string,string>={bike:'#467d70',motorcycle:'#526c91',shoulder:'#66727c',buffer:'#899396'};
-function stripPath(ps:{x:number;y:number}[],inner:number,outer:number){
-  return path([...parallel(ps,inner),...parallel(ps,outer).reverse()],true);
-}
 function variableStripPath(ps:{x:number;y:number}[],innerStart:number,innerEnd:number,outerStart:number,outerEnd:number){
   return path([...variableParallel(ps,innerStart,innerEnd),...variableParallel(ps,outerStart,outerEnd).reverse()],true);
 }
