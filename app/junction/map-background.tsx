@@ -225,9 +225,8 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
     setReady(false);setFailed(false);
     loadMapLibre().then(lib=>{
       if(cancelled||!container.current)return;
-      const center=mapCenterForView(reference,view.pan),zoom=mapZoomForViewport(center.lat,view.zoom,pixels);
       const instance=new lib.Map({
-        container:container.current,style,center:[center.lng,center.lat],zoom,bearing:0,pitch:0,
+        container:container.current,style,center:[0,0],zoom:0,bearing:0,pitch:0,
         interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false
       });
       map.current=instance;setReady(true);
