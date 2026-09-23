@@ -50,7 +50,7 @@ export default function NetworkScene3D({
     if(!details.length){setDetailImage(null);return;}
     const ancestors=new Set<Element>();
     for(const detail of details){
-      let parent=detail.parentElement;
+      let parent:Element|null=detail.parentElement;
       while(parent&&parent!==copy){ancestors.add(parent);parent=parent.parentElement;}
     }
     for(const el of [...copy.querySelectorAll('*')]){
