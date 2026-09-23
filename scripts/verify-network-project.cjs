@@ -1,12 +1,12 @@
 const ts=require('typescript'),fs=require('fs'),assert=require('node:assert/strict');
 
-for(const name of ['slip-model','model']){
-  const code=ts.transpileModule(fs.readFileSync('app/junction/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
+for(const file of ['allocation.ts','planting.ts','cross-section.ts','roundabout.ts','slip-model.ts','model.ts','geometry.ts','slip-geometry.ts','design-validation.ts','lane-configuration.ts','arrow-layout.ts']){
+  const code=ts.transpileModule(fs.readFileSync('app/junction/'+file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
     .outputText.replace(/require\("\.\/([a-z-]+)"\)/g,'require("./$1.cjs")');
-  fs.writeFileSync('.sites-runtime/'+name+'.cjs',code);
+  fs.writeFileSync('.sites-runtime/'+file.replace(/\.ts$/,'.cjs'),code);
 }
 const projectCode=ts.transpileModule(fs.readFileSync('lib/network-project.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
-  .outputText.replace(/require\("\.\.\/app\/junction\/model"\)/g,'require("./model.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
+  .outputText.replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
 fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
 
 const n=require('../.sites-runtime/network-project.cjs');
@@ -20,6 +20,11 @@ const link=p.links[0],a=p.junctions[0],b=p.junctions[1],points=n.linkPoints(p,li
 assert.deepEqual(points[0],n.portPoint(a,0));
 assert.deepEqual(points.at(-1),n.portPoint(b,2));
 assert.equal(n.linkIssues(p,link).length,0,'default linked junctions must be section-compatible');
+assert.equal(n.portDistance(a,0),a.design.arms[0].length,'Network port must use the actual semantic Arm length');
+const directBefore=n.linkPoints(p,link)[0],direct=n.updateJunctionArmGeometry(p,a.id,0,a.design.arms[0].angle,120);
+assert.equal(direct.error,null);assert.equal(direct.project.junctions[0].design.arms[0].length,120);
+const directAfter=n.linkPoints(direct.project,direct.project.links[0])[0];assert(Math.hypot(directAfter.x-directBefore.x,directAfter.y-directBefore.y)>20,'stretching an Arm must move the attached Road Link endpoint');
+const laneEdit=n.updateJunctionArmBasics(p,a.id,0,{incoming:3});assert.equal(laneEdit.error,null);assert.equal(laneEdit.project.junctions[0].design.arms[0].incoming,3);assert(n.linkIssues(laneEdit.project,laneEdit.project.links[0]).some(v=>v.kind==='lane-count'),'direct lane editing must reuse Road Link semantic mismatch review');
 const directional=structuredClone(p),dirA=directional.junctions[0].design.arms[0],dirB=directional.junctions[1].design.arms[2];
 dirA.outgoingSection={width:3.5,walk:2,bands:[]};dirB.incomingSection={width:3.5,walk:2,bands:[]};
 assert.equal(n.linkEndSection(directional,directional.links[0],'from').forwardLaneWidth,3.5);
@@ -61,7 +66,7 @@ assert(n.linkIssues(collapsed,collapsed.links[0]).some(v=>v.kind==='alignment'),
 const display=n.junctionDisplayDesign(movedA);
 assert.equal(display.rotation,0);
 assert(display.arms.every((arm,i)=>arm.length===n.portDistance(movedA,i)));
-assert(movedA.design.arms.some(arm=>arm.length>45),'network clipping must remain display-only');
+assert.deepEqual(display.arms.map(arm=>arm.length),movedA.design.arms.map(arm=>arm.length),'Network overview must render the same Arm lengths as the Junction engine');
 
 let result=n.addJunction(p,{x:0,y:140});
 p=result.project;const c=result.junction;
@@ -95,4 +100,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, move/rotate transforms, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
+console.log('PASS network project: instances, direct Arm stretch/rotate/basic edits, semantic ports, directional section widths, Complete Streets edge continuity, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, linked-arm topology guard, detail round-trip and cleanup');
