@@ -145,7 +145,7 @@ export default function NetworkWorkspace(){
       commit(after,before);setSelection(null);return;
     }
     const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id);
-    setSelection(next);if(next.kind==='junction')setSelectedArm(null);else setSelectedArm(null);if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
+    setSelection(next);setSelectedArm(null);if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
   }
   function selectPort(ref:PortRef){
     if(tool!=='link')return;
@@ -177,7 +177,7 @@ export default function NetworkWorkspace(){
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
             <NetworkDrawing project={project} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
-            {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=Math.min(j.design.arms[pendingPort.armId].length,45);return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
+            {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=j.design.arms[pendingPort.armId].length;return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
           </svg>
           <NetworkScene3D project={project} mapReference={mapReference} active={view==='3d'}/>
           <div className="network-zoom" hidden={view==='3d'}><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
@@ -196,7 +196,7 @@ export default function NetworkWorkspace(){
           {selectedArmData&&selectedArm!==null&&<div className="network-arm-editor">
             <div className="network-arm-editor-head"><span>DIRECT ARM EDIT</span><b>{selectedArmData.name}</b></div>
             <p className="network-arm-hint">ลากวงกลมที่ปลายขาบนแผนเพื่อยืด/หดและหมุน ขาที่เชื่อม RoadLink อยู่จะพาปลาย Link ตามไปด้วย</p>
-            <div className="network-coords"><label>มุม (°)<input type="number" min="0" max="359" value={Math.round(selectedArmData.angle)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))editSelectedArmGeometry(n,selectedArmData.length);}}/></label><label>ความยาว (m)<input type="number" min="45" max="400" value={Math.round(selectedArmData.length)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))editSelectedArmGeometry(selectedArmData.angle,n);}}/></label></div>
+            <div className="network-coords"><label>มุม (°)<input key={'angle-'+selectedJunction.id+'-'+selectedArm+'-'+selectedArmData.angle} type="number" min="0" max="359" defaultValue={Math.round(selectedArmData.angle)} onBlur={e=>{const n=Number(e.currentTarget.value);if(Number.isFinite(n))editSelectedArmGeometry(n,selectedArmData.length);}}/></label><label>ความยาว (m)<input key={'length-'+selectedJunction.id+'-'+selectedArm+'-'+selectedArmData.length} type="number" min="45" max="400" defaultValue={Math.round(selectedArmData.length)} onBlur={e=>{const n=Number(e.currentTarget.value);if(Number.isFinite(n))editSelectedArmGeometry(selectedArmData.angle,n);}}/></label></div>
             <div className="network-step-row"><span>เลนเข้า</span><button disabled={selectedArmData.incoming<=0||selectedArmData.incoming+selectedArmData.outgoing<=1} onClick={()=>editSelectedArm({incoming:selectedArmData.incoming-1})}>−</button><b>{selectedArmData.incoming}</b><button disabled={selectedArmData.incoming>=4} onClick={()=>editSelectedArm({incoming:selectedArmData.incoming+1})}>＋</button></div>
             <div className="network-step-row"><span>เลนออก</span><button disabled={selectedArmData.outgoing<=0||selectedArmData.incoming+selectedArmData.outgoing<=1} onClick={()=>editSelectedArm({outgoing:selectedArmData.outgoing-1})}>−</button><b>{selectedArmData.outgoing}</b><button disabled={selectedArmData.outgoing>=4} onClick={()=>editSelectedArm({outgoing:selectedArmData.outgoing+1})}>＋</button></div>
             <div className="network-step-row"><span>เกาะกลาง</span><button disabled={selectedArmData.median<=0} onClick={()=>editSelectedArm({median:Math.max(0,+(selectedArmData.median-.5).toFixed(2))})}>−</button><b>{selectedArmData.median.toFixed(1)} m</b><button disabled={selectedArmData.median>=12} onClick={()=>editSelectedArm({median:Math.min(12,+(selectedArmData.median+.5).toFixed(2))})}>＋</button></div>
