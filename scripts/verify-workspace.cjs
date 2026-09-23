@@ -44,4 +44,10 @@ assert(drawingSource.includes('export default memo(Drawing'),'2D drawing must st
 assert(drawingSource.includes('roadObjects(d,segments,slips)'),'2D roadside rendering must reuse the resolved edge/Slip geometry');
 assert(objectLayerSource.includes('export const ObjectLayer=memo(ObjectLayerImpl'),'object hit layer must stay memoized during viewport-only motion');
 assert(pageSource.includes('baseEdges=cachedEdges(d)'),'workspace must not rebuild junction edges for pan/zoom-only state changes');
+const rootSource=fs.readFileSync('app/page.tsx','utf8'),networkSource=fs.readFileSync('app/network/page.tsx','utf8'),networkDrawingSource=fs.readFileSync('app/network/network-drawing.tsx','utf8'),junctionPageSource=fs.readFileSync('app/junction/page.tsx','utf8');
+assert(rootSource.includes("from './network/page'"),'root app must open the unified Network workspace');
+assert(networkSource.includes('connectPorts')&&networkSource.includes('onJunctionMoveStart'),'network workspace must expose semantic arm-to-arm connection and whole-junction movement');
+assert(networkDrawingSource.includes('junctionDisplayDesign')&&networkDrawingSource.includes('RoadLinkDrawing'),'network renderer must keep junction-local and corridor geometry as separate owners');
+assert(networkSource.includes('NETWORK_EDIT_JUNCTION_STORAGE'),'Network workspace must bridge selected Junction into detailed editing');
+assert(junctionPageSource.includes('updateJunctionDesign')&&junctionPageSource.includes('บันทึกกลับ Network แล้ว'),'junction detail editor must save changes back into NetworkProject');
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
