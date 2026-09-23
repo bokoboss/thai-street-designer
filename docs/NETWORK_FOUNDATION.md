@@ -65,11 +65,18 @@ Attached Road Links follow the transformed ports automatically.
 
 ## Corridor boundary
 
-The network workspace intentionally clips a Junction instance to a short local display length. This is a display boundary only.
+The Network workspace now renders the actual `Design v6 Arm.length` for each Junction arm.
 
-The original `Design v6` arm lengths are retained in the junction design.
+That Arm endpoint is the semantic connection port.
 
-The Road Link is responsible for the corridor between those local port boundaries. This prevents two junctions from each pretending to own the same connecting road.
+The Road Link owns only the corridor between the two referenced Arm endpoints. This gives direct manipulation a clear meaning:
+
+- drag an Arm endpoint → change the same `Arm.angle` / `Arm.length` used by the Junction engine
+- an attached Road Link endpoint follows automatically
+- move the whole Junction → transform all of its ports without mutating local Junction geometry
+- edit Road Link via points → change only the inter-junction corridor alignment
+
+There is no duplicate network-only arm length. The standalone Junction editor and the Network workspace consume the same `Design v6` geometry.
 
 ## Link direction semantics
 
@@ -94,19 +101,25 @@ A future resolver may create an explicit transition treatment, but it must be a 
 
 The root workspace is now the Network workspace.
 
-Foundation interactions:
+Primary-workspace interactions:
 
 - create multiple Junction instances
-- select Junction / Road Link
+- select a Junction by clicking its visible road arms
 - drag the whole Junction instance
 - rotate the whole Junction instance
-- connect arm-to-arm using visible ports
-- attached Links follow moved/rotated ports
+- select an Arm and drag its endpoint to stretch/shrink/rotate it
+- edit basic Arm lane counts and median contextually in the Network Inspector
+- connect arm-to-arm using visible semantic ports
+- attached Links follow moved Junctions and edited Arm endpoints
+- edit Road Link polyline via points
 - delete Junctions and their owned connections
 - undo / redo
-- map reference underneath the network
-- open a selected Junction in the detailed schema-v6 editor
-- save edits back into the Network project automatically
+- align a map reference underneath the network
+- switch to a Network-level 3D overview
+- open a selected Junction in the detailed schema-v6 editor for advanced treatments
+- save advanced detail edits back into the same Network project automatically
+
+The product direction is Network-first. The separate Junction route remains useful for standalone concept figures and advanced focused editing, but it is not a second geometry engine.
 
 Legacy detailed workspaces remain available during migration:
 
@@ -159,12 +172,12 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-1. Stabilize Network schema v1 and interaction.
-2. Add RoadLink alignment editing using the existing Free Draw polyline engine.
+1. Continue consolidating direct manipulation in the root Network workspace.
+2. Move more common Junction properties into contextual Network Inspector editing while preserving one shared Design v6 engine.
 3. Add explicit Link section-transition semantics.
-4. Add Network-level 3D view consuming Junction + Link geometry.
-5. Integrate Road Link detail editing into the same root workspace.
-6. Research and model frontage / parallel roads.
+4. Improve Network 3D from projected-plan foundation toward resolved Junction + Link scene geometry.
+5. Fold the useful parts of the Road Alignment Lab into the root workspace.
+6. Research and model frontage / parallel roads using Corridor ownership.
 7. Only then expand toward ramps/interchanges or more complex corridor topology.
 
 ## Non-goals
