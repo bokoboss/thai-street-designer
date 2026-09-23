@@ -41,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: network-browser-acceptance
-          path: artifacts/network-browser-acceptance.png
+          path: artifacts/network-browser-*
           if-no-files-found: ignore
