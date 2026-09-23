@@ -76,5 +76,9 @@ assert(networkSource.includes('updateLinkSectionProfile')&&networkSource.include
 assert(networkSource.includes('linkControlPoints')&&networkSource.includes('R0 = polyline เดิม'),'PI insertion/editing must operate on control geometry while rendering uses the resolved alignment');
 assert(networkSource.includes('Network schema v2'),'root workspace must expose the migrated Network schema v2 state');
 assert(networkDrawingSource.includes('variableParallel')&&networkDrawingSource.includes('data-network-link-median'),'RoadLink renderer must consume variable-width resolved geometry instead of a constant max-width stroke');
+assert(networkSource.includes('NetworkSectionDock'),'root Network workspace must expose the contextual section/profile dock');
+const networkSectionSource=fs.readFileSync('app/network/network-section-dock.tsx','utf8');
+assert(networkSectionSource.includes('CrossSection')&&networkSectionSource.includes('resolveLinkSectionGeometry'),'Network section dock must reuse Junction section semantics and resolved RoadLink geometry');
+assert(networkSectionSource.includes('Station')&&networkSectionSource.includes('Resolved geometric transition'),'RoadLink section dock must expose station-based continuity visualization');
 
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
