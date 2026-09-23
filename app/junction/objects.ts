@@ -1,6 +1,6 @@
 import {plantingPlan} from './planting';
 import {type Design,displayFor,roadsideFor,sectionFor} from './model';
-import {activeIds,armMouth,edges,rotate,armTurn,armTreatmentOrigins} from './geometry';
+import {activeIds,armMouth,edges,rotate,armTurn,armTreatmentOrigins,type Edge} from './geometry';
 import {slipGeometries,type SlipGeometry} from './slip-geometry';
 import {resolvedSidewalkEdges} from './lane-configuration';
 export type RoadObject={median?:boolean;x:number;y:number;kind:'tree'|'light';angle:number;side:number;height:number;size:number;reach:number;arm:number};
