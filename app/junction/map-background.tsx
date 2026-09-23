@@ -227,7 +227,7 @@ function VectorBasemap({reference,view}:{reference:MapReference;view:{zoom:numbe
   const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
     center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels),
     cameraRef=useRef({center,zoom:cameraZoom});
-  useEffect(()=>{cameraRef.current={center,zoom:cameraZoom};},[center.lat,center.lng,cameraZoom]);
+  useEffect(()=>{cameraRef.current={center:{lat:center.lat,lng:center.lng},zoom:cameraZoom};},[center.lat,center.lng,cameraZoom]);
 
   useEffect(()=>{
     const node=container.current;
