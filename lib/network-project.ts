@@ -166,7 +166,18 @@ export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):Con
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[]};
   return{project:{...project,links:[...project.links,link]},link,error:null};
 }
+export function linkedArmIds(project:NetworkProject,junctionId:string){
+  return [...new Set(project.links.flatMap(link=>[
+    ...(link.from.junctionId===junctionId?[link.from.armId]:[]),
+    ...(link.to.junctionId===junctionId?[link.to.armId]:[])
+  ]))].sort((a,b)=>a-b);
+}
+export function junctionDesignLinkIssue(project:NetworkProject,id:string,design:Design){
+  const disabled=linkedArmIds(project,id).filter(armId=>!design.enabled[armId]);
+  return disabled.length?`บันทึกกลับ Network ไม่ได้: arm ${disabled.map(v=>v+1).join(', ')} ยังมี Road Link เชื่อมอยู่ · ลบ/ย้าย Link ก่อนปิด arm`:null;
+}
 export function updateJunctionDesign(project:NetworkProject,id:string,design:Design):NetworkProject{
+  if(junctionDesignLinkIssue(project,id,design))return project;
   return{...project,junctions:project.junctions.map(j=>j.id===id?{...j,design:copyDesign(design)}:j)};
 }
 export function removeJunction(project:NetworkProject,id:string):NetworkProject{
