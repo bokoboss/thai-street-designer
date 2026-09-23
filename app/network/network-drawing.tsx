@@ -20,8 +20,8 @@ function stripPath(ps:{x:number;y:number}[],inner:number,outer:number){
 }
 
 export function RoadLinkDrawing({
-  project,link,selected,selectedVertex,onSelect,onVertexMoveStart,onVertexSelect
-}:{project:NetworkProject;link:RoadLink;selected:boolean;selectedVertex:number|null;onSelect:()=>void;onVertexMoveStart:(index:number,e:React.PointerEvent<SVGCircleElement>)=>void;onVertexSelect:(index:number)=>void}){
+  project,link,selected,selectedVertex,onSelect,onInsertVertex,onVertexMoveStart,onVertexSelect
+}:{project:NetworkProject;link:RoadLink;selected:boolean;selectedVertex:number|null;onSelect:()=>void;onInsertVertex:(e:React.MouseEvent<SVGGElement>)=>void;onVertexMoveStart:(index:number,e:React.PointerEvent<SVGCircleElement>)=>void;onVertexSelect:(index:number)=>void}){
   const ps=linkPoints(project,link);
   if(ps.length<2)return null;
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),
@@ -45,7 +45,7 @@ export function RoadLinkDrawing({
     from.backwardBands.forEach((band,index)=>{edgePieces.push(<path key={'b-'+index} data-network-link-band={band.type} data-link-side="backward" d={stripPath(ps,-backward,-(backward+band.width))} fill={bandFill[band.type]}/>);backward+=band.width;});
     if(from.backwardWalk>0)edgePieces.push(<path key="b-walk" data-network-link-sidewalk="backward" d={stripPath(ps,-backward,-(backward+from.backwardWalk))} fill="#b9c5cc"/>);
   }
-  return <g data-network-link={link.id} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
+  return <g data-network-link={link.id} onPointerDown={e=>{e.stopPropagation();onSelect();}} onDoubleClick={e=>{e.stopPropagation();onInsertVertex(e);}} style={{cursor:'pointer'}}>
     {edgePieces}
     <path d={center} stroke={selected?'#1c7974':'#9aa8ae'} strokeWidth={roadWidth+1.2} fill="none" strokeLinejoin="round"/>
     <path d={center} stroke="#35424e" strokeWidth={roadWidth} fill="none" strokeLinejoin="round"/>
@@ -107,7 +107,7 @@ export function JunctionInstanceDrawing({
 }
 
 export function NetworkDrawing({
-  project,selection,selectedArm,linkMode,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkVertexMoveStart,onLinkVertexSelect,onPort
+  project,selection,selectedArm,linkMode,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
   project:NetworkProject;
   selection:NetworkSelection;
@@ -118,13 +118,14 @@ export function NetworkDrawing({
   onArmSelect:(junctionId:string,armId:number)=>void;
   onJunctionMoveStart:(id:string,e:React.PointerEvent<SVGCircleElement>)=>void;
   onArmMoveStart:(id:string,armId:number,e:React.PointerEvent<SVGCircleElement>)=>void;
+  onLinkInsertVertex:(id:string,e:React.MouseEvent<SVGGElement>)=>void;
   onLinkVertexMoveStart:(id:string,index:number,e:React.PointerEvent<SVGCircleElement>)=>void;
   onLinkVertexSelect:(index:number)=>void;
   onPort:(ref:PortRef)=>void;
 }){
   const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`]));
   return <g>
-    {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
+    {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }
