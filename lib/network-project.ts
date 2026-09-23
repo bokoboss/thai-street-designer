@@ -206,6 +206,18 @@ export function updateJunctionArmPocket(project:NetworkProject,id:string,armId:n
   const error=designError(design);if(error)return{project,error};
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
+export function setJunctionArmEnabled(project:NetworkProject,id:string,armId:number,enabled:boolean):NetworkEditResult{
+  const junction=junctionById(project,id);if(!junction||armId<0||armId>=junction.design.arms.length)return{project,error:'ไม่พบขาถนนที่เลือก'};
+  if(junction.design.enabled[armId]===enabled)return{project,error:null};
+  if(!enabled){
+    if(linkedArmIds(project,id).includes(armId))return{project,error:'ปิดขานี้ไม่ได้ เพราะยังมี Road Link เชื่อมอยู่ · ลบ/ย้าย Link ก่อน'};
+    if(junction.design.slips.some(s=>s.fromArm===armId||s.toArm===armId))return{project,error:'ปิดขานี้ไม่ได้ เพราะ Slip lane ยังอ้างถึงขานี้ · แก้ Slip ก่อน'};
+    if(junction.design.enabled.filter(Boolean).length<=3)return{project,error:'ทางแยกต้องมีอย่างน้อย 3 ขา'};
+  }
+  const design=copyDesign(junction.design);design.enabled[armId]=enabled;
+  const error=designError(design);if(error)return{project,error};
+  return{project:updateJunctionDesign(project,id,design),error:null};
+}
 export function linkedArmIds(project:NetworkProject,junctionId:string){
   return [...new Set(project.links.flatMap(link=>[
     ...(link.from.junctionId===junctionId?[link.from.armId]:[]),
