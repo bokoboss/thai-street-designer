@@ -52,7 +52,7 @@ export function designReviews(d:Design):Review[]{
 
     const slip=d.slips.find(s=>s.fromArm===i);
     if(slip){
-      const edgeSet=edges(d),origins=armTreatmentOrigins(d,i,edgeSet),g=resolveStreetSection(d,i,origins.incoming+5,edgeSet);
+      const edgeSet=edges(d),g=resolveStreetSection(d,i,slip.approach.mode==='auxiliary'?Math.min(a.length,armMouth(d,i)+slip.approach.storage):armTreatmentOrigins(d,i,edgeSet).incoming+5,edgeSet);
       if(g.conflicts.includes('incoming-curb-treatment-overlap')){
         out.push({
           level:'engineering',
@@ -63,7 +63,7 @@ export function designReviews(d:Design):Review[]{
     }
     const receivingSlip=d.slips.find(s=>s.toArm===i);
     if(receivingSlip){
-      const edgeSet=edges(d),origins=armTreatmentOrigins(d,i,edgeSet),g=resolveStreetSection(d,i,origins.outgoing+5,edgeSet);
+      const edgeSet=edges(d),g=resolveStreetSection(d,i,Math.min(a.length,armMouth(d,i)+12),edgeSet);
       if(g.conflicts.includes('outgoing-curb-treatment-overlap')){
         out.push({
           level:'engineering',
