@@ -7,14 +7,15 @@ import MapBackground,{BASEMAP_OPTIONS,MAP_REFERENCE_STORAGE,mapReferenceDefaults
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
 import {
-  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,junctionById,linkIssues,moveJunction,portKey,
-  projectBounds,removeJunction,removeLink,restoreNetworkProject,rotateJunction,type NetworkProject,type PortRef,type WorldPoint
+  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,insertLinkVia,junctionById,linkIssues,linkLength,linkPoints,moveJunction,moveLinkVia,portKey,
+  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'delete';
 type Drag=
   |{kind:'pan';start:{x:number;y:number};pan:{x:number;y:number}}
   |{kind:'junction';id:string;before:NetworkProject;offset:WorldPoint}
+  |{kind:'link-via';id:string;index:number;before:NetworkProject}
   |null;
 
 const tools:[Tool,string,typeof MousePointer2][]=[
@@ -27,7 +28,7 @@ const tools:[Tool,string,typeof MousePointer2][]=[
 
 export default function NetworkWorkspace(){
   const [project,setProject]=useState<NetworkProject>(createNetworkProject),[selection,setSelection]=useState<NetworkSelection>({kind:'junction',id:'J-1'}),
-    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),
+    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults);
@@ -74,15 +75,21 @@ export default function NetworkWorkspace(){
       const r=e.currentTarget.getBoundingClientRect(),scale=250/zoom/Math.min(r.width,r.height);
       setPan({x:current.pan.x-(e.clientX-current.start.x)*scale,y:current.pan.y-(e.clientY-current.start.y)*scale});return;
     }
-    const p=point(e),next=moveJunction(projectRef.current,current.id,{x:p.x+current.offset.x,y:p.y+current.offset.y});
+    const p=point(e);
+    if(current.kind==='link-via'){
+      const next=moveLinkVia(projectRef.current,current.id,current.index,p);
+      if(next===projectRef.current){setNotice('จุดแนวนี้ทำให้ Link หักกลับ/ตัดตัวเองหรือมีท่อนสั้นเกินไป');return;}
+      setProjectNow(next);return;
+    }
+    const next=moveJunction(projectRef.current,current.id,{x:p.x+current.offset.x,y:p.y+current.offset.y});
     setProjectNow(next);
   }
   function endPointer(e:React.PointerEvent<SVGSVGElement>){
     const current=drag.current;drag.current=null;
     try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
-    if(current?.kind==='junction'){
+    if(current?.kind==='junction'||current?.kind==='link-via'){
       const after=projectRef.current;
-      if(after!==current.before){setPast(h=>[...h.slice(-39),current.before]);setFuture([]);setNotice('ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ');}
+      if(after!==current.before){setPast(h=>[...h.slice(-39),current.before]);setFuture([]);setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');}
     }
   }
   function startJunctionMove(id:string,e:React.PointerEvent<SVGCircleElement>){
@@ -93,13 +100,16 @@ export default function NetworkWorkspace(){
     drag.current={kind:'junction',id,before,offset:{x:junction.x-p.x,y:junction.y-p.y}};
     svg.current?.setPointerCapture(e.pointerId);
   }
+  function startLinkVertexMove(id:string,index:number,e:React.PointerEvent<SVGCircleElement>){
+    if(tool!=='select')return;setSelection({kind:'link',id});setSelectedLinkVertex(index);drag.current={kind:'link-via',id,index,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
+  }
   function selectObject(next:NetworkSelection){
     if(!next)return;
     if(tool==='delete'){
       const before=projectRef.current,after=next.kind==='junction'?removeJunction(before,next.id):removeLink(before,next.id);
       commit(after,before);setSelection(null);return;
     }
-    setSelection(next);
+    setSelection(next);if(next.kind!=='link')setSelectedLinkVertex(null);
   }
   function selectPort(ref:PortRef){
     if(tool!=='link')return;
@@ -130,7 +140,7 @@ export default function NetworkWorkspace(){
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
-            <NetworkDrawing project={project} selection={selection} linkMode={tool==='link'} onSelect={selectObject} onJunctionMoveStart={startJunctionMove} onPort={selectPort}/>
+            <NetworkDrawing project={project} selection={selection} linkMode={tool==='link'} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onJunctionMoveStart={startJunctionMove} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=Math.min(j.design.arms[pendingPort.armId].length,45);return <circle cx={j.x+Math.cos(angle)*d} cy={j.y+Math.sin(angle)*d} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>;})()}
           </svg>
           <div className="network-zoom"><button onClick={()=>zoomAt(.85)}><Plus size={16}/></button><span>{Math.round(zoom*100)}%</span><button onClick={()=>zoomAt(1.18)}><Minus size={16}/></button></div>
@@ -149,6 +159,8 @@ export default function NetworkWorkspace(){
         </section>}
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
+          <div className="network-link-metrics"><span>Alignment <b>{linkLength(project,selectedLink).toFixed(1)} m</b></span><span>Via points <b>{selectedLink.via.length}</b></span></div>
+          <div className="network-inline-actions"><button onClick={()=>{const ps=linkPoints(projectRef.current,selectedLink);let best=0,bestLen=-1;for(let i=0;i<ps.length-1;i++){const len=Math.hypot(ps[i+1].x-ps[i].x,ps[i+1].y-ps[i].y);if(len>bestLen){best=i;bestLen=len;}}const p={x:(ps[best].x+ps[best+1].x)/2,y:(ps[best].y+ps[best+1].y)/2};const before=projectRef.current,next=insertLinkVia(before,selectedLink.id,best,p);if(next!==before){commit(next,before);setSelectedLinkVertex(best);setNotice('เพิ่มจุดแนว Road Link แล้ว · ลากจุดเพื่อปรับ alignment');}}}>＋ จุดแนว</button><button disabled={selectedLinkVertex===null} onClick={()=>{if(selectedLinkVertex===null)return;const before=projectRef.current,next=removeLinkVia(before,selectedLink.id,selectedLinkVertex);if(next!==before){commit(next,before);setSelectedLinkVertex(null);}}}>ลบจุดแนว</button></div>
           <div className="network-link-ends"><span>FROM <b>{portKey(selectedLink.from)}</b></span><span>TO <b>{portKey(selectedLink.to)}</b></span></div>
           {selectedIssues.length?<div className="network-issues">{selectedIssues.map((issue,i)=><p key={i}>! {issue.message}</p>)}</div>:<p className="network-ok">ปลาย Link สอดคล้องกันในระดับ foundation</p>}
           <p className="network-note">Junction เป็นเจ้าของ geometry ใกล้ปากแยก ส่วน Road Link เป็นเจ้าของ corridor ระหว่าง ports. ถ้าปลายสองด้านมี lane/median ไม่เท่ากัน ระบบจะเตือนแทนการสร้าง transition แบบเดาเอง</p>
