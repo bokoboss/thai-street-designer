@@ -10,7 +10,7 @@ import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model'
 import NetworkScene3D from './network-scene3d';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,insertLinkVia,junctionById,linkIssues,linkLength,linkPoints,moveJunction,moveLinkVia,portKey,
-  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,type NetworkProject,type PortRef,type WorldPoint
+  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'delete';
@@ -134,6 +134,12 @@ export default function NetworkWorkspace(){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmBasics(before,selectedJunction.id,selectedArm,patch);
     if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับ '+(result.project.junctions.find(j=>j.id===selectedJunction.id)?.design.arms[selectedArm]?.name??'ขาถนน')+' แล้ว');
   }
+  function toggleJunctionArm(armId:number,enabled:boolean){
+    if(!selectedJunction)return;const before=projectRef.current,result=setJunctionArmEnabled(before,selectedJunction.id,armId,enabled);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);
+    if(!enabled&&selectedArm===armId)setSelectedArm(null);
+    setNotice(enabled?'เปิดขาถนนแล้ว':'เปลี่ยนเป็นทางแยก 3 ขาแล้ว');
+  }
   function editSelectedArmGeometry(angle:number,length:number){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmGeometry(before,selectedJunction.id,selectedArm,angle,length);
     if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ปรับมุม/ความยาวขาถนนแล้ว');
@@ -232,6 +238,7 @@ export default function NetworkWorkspace(){
         {selectedJunction&&<section>
           <p className="network-object-type">Junction Instance · {selectedJunction.id}</p>
           <div className="network-arm-tabs" aria-label="เลือกขาถนน">{selectedJunction.design.enabled.map((enabled,armId)=>enabled?<button key={armId} className={selectedArm===armId?'active':''} onClick={()=>selectArm(selectedJunction.id,armId)}>{selectedJunction.design.arms[armId].name||('Arm '+(armId+1))}</button>:null)}</div>
+          <div className="network-leg-config"><span>ขาทางแยก</span>{selectedJunction.design.enabled.map((enabled,armId)=><label key={armId} className={enabled?'active':''}><input type="checkbox" checked={enabled} onChange={e=>toggleJunctionArm(armId,e.target.checked)}/>{selectedJunction.design.arms[armId].name||('Arm '+(armId+1))}</label>)}</div>
           <label>ชื่อทางแยก<input value={selectedJunction.name} onChange={e=>{const before=projectRef.current,next={...before,junctions:before.junctions.map(j=>j.id===selectedJunction.id?{...j,name:e.target.value}:j)};setProjectNow(next);}}/></label>
           <div className="network-coords"><label>X (m)<input type="number" value={+selectedJunction.x.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:n,y:selectedJunction.y}),before);}}}/></label><label>Y (m)<input type="number" value={+selectedJunction.y.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(moveJunction(before,selectedJunction.id,{x:selectedJunction.x,y:n}),before);}}}/></label></div>
           <label>หมุน Junction ใน world (°)<input type="number" min="0" max="359" step="1" value={Math.round(selectedJunction.rotation)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)){const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,n),before);}}}/></label>
