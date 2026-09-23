@@ -20,6 +20,10 @@ const link=p.links[0],a=p.junctions[0],b=p.junctions[1],points=n.linkPoints(p,li
 assert.deepEqual(points[0],n.portPoint(a,0));
 assert.deepEqual(points.at(-1),n.portPoint(b,2));
 assert.equal(n.linkIssues(p,link).length,0,'default linked junctions must be section-compatible');
+const overview1=n.junctionDisplayDesign(a),overview2=n.junctionDisplayDesign(a);
+assert.equal(overview1,overview2,'unchanged Junction instance should reuse cached overview Design');
+assert.equal(overview1.showNames,false);assert.equal(overview1.showScale,false);assert.equal(overview1.trees,false);assert.equal(overview1.lights,false);
+assert.equal(overview1.display.trees,false);assert.equal(overview1.display.lights,false);
 
 const originalDesign=structuredClone(a.design),oldEnd=points[0],beforeMove=structuredClone(p);
 p=n.moveJunction(p,a.id,{x:a.x+20,y:a.y+15});
@@ -34,6 +38,8 @@ const afterRotate=n.linkPoints(p,p.links[0])[0],movedA=p.junctions.find(j=>j.id=
 assert.equal(movedA.rotation,90);
 assert(Math.hypot(afterRotate.x-movedA.x,afterRotate.y-movedA.y)>40);
 assert.notDeepEqual(afterRotate,beforeRotate,'rotating the Junction instance must move its port and attached Link endpoint');
+const collapsed=n.moveJunction(p,b.id,{x:movedA.x,y:movedA.y});
+assert(n.linkIssues(collapsed,collapsed.links[0]).some(v=>v.kind==='alignment'),'moving Junctions into an invalid Link alignment must be surfaced explicitly');
 
 const display=n.junctionDisplayDesign(movedA);
 assert.equal(display.rotation,0);
@@ -62,8 +68,11 @@ const editedDesign=structuredClone(removed.junctions[0].design);editedDesign.tit
 const editable=structuredClone(removed),editLink=editable.links[0],editPoints=n.linkPoints(editable,editLink),mid={x:(editPoints[0].x+editPoints.at(-1).x)/2,y:(editPoints[0].y+editPoints.at(-1).y)/2+18};const bent=n.insertLinkVia(editable,editLink.id,0,mid);assert.equal(bent.links[0].via.length,1);assert(n.linkLength(bent,bent.links[0])>n.linkLength(editable,editLink));const movedVia=n.moveLinkVia(bent,editLink.id,0,{x:mid.x,y:mid.y+8});assert.equal(movedVia.links[0].via[0].y,mid.y+8);const straightAgain=n.removeLinkVia(movedVia,editLink.id,0);assert.equal(straightAgain.links[0].via.length,0);
 const saved=JSON.stringify(removed),restored=n.restoreNetworkProject(saved);
 assert.deepEqual(restored,removed);
+const oldNetwork=structuredClone(removed);oldNetwork.junctions[0].design.schemaVersion=5;const migratedNetwork=n.normalizeNetworkProject(oldNetwork);assert.equal(migratedNetwork.junctions[0].design.schemaVersion,6,'Network restore must migrate embedded Junction Designs');
+const duplicatePort=structuredClone(removed);duplicatePort.links.push({...duplicatePort.links[0],id:'L-duplicate'});assert.throws(()=>n.normalizeNetworkProject(duplicatePort),/port ซ้ำ/,'duplicate semantic port ownership must be rejected');
+const badTitle=structuredClone(removed);badTitle.title='x'.repeat(121);assert.throws(()=>n.normalizeNetworkProject(badTitle),/ชื่อ Network/);
 assert.equal(n.restoreNetworkProject('{bad').schemaVersion,1);
 
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
-console.log('PASS network project: instances, move/rotate transforms, semantic ports, linked corridor ownership, mismatch review, persistence, Free Draw link alignment, detail round-trip and cleanup');
+console.log('PASS network project: instances, move/rotate transforms, semantic ports, cached lightweight overview, alignment review, embedded Design migration, persistence, Free Draw link alignment, detail round-trip and cleanup');
