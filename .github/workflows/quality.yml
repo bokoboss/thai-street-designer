@@ -34,3 +34,12 @@ jobs:
         run: pnpm lint
       - name: Sites and Vercel production builds
         run: pnpm test:builds
+      - name: Network browser acceptance
+        run: pnpm test:browser
+      - name: Upload browser acceptance screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-browser-acceptance
+          path: artifacts/network-browser-acceptance.png
+          if-no-files-found: ignore
