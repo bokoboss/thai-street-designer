@@ -39,7 +39,8 @@ export default function NetworkWorkspace(){
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[view,setView]=useState<'2d'|'3d'>('2d'),
-    [linkCursor,setLinkCursor]=useState<WorldPoint|null>(null),[mapQuery,setMapQuery]=useState(''),[mapPlaces,setMapPlaces]=useState<MapPlace[]>([]),[mapSearching,setMapSearching]=useState(false);
+    [linkCursor,setLinkCursor]=useState<WorldPoint|null>(null),[mapQuery,setMapQuery]=useState(''),[mapPlaces,setMapPlaces]=useState<MapPlace[]>([]),[mapSearching,setMapSearching]=useState(false),
+    [inspectorOpen,setInspectorOpen]=useState(true);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]);
 
@@ -217,6 +218,30 @@ export default function NetworkWorkspace(){
   function updateBand(id:string,patch:Partial<Band>){
     if(!selectedSection)return;editSelectedSection({bands:selectedSection.bands.map(b=>b.id===id?{...b,...patch}:b)});
   }
+  function openSelectedJunctionDetail(){
+    if(!selectedJunction)return;
+    try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(projectRef.current));localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}
+    location.href='junction/?from=network';
+  }
+  function addSelectedLinkPi(){
+    if(!selectedLink)return;
+    const before=projectRef.current,link=before.links.find(v=>v.id===selectedLink.id);if(!link)return;
+    const ps=linkControlPoints(before,link);let best=0,bestLen=-1;
+    for(let i=0;i<ps.length-1;i++){const len=Math.hypot(ps[i+1].x-ps[i].x,ps[i+1].y-ps[i].y);if(len>bestLen){best=i;bestLen=len;}}
+    const p={x:(ps[best].x+ps[best+1].x)/2,y:(ps[best].y+ps[best+1].y)/2},next=insertLinkVia(before,link.id,best,p);
+    if(next===before){setNotice('เพิ่ม PI ไม่ได้ — alignment จะสั้นเกินไปหรือหักกลับ');return;}
+    commit(next,before);setSelectedLinkVertex(best);setNotice('เพิ่ม PI แล้ว · ลากจุดบนแผนเพื่อปรับแนว');
+  }
+  function removeSelectedLinkPi(){
+    if(!selectedLink||selectedLinkVertex===null)return;
+    const before=projectRef.current,next=removeLinkVia(before,selectedLink.id,selectedLinkVertex);
+    if(next!==before){commit(next,before);setSelectedLinkVertex(null);setNotice('ลบ PI แล้ว');}
+  }
+  function adjustSelectedViaRadius(delta:number){
+    if(!selectedLink||selectedLinkVertex===null||!selectedVia)return;
+    const before=projectRef.current,nextRadius=Math.max(0,Math.min(200,selectedVia.radius+delta));
+    commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,nextRadius),before);
+  }
   function insertLinkVertexAt(id:string,e:React.MouseEvent<SVGGElement>){
     if(tool!=='select')return;
     const before=projectRef.current,link=before.links.find(v=>v.id===id);if(!link)return;
@@ -263,15 +288,15 @@ export default function NetworkWorkspace(){
   }
   function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
 
-  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setPendingPort(null);setLinkCursor(null);choose('select');}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
+  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setPendingPort(null);setLinkCursor(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
       <div className="network-header-actions"><button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset demo</button></div>
     </header>
-    <div className="network-body">
+    <div className={'network-body'+(!inspectorOpen?' inspector-collapsed':'')} data-network-inspector={inspectorOpen?'open':'closed'}>
       <aside className="network-tools">{tools.map(([id,label,Icon])=><button key={id} data-network-tool={id} className={tool===id?'active':''} title={label} onClick={()=>choose(id)}><Icon size={20}/><span>{label}</span></button>)}</aside>
       <section className="network-canvas-wrap">
-        <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button data-network-view="2d" className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button data-network-view="3d" className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
+        <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button data-network-view="2d" className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button data-network-view="3d" className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><button data-network-action="toggle-inspector" aria-pressed={inspectorOpen} onClick={()=>setInspectorOpen(v=>!v)}>{inspectorOpen?'Hide Inspector':'Inspector'}</button><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
         <div className="network-canvas">
           {view==='2d'&&<MapBackground reference={mapReference} view={{zoom,pan,span:NETWORK_VIEW_SPAN,minZoom:NETWORK_MIN_ZOOM}}/>}
           <svg ref={svg} data-network-plan="true" data-network-view-span={NETWORK_VIEW_SPAN} data-network-zoom={zoom.toFixed(4)} className={view==='3d'?'network-plan-hidden':''} viewBox={[(-NETWORK_VIEW_SPAN/2/zoom+pan.x),(-NETWORK_VIEW_SPAN/2/zoom+pan.y),(NETWORK_VIEW_SPAN/zoom),(NETWORK_VIEW_SPAN/zoom)].join(' ')}
@@ -284,6 +309,34 @@ export default function NetworkWorkspace(){
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=j.design.arms[pendingPort.armId].length,source={x:j.x+Math.cos(angle)*d,y:j.y+Math.sin(angle)*d};return <g data-network-link-preview="true" pointerEvents="none"><circle cx={source.x} cy={source.y} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>{linkCursor&&<path d={`M${source.x} ${source.y}L${linkCursor.x} ${linkCursor.y}`} fill="none" stroke="#e3a33d" strokeWidth=".8" strokeDasharray="3 2"/>}</g>;})()}
           </svg>
           <NetworkScene3D project={project} mapReference={mapReference} active={view==='3d'}/>
+          {view==='2d'&&tool==='select'&&(selectedArmData||selectedLink||selectedJunction)&&<div className="network-context-bar" data-network-context-kind={selectedArmData?'arm':selectedLink?'link':'junction'}>
+            {selectedArmData&&selectedJunction&&selectedArm!==null&&<>
+              <div className="network-context-title"><span>ARM</span><b>{selectedArmData.name}</b></div>
+              <div className="network-context-segment">
+                <button data-network-context-direction="incoming" className={selectedDirection==='incoming'?'active':''} onClick={()=>setSelectedDirection('incoming')}>ขาเข้า</button>
+                <button data-network-context-direction="outgoing" className={selectedDirection==='outgoing'?'active':''} onClick={()=>setSelectedDirection('outgoing')}>ขาออก</button>
+              </div>
+              <div className="network-context-step"><span>IN</span><button data-network-context-action="incoming-dec" disabled={selectedArmData.incoming<=0||selectedArmData.incoming+selectedArmData.outgoing<=1} onClick={()=>editSelectedArm({incoming:selectedArmData.incoming-1})}>−</button><b>{selectedArmData.incoming}</b><button data-network-context-action="incoming-inc" disabled={selectedArmData.incoming>=4} onClick={()=>editSelectedArm({incoming:selectedArmData.incoming+1})}>＋</button></div>
+              <div className="network-context-step"><span>OUT</span><button data-network-context-action="outgoing-dec" disabled={selectedArmData.outgoing<=0||selectedArmData.incoming+selectedArmData.outgoing<=1} onClick={()=>editSelectedArm({outgoing:selectedArmData.outgoing-1})}>−</button><b>{selectedArmData.outgoing}</b><button data-network-context-action="outgoing-inc" disabled={selectedArmData.outgoing>=4} onClick={()=>editSelectedArm({outgoing:selectedArmData.outgoing+1})}>＋</button></div>
+              <div className="network-context-step wide"><span>Median</span><button data-network-context-action="median-dec" disabled={selectedArmData.median<=0} onClick={()=>editSelectedArm({median:Math.max(0,+(selectedArmData.median-.5).toFixed(2))})}>−</button><b>{selectedArmData.median.toFixed(1)} m</b><button data-network-context-action="median-inc" disabled={selectedArmData.median>=12} onClick={()=>editSelectedArm({median:Math.min(12,+(selectedArmData.median+.5).toFixed(2))})}>＋</button></div>
+              <button className="network-context-more" data-network-context-action="junction-detail" onClick={openSelectedJunctionDetail}>Detail</button>
+            </>}
+            {!selectedArmData&&selectedJunction&&<>
+              <div className="network-context-title"><span>JUNCTION</span><b>{selectedJunction.name}</b></div>
+              <button data-network-context-action="rotate-dec" onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation-15),before);}}><RotateCw size={13}/> −15°</button>
+              <button data-network-context-action="rotate-inc" onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation+15),before);}}><RotateCw size={13}/> +15°</button>
+              <button className="network-context-more" data-network-context-action="junction-detail" onClick={openSelectedJunctionDetail}>Detail</button>
+            </>}
+            {selectedLink&&<>
+              <div className="network-context-title"><span>ROAD LINK</span><b>{selectedLink.name}</b><em>{linkLength(project,selectedLink).toFixed(0)} m</em></div>
+              <button data-network-context-action="add-pi" onClick={addSelectedLinkPi}>＋ PI</button>
+              {selectedVia&&selectedLinkVertex!==null&&<>
+                <div className="network-context-step wide"><span>R</span><button data-network-context-action="radius-dec" disabled={selectedVia.radius<=0} onClick={()=>adjustSelectedViaRadius(-5)}>−</button><b>{selectedVia.radius.toFixed(0)} m</b><button data-network-context-action="radius-inc" disabled={selectedVia.radius>=200} onClick={()=>adjustSelectedViaRadius(5)}>＋</button></div>
+                <button className="danger" data-network-context-action="remove-pi" onClick={removeSelectedLinkPi}>ลบ PI</button>
+              </>}
+              {!selectedVia&&<span className="network-context-hint">Double-click Link = เพิ่ม PI</span>}
+            </>}
+          </div>}
           <div className="network-zoom" hidden={view==='3d'} data-network-zoom-value={zoom.toFixed(4)}>
             <button data-network-zoom-action="in" title="Zoom in" onClick={()=>zoomAt(1.18)}><Plus size={16}/></button>
             <button className="network-zoom-value" data-network-zoom-action="reset" title="กลับสู่ 100%" onClick={()=>zoomAt(1/zoom)}>{Math.round(zoom*100)}%</button>
@@ -294,7 +347,7 @@ export default function NetworkWorkspace(){
         </div>
         {view==='2d'&&<NetworkSectionDock project={project} junction={selectedJunction} armId={selectedArm} link={selectedLink} onJunctionEdit={editFromNetworkSection}/>}
       </section>
-      <aside className="network-inspector">
+      <aside className={'network-inspector'+(!inspectorOpen?' is-hidden':'')}>
         <div className="network-inspector-title"><span>NETWORK OBJECT</span><b>{selectedJunction?.name??selectedLink?.name??'ยังไม่ได้เลือกวัตถุ'}</b></div>
         {selectedJunction&&<section>
           <p className="network-object-type">Junction Instance · {selectedJunction.id}</p>
@@ -335,13 +388,13 @@ export default function NetworkWorkspace(){
               <p className="network-arm-hint">ริมทาง = curb-side auxiliary · ชิดเกาะกลาง = median-side auxiliary. ระบบยังใช้ Pocket resolver / allocation / lane marking ชุดเดียวกับ Junction Detail.</p>
             </div>}
           </div>}
-          <button className="network-detail-button" onClick={()=>{try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(projectRef.current));localStorage.setItem(NETWORK_EDIT_JUNCTION_STORAGE,selectedJunction.id);}catch{}location.href='junction/?from=network';}}>แก้รายละเอียดทางแยก</button><p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
+          <button className="network-detail-button" onClick={openSelectedJunctionDetail}>แก้รายละเอียดทางแยก</button><p className="network-note">ตำแหน่ง/rotation เป็น transform ของ Junction instance เท่านั้น ไม่แก้ geometry ภายใน Design v6. Road Link ที่ผูกกับ arm จะตาม port ไปอัตโนมัติ</p>
         </section>}
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
           <div className="network-link-metrics"><span>Resolved alignment <b>{linkLength(project,selectedLink).toFixed(1)} m</b></span><span>PI / via points <b>{selectedLink.via.length}</b></span></div>
-          <div className="network-inline-actions"><button data-network-link-action="add-pi" onClick={()=>{const ps=linkControlPoints(projectRef.current,selectedLink);let best=0,bestLen=-1;for(let i=0;i<ps.length-1;i++){const len=Math.hypot(ps[i+1].x-ps[i].x,ps[i+1].y-ps[i].y);if(len>bestLen){best=i;bestLen=len;}}const p={x:(ps[best].x+ps[best+1].x)/2,y:(ps[best].y+ps[best+1].y)/2};const before=projectRef.current,next=insertLinkVia(before,selectedLink.id,best,p);if(next!==before){commit(next,before);setSelectedLinkVertex(best);setNotice('เพิ่ม PI แล้ว · ค่าเริ่มต้น R25 m และลากจุดเพื่อปรับ alignment ได้');}}}>＋ PI / จุดแนว</button><button data-network-link-action="remove-pi" disabled={selectedLinkVertex===null} onClick={()=>{if(selectedLinkVertex===null)return;const before=projectRef.current,next=removeLinkVia(before,selectedLink.id,selectedLinkVertex);if(next!==before){commit(next,before);setSelectedLinkVertex(null);}}}>ลบ PI</button></div>
-          {selectedVia&&selectedLinkVertex!==null&&<div className="network-link-editor"><div className="network-arm-editor-head"><span>CURVE AT PI {selectedLinkVertex+1}</span><b>R {selectedVia.radius.toFixed(0)} m</b></div><div className="network-step-row"><span>รัศมีโค้ง</span><button disabled={selectedVia.radius<=0} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,Math.max(0,selectedVia.radius-5)),before);}}>−</button><b>{selectedVia.radius.toFixed(0)} m</b><button disabled={selectedVia.radius>=200} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,Math.min(200,selectedVia.radius+5)),before);}}>＋</button></div><button className="network-map-reset" disabled={selectedVia.radius===0} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,0),before);}}>ใช้มุม PI ตรง (R0)</button><p className="network-note">ระบบ clamp รัศมีตามระยะ tangent ที่มีจริง เพื่อไม่ให้โค้งล้ำ PI ข้างเคียง</p></div>}
+          <div className="network-inline-actions"><button data-network-link-action="add-pi" onClick={addSelectedLinkPi}>＋ PI / จุดแนว</button><button data-network-link-action="remove-pi" disabled={selectedLinkVertex===null} onClick={removeSelectedLinkPi}>ลบ PI</button></div>
+          {selectedVia&&selectedLinkVertex!==null&&<div className="network-link-editor"><div className="network-arm-editor-head"><span>CURVE AT PI {selectedLinkVertex+1}</span><b>R {selectedVia.radius.toFixed(0)} m</b></div><div className="network-step-row"><span>รัศมีโค้ง</span><button disabled={selectedVia.radius<=0} onClick={()=>adjustSelectedViaRadius(-5)}>−</button><b>{selectedVia.radius.toFixed(0)} m</b><button disabled={selectedVia.radius>=200} onClick={()=>adjustSelectedViaRadius(5)}>＋</button></div><button className="network-map-reset" disabled={selectedVia.radius===0} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,0),before);}}>ใช้มุม PI ตรง (R0)</button><p className="network-note">ระบบ clamp รัศมีตามระยะ tangent ที่มีจริง เพื่อไม่ให้โค้งล้ำ PI ข้างเคียง</p></div>}
           <div className="network-link-profile"><div className="network-arm-editor-head"><span>SECTION CONTINUITY</span><b>{selectedLink.sectionProfile.mode==='linear'?(linearTransitionPossible?'Linear transition':'Linear · needs topology'):'Review mismatch'}</b></div>
             {(['forward','backward'] as LinkDirection[]).map(direction=>{const counts=linkLaneCounts(project,selectedLink,direction);if(!counts||counts.from===counts.to)return null;const key=direction==='forward'?'forwardLaneTransition':'backwardLaneTransition',transition=selectedLink.sectionProfile[key],possible=linkLaneTransitionPossible(project,selectedLink,direction),label=direction==='forward'?'ทิศไป FROM → TO':'ทิศกลับ TO → FROM';return <div key={direction} className="network-lane-transition"><div className="network-pocket-title"><span>{label}</span><b>{counts.from} → {counts.to} เลน</b></div>{possible?<><div className="network-transition-side"><button data-network-transition-side={direction+'-curb'} className={transition?.side==='curb'?'active':''} onClick={()=>{const before=projectRef.current;commit(defaultLinkLaneTransition(before,selectedLink,direction,'curb'),before);setNotice('กำหนด lane transition ฝั่งริมทางแล้ว');}}>ริมทาง / Curb</button><button data-network-transition-side={direction+'-median'} className={transition?.side==='median'?'active':''} onClick={()=>{const before=projectRef.current;commit(defaultLinkLaneTransition(before,selectedLink,direction,'median'),before);setNotice('กำหนด lane transition ฝั่งชิดเกาะกลางแล้ว');}}>ชิดเกาะกลาง / Median</button></div>{transition&&<><div className="network-step-row"><span>กึ่งกลาง Station</span><button onClick={()=>{const before=projectRef.current;commit(updateLinkLaneTransition(before,selectedLink.id,direction,{...transition,center:Math.max(0,transition.center-10)}),before);}}>−</button><b>{transition.center.toFixed(0)} m</b><button onClick={()=>{const before=projectRef.current;commit(updateLinkLaneTransition(before,selectedLink.id,direction,{...transition,center:transition.center+10}),before);}}>＋</button></div><div className="network-step-row"><span>Transition length</span><button disabled={transition.length<=3} onClick={()=>{const before=projectRef.current;commit(updateLinkLaneTransition(before,selectedLink.id,direction,{...transition,length:Math.max(3,transition.length-5)}),before);}}>−</button><b>{transition.length.toFixed(0)} m</b><button onClick={()=>{const before=projectRef.current;commit(updateLinkLaneTransition(before,selectedLink.id,direction,{...transition,length:transition.length+5}),before);}}>＋</button></div><button className="network-map-reset" onClick={()=>{const before=projectRef.current;commit(updateLinkLaneTransition(before,selectedLink.id,direction,null),before);}}>ล้าง lane transition</button></>}</>:<p className="network-note">รุ่นนี้รองรับ transition ทีละ 1 เลน และต้องมีอย่างน้อย 1 เลนทั้งสองปลาย กรณีนี้ยังคงเป็น unresolved topology.</p>}</div>;})}
             <label>การต่อหน้าตัด<select data-network-section-mode="link" value={selectedLink.sectionProfile.mode} onChange={e=>{const before=projectRef.current,next=updateLinkSectionProfile(before,selectedLink.id,e.target.value as 'review'|'linear');if(next===before&&e.target.value==='linear'){setNotice('ใช้ Linear transition ไม่ได้จนกว่าจะกำหนด lane transition และชนิด edge bands ให้สอดคล้อง');return;}commit(next,before);setNotice(e.target.value==='linear'?'เปิด resolved section transition แล้ว':'กลับเป็นโหมดตรวจ mismatch แล้ว');}}><option value="review">Review mismatch</option><option value="linear" disabled={!linearTransitionPossible}>Resolved geometric transition</option></select></label><p className="network-note">ระบบไม่เดาฝั่งเพิ่ม/ลดเลน ต้องเลือก Curb หรือ Median ต่อทิศทางก่อน ส่วน lane width, median, sidewalk และ band widths จะ interpolate ต่อเนื่องเมื่อเปิด Resolved geometric transition.</p></div>

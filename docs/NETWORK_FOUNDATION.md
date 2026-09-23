@@ -199,6 +199,19 @@ Phase 3B removes the remaining flat Junction plan texture from Network 3D. The N
 
 The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation. Lane markings, arrows and roadside furniture remain presentation layers for a later visual-polish phase; they are intentionally not re-created inside the geometry resolver.
 
+### Phase 4A contextual direct editing
+
+The Network workspace now treats the Inspector as a precision panel rather than the only editing surface:
+
+- the Inspector can be collapsed and restored without leaving the Network workspace;
+- selecting an Arm exposes a compact canvas command bar for incoming/outgoing lane count, median width and direction context;
+- selecting a RoadLink exposes direct PI creation and, when a PI is selected, curve-radius and PI-removal controls;
+- selecting a Junction exposes quick rotation and a direct handoff to Junction Detail;
+- contextual commands call the same Network/Junction update functions as the Inspector, so there is no parallel editing model;
+- the Delete tool remains available but is visually de-emphasized; Delete-key and selected-object deletion remain unchanged.
+
+This establishes the intended interaction hierarchy: **Select → manipulate / quick edit → precision tune in Inspector / section dock**.
+
 ### Phase 3C viewport / camera UX
 
 The Network viewport now uses a wider engineering-scale baseline:
