@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {anchorGround,groundAt,orbitGround} from '../junction/camera3d';
 import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapReference} from '../junction/map-background';
@@ -22,10 +22,18 @@ export default function NetworkScene3D({
   const camera=useRef({yaw,pitch,zoom,pan});
   useEffect(()=>{camera.current={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
 
-  const junctionSurfaceCount=resolveJunctionSceneSurfaces(project).length,
-    linkSurfaceCount=resolveRoadLinkSceneSurfaces(project).length,
-    furnitureFaceCount=resolveJunctionSceneFaces(project).length,
-    bounds=projectBounds(project,45),center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
+  const scene=useMemo(()=>{
+      if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
+      return{
+        junctionSurfaces:resolveJunctionSceneSurfaces(project),
+        linkSurfaces:resolveRoadLinkSceneSurfaces(project),
+        furnitureFaces:resolveJunctionSceneFaces(project),
+        bounds:projectBounds(project,45)
+      };
+    },[active,project]),
+    {junctionSurfaces,linkSurfaces,furnitureFaces,bounds}=scene,
+    junctionSurfaceCount=junctionSurfaces.length,linkSurfaceCount=linkSurfaces.length,furnitureFaceCount=furnitureFaces.length,
+    center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
     mapKey=[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng,mapReference.zoom,mapReference.offsetX,mapReference.offsetY,extent.toFixed(2),center.x.toFixed(2),center.y.toFixed(2)].join(':');
 
   useEffect(()=>{
@@ -90,8 +98,7 @@ export default function NetworkScene3D({
   useEffect(()=>{
     if(!active)return;
     const c=canvas.current,ctx=c?.getContext('2d');if(!c||!ctx)return;
-    const junctionSurfaces=resolveJunctionSceneSurfaces(project),linkSurfaces=resolveRoadLinkSceneSurfaces(project),
-      sceneSurfaces=[...junctionSurfaces,...linkSurfaces],furnitureFaces=resolveJunctionSceneFaces(project),
+    const sceneSurfaces=[...junctionSurfaces,...linkSurfaces],
       ratio=Math.min(window.devicePixelRatio||1,2);c.width=size.w*ratio;c.height=size.h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);
     const w=size.w,h=size.h,a=yaw*Math.PI/180,p=pitch*Math.PI/180,scale=Math.min(w,h)/(extent*2)*zoom;
     const projectPoint=(x:number,y:number,z=0)=>{
@@ -125,7 +132,7 @@ export default function NetworkScene3D({
     for(const face of [...furnitureFaces].sort((u,v)=>depth(u)-depth(v))){
       const ps=face.points.map(q=>projectPoint(q.x,q.y,q.z));ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=face.color;ctx.fill();
     }
-  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,project]);
+  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces]);
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'

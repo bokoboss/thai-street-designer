@@ -11,17 +11,19 @@ import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import {
-  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,moveJunction,moveLinkVia,portKey,
+  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,moveJunction,moveLinkVia,portKey,portPoint,
   projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'delete';
+type ArmDragState={kind:'arm';id:string;armId:number;before:NetworkProject;startPointer:WorldPoint;startEndpoint:WorldPoint};
 type Drag=
   |{kind:'pan';start:{x:number;y:number};pan:{x:number;y:number}}
   |{kind:'junction';id:string;before:NetworkProject;offset:WorldPoint}
-  |{kind:'arm';id:string;armId:number;before:NetworkProject}
+  |ArmDragState
   |{kind:'link-via';id:string;index:number;before:NetworkProject}
   |null;
+type ArmMovePending={drag:ArmDragState;point:WorldPoint;shiftKey:boolean};
 type ArmGuideHint={kind:'angle'|'parallel'|'snap';worldAngle:number;label:string};
 type ArmDragGuide={junctionId:string;armId:number;worldAngle:number;localAngle:number;length:number;snapped:boolean;hint:ArmGuideHint|null};
 
@@ -60,7 +62,7 @@ export default function NetworkWorkspace(){
     [linkCursor,setLinkCursor]=useState<WorldPoint|null>(null),[mapQuery,setMapQuery]=useState(''),[mapPlaces,setMapPlaces]=useState<MapPlace[]>([]),[mapSearching,setMapSearching]=useState(false),
     [inspectorOpen,setInspectorOpen]=useState(true),[armGuide,setArmGuide]=useState<ArmDragGuide|null>(null);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
-    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]);
+    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null);
 
   useEffect(()=>{projectRef.current=project;},[project]);
   useEffect(()=>{
@@ -72,7 +74,8 @@ export default function NetworkWorkspace(){
     }catch{storageReady.current=true;}
     return()=>{active=false;};
   },[]);
-  useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>{if(!storageReady.current||drag.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>()=>{if(armMoveFrame.current!==null)cancelAnimationFrame(armMoveFrame.current);},[]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
 
   const selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
@@ -85,6 +88,7 @@ export default function NetworkWorkspace(){
     linearTransitionPossible=selectedLink?linkLinearTransitionPossible(project,selectedLink):false;
 
   function setProjectNow(next:NetworkProject){projectRef.current=next;setProject(next);}
+  function persistProjectSnapshot(next:NetworkProject){if(!storageReady.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(next));}catch{}}
   function remember(before:NetworkProject){
     const nextPast=[...pastRef.current.slice(-39),before];
     pastRef.current=nextPast;futureRef.current=[];setPast(nextPast);setFuture([]);
@@ -127,6 +131,33 @@ export default function NetworkWorkspace(){
       g={dx:0,dy:0,factor,before:p,after:p,count:2},next=panZoom2D(pan,zoom,g,{x:r.left+r.width/2,y:r.top+r.height/2},Math.min(r.width,r.height),NETWORK_VIEW_SPAN,NETWORK_MIN_ZOOM,NETWORK_MAX_ZOOM);
     setZoom(next.zoom);setPan(next.pan);
   }
+  function applyArmMove(current:ArmDragState,p:WorldPoint,shiftKey:boolean){
+    const junction=junctionById(projectRef.current,current.id);if(!junction)return;
+    const endpoint={x:current.startEndpoint.x+(p.x-current.startPointer.x),y:current.startEndpoint.y+(p.y-current.startPointer.y)},
+      dx=endpoint.x-junction.x,dy=endpoint.y-junction.y,length=Math.hypot(dx,dy),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
+      appliedWorldAngle=shiftKey?normalizeAngle(Math.round(rawWorldAngle/15)*15):rawWorldAngle,
+      localAngle=normalizeAngle(appliedWorldAngle-worldJunctionRotation(junction)),
+      hint:ArmGuideHint|null=shiftKey?{kind:'snap',worldAngle:appliedWorldAngle,label:`SNAP ${appliedWorldAngle.toFixed(0)}°`}:nearestArmGuide(projectRef.current,current.id,current.armId,rawWorldAngle),
+      result=updateJunctionArmGeometry(projectRef.current,current.id,current.armId,+localAngle.toFixed(2),+length.toFixed(2));
+    if(result.error){setNotice(result.error);return;}
+    setProjectNow(result.project);
+    const nextJ=junctionById(result.project,current.id),nextArm=nextJ?.design.arms[current.armId];
+    setArmGuide({junctionId:current.id,armId:current.armId,worldAngle:nextJ&&nextArm?normalizeAngle(worldJunctionRotation(nextJ)+nextArm.angle):appliedWorldAngle,localAngle:nextArm?.angle??+localAngle.toFixed(2),length:nextArm?.length??+length.toFixed(2),snapped:shiftKey,hint});
+  }
+  function scheduleArmMove(current:ArmDragState,p:WorldPoint,shiftKey:boolean){
+    armMovePending.current={drag:current,point:p,shiftKey};
+    if(armMoveFrame.current!==null)return;
+    armMoveFrame.current=requestAnimationFrame(()=>{
+      armMoveFrame.current=null;
+      const pending=armMovePending.current;armMovePending.current=null;
+      if(pending)applyArmMove(pending.drag,pending.point,pending.shiftKey);
+    });
+  }
+  function flushArmMove(){
+    if(armMoveFrame.current!==null){cancelAnimationFrame(armMoveFrame.current);armMoveFrame.current=null;}
+    const pending=armMovePending.current;armMovePending.current=null;
+    if(pending)applyArmMove(pending.drag,pending.point,pending.shiftKey);
+  }
   function canvasDown(e:React.PointerEvent<SVGSVGElement>){
     if(e.button===1||tool==='pan'){drag.current={kind:'pan',start:{x:e.clientX,y:e.clientY},pan};e.currentTarget.setPointerCapture(e.pointerId);return;}
     if(tool==='junction'){
@@ -147,29 +178,20 @@ export default function NetworkWorkspace(){
       if(next===projectRef.current){setNotice('จุดแนวนี้ทำให้ Link หักกลับ/ตัดตัวเองหรือมีท่อนสั้นเกินไป');return;}
       setProjectNow(next);return;
     }
-    if(current.kind==='arm'){
-      const junction=junctionById(projectRef.current,current.id);if(!junction)return;
-      const dx=p.x-junction.x,dy=p.y-junction.y,length=Math.hypot(dx,dy),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
-        appliedWorldAngle=e.shiftKey?normalizeAngle(Math.round(rawWorldAngle/15)*15):rawWorldAngle,
-        localAngle=normalizeAngle(appliedWorldAngle-worldJunctionRotation(junction)),
-        hint:ArmGuideHint|null=e.shiftKey?{kind:'snap',worldAngle:appliedWorldAngle,label:`SNAP ${appliedWorldAngle.toFixed(0)}°`}:nearestArmGuide(projectRef.current,current.id,current.armId,rawWorldAngle),
-        result=updateJunctionArmGeometry(projectRef.current,current.id,current.armId,+localAngle.toFixed(2),+length.toFixed(2));
-      if(result.error){setNotice(result.error);return;}
-      setProjectNow(result.project);
-      setArmGuide({junctionId:current.id,armId:current.armId,worldAngle:appliedWorldAngle,localAngle:+localAngle.toFixed(2),length:+length.toFixed(2),snapped:e.shiftKey,hint});
-      return;
-    }
+    if(current.kind==='arm'){scheduleArmMove(current,p,e.shiftKey);return;}
     const next=moveJunction(projectRef.current,current.id,{x:p.x+current.offset.x,y:p.y+current.offset.y});
     setProjectNow(next);
   }
   function endPointer(e:React.PointerEvent<SVGSVGElement>){
-    const current=drag.current;drag.current=null;setArmGuide(null);
+    const current=drag.current;
+    if(current?.kind==='arm'){armMovePending.current={drag:current,point:point(e),shiftKey:e.shiftKey};flushArmMove();}
+    drag.current=null;setArmGuide(null);
     try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
     if(current?.kind==='junction'||current?.kind==='arm'||current?.kind==='link-via'){
       const after=projectRef.current;
       if(after!==current.before){
-        remember(current.before);
-        setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':current.kind==='arm'?'ปรับขาถนนแล้ว · ความยาว/มุมและ Road Link ใช้ geometry เดียวกัน':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
+        remember(current.before);persistProjectSnapshot(after);
+        setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':current.kind==='arm'?'ปรับขาถนนแล้ว · ลากได้จากทั้ง Arm และ Road Link ตาม port อัตโนมัติ':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
       }
     }
   }
@@ -181,17 +203,20 @@ export default function NetworkWorkspace(){
     svg.current?.setPointerCapture(e.pointerId);
   }
   function selectArm(id:string,armId:number){
-    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · ลากจุดปลายเพื่อยืด/หด/หมุน หรือปรับค่าที่ Inspector');
+    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · ลากได้จากตัวแขนหรือ grip ที่ปลาย · Shift = snap 15°');
   }
-  function startArmMove(id:string,armId:number,e:React.PointerEvent<SVGCircleElement>){
+  function startArmMove(id:string,armId:number,e:React.PointerEvent<SVGElement>){
     if(tool!=='select')return;
-    const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];
-    setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');drag.current={kind:'arm',id,armId,before:projectRef.current};
-    if(junction&&arm){
-      const worldAngle=normalizeAngle(worldJunctionRotation(junction)+arm.angle);
-      setArmGuide({junctionId:id,armId,worldAngle,localAngle:arm.angle,length:arm.length,snapped:false,hint:nearestArmGuide(projectRef.current,id,armId,worldAngle)});
-    }
-    svg.current?.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(!junction||!arm)return;
+    if(armMoveFrame.current!==null){cancelAnimationFrame(armMoveFrame.current);armMoveFrame.current=null;}armMovePending.current=null;
+    const startPointer=point(e),startEndpoint=portPoint(junction,armId);
+    setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);
+    drag.current={kind:'arm',id,armId,before:projectRef.current,startPointer,startEndpoint};
+    const worldAngle=normalizeAngle(worldJunctionRotation(junction)+arm.angle);
+    setArmGuide({junctionId:id,armId,worldAngle,localAngle:arm.angle,length:arm.length,snapped:false,hint:nearestArmGuide(projectRef.current,id,armId,worldAngle)});
+    setNotice(arm.name+' · กำลังลากแบบ direct manipulation · Shift = snap 15°');
+    try{svg.current?.setPointerCapture(e.pointerId);}catch{}
   }
   function editSelectedArm(patch:Parameters<typeof updateJunctionArmBasics>[3]){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmBasics(before,selectedJunction.id,selectedArm,patch);
@@ -329,12 +354,12 @@ export default function NetworkWorkspace(){
         <div className="network-canvas">
           {view==='2d'&&<MapBackground reference={mapReference} view={{zoom,pan,span:NETWORK_VIEW_SPAN,minZoom:NETWORK_MIN_ZOOM}}/>}
           <svg ref={svg} data-network-plan="true" data-network-view-span={NETWORK_VIEW_SPAN} data-network-zoom={zoom.toFixed(4)} className={view==='3d'?'network-plan-hidden':''} viewBox={[(-NETWORK_VIEW_SPAN/2/zoom+pan.x),(-NETWORK_VIEW_SPAN/2/zoom+pan.y),(NETWORK_VIEW_SPAN/zoom),(NETWORK_VIEW_SPAN/zoom)].join(' ')}
-            onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer}
+            onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer} onLostPointerCapture={endPointer}
             onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.88:1.14,{x:e.clientX,y:e.clientY});}}>
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
-            <NetworkDrawing project={project} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
+            <NetworkDrawing project={project} zoom={zoom} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/>
             {armGuide&&(()=>{const junction=junctionById(project,armGuide.junctionId);if(!junction)return null;const a=armGuide.worldAngle*Math.PI/180,reach=Math.max(140,armGuide.length+70),end={x:junction.x+Math.cos(a)*armGuide.length,y:junction.y+Math.sin(a)*armGuide.length},hint=armGuide.hint,hintA=(hint?.worldAngle??armGuide.worldAngle)*Math.PI/180;return <g data-network-arm-guide={armGuide.junctionId+':'+armGuide.armId} data-network-arm-snap={armGuide.snapped?'true':'false'} data-network-arm-guide-kind={hint?.kind??'free'} pointerEvents="none">
               {hint&&<line x1={hint.kind==='parallel'?junction.x-Math.cos(hintA)*reach:junction.x} y1={hint.kind==='parallel'?junction.y-Math.sin(hintA)*reach:junction.y} x2={junction.x+Math.cos(hintA)*reach} y2={junction.y+Math.sin(hintA)*reach} stroke={hint.kind==='snap'?'#d18a24':hint.kind==='parallel'?'#567f9c':'#7e98a6'} strokeWidth=".65" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/>}
               <circle cx={end.x} cy={end.y} r="5" fill="none" stroke={armGuide.snapped?'#d18a24':'#0e8995'} strokeWidth=".6" vectorEffect="non-scaling-stroke"/>

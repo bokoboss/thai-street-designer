@@ -77,9 +77,10 @@ export function RoadLinkDrawing({
 }
 
 export function JunctionInstanceDrawing({
-  project,junction,selected,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort
+  project,zoom,junction,selected,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort
 }:{
   project:NetworkProject;
+  zoom:number;
   junction:JunctionInstance;
   selected:boolean;
   selectedArm:number|null;
@@ -89,26 +90,30 @@ export function JunctionInstanceDrawing({
   onSelect:()=>void;
   onArmSelect:(armId:number)=>void;
   onMoveStart:(e:React.PointerEvent<SVGCircleElement>)=>void;
-  onArmMoveStart:(armId:number,e:React.PointerEvent<SVGCircleElement>)=>void;
+  onArmMoveStart:(armId:number,e:React.PointerEvent<SVGElement>)=>void;
   onPort:(ref:PortRef)=>void;
 }){
-  const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction);
+  const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction),interactionScale=1/Math.max(.2,zoom);
   return <g data-network-junction={junction.id}>
     <g transform={`translate(${junction.x} ${junction.y}) rotate(${rotation})`} pointerEvents="none">
       <Drawing d={display} selected={-1} onSelect={()=>{}} handlesEnabled={false}/>
     </g>
     {activeArmIds(junction).map(armId=>{
-      const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(14,arm.median+(arm.incoming+arm.outgoing)*arm.width+8),armSelected=selected&&selectedArm===armId;
+      const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(arm.median+(arm.incoming+arm.outgoing)*arm.width+8,14*interactionScale),armSelected=selected&&selectedArm===armId,
+        gripHit=10*interactionScale,gripVisible=3.6*interactionScale;
       return <g key={'hit-'+armId}>
-        <line data-network-junction-hit={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
+        <line data-network-junction-hit={`${junction.id}:${armId}`} data-network-arm-drag-target="true" x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
           stroke="transparent" strokeWidth={hitWidth} pointerEvents={linkMode?'none':'stroke'}
-          onPointerDown={e=>{e.stopPropagation();onSelect();onArmSelect(armId);}} style={{cursor:linkMode?undefined:'pointer'}}/>
+          onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelect();onArmSelect(armId);onArmMoveStart(armId,e);}} style={{cursor:linkMode?undefined:'grab'}}/>
         {armSelected&&<line data-network-arm-selection={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
-          stroke="#0eabb8" strokeWidth="1.15" strokeDasharray="2.4 1.5" pointerEvents="none"/>}
-        {armSelected&&!linkMode&&<circle data-network-arm-handle={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r="3.4" fill="#ffffff" stroke="#0e8995" strokeWidth=".75"
-          onPointerDown={e=>{e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'move'}}>
-          <title>ลากเพื่อยืด/หด/หมุนขาถนน</title>
-        </circle>}
+          stroke="#0eabb8" strokeWidth={1.15*interactionScale} strokeDasharray={`${2.4*interactionScale} ${1.5*interactionScale}`} pointerEvents="none"/>}
+        {armSelected&&!linkMode&&<>
+          <circle data-network-arm-handle-visible={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r={gripVisible} fill="#ffffff" stroke="#0e8995" strokeWidth={.75*interactionScale} pointerEvents="none"/>
+          <circle data-network-arm-handle={`${junction.id}:${armId}`} data-network-arm-hit-radius={gripHit.toFixed(2)} cx={p.x} cy={p.y} r={gripHit} fill="transparent" stroke="transparent"
+            onPointerDown={e=>{e.preventDefault();e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'grab'}}>
+            <title>ลากจาก grip หรือจากตัว Arm ได้โดยตรง</title>
+          </circle>
+        </>}
       </g>;
     })}
     <circle data-network-instance-handle="true" cx={junction.x} cy={junction.y} r={selected?7:5.2} fill={selected?'#0f7d77':'#ffffffdd'} stroke="#0f7d77" strokeWidth=".7"
@@ -134,9 +139,10 @@ export function JunctionInstanceDrawing({
 }
 
 export function NetworkDrawing({
-  project,selection,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
+  project,zoom,selection,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
   project:NetworkProject;
+  zoom:number;
   selection:NetworkSelection;
   selectedArm:number|null;
   linkMode:boolean;
@@ -145,7 +151,7 @@ export function NetworkDrawing({
   onSelect:(selection:NetworkSelection)=>void;
   onArmSelect:(junctionId:string,armId:number)=>void;
   onJunctionMoveStart:(id:string,e:React.PointerEvent<SVGCircleElement>)=>void;
-  onArmMoveStart:(id:string,armId:number,e:React.PointerEvent<SVGCircleElement>)=>void;
+  onArmMoveStart:(id:string,armId:number,e:React.PointerEvent<SVGElement>)=>void;
   onLinkInsertVertex:(id:string,e:React.MouseEvent<SVGGElement>)=>void;
   onLinkVertexMoveStart:(id:string,index:number,e:React.PointerEvent<SVGCircleElement>)=>void;
   onLinkVertexSelect:(index:number)=>void;
@@ -154,6 +160,6 @@ export function NetworkDrawing({
   const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`]));
   return <g>
     {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
-    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
+    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }
