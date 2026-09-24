@@ -12,7 +12,7 @@ import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,moveJunction,moveLinkVia,portKey,portPoint,
-  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type NetworkProject,type PortRef,type WorldPoint
+  projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'delete';
@@ -30,6 +30,11 @@ type ArmDragGuide={junctionId:string;armId:number;worldAngle:number;localAngle:n
 const NETWORK_VIEW_SPAN=600,NETWORK_MIN_ZOOM=.2,NETWORK_MAX_ZOOM=5.5;
 const normalizeAngle=(angle:number)=>((angle%360)+360)%360;
 const angleDelta=(a:number,b:number)=>Math.abs((((a-b)+540)%360)-180);
+function niceScaleMeters(maxMeters:number){
+  const safe=Math.max(.1,maxMeters),power=10**Math.floor(Math.log10(safe));
+  for(const factor of [5,2,1]){const value=factor*power;if(value<=safe)return value;}
+  return power/2;
+}
 function nearestArmGuide(project:NetworkProject,junctionId:string,armId:number,worldAngle:number):ArmGuideHint|null{
   const gridAngle=normalizeAngle(Math.round(worldAngle/15)*15),gridDelta=angleDelta(worldAngle,gridAngle);
   let best:{angle:number;delta:number;label:string}|undefined;
@@ -64,6 +69,7 @@ export default function NetworkWorkspace(){
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null);
 
+  const viewWidthMeters=NETWORK_VIEW_SPAN/zoom,scaleMeters=niceScaleMeters(viewWidthMeters*.18),scaleWidthPercent=scaleMeters/viewWidthMeters*100;
   useEffect(()=>{projectRef.current=project;},[project]);
   useEffect(()=>{
     let active=true;
@@ -134,14 +140,15 @@ export default function NetworkWorkspace(){
   function applyArmMove(current:ArmDragState,p:WorldPoint,shiftKey:boolean){
     const junction=junctionById(projectRef.current,current.id);if(!junction)return;
     const endpoint={x:current.startEndpoint.x+(p.x-current.startPointer.x),y:current.startEndpoint.y+(p.y-current.startPointer.y)},
-      dx=endpoint.x-junction.x,dy=endpoint.y-junction.y,length=Math.hypot(dx,dy),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
+      dx=endpoint.x-junction.x,dy=endpoint.y-junction.y,length=Math.max(45,Math.min(400,Math.hypot(dx,dy))),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
       appliedWorldAngle=shiftKey?normalizeAngle(Math.round(rawWorldAngle/15)*15):rawWorldAngle,
       localAngle=normalizeAngle(appliedWorldAngle-worldJunctionRotation(junction)),
       hint:ArmGuideHint|null=shiftKey?{kind:'snap',worldAngle:appliedWorldAngle,label:`SNAP ${appliedWorldAngle.toFixed(0)}°`}:nearestArmGuide(projectRef.current,current.id,current.armId,rawWorldAngle),
-      result=updateJunctionArmGeometry(projectRef.current,current.id,current.armId,+localAngle.toFixed(2),+length.toFixed(2));
-    if(result.error){setNotice(result.error);return;}
-    setProjectNow(result.project);
-    const nextJ=junctionById(result.project,current.id),nextArm=nextJ?.design.arms[current.armId];
+      previewDesign={...junction.design,arms:junction.design.arms.map((arm,index)=>index===current.armId?{...arm,angle:+localAngle.toFixed(2),length:+length.toFixed(2)}:arm)},
+      previewProject=updateJunctionDesign(projectRef.current,current.id,previewDesign);
+    // Direct manipulation stays visually continuous. Full engineering validation is deferred to pointer-up.
+    setProjectNow(previewProject);
+    const nextJ=junctionById(previewProject,current.id),nextArm=nextJ?.design.arms[current.armId];
     setArmGuide({junctionId:current.id,armId:current.armId,worldAngle:nextJ&&nextArm?normalizeAngle(worldJunctionRotation(nextJ)+nextArm.angle):appliedWorldAngle,localAngle:nextArm?.angle??+localAngle.toFixed(2),length:nextArm?.length??+length.toFixed(2),snapped:shiftKey,hint});
   }
   function scheduleArmMove(current:ArmDragState,p:WorldPoint,shiftKey:boolean){
@@ -184,14 +191,24 @@ export default function NetworkWorkspace(){
   }
   function endPointer(e:React.PointerEvent<SVGSVGElement>){
     const current=drag.current;
-    if(current?.kind==='arm'){armMovePending.current={drag:current,point:point(e),shiftKey:e.shiftKey};flushArmMove();}
+    if(current?.kind==='arm'){
+      armMovePending.current={drag:current,point:point(e),shiftKey:e.shiftKey};flushArmMove();
+      const previewJunction=junctionById(projectRef.current,current.id),previewArm=previewJunction?.design.arms[current.armId],
+        validated=previewArm?updateJunctionArmGeometry(current.before,current.id,current.armId,previewArm.angle,previewArm.length):{project:current.before,error:'ไม่พบขาถนนที่เลือก'};
+      drag.current=null;setArmGuide(null);
+      try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
+      if(validated.error){setProjectNow(current.before);setNotice('ตำแหน่งปลายที่ปล่อยยังใช้ไม่ได้ · '+validated.error);return;}
+      setProjectNow(validated.project);
+      if(validated.project!==current.before){remember(current.before);persistProjectSnapshot(validated.project);setNotice('ปรับขาถนนแล้ว · ลากลื่นระหว่างทาง และตรวจ geometry เมื่อปล่อย');}
+      return;
+    }
     drag.current=null;setArmGuide(null);
     try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
-    if(current?.kind==='junction'||current?.kind==='arm'||current?.kind==='link-via'){
+    if(current?.kind==='junction'||current?.kind==='link-via'){
       const after=projectRef.current;
       if(after!==current.before){
         remember(current.before);persistProjectSnapshot(after);
-        setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':current.kind==='arm'?'ปรับขาถนนแล้ว · ลากได้จากทั้ง Arm และ Road Link ตาม port อัตโนมัติ':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
+        setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
       }
     }
   }
@@ -397,6 +414,7 @@ export default function NetworkWorkspace(){
               {!selectedVia&&<span className="network-context-hint">Double-click Link = เพิ่ม PI</span>}
             </>}
           </div>}
+          {view==='2d'&&<div className="network-scale" data-network-scale-meters={scaleMeters} style={{width:`${scaleWidthPercent}%`}}><span>{scaleMeters>=1000?(scaleMeters/1000)+' km':scaleMeters+' m'}</span><div className="network-scale-bar"/></div>}
           <div className="network-zoom" hidden={view==='3d'} data-network-zoom-value={zoom.toFixed(4)}>
             <button data-network-zoom-action="in" title="Zoom in" onClick={()=>zoomAt(1.18)}><Plus size={16}/></button>
             <button className="network-zoom-value" data-network-zoom-action="reset" title="กลับสู่ 100%" onClick={()=>zoomAt(1/zoom)}>{Math.round(zoom*100)}%</button>
@@ -463,7 +481,7 @@ export default function NetworkWorkspace(){
           <p className="network-note">ดับเบิลคลิกบน Road Link เพื่อเพิ่ม PI แล้วลาก PI เพื่อเปลี่ยน alignment. R0 = polyline เดิม; R&gt;0 = tangent–arc–tangent ที่ resolve จาก geometry เดียวกันใน plan, Fit และ length.</p>
         </section>}
         {!selection&&<section><p className="network-note">เลือก Junction หรือ Road Link บนแผน หรือใช้เครื่องมือ “ทางแยก” เพื่อสร้าง instance ใหม่ และ “เชื่อมถนน” เพื่อเชื่อม arm-to-arm.</p></section>}
-        <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><div className="network-map-search"><input type="search" placeholder="ค้นหาสถานที่ / ถนน / ทางแยก" value={mapQuery} onChange={e=>setMapQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void findPlace();}}}/><button disabled={mapSearching||mapQuery.trim().length<2} onClick={()=>void findPlace()}>{mapSearching?'กำลังค้นหา…':'ค้นหา'}</button></div>{!!mapPlaces.length&&<div className="network-map-results">{mapPlaces.map((place,i)=><button key={place.label+i} onClick={()=>{setMapReference(v=>({...v,lat:place.lat,lng:place.lng,offsetX:0,offsetY:0}));setMapPlaces([]);setMapQuery(place.label);setNotice('ย้ายแผนที่อ้างอิงไปยัง '+place.label);}}>{place.label}</button>)}</div>}<label>Basemap<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><div className="network-coords"><label>Offset X (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetX.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetX:n}));}}/></label><label>Offset Y (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetY.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetY:n}));}}/></label></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={mapReference.locked} onChange={e=>setMapReference(v=>({...v,locked:e.target.checked}))}/> ล็อกตำแหน่งแผนที่</label><button className="network-map-reset" disabled={mapReference.locked} onClick={()=>setMapReference(v=>({...v,offsetX:0,offsetY:0}))}>คืน Offset เป็น 0</button><p className="network-note">Map เป็น reference layer เท่านั้น · X/Y ใช้จัดแนว Network กับแผนที่โดยไม่แก้ geometry ของ Junction หรือ Road Link</p></>}</section>
+        <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><div className="network-map-search"><input type="search" placeholder="ค้นหาสถานที่ / ถนน / ทางแยก" value={mapQuery} onChange={e=>setMapQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void findPlace();}}}/><button disabled={mapSearching||mapQuery.trim().length<2} onClick={()=>void findPlace()}>{mapSearching?'กำลังค้นหา…':'ค้นหา'}</button></div>{!!mapPlaces.length&&<div className="network-map-results">{mapPlaces.map((place,i)=><button key={place.label+i} onClick={()=>{setMapReference(v=>({...v,lat:place.lat,lng:place.lng,offsetX:0,offsetY:0}));setMapPlaces([]);setMapQuery(place.label);setNotice('ย้ายแผนที่อ้างอิงไปยัง '+place.label);}}>{place.label}</button>)}</div>}<label>Basemap<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><div className="network-coords"><label>Offset X (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetX.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetX:n}));}}/></label><label>Offset Y (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetY.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetY:n}));}}/></label></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={mapReference.locked} onChange={e=>setMapReference(v=>({...v,locked:e.target.checked}))}/> ล็อกตำแหน่งแผนที่</label><button className="network-map-reset" disabled={mapReference.locked} onClick={()=>setMapReference(v=>({...v,offsetX:0,offsetY:0}))}>คืน Offset เป็น 0</button><p className="network-note">Map และ Network ใช้ world scale เดียวกัน: 1 หน่วย = 1 เมตรบนพื้นดิน · scale bar มุมล่างซ้ายเปลี่ยนตาม zoom อัตโนมัติ · X/Y ใช้จัดแนวโดยไม่แก้ geometry</p>{mapReference.basemap==='satellite-eox-2016'&&<p className="network-note">Satellite ฟรีชุดนี้เป็น Sentinel-2 cloudless 2016 ความละเอียดต้นฉบับประมาณ 10 m เหมาะสำหรับบริบทพื้นที่ ไม่ใช้แทนภาพ orthophoto สำหรับขอบคันหิน/ช่องจราจร</p>}</>}</section>
         {selection&&<button className="network-delete" onClick={deleteSelection}><Trash2 size={15}/> ลบวัตถุที่เลือก</button>}
       </aside>
     </div>

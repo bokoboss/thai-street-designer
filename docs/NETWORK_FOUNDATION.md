@@ -208,6 +208,27 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4F map scale + open satellite reference
+
+The map reference now exposes engineering-scale context rather than acting as a purely visual backdrop:
+
+- the Network world remains metre-based and the 2D canvas shows a dynamic 1–2–5 scale bar that tracks zoom;
+- vector-map recentering converts workspace ground metres to Web Mercator projected metres, preserving local scale registration at Thai latitudes;
+- **Satellite · Sentinel-2 Cloudless 2016** is available as a no-key global raster reference from EOX WMTS;
+- the 2016 layer is used because it is CC BY 4.0; attribution is rendered on-map;
+- Sentinel-2 native detail is roughly 10 m, so it is suitable for corridor/site context, not curb, lane-marking or orthophoto-grade tracing;
+- higher-resolution commercial/free-tier imagery should be integrated through user-supplied credentials rather than hard-coded into the public repository.
+
+### Phase 4E.2 continuous Arm preview
+
+Arm dragging now separates **interaction preview** from **engineering commit validation**:
+
+- pointer moves update the Arm continuously without running the full Junction validation stack on every frame;
+- the selected Arm is rendered last in the hit layer and receives a larger zoom-compensated corridor/grip target;
+- the final angle/length is validated once against the transaction baseline on pointer-up;
+- invalid release positions revert atomically, while valid positions commit as one Undo step;
+- preview state is never persisted during the active drag transaction.
+
 ### Phase 4E.1 Arm drag responsiveness hardening
 
 Direct Arm manipulation was made more forgiving and less expensive per pointer move:
