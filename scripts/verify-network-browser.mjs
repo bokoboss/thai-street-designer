@@ -131,6 +131,16 @@ try{
     await sleep(80);
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1,modifiers});
   }
+  async function smoothDragSelector(selector,dx,dy,steps=10,modifiers=0){
+    const p=await waitFor(()=>rectBySelector(selector),selector);
+    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
+    await send('Input.dispatchMouseEvent',{type:'mousePressed',x:p.x,y:p.y,button:'left',clickCount:1,modifiers});
+    for(let i=1;i<=steps;i++){
+      await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x+dx*i/steps,y:p.y+dy*i/steps,button:'left',buttons:1,modifiers});
+      await sleep(18);
+    }
+    await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1,modifiers});
+  }
   async function screenshot(name){
     const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},20000);
     const bytes=Buffer.from(shot.data,'base64');assert(bytes.length>5000,'Screenshot is unexpectedly small: '+name);
@@ -156,12 +166,13 @@ try{
   await clickSelector('[data-network-zoom-action="fit"]');await sleep(180);
 
   mark('free-arm-drag');
-  await clickSelector('[data-network-junction-hit="J-1:1"]');
   const armAngleBefore=(await project()).junctions.find(j=>j.id==='J-1').design.arms[1].angle;
-  await dragSelector('[data-network-arm-handle="J-1:1"]',31,-17);
+  await smoothDragSelector('[data-network-junction-hit="J-1:1"]',31,-17,12);
+  const gripRect=await waitFor(()=>rectBySelector('[data-network-arm-handle="J-1:1"]'),'Arm grip hit target');
+  assert(gripRect.w>=14&&gripRect.h>=14,'Arm endpoint grip must retain a usable screen-space hit target after direct dragging');
   const freeArm=await waitFor(async()=>{const p=await project(),arm=p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[1];return arm&&Math.abs(arm.angle-armAngleBefore)>.05?arm:null;},'free Arm drag');
   assert(Math.abs(freeArm.angle-Math.round(freeArm.angle))>.001,'normal Arm drag must preserve a fractional angle instead of integer snapping');
-  await dragSelector('[data-network-arm-handle="J-1:1"]',22,13,8);
+  await smoothDragSelector('[data-network-junction-hit="J-1:1"]',22,13,10,8);
   const snappedArm=await waitFor(async()=>{const p=await project(),j=p?.junctions?.find(v=>v.id==='J-1'),arm=j?.design?.arms?.[1];if(!j||!arm)return null;const world=((j.rotation+j.design.rotation+arm.angle)%360+360)%360;return Math.abs(world/15-Math.round(world/15))<.001?{arm,world}:null;},'Shift Arm snap 15 degrees');
   assert(Math.abs(snappedArm.world/15-Math.round(snappedArm.world/15))<.001,'Shift drag must snap Arm world heading to 15 degree increments');
 
@@ -253,7 +264,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: free Arm drag + Shift snap → port-facing guardrail → tangent continuity → persistence → resolved 3D detail');
+  console.log('PASS browser acceptance: whole-Arm smooth drag + stable grip + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

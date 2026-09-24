@@ -208,6 +208,20 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4E.1 Arm drag responsiveness hardening
+
+Direct Arm manipulation was made more forgiving and less expensive per pointer move:
+
+- the entire visible Arm hit corridor is now a drag target; users no longer need to acquire the small endpoint grip first;
+- dragging from the middle of an Arm uses pointer delta relative to the original endpoint, so the Arm does not jump to the mouse-down position;
+- the endpoint grip keeps an approximately constant screen-space hit radius across Network zoom levels;
+- pointer capture is finalized on normal up, cancel and lost-capture paths;
+- high-frequency pointer moves are coalesced with `requestAnimationFrame`, with the final pointer sample flushed synchronously on release;
+- project persistence is skipped during an active drag transaction and written once at completion instead of serializing localStorage on every frame;
+- the hidden Network 3D view no longer resolves Junction / RoadLink / furniture scene geometry while the user is editing in 2D.
+
+These are interaction/performance changes only. Arm geometry still uses Design v6 and RoadLinks still follow semantic Arm ports.
+
 ### Phase 4E free Arm manipulation + optional precision guides
 
 Arm manipulation remains deliberately free-form so map-based concept design is not forced onto an artificial angular grid:
