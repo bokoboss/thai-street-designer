@@ -209,9 +209,9 @@ function tileUrl(spec:RasterTileSpec,z:number,x:number,y:number){
 type MapWorkspaceView={zoom:number;pan:{x:number;y:number};span?:number;minZoom?:number};
 
 function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
-  const spec=rasterTileSpec(reference.basemap);
+  const provider=rasterTileSpec(reference.basemap).provider;
   const tiles=useMemo(()=>{
-    const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),
+    const spec=rasterTileSpec(reference.basemap),span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),
       z=Math.round(clamp(reference.zoom,spec.minZoom,spec.maxZoom)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
       half=span/2/safeZoom,
       minX=view.pan.x-half-reference.offsetX,maxX=view.pan.x+half-reference.offsetX,
@@ -230,7 +230,7 @@ function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspa
     return out;
   },[reference,view.zoom,view.pan.x,view.pan.y,view.span,view.minZoom]);
   const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),half=span/2/safeZoom;
-  return <svg data-map-background="true" data-map-provider={spec.provider} className="map-raster-fallback"
+  return <svg data-map-background="true" data-map-provider={provider} className="map-raster-fallback"
     viewBox={`${-half+view.pan.x} ${-half+view.pan.y} ${span/safeZoom} ${span/safeZoom}`}>
     {tiles.map(t=><image key={t.key} href={t.href} x={t.x} y={t.y} width={t.size} height={t.size} preserveAspectRatio="none"/>)}
   </svg>;
