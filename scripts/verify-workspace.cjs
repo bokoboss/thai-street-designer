@@ -69,6 +69,10 @@ assert(networkDrawingSource.includes('data-network-port-occupied'),'link mode mu
 assert(networkDrawingSource.includes('data-network-junction-hit'),'Network overview must make the visible Junction arms directly selectable');
 assert(networkDrawingSource.includes('data-network-arm-handle')&&networkDrawingSource.includes('data-network-arm-selection'),'selected Junction arms must expose direct stretch/rotate interaction in the primary workspace');
 assert(networkSource.includes('updateJunctionArmGeometry')&&networkSource.includes('DIRECT ARM EDIT'),'Network root must directly edit Junction Arm geometry through the shared engine rather than requiring a separate page');
+assert(networkSource.includes('rawWorldAngle')&&networkSource.includes("e.shiftKey?normalizeAngle(Math.round(rawWorldAngle/15)*15):rawWorldAngle"),'Arm drag must remain continuous by default and apply 15 degree snapping only while Shift is held');
+assert(networkSource.includes('nearestArmGuide')&&networkSource.includes('data-network-arm-guide')&&networkSource.includes('data-network-arm-measure'),'Arm manipulation must expose non-binding angle/alignment guides and live angle/length measurement on the canvas');
+assert(!networkSource.includes('Math.round(localAngle),Math.round(length)'),'Network Arm drag must not quantize free manipulation to integer angle/length');
+assert(networkSource.includes('step=".01"')&&networkSource.includes('selectedArmData.angle.toFixed(2)'),'precision Inspector inputs must preserve the two-decimal Arm geometry supported by the shared engine');
 assert(networkSource.includes('updateJunctionArmBasics')&&networkSource.includes('เลนเข้า')&&networkSource.includes('เลนออก'),'Network Inspector must support contextual basic Arm editing');
 assert(networkSource.includes('updateJunctionArmSection')&&networkSource.includes('STREET SECTION')&&networkSource.includes('องค์ประกอบริมทาง'),'Network Inspector must edit shared directional street sections');
 assert(networkSource.includes('updateJunctionArmPocket')&&networkSource.includes('AUXILIARY / TURN LANE'),'Network Inspector must expose contextual Pocket/receiving-lane edits through the shared Junction engine');

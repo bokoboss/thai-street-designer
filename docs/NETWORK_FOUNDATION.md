@@ -208,6 +208,20 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4E free Arm manipulation + optional precision guides
+
+Arm manipulation remains deliberately free-form so map-based concept design is not forced onto an artificial angular grid:
+
+- normal drag writes continuous angle / length values at the Design-v6 engine's existing 0.01 precision;
+- holding **Shift** while dragging snaps the **world heading** to 15° increments;
+- without Shift, being near a 15° heading only shows an `ANGLE` guide; it does not modify the Arm;
+- when the dragged Arm is nearly parallel/anti-parallel to another active Arm, the workspace shows an `ALIGN` guide using that other Arm's real world heading;
+- live world heading and Arm length are shown beside the dragged endpoint;
+- numeric Inspector fields expose 0.01° / 0.01 m precision instead of rounding the display to integers;
+- linked RoadLinks continue to follow the semantic Arm port during both free and snapped manipulation.
+
+Map alignment remains a separate future transform: Phase 4E changes Arm geometry only when the user actually drags the Arm, while a future Map Align mode will move/rotate the Network reference frame without silently reshaping individual Arms.
+
 ### Phase 4D port-facing guardrail
 
 RoadLink creation now checks whether the selected semantic Arm ports actually face the corridor they are being asked to connect:
