@@ -123,13 +123,13 @@ try{
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x,y:p.y,button:'left',clickCount:count});
   }
   async function clickSelector(selector,index=0){const p=await waitFor(()=>rectBySelector(selector,index),selector);await clickAt(p);}
-  async function dragSelector(selector,dx,dy){
+  async function dragSelector(selector,dx,dy,modifiers=0){
     const p=await waitFor(()=>rectBySelector(selector),selector);
-    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y});
-    await send('Input.dispatchMouseEvent',{type:'mousePressed',x:p.x,y:p.y,button:'left',clickCount:1});
-    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x+dx,y:p.y+dy,button:'left',buttons:1});
+    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
+    await send('Input.dispatchMouseEvent',{type:'mousePressed',x:p.x,y:p.y,button:'left',clickCount:1,modifiers});
+    await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x+dx,y:p.y+dy,button:'left',buttons:1,modifiers});
     await sleep(80);
-    await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1});
+    await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1,modifiers});
   }
   async function screenshot(name){
     const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},20000);
@@ -154,6 +154,16 @@ try{
   for(let i=0;i<7;i++)await clickSelector('[data-network-zoom-action="out"]');
   await waitFor(()=>evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)<.35`),'2D zoom below legacy 35% floor');
   await clickSelector('[data-network-zoom-action="fit"]');await sleep(180);
+
+  mark('free-arm-drag');
+  await clickSelector('[data-network-junction-hit="J-1:1"]');
+  const armAngleBefore=(await project()).junctions.find(j=>j.id==='J-1').design.arms[1].angle;
+  await dragSelector('[data-network-arm-handle="J-1:1"]',31,-17);
+  const freeArm=await waitFor(async()=>{const p=await project(),arm=p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[1];return arm&&Math.abs(arm.angle-armAngleBefore)>.05?arm:null;},'free Arm drag');
+  assert(Math.abs(freeArm.angle-Math.round(freeArm.angle))>.001,'normal Arm drag must preserve a fractional angle instead of integer snapping');
+  await dragSelector('[data-network-arm-handle="J-1:1"]',22,13,8);
+  const snappedArm=await waitFor(async()=>{const p=await project(),j=p?.junctions?.find(v=>v.id==='J-1'),arm=j?.design?.arms?.[1];if(!j||!arm)return null;const world=((j.rotation+j.design.rotation+arm.angle)%360+360)%360;return Math.abs(world/15-Math.round(world/15))<.001?{arm,world}:null;},'Shift Arm snap 15 degrees');
+  assert(Math.abs(snappedArm.world/15-Math.round(snappedArm.world/15))<.001,'Shift drag must snap Arm world heading to 15 degree increments');
 
   mark('create-junction');
   await clickSelector('[data-network-tool="junction"]');
@@ -243,7 +253,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: port-facing guardrail → contextual edit → tangent continuity → persistence → resolved 3D detail');
+  console.log('PASS browser acceptance: free Arm drag + Shift snap → port-facing guardrail → tangent continuity → persistence → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
