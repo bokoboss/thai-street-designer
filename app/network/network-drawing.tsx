@@ -93,14 +93,15 @@ export function JunctionInstanceDrawing({
   onArmMoveStart:(armId:number,e:React.PointerEvent<SVGElement>)=>void;
   onPort:(ref:PortRef)=>void;
 }){
-  const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction),interactionScale=1/Math.max(.2,zoom);
+  const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction),interactionScale=1/Math.max(.2,zoom),activeIds=activeArmIds(junction),
+    hitArmIds=[...activeIds].sort((a,b)=>(a===selectedArm?1:0)-(b===selectedArm?1:0));
   return <g data-network-junction={junction.id}>
     <g transform={`translate(${junction.x} ${junction.y}) rotate(${rotation})`} pointerEvents="none">
       <Drawing d={display} selected={-1} onSelect={()=>{}} handlesEnabled={false}/>
     </g>
-    {activeArmIds(junction).map(armId=>{
-      const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(arm.median+(arm.incoming+arm.outgoing)*arm.width+8,14*interactionScale),armSelected=selected&&selectedArm===armId,
-        gripHit=10*interactionScale,gripVisible=3.6*interactionScale;
+    {hitArmIds.map(armId=>{
+      const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(arm.median+(arm.incoming+arm.outgoing)*arm.width+10,20*interactionScale),armSelected=selected&&selectedArm===armId,
+        gripHit=12*interactionScale,gripVisible=3.6*interactionScale;
       return <g key={'hit-'+armId}>
         <line data-network-junction-hit={`${junction.id}:${armId}`} data-network-arm-drag-target="true" x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
           stroke="transparent" strokeWidth={hitWidth} pointerEvents={linkMode?'none':'stroke'}

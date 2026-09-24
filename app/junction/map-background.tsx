@@ -1,13 +1,14 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
 
-export type MapBasemap='positron'|'bright'|'liberty'|'dark'|'osm-raster';
+export type MapBasemap='positron'|'bright'|'liberty'|'dark'|'osm-raster'|'satellite-eox-2016';
 export const BASEMAP_OPTIONS:Record<MapBasemap,string>={
   positron:'OpenFreeMap · Positron',
   bright:'OpenFreeMap · Bright',
   liberty:'OpenFreeMap · Liberty',
   dark:'OpenFreeMap · Dark',
-  'osm-raster':'OpenStreetMap · Raster fallback'
+  'osm-raster':'OpenStreetMap · Raster fallback',
+  'satellite-eox-2016':'Satellite · Sentinel-2 Cloudless 2016 (free)'
 };
 
 export type MapReference={
@@ -58,7 +59,7 @@ const MAPLIBRE_CSS=[
   'https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css',
   'https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css'
 ];
-const STYLE_URLS:Record<Exclude<MapBasemap,'osm-raster'>,string>={
+const STYLE_URLS:Record<Exclude<MapBasemap,'osm-raster'|'satellite-eox-2016'>,string>={
   positron:'https://tiles.openfreemap.org/styles/positron',
   bright:'https://tiles.openfreemap.org/styles/bright',
   liberty:'https://tiles.openfreemap.org/styles/liberty',
@@ -123,8 +124,10 @@ function fromMercatorMeters(x:number,y:number){
 
 export function mapCenterForView(reference:MapReference,pan:{x:number;y:number}){
   const origin=mercatorMeters(reference.lat,reference.lng),
-    dx=pan.x-reference.offsetX,dy=pan.y-reference.offsetY;
-  return fromMercatorMeters(origin.x+dx,origin.y-dy);
+    dx=pan.x-reference.offsetX,dy=pan.y-reference.offsetY,
+    groundScale=Math.max(.01,Math.cos(clamp(reference.lat,-MAX_LAT,MAX_LAT)*Math.PI/180));
+  // Workspace coordinates are ground metres; Web Mercator projected metres expand by sec(latitude).
+  return fromMercatorMeters(origin.x+dx/groundScale,origin.y-dy/groundScale);
 }
 
 export function mapZoomForViewport(lat:number,workspaceZoom:number,pixelsPerView:number,workspaceSpan=250,minWorkspaceZoom=.35){
@@ -190,19 +193,26 @@ export async function searchMapPlaces(query:string):Promise<MapPlace[]>{
   return places;
 }
 
-function tileTemplate(){
-  return process.env.NEXT_PUBLIC_MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+type RasterTileSpec={template:string;minZoom:number;maxZoom:number;provider:string};
+function rasterTileSpec(basemap:MapBasemap):RasterTileSpec{
+  if(basemap==='satellite-eox-2016')return{
+    template:'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',
+    minZoom:0,maxZoom:14,provider:'eox-sentinel-2-cloudless-2016'
+  };
+  return{template:process.env.NEXT_PUBLIC_MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',minZoom:12,maxZoom:19,provider:'osm-raster'};
 }
-function tileUrl(z:number,x:number,y:number){
-  return tileTemplate().replace('{z}',String(z)).replace('{x}',String(x)).replace('{y}',String(y));
+function isRasterBasemap(basemap:MapBasemap){return basemap==='osm-raster'||basemap==='satellite-eox-2016';}
+function tileUrl(spec:RasterTileSpec,z:number,x:number,y:number){
+  return spec.template.replace('{z}',String(z)).replace('{x}',String(x)).replace('{y}',String(y));
 }
 
 type MapWorkspaceView={zoom:number;pan:{x:number;y:number};span?:number;minZoom?:number};
 
 function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
+  const spec=rasterTileSpec(reference.basemap);
   const tiles=useMemo(()=>{
     const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),
-      z=Math.round(clamp(reference.zoom,12,19)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
+      z=Math.round(clamp(reference.zoom,spec.minZoom,spec.maxZoom)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
       half=span/2/safeZoom,
       minX=view.pan.x-half-reference.offsetX,maxX=view.pan.x+half-reference.offsetX,
       minY=view.pan.y-half-reference.offsetY,maxY=view.pan.y+half-reference.offsetY,
@@ -215,12 +225,12 @@ function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspa
     const size=TILE*mpp;
     for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
       const wx=wrap(tx,n),x=(tx*TILE-center.x)*mpp+reference.offsetX,y=(ty*TILE-center.y)*mpp+reference.offsetY;
-      out.push({key:`${z}/${wx}/${ty}`,href:tileUrl(z,wx,ty),x,y,size});
+      out.push({key:`${z}/${wx}/${ty}`,href:tileUrl(spec,z,wx,ty),x,y,size});
     }
     return out;
   },[reference,view.zoom,view.pan.x,view.pan.y,view.span,view.minZoom]);
   const span=view.span??250,safeZoom=Math.max(view.minZoom??.35,view.zoom),half=span/2/safeZoom;
-  return <svg data-map-background="true" data-map-provider="osm-raster" className="map-raster-fallback"
+  return <svg data-map-background="true" data-map-provider={spec.provider} className="map-raster-fallback"
     viewBox={`${-half+view.pan.x} ${-half+view.pan.y} ${span/safeZoom} ${span/safeZoom}`}>
     {tiles.map(t=><image key={t.key} href={t.href} x={t.x} y={t.y} width={t.size} height={t.size} preserveAspectRatio="none"/>)}
   </svg>;
@@ -228,7 +238,7 @@ function RasterFallback({reference,view}:{reference:MapReference;view:MapWorkspa
 
 function VectorBasemap({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
   const container=useRef<HTMLDivElement>(null),map=useRef<MapLibreMap|null>(null),[generation,setGeneration]=useState(0),[status,setStatus]=useState<'loading'|'ready'|'failed'>('loading'),[pixels,setPixels]=useState(800);
-  const style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap],
+  const style=reference.basemap in STYLE_URLS?STYLE_URLS[reference.basemap as keyof typeof STYLE_URLS]:STYLE_URLS.positron,
     center=mapCenterForView(reference,view.pan),cameraZoom=mapZoomForViewport(center.lat,view.zoom,pixels,view.span??250,view.minZoom??.35),
     cameraRef=useRef({center,zoom:cameraZoom});
   useEffect(()=>{cameraRef.current={center:{lat:center.lat,lng:center.lng},zoom:cameraZoom};},[center.lat,center.lng,cameraZoom]);
@@ -289,7 +299,7 @@ function loadRasterImage(src:string){
 async function renderRasterTexture(reference:MapReference,extent:number,size:number,worldCenter:{x:number;y:number}){
   const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
   const ctx=canvas.getContext('2d');if(!ctx)return null;
-  const z=Math.round(clamp(reference.zoom,12,19)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
+  const spec=rasterTileSpec(reference.basemap),z=Math.round(clamp(reference.zoom,spec.minZoom,spec.maxZoom)),n=2**z,center=worldPixels(reference.lat,reference.lng,z),mpp=metersPerPixel(reference.lat,z),
     minX=worldCenter.x-extent,maxX=worldCenter.x+extent,minY=worldCenter.y-extent,maxY=worldCenter.y+extent,
     px0=center.x+(minX-reference.offsetX)/mpp,px1=center.x+(maxX-reference.offsetX)/mpp,
     py0=center.y+(minY-reference.offsetY)/mpp,py1=center.y+(maxY-reference.offsetY)/mpp,
@@ -299,7 +309,7 @@ async function renderRasterTexture(reference:MapReference,extent:number,size:num
   const jobs:Promise<void>[]=[];
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
     const wx=wrap(tx,n),worldX=(tx*TILE-center.x)*mpp+reference.offsetX,worldY=(ty*TILE-center.y)*mpp+reference.offsetY;
-    jobs.push(loadRasterImage(tileUrl(z,wx,ty)).then(image=>{if(!image)return;ctx.drawImage(image,(worldX-(worldCenter.x-extent))*worldToPixel,(worldY-(worldCenter.y-extent))*worldToPixel,tileWorld*worldToPixel,tileWorld*worldToPixel);}));
+    jobs.push(loadRasterImage(tileUrl(spec,z,wx,ty)).then(image=>{if(!image)return;ctx.drawImage(image,(worldX-(worldCenter.x-extent))*worldToPixel,(worldY-(worldCenter.y-extent))*worldToPixel,tileWorld*worldToPixel,tileWorld*worldToPixel);}));
   }
   await Promise.all(jobs);
   return canvas;
@@ -310,7 +320,7 @@ async function renderVectorTexture(reference:MapReference,extent:number,size:num
   Object.assign(holder.style,{position:'fixed',left:'-20000px',top:'0',width:size+'px',height:size+'px',pointerEvents:'none'});
   document.body.appendChild(holder);
   const center=mapCenterForView(reference,worldCenter),workspaceZoom=250/(extent*2),zoom=mapZoomForViewport(center.lat,workspaceZoom,size),
-    style=reference.basemap==='osm-raster'?STYLE_URLS.positron:STYLE_URLS[reference.basemap];
+    style=reference.basemap in STYLE_URLS?STYLE_URLS[reference.basemap as keyof typeof STYLE_URLS]:STYLE_URLS.positron;
   const map=new lib.Map({container:holder,style,center:[center.lng,center.lat],zoom,bearing:0,pitch:0,interactive:false,attributionControl:false,maplibreLogo:false,renderWorldCopies:false,preserveDrawingBuffer:true});
   try{
     await new Promise<void>((resolve,reject)=>{
@@ -330,19 +340,19 @@ async function renderVectorTexture(reference:MapReference,extent:number,size:num
 
 export async function renderMapTexture(reference:MapReference,extent:number,size=1200,worldCenter:{x:number;y:number}={x:0,y:0}){
   if(!reference.enabled||typeof document==='undefined')return null;
-  try{return reference.basemap==='osm-raster'?await renderRasterTexture(reference,extent,size,worldCenter):await renderVectorTexture(reference,extent,size,worldCenter);}
+  try{return isRasterBasemap(reference.basemap)?await renderRasterTexture(reference,extent,size,worldCenter):await renderVectorTexture(reference,extent,size,worldCenter);}
   catch{return null;}
 }
 
 export default function MapBackground({reference,view}:{reference:MapReference;view:MapWorkspaceView}){
   if(!reference.enabled)return null;
-  const raster=reference.basemap==='osm-raster';
+  const raster=isRasterBasemap(reference.basemap),satellite=reference.basemap==='satellite-eox-2016';
   return <div className="map-reference-layer" aria-hidden="true">
     <div className="map-reference-surface" style={{opacity:clamp(reference.opacity,.1,1)}}>
       {raster?<RasterFallback reference={reference} view={view}/>:<VectorBasemap reference={reference} view={view}/>}
     </div>
     <div className="map-reference-attribution">
-      {raster?'© OpenStreetMap contributors':'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors'}
+      {satellite?<><a href="https://s2maps.eu" target="_blank" rel="noreferrer">Sentinel-2 cloudless</a> by <a href="https://eox.at" target="_blank" rel="noreferrer">EOX IT Services GmbH</a> · modified Copernicus Sentinel data 2016/2017 · CC BY 4.0</>:raster?'© OpenStreetMap contributors':'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors'}
     </div>
   </div>;
 }
