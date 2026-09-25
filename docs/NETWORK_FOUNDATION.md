@@ -208,6 +208,16 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4G.1 open local imagery + access labels
+
+The imagery workflow now distinguishes **availability/license/access** from visual quality:
+
+- **OpenAerialMap · Local Open Imagery** is the default open imagery choice. It uses HOT's Global Mosaic TMS with no API key; low zooms show the coverage grid and zoom 14+ resolves real imagery where coverage exists.
+- When OpenAerialMap is selected, both Network and Junction workspaces query the OAM STAC catalog around the current center (3 km radius) and report available image count, latest capture date when present, and best sample GSD when metadata provides it.
+- Provider metadata exposes explicit access badges such as `OPEN · NO KEY`, `FREE QUOTA · API KEY`, and `FREE TIER · API KEY` instead of treating API-key providers as automatically paid.
+- Esri remains a high-resolution fallback with a free basemap quota under ArcGIS Location Platform; MapTiler remains a credentialed fallback whose free plan is primarily intended for testing/personal/non-commercial use.
+- Longdo is intentionally not consumed via undocumented/direct tile URLs. Its published terms require the official Longdo Map API with a URL-bound API key, so a dedicated SDK integration should be implemented separately if added.
+
 ### Phase 4G multi-provider basemap registry
 
 The reference-map layer is provider-driven rather than a binary Street/Satellite switch:
