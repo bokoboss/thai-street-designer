@@ -23,8 +23,8 @@ export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
   'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',description:'High-resolution satellite/aerial imagery · MapTiler API key required'}
 };
 export const BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).map(([id,m])=>[id,m.label])) as Record<MapBasemap,string>;
-export const STREET_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='street').map(([id,m])=>[id,m.label])) as Partial<Record<MapBasemap,string>>;
-export const IMAGERY_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='imagery').map(([id,m])=>[id,m.label])) as Partial<Record<MapBasemap,string>>;
+export const STREET_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='street').map(([id,m])=>[id,m.label])) as Record<string,string>;
+export const IMAGERY_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='imagery').map(([id,m])=>[id,m.label])) as Record<string,string>;
 export const MAP_PROVIDER_CREDENTIALS_STORAGE='thai-street-map-provider-credentials-v1';
 export const mapProviderCredentialsDefaults=():MapProviderCredentials=>({esri:'',maptiler:''});
 export function restoreMapProviderCredentials(raw:string|null):MapProviderCredentials{
