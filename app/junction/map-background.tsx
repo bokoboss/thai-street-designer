@@ -4,23 +4,24 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 export type MapBasemap=
   |'positron'|'bright'|'liberty'|'dark'
   |'osm-raster'|'opentopo-raster'|'esri-streets'
-  |'satellite-eox-2016'|'esri-imagery'|'maptiler-satellite';
+  |'oam-global'|'satellite-eox-2016'|'esri-imagery'|'maptiler-satellite';
 export type MapLayerKind='street'|'imagery';
 export type MapProviderCredentials={esri:string;maptiler:string};
 export type MapCredentialKey=keyof MapProviderCredentials;
-export type MapBasemapMeta={label:string;kind:MapLayerKind;provider:string;credential:MapCredentialKey|null;description:string};
+export type MapBasemapMeta={label:string;kind:MapLayerKind;provider:string;credential:MapCredentialKey|null;access:string;description:string};
 
 export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
-  positron:{label:'OpenFreeMap · Positron',kind:'street',provider:'OpenFreeMap',credential:null,description:'Vector · clean engineering background · no API key'},
-  bright:{label:'OpenFreeMap · Bright',kind:'street',provider:'OpenFreeMap',credential:null,description:'Vector · brighter labels · no API key'},
-  liberty:{label:'OpenFreeMap · Liberty',kind:'street',provider:'OpenFreeMap',credential:null,description:'Vector · detailed street style · no API key'},
-  dark:{label:'OpenFreeMap · Dark',kind:'street',provider:'OpenFreeMap',credential:null,description:'Vector dark style · no API key'},
-  'osm-raster':{label:'OpenStreetMap · Standard',kind:'street',provider:'OpenStreetMap',credential:null,description:'Raster · public OSM tile service · best-effort / fair-use'},
-  'opentopo-raster':{label:'OpenTopoMap · Topographic',kind:'street',provider:'OpenTopoMap',credential:null,description:'Raster topo map with terrain · no API key'},
-  'esri-streets':{label:'Esri · Streets',kind:'street',provider:'Esri',credential:'esri',description:'Commercial-quality streets · ArcGIS API key required'},
-  'satellite-eox-2016':{label:'EOX · Sentinel-2 Cloudless 2016',kind:'imagery',provider:'EOX',credential:null,description:'Open satellite context · ~10 m source resolution · no API key'},
-  'esri-imagery':{label:'Esri · World Imagery',kind:'imagery',provider:'Esri',credential:'esri',description:'High-resolution satellite/aerial imagery · ArcGIS API key required'},
-  'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',description:'High-resolution satellite/aerial imagery · MapTiler API key required'}
+  positron:{label:'OpenFreeMap · Positron',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · clean engineering background'},
+  bright:{label:'OpenFreeMap · Bright',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · brighter labels'},
+  liberty:{label:'OpenFreeMap · Liberty',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · detailed street style'},
+  dark:{label:'OpenFreeMap · Dark',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector dark style'},
+  'osm-raster':{label:'OpenStreetMap · Standard',kind:'street',provider:'OpenStreetMap',credential:null,access:'OPEN DATA · NO KEY',description:'Raster · public OSM tile service · best-effort / fair-use'},
+  'opentopo-raster':{label:'OpenTopoMap · Topographic',kind:'street',provider:'OpenTopoMap',credential:null,access:'OPEN · NO KEY',description:'Raster topo map with terrain'},
+  'esri-streets':{label:'Esri · Streets',kind:'street',provider:'Esri',credential:'esri',access:'FREE QUOTA · API KEY',description:'Commercial-quality streets · ArcGIS Location Platform free quota available'},
+  'oam-global':{label:'OpenAerialMap · Local Open Imagery',kind:'imagery',provider:'OpenAerialMap',credential:null,access:'OPEN · NO KEY',description:'Community aerial/UAV/satellite imagery · detail varies by local coverage · z14+ shows available imagery'},
+  'satellite-eox-2016':{label:'EOX · Sentinel-2 Cloudless 2016',kind:'imagery',provider:'EOX',credential:null,access:'OPEN · NO KEY',description:'Global satellite context · ~10 m source resolution'},
+  'esri-imagery':{label:'Esri · World Imagery',kind:'imagery',provider:'Esri',credential:'esri',access:'FREE QUOTA · API KEY',description:'High-resolution satellite/aerial imagery · ArcGIS Location Platform free quota available'},
+  'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',access:'FREE TIER · API KEY',description:'High-resolution satellite/aerial imagery · Free plan is primarily for testing/personal/non-commercial use'}
 };
 export const BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).map(([id,m])=>[id,m.label])) as Record<MapBasemap,string>;
 export const STREET_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='street').map(([id,m])=>[id,m.label])) as Record<string,string>;
@@ -37,6 +38,7 @@ export function restoreMapProviderCredentials(raw:string|null):MapProviderCreden
 export const basemapKind=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.kind??'street';
 export const basemapCredentialKey=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.credential??null;
 export const basemapDescription=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.description??'';
+export const basemapAccessLabel=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.access??'';
 export const basemapHasCredential=(basemap:MapBasemap,credentials:MapProviderCredentials)=>{
   const key=basemapCredentialKey(basemap);return !key||!!credentials[key].trim();
 };
@@ -229,14 +231,32 @@ export async function searchMapPlaces(query:string):Promise<MapPlace[]>{
   return places;
 }
 
+export type OamImagerySummary={count:number;sampleCount:number;latest:string|null;bestGsd:number|null};
+export async function searchOpenAerialMapImagery(lat:number,lng:number,radiusMeters=3000):Promise<OamImagerySummary>{
+  const radius=Math.max(250,Math.min(20000,radiusMeters)),latDelta=radius/111320,
+    lngScale=Math.max(.08,Math.cos(clamp(lat,-80,80)*Math.PI/180)),lngDelta=radius/(111320*lngScale),
+    url=new URL('https://api.imagery.hotosm.org/stac/search');
+  url.searchParams.set('collections','openaerialmap');
+  url.searchParams.set('bbox',[lng-lngDelta,lat-latDelta,lng+lngDelta,lat+latDelta].map(v=>v.toFixed(7)).join(','));
+  url.searchParams.set('limit','20');
+  const response=await fetch(url.toString(),{headers:{Accept:'application/geo+json,application/json'}});
+  if(!response.ok)throw new Error('OpenAerialMap catalog unavailable');
+  const raw=await response.json() as {numberMatched?:number;context?:{matched?:number};features?:Array<{properties?:{datetime?:string;gsd?:number}}>} ,
+    features=Array.isArray(raw.features)?raw.features:[],matched=Number(raw.numberMatched??raw.context?.matched);
+  const dates=features.map(f=>f.properties?.datetime).filter((v):v is string=>typeof v==='string'&&!Number.isNaN(Date.parse(v))).sort((a,b)=>Date.parse(b)-Date.parse(a)),
+    gsd=features.map(f=>Number(f.properties?.gsd)).filter(Number.isFinite);
+  return{count:Number.isFinite(matched)?matched:features.length,sampleCount:features.length,latest:dates[0]??null,bestGsd:gsd.length?Math.min(...gsd):null};
+}
+
 type RasterTileSpec={template:string;minZoom:number;maxZoom:number;provider:string};
 function rasterTileSpec(basemap:MapBasemap,credentials:MapProviderCredentials):RasterTileSpec{
+  if(basemap==='oam-global')return{template:'https://global.imagery.hotosm.org/{z}/{x}/{y}.png',minZoom:0,maxZoom:21,provider:'openaerialmap-global'};
   if(basemap==='satellite-eox-2016')return{template:'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',minZoom:0,maxZoom:14,provider:'eox-sentinel-2-cloudless-2016'};
   if(basemap==='opentopo-raster')return{template:'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',minZoom:0,maxZoom:17,provider:'opentopomap'};
   if(basemap==='maptiler-satellite')return{template:'https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key='+encodeURIComponent(credentials.maptiler.trim()),minZoom:0,maxZoom:20,provider:'maptiler-satellite-v2'};
   return{template:process.env.NEXT_PUBLIC_MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',minZoom:0,maxZoom:19,provider:'osm-raster'};
 }
-function isRasterBasemap(basemap:MapBasemap){return ['osm-raster','opentopo-raster','satellite-eox-2016','maptiler-satellite'].includes(basemap);}
+function isRasterBasemap(basemap:MapBasemap){return ['osm-raster','opentopo-raster','oam-global','satellite-eox-2016','maptiler-satellite'].includes(basemap);}
 function tileUrl(spec:RasterTileSpec,z:number,x:number,y:number){return spec.template.replace('{z}',String(z)).replace('{x}',String(x)).replace('{y}',String(y));}
 
 type MapWorkspaceView={zoom:number;pan:{x:number;y:number};span?:number;minZoom?:number};
@@ -377,6 +397,7 @@ export async function renderMapTexture(reference:MapReference,credentials:MapPro
   catch{return null;}
 }
 function attributionFor(basemap:MapBasemap){
+  if(basemap==='oam-global')return <><a href="https://imagery.hotosm.org" target="_blank" rel="noreferrer">OpenAerialMap</a> · open imagery contributors</>;
   if(basemap==='satellite-eox-2016')return <><a href="https://s2maps.eu" target="_blank" rel="noreferrer">Sentinel-2 cloudless</a> by <a href="https://eox.at" target="_blank" rel="noreferrer">EOX</a> · modified Copernicus Sentinel data 2016/2017 · CC BY 4.0</>;
   if(basemap==='opentopo-raster')return <>Map data © OpenStreetMap contributors, SRTM · map style © OpenTopoMap (CC-BY-SA)</>;
   if(basemap==='esri-imagery')return <>© Esri, Vantor, Earthstar Geographics, GIS User Community</>;
