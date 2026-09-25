@@ -169,7 +169,7 @@ useEffect(()=>{try{setMapReference(restoreMapReference(localStorage.getItem(MAP_
 useEffect(()=>{try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
 useEffect(()=>{try{localStorage.setItem(MAP_PROVIDER_CREDENTIALS_STORAGE,JSON.stringify(mapCredentials));}catch{}},[mapCredentials]);
 useEffect(()=>{
- if(!mapReference.enabled||mapReference.basemap!=='oam-global'){setOamSummary(null);setOamSearching(false);setOamError(false);return;}
+ if(!mapReference.enabled||mapReference.basemap!=='oam-global')return;
  let stale=false;const timer=window.setTimeout(()=>{
   setOamSearching(true);setOamError(false);
   searchOpenAerialMapImagery(mapReference.lat,mapReference.lng,3000)
