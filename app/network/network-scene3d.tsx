@@ -2,7 +2,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {anchorGround,groundAt,orbitGround} from '../junction/camera3d';
 import {clampZoom,PointerGesture} from '../junction/gestures';
-import {renderMapTexture,type MapReference} from '../junction/map-background';
+import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/lib/network-project';
 import {
   resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
@@ -13,8 +13,8 @@ type CameraMode='pan'|'orbit';
 type DragState={action:'pan'|'rotate';point:{x:number;y:number};screen:{x:number;y:number}}|null;
 
 export default function NetworkScene3D({
-  project,mapReference,active
-}:{project:NetworkProject;mapReference:MapReference;active:boolean}){
+  project,mapReference,mapCredentials,active
+}:{project:NetworkProject;mapReference:MapReference;mapCredentials:MapProviderCredentials;active:boolean}){
   const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),modeRef=useRef<CameraMode>('pan'),
     [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-35),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(.92),
     [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
@@ -45,9 +45,9 @@ export default function NetworkScene3D({
   useEffect(()=>{
     if(!active||!mapReference.enabled)return;
     let stale=false;
-    renderMapTexture(mapReference,extent,1200,{x:center.x,y:center.y}).then(image=>{if(!stale)setMapTexture({key:mapKey,image});});
+    renderMapTexture(mapReference,mapCredentials,extent,1200,{x:center.x,y:center.y}).then(image=>{if(!stale)setMapTexture({key:mapKey,image});});
     return()=>{stale=true;};
-  },[active,mapReference,extent,center.x,center.y,mapKey]);
+  },[active,mapReference,mapCredentials,extent,center.x,center.y,mapKey]);
 
   useEffect(()=>{
     if(!active)return;

@@ -8,7 +8,7 @@ import {activeIds} from './geometry';
 import {resolveJunctionSceneSurfaces} from './scene-surfaces';
 import {furnitureFaces} from './furniture3d';
 import {buildVisibility,visibleOrder,cameraDirection} from './visibility3d';
-import {renderMapTexture,type MapReference} from './map-background';
+import {renderMapTexture,type MapProviderCredentials,type MapReference} from './map-background';
 type V={x:number;y:number;z:number};
 type Face={points:V[];color:string};
 const vertex=(x:number,y:number,z:number):V=>({x,y,z});
@@ -18,7 +18,7 @@ function CameraNum({label,value,min,max,step=1,onCommit}:{label:string;value:num
  const commit=(input:HTMLInputElement)=>{const n=Number(input.value);if(Number.isFinite(n)){const v=Math.max(min,Math.min(max,Math.round(n/step)*step));onCommit(+v.toFixed(3));}else input.value=String(value);};
  return <label className="j-camera-num"><span>{label}</span><input key={label+':'+value} type="number" defaultValue={value} min={min} max={max} step={step} onBlur={e=>commit(e.currentTarget)} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(value);e.currentTarget.blur();}}}/></label>;
 }
-export default function Scene3D({d,active,ref,onSave,onNotice,mapReference}:{d:Design;active:boolean;ref?:React.Ref<SceneHandle>;onSave:(format:'png'|'jpeg')=>void;onNotice:(message:string)=>void;mapReference:MapReference}){
+export default function Scene3D({d,active,ref,onSave,onNotice,mapReference,mapCredentials}:{d:Design;active:boolean;ref?:React.Ref<SceneHandle>;onSave:(format:'png'|'jpeg')=>void;onNotice:(message:string)=>void;mapReference:MapReference;mapCredentials:MapProviderCredentials}){
  const canvas=useRef<HTMLCanvasElement>(null),[yaw,setYaw]=useState(-30),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(1),[texture,setTexture]=useState<HTMLImageElement|null>(null),[mapTexture,setMapTexture]=useState<{key:string;image:HTMLCanvasElement|null}|null>(null),[size,setSize]=useState({w:900,h:650});const gestures=useRef(new PointerGesture()),textureTask=useRef<Promise<HTMLImageElement|null>>(Promise.resolve(null));const [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState('pan');const camera=useRef({yaw,pitch,zoom,pan});useEffect(()=>{camera.current={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
  const drag=useRef<{action:string;point:{x:number;y:number};screen:{x:number;y:number}}|null>(null);
  const extent=Math.max(115,...activeIds(d).map(i=>d.arms[i].length+20));
@@ -33,7 +33,7 @@ export default function Scene3D({d,active,ref,onSave,onNotice,mapReference}:{d:D
  useEffect(()=>{if(!active)return;const c=canvas.current;if(!c)return;const observer=new ResizeObserver(entries=>{const r=entries[0].contentRect;setSize({w:r.width,h:r.height});});observer.observe(c);return()=>observer.disconnect();},[active]);
  useEffect(()=>{if(!active)return;let stale=false,url='';const source=document.querySelector<SVGSVGElement>('.j-drawing > svg');if(!source)return;const copy=source.cloneNode(true) as SVGSVGElement;copy.querySelectorAll('[data-background],[data-selection],[data-scale],[data-road-name],[data-road-object],[data-traffic-signal]').forEach(n=>n.remove());copy.querySelector('g')?.removeAttribute('transform');copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('viewBox',`${-extent} ${-extent} ${extent*2} ${extent*2}`);copy.setAttribute('width','1800');copy.setAttribute('height','1800');const img=new Image();textureTask.current=new Promise(resolve=>{img.onload=()=>{if(!stale)setTexture(img);resolve(img);};img.onerror=()=>resolve(null);});url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml'}));img.src=url;return()=>{stale=true;URL.revokeObjectURL(url);};},[d,active,extent]);
  const mapTextureKey=`${extent.toFixed(2)}:${mapReference.basemap}:${mapReference.lat.toFixed(6)}:${mapReference.lng.toFixed(6)}:${mapReference.zoom}:${mapReference.offsetX.toFixed(2)}:${mapReference.offsetY.toFixed(2)}`;
- useEffect(()=>{if(!active||!mapReference.enabled)return;let stale=false;const key=mapTextureKey,mapExtent=extent*Math.SQRT2;renderMapTexture(mapReference,mapExtent,1200).then(image=>{if(!stale)setMapTexture({key,image});});return()=>{stale=true;};},[active,extent,mapReference,mapTextureKey]);
+ useEffect(()=>{if(!active||!mapReference.enabled)return;let stale=false;const key=mapTextureKey,mapExtent=extent*Math.SQRT2;renderMapTexture(mapReference,mapCredentials,mapExtent,1200).then(image=>{if(!stale)setMapTexture({key,image});});return()=>{stale=true;};},[active,extent,mapReference,mapCredentials,mapTextureKey]);
  const activeMapTexture=mapReference.enabled&&mapTexture?.key===mapTextureKey?mapTexture.image:null,mapLoading=mapReference.enabled&&mapTexture?.key!==mapTextureKey;
  function draw(ctx:CanvasRenderingContext2D,w:number,h:number,background:string|null,img:HTMLImageElement|null,mapImg:HTMLCanvasElement|null){
  ctx.clearRect(0,0,w,h);if(background){ctx.fillStyle=background;ctx.fillRect(0,0,w,h);}

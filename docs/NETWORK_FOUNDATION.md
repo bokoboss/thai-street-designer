@@ -208,6 +208,20 @@ Phase 4C restores the missing presentation detail without weakening geometry own
 - the overlay contains no road/median/sidewalk fill, so it cannot replace or override the resolved Junction / Slip / RoadLink geometry;
 - raised median/sidewalk surfaces are drawn above the marking overlay, keeping zebra/linework visually below physical islands.
 
+### Phase 4G multi-provider basemap registry
+
+The reference-map layer is provider-driven rather than a binary Street/Satellite switch:
+
+- **Street / Map:** OpenFreeMap styles, OpenStreetMap Standard, OpenTopoMap and Esri Streets;
+- **Aerial / Satellite:** EOX Sentinel-2 Cloudless 2016, Esri World Imagery and MapTiler Satellite;
+- no-key providers remain immediately usable for public preview and concept context;
+- Esri and MapTiler use BYOK credentials stored separately in browser localStorage, never in NetworkProject, Design JSON or repository source;
+- both 2D reference maps and 3D ground textures consume the same provider registry and credentials;
+- provider attribution changes with the selected source;
+- high-resolution commercial/free-tier keys should be origin-restricted to the deployed host.
+
+Sentinel-2 remains useful for broad context only. For curb/lanemarking-level visual reference, select Esri World Imagery or MapTiler Satellite with a valid browser API key and verify imagery currency/resolution at the site.
+
 ### Phase 4F map scale + open satellite reference
 
 The map reference now exposes engineering-scale context rather than acting as a purely visual backdrop:
