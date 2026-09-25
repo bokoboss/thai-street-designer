@@ -107,3 +107,8 @@
 
 @media(max-width:1180px){.network-context-title em,.network-context-hint{display:none}.network-context-title b{max-width:110px}.network-context-bar{top:8px}}
 @media(max-width:760px){.network-context-bar{left:8px;right:8px;transform:none;overflow-x:auto;justify-content:flex-start}.network-context-title{position:sticky;left:0;background:#fffffff2}.network-view-links a{display:none}}
+
+.network-map-align{margin:9px 0;padding:9px;border:1px solid #c9dfdc;border-radius:7px;background:#f5fbfa}
+.network-map-align-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}.network-map-align-head span{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--ws-accent)}.network-map-align-head b{font-size:9.5px;color:var(--ws-muted);font-weight:600}
+.network-map-align-actions{display:grid;gap:6px;margin-top:7px}.network-map-align-actions>button{width:100%;border:1px solid #9ccbc6;background:#fff;border-radius:6px;padding:7px 8px;color:var(--ws-accent);font-weight:700}.network-map-align-actions>button.active{background:var(--ws-active);border-color:#6fb8b1}
+.network-map-align-rotation{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;align-items:end}.network-map-align-rotation label{margin:0!important}.network-map-align-rotation button{height:32px;border:1px solid var(--ws-border);background:#fff;border-radius:6px;padding:0 10px;color:var(--ws-ink)}.network-map-align-rotation button:disabled{opacity:.4}

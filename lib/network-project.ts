@@ -48,6 +48,7 @@ export type LinkIssue={kind:'lane-count'|'lane-width'|'median'|'edge-section'|'a
 export type PortConnectionAssessment={distance:number;fromDeviation:number;toDeviation:number;status:'valid'|'caution'|'invalid'};
 export type ConnectPortsResult={project:NetworkProject;link?:RoadLink;error:string|null};
 export type NetworkEditResult={project:NetworkProject;error:string|null};
+export type NetworkRigidTransform={origin:WorldPoint;translation:WorldPoint;rotation:number};
 export const NETWORK_PROJECT_STORAGE='thai-street-network-project-v1';
 export const NETWORK_EDIT_JUNCTION_STORAGE='thai-street-network-edit-junction-v1';
 
@@ -84,6 +85,21 @@ export function junctionDisplayDesign(j:JunctionInstance):Design{
 }
 export function worldJunctionRotation(j:JunctionInstance){
   return j.rotation+j.design.rotation;
+}
+const normalizedRotation=(rotation:number)=>((rotation%360)+360)%360;
+export function transformNetworkProject(project:NetworkProject,transform:NetworkRigidTransform):NetworkProject{
+  const {origin,translation}=transform,rotation=normalizedRotation(transform.rotation);
+  if(![origin.x,origin.y,translation.x,translation.y,rotation].every(Number.isFinite))return project;
+  if(Math.abs(translation.x)<1e-12&&Math.abs(translation.y)<1e-12&&Math.abs(rotation)<1e-12)return project;
+  const angle=rad(rotation),cos=Math.cos(angle),sin=Math.sin(angle),move=(point:WorldPoint):WorldPoint=>{
+    const dx=point.x-origin.x,dy=point.y-origin.y;
+    return{x:origin.x+dx*cos-dy*sin+translation.x,y:origin.y+dx*sin+dy*cos+translation.y};
+  };
+  return{
+    ...project,
+    junctions:project.junctions.map(j=>{const p=move(j);return{...j,x:p.x,y:p.y,rotation:normalizedRotation(j.rotation+rotation)};}),
+    links:project.links.map(link=>({...link,via:link.via.map(v=>({...move(v),radius:v.radius}))}))
+  };
 }
 export function junctionById(project:NetworkProject,id:string){
   return project.junctions.find(j=>j.id===id);

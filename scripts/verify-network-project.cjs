@@ -81,6 +81,15 @@ const collapseLink=p.links[0],collapseFrom=n.worldPort(p,collapseLink.from),coll
 const collapsed=n.moveJunction(p,b.id,{x:currentB.x+(collapseFrom.x-collapseTo.x),y:currentB.y+(collapseFrom.y-collapseTo.y)});
 assert(n.linkIssues(collapsed,collapsed.links[0]).some(v=>v.kind==='alignment'),'moving Junctions into an invalid Link alignment must be surfaced explicitly');
 
+const rigidBase=n.createNetworkProject(),rigidLink=rigidBase.links[0],rigidControls=n.linkControlPoints(rigidBase,rigidLink),rigidMid={x:(rigidControls[0].x+rigidControls.at(-1).x)/2,y:(rigidControls[0].y+rigidControls.at(-1).y)/2+25},rigidWithVia=n.insertLinkVia(rigidBase,rigidLink.id,0,rigidMid),rigidBounds=n.projectBounds(rigidWithVia,0),rigidOrigin={x:rigidBounds.x+rigidBounds.w/2,y:rigidBounds.y+rigidBounds.h/2},rigidRotation=27,rigidTranslation={x:34,y:-19},rigidAngle=rigidRotation*Math.PI/180,
+  rigidMove=point=>{const dx=point.x-rigidOrigin.x,dy=point.y-rigidOrigin.y;return{x:rigidOrigin.x+dx*Math.cos(rigidAngle)-dy*Math.sin(rigidAngle)+rigidTranslation.x,y:rigidOrigin.y+dx*Math.sin(rigidAngle)+dy*Math.cos(rigidAngle)+rigidTranslation.y};},
+  rigid=n.transformNetworkProject(rigidWithVia,{origin:rigidOrigin,translation:rigidTranslation,rotation:rigidRotation});
+assert.equal(n.validateNetworkProject(rigid),null,'whole-network rigid transform must preserve a valid semantic project');
+rigidWithVia.junctions.forEach((junction,index)=>{const expected=rigidMove(junction),actual=rigid.junctions[index];assert(Math.hypot(actual.x-expected.x,actual.y-expected.y)<1e-8);assert.equal(actual.rotation,(junction.rotation+rigidRotation)%360);assert.deepEqual(actual.design,junction.design,'Map Align must not mutate embedded Junction Design v6');});
+const rigidViaExpected=rigidMove(rigidWithVia.links[0].via[0]),rigidVia=rigid.links[0].via[0];assert(Math.hypot(rigidVia.x-rigidViaExpected.x,rigidVia.y-rigidViaExpected.y)<1e-8);assert.equal(rigidVia.radius,rigidWithVia.links[0].via[0].radius,'rigid transform must preserve RoadLink PI radius');assert.deepEqual(rigid.links[0].from,rigidWithVia.links[0].from);assert.deepEqual(rigid.links[0].to,rigidWithVia.links[0].to);
+assert(Math.abs(n.linkLength(rigid,rigid.links[0])-n.linkLength(rigidWithVia,rigidWithVia.links[0]))<1e-7,'rigid Map Align must preserve resolved RoadLink length');
+assert.equal(n.transformNetworkProject(rigidBase,{origin:{x:0,y:0},translation:{x:0,y:0},rotation:0}),rigidBase,'zero rigid transform must be a no-op');
+
 const display=n.junctionDisplayDesign(movedA);
 assert.equal(display.rotation,0);
 assert(display.arms.every((arm,i)=>arm.length===n.portDistance(movedA,i)));
@@ -138,4 +147,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,2);
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
 const wideBoundsProject=structuredClone(removed),wideJ=wideBoundsProject.junctions[0];wideJ.design.arms[1].incomingSection={width:4.5,walk:5,bands:[{id:'wide-bike',type:'bike',width:3},{id:'wide-shoulder',type:'shoulder',width:4}]};const wideBounds=n.projectBounds(wideBoundsProject);assert(wideBounds.w>=bounds.w&&wideBounds.h>=bounds.h,'fit bounds must include resolved carriageway/edge-zone footprint, not only Junction centers and ports');
-console.log('PASS network project v2: PI radius curves, explicit curb/median lane transitions, localized section geometry, v1 migration, direct Arm edits, semantic ports, Complete Streets continuity and persistence');
+console.log('PASS network project v2: PI radius curves, explicit curb/median lane transitions, localized section geometry, v1 migration, direct Arm edits, rigid Map Align transform, semantic ports, Complete Streets continuity and persistence');
