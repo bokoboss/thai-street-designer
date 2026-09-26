@@ -103,10 +103,14 @@ assert(networkSource.includes("if(selection?.kind==='link'&&selectedLinkVertex!=
 assert(networkDrawingSource.includes('data-network-link-band')&&networkDrawingSource.includes('data-network-link-sidewalk'),'Road Link rendering must carry resolved edge-zone composition instead of dropping Complete Streets bands');
 assert(networkSource.includes("view==='2d'&&<MapBackground"),'live MapLibre 2D layer must unmount in 3D to avoid duplicate map rendering');
 assert(networkSource.includes('Offset X (m)')&&networkSource.includes('ล็อกตำแหน่งแผนที่'),'Network map controls must support persistent reference alignment without mutating engineering geometry');
-assert(networkProjectSource.includes('export function transformNetworkProject')&&networkProjectSource.includes('links:project.links.map(link=>({...link,via:link.via.map')),'Map Align must use one rigid semantic Network transform that moves Junction instances and RoadLink via points together');
+assert(
+  networkProjectSource.includes('export function transformNetworkProject')&&networkProjectSource.includes('links:project.links.map(link=>({...link,via:link.via.map'),
+  'Map Align must use one rigid semantic Network transform that moves Junction instances and RoadLink via points together'
+);
 assert(networkSource.includes("kind:'network-align'")&&networkSource.includes('data-network-map-align-action="drag"')&&networkSource.includes('data-network-map-align-layer'),'Map Align drag mode must move the whole Network while disabling object-level hit interactions');
 assert(networkSource.includes('rotateNetworkForMapAlignment')&&networkSource.includes('data-network-map-align-action="rotate"')&&networkSource.includes('projectBounds(before,0)'),'Map Align rotation must be an explicit whole-Network transaction around the current footprint center');
 assert(networkSource.includes('LocalImageReferenceLayer')&&networkSource.includes('data-local-reference-panel="true"')&&networkSource.includes("'image-align'")&&networkSource.includes("'image-calibrate'"),'Network workspace must expose a separate local-image reference layer with move and A-B calibration modes');
+assert(networkSource.includes("localReference.enabled&&!!localImageUrl"),'canvas background must become transparent when a local reference is visible without an online basemap');
 assert(localReferenceModelSource.includes('calibrateLocalImageReference')&&localReferenceModelSource.includes('metersPerPixel')&&localReferenceModelSource.includes('calibrationDistance'),'local reference scale must be semantic metadata rather than baked pixels or engineering geometry');
 assert(localReferenceLayerSource.includes('indexedDB.open')&&localReferenceLayerSource.includes('active-site-plan')&&localReferenceLayerSource.includes('createObjectURL'),'local image bytes must persist in browser IndexedDB rather than NetworkProject JSON/localStorage payloads');
 assert(networkSource.includes('data-local-reference-calibration="true"')&&networkSource.includes('Apply calibration')&&networkSource.includes('Calibration ขยาย/ย่อแบบ uniform'),'A-B calibration must be visible, explicit and user-applied rather than silently changing scale');
