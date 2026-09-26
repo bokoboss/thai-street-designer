@@ -440,3 +440,26 @@ Engineering rules in this phase:
 - 2D, section dock and Network 3D all consume the same `resolveLinkSectionGeometry()` result.
 
 Schema migration is intentionally small: v1/v2 projects gain `components: []`; no Junction Design data is rewritten. Review mode cannot be re-enabled while persisted station components remain, preventing the UI from silently discarding corridor lifecycle semantics.
+
+### Phase 5B.3 unified lane lifecycle runtime
+
+RoadLink lane-count changes now resolve through one runtime lifecycle model before plan, cross-section or 3D geometry is generated.
+
+This deliberately keeps Network schema v3 unchanged. Persistence remains backward compatible:
+
+- Junction endpoint lane-count mismatch still stores its explicit side/center/length in `sectionProfile.forwardLaneTransition` or `backwardLaneTransition`;
+- corridor auxiliary lanes still persist as RoadLink `components[]`;
+- both forms normalize to `ResolvedLaneLifecycle` at runtime with a common direction, side, profile and source identity.
+
+The runtime distinguishes two provenance classes:
+
+- `junction-endpoint` — the extra lane implied by a one-lane mismatch between the two Junction ports;
+- `roadlink-component` — a persisted station-based auxiliary lane owned by the corridor.
+
+After normalization, lane count, taper sampling, divider identity and lateral stacking are derived by the same lifecycle resolver. This removes the previous duplicate endpoint/component lane-count branches from `network-link-geometry.ts`.
+
+The Junction side also shares the same low-level easing primitive now: `Pocket` / receiving-lane taper-out uses `lifecycle-math.taperOutFactor()`, while station profiles use the same `smoothstep()`. Ownership and persistence remain separate, but the longitudinal taper math is no longer duplicated.
+
+Median-side stacking is now deterministic when an endpoint transition and a corridor auxiliary overlap: each lifecycle keeps a separate divider identity and common lanes shift by the total active median-side lifecycle width. Curb-side lifecycle stacking follows the same ordered rule outside the common lane stack.
+
+This phase does **not** move Junction Pocket / receiving-lane ownership out of Design v6. Pocket geometry remains local to the Junction arm. The architectural boundary is now prepared for the next step: mapping selected Junction auxiliary treatments into corridor lifecycle proposals without creating a second taper or lane-identity engine.

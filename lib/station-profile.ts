@@ -1,10 +1,11 @@
+import {clamp01,smoothstep} from './lifecycle-math';
+
 export type StationInterpolation='linear'|'smooth'|'hold';
 export type StationValueKnot={station:number;value:number};
 export type StationValueProfile={knots:StationValueKnot[];interpolation:StationInterpolation};
 
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
-const smooth=(t:number)=>{const x=clamp(t,0,1);return x*x*(3-2*x);};
 
 export function createStationProfile(knots:StationValueKnot[],interpolation:StationInterpolation='linear'):StationValueProfile{
   const sorted=knots
@@ -46,7 +47,7 @@ export function valueAtStation(profile:StationValueProfile,station:number){
     const a=knots[i-1],b=knots[i];
     if(s<=b.station){
       if(profile.interpolation==='hold')return a.value;
-      const raw=(s-a.station)/(b.station-a.station||1),t=profile.interpolation==='smooth'?smooth(raw):clamp(raw,0,1);
+      const raw=(s-a.station)/(b.station-a.station||1),t=profile.interpolation==='smooth'?smoothstep(raw):clamp01(raw);
       return mix(a.value,b.value,t);
     }
   }
@@ -92,7 +93,7 @@ export function sampleStationSeries(stations:number[],values:number[],station:nu
   for(let i=1;i<stations.length;i++){
     if(station<=stations[i]){
       const a=stations[i-1],b=stations[i],t=(station-a)/(b-a||1);
-      return mix(values[i-1]??0,values[i]??0,clamp(t,0,1));
+      return mix(values[i-1]??0,values[i]??0,clamp01(t));
     }
   }
   return values.at(-1)??0;

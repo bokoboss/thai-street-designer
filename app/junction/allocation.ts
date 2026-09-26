@@ -1,3 +1,4 @@
+import {taperOutFactor} from '../../lib/lifecycle-math';
 import {sectionFor,pocketsFor,pocketLaneWidth,type Arm,type Direction,type Pocket} from './model';
 
 export type AllocationMode='auto'|'median'|'retain'|'widen'|'reallocate'|'legacy-preserve';
@@ -12,10 +13,7 @@ export const pocketOriginFor=(origins:TreatmentOrigins,dir:Direction,side:'left'
   const key=treatmentOriginKey(dir,side);
   return origins[key]??origins[dir]??0;
 };
-export const pocketFactor=(p:{length:number;taper:number},x:number,origin:number)=>{
-  const t=Math.max(0,Math.min(1,(x-origin-p.length)/p.taper));
-  return 1-t*t*(3-2*t);
-};
+export const pocketFactor=(p:{length:number;taper:number},x:number,origin:number)=>taperOutFactor(x,origin+p.length,p.taper);
 export const pocketFactorAt=(p:{length:number;taper:number},x:number,origins:TreatmentOrigins,dir:Direction,side:'left'|'right')=>{
   const origin=pocketOriginFor(origins,dir,side);
   const custom=typeof origins!=='number'&&Object.prototype.hasOwnProperty.call(origins,treatmentOriginKey(dir,side));
