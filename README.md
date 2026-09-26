@@ -4,6 +4,8 @@
 
 รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
 
+สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md) และ [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+
 ## เริ่มใช้งาน
 
 เลือกทางแยกหรือวงเวียน เปิด/ปิดขาถนนให้เหลือ 3 หรือ 4 ขา จากนั้นคลิกขาถนนบนแบบเพื่อแก้ไข
@@ -21,7 +23,7 @@
 
 ขาถนนเป็นเส้นตรงแยกมุมได้ มีระยะห่างมุมขั้นต่ำ 40 องศาเพื่อกันแบบซ้อนกัน กรณีที่พื้นที่ไม่พอสำหรับโค้ง Slip lane หรือเส้นทึบ 30 เมตรจะคงแบบเดิมและแสดงเหตุผล
 
-แถบหน้าตัดกำหนดแยกขาเข้าและขาออกได้ เรียงจากเลนรถออกสู่ทางเท้า เพิ่มแล้วขยายความกว้างรวม ประเภท: ไหล่ทาง เลนจักรยาน เลนมอเตอร์ไซค์ พื้นที่คั่น แถบเหล่านี้สิ้นสุดก่อนปากแยก / Slip lane ยังไม่มีการออกแบบแนวเชื่อมเลนพิเศษผ่านแยก แยกความกว้างเลนรถแต่ละเลน และโหมดล็อกความกว้างถนนรวม
+หน้าตัดใช้กติกาคงที่ **ซ้าย = ขาเข้าแยก / กลาง = เกาะกลาง / ขวา = ขาออกแยก** ไม่กลับด้านตามทิศภูมิศาสตร์ ผู้ใช้เลือกองค์ประกอบจากผังหรือหน้าตัดและแก้ความกว้างจากหน้าตัดได้โดยตรง เลนหลักของแต่ละทิศทางใช้ความกว้างร่วมกัน ส่วนเลนเสริม/เลนรับสามารถกำหนดความกว้างแยกได้ แถบเพิ่มเติม ได้แก่ ไหล่ทาง เลนจักรยาน เลนมอเตอร์ไซค์ และพื้นที่คั่น
 
 3D เป็นแบบฉายขนานจากพิกัดสามมิติ ใช้ Canvas และผัง SVG ชุดเดียวกัน ถนนอยู่ระดับเดียว ยังไม่มีภูมิประเทศ ความลาดชัน สะพาน การจำลองรถ การคำนวณแสง หรือการส่งออกโมเดล 3D ต้นไม้/เสาไฟเป็นชุดอัตโนมัติ ยังไม่มีการย้ายวัตถุทีละชิ้น
 
@@ -29,13 +31,23 @@
 
 ## Source
 
-- `app/junction/model.ts`: ข้อมูลแบบ การตรวจและแปลง JSON รุ่นเก่า
-- `app/junction/geometry.ts`: ขอบถนน ทางเท้า โค้ง Slip lane เส้นหยุด
-- `app/junction/drawing.tsx`: ผัง SVG และลูกศร
-- `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D
-- `app/junction/scene3d.tsx`: รูปทรงยกสูงและกล้อง 3D
+- `app/junction/model.ts`: ข้อมูลแบบหลัก, schema v6, validation ระดับข้อมูล และ migration JSON รุ่นเก่า
+- `app/junction/geometry.ts`: **base junction geometry เท่านั้น** — ขอบถนน ทางเท้า ปากแยก median/pocket datums; ห้ามนำ Slip logic กลับเข้ามา
+- `app/junction/slip-model.ts`: source of truth ของ `Design.slips: SlipLane[]` และ lifecycle เพิ่ม/ลบ/แก้ Slip
+- `app/junction/slip-geometry.ts`: Slip overlay geometry, tangent/width transition, approach auxiliary, departure/acceleration, crossing และ validation เฉพาะ Slip
+- `app/junction/design-validation.ts`: รวม base-junction validation กับ Slip-overlay validation
+- `app/junction/drawing.tsx`: ผัง SVG; render base junction และ Slip overlay แยกกัน
+- `app/junction/selection.ts` / `object-layer.tsx`: selection และ drag interaction ที่อ้าง geometry ชุดเดียวกับ renderer
+- `app/junction/section-view.tsx` / `scene3d.tsx`: หน้าตัดและ 3D ที่ consume Slip overlay โดยไม่แก้ base road
+- `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D และหลบพื้นที่ Slip overlay
 - `app/junction/page.tsx`: เครื่องมือ ประวัติการแก้ไข autosave และส่งออก
-- `app/roads/page.tsx`: โหมดวาดถนนอิสระเดิม
+- `app/roads/page.tsx`: พื้นที่ทำงานวาดถนนอิสระ (Free Draw / Network)
+
+### Slip lane architecture (schema v6)
+
+Slip lane เป็น **design-level overlay** ไม่ใช่ field ใน `Arm` และไม่ใช้ generic `Pocket` เป็น source of truth อีกต่อไป กฎเหล็กคือการเพิ่ม/ลบ/ปรับ Slip ต้องไม่เปลี่ยน `edges(d)` ของ base junction; regression test ตรวจ `edges(withSlip) === edges(base)` แบบโครงสร้างตรงกัน
+
+Baseline Slip ไม่มีทางข้าม, auxiliary lane หรือ acceleration lane โดยอัตโนมัติ Treatment ต่าง ๆ ต้องเปิดอย่าง explicit ผ่าน `SlipLane.approach`, `SlipLane.departure` และ `SlipLane.crossing`. ดูรายละเอียดและข้อห้ามใน [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) และหลักวิศวกรรมใน [docs/SLIP_LANE_DESIGN_BASIS.md](docs/SLIP_LANE_DESIGN_BASIS.md)
 
 ## Development
 
@@ -45,8 +57,9 @@ Node >= 22.13 และ pnpm ตาม `packageManager` ใน package.json
 pnpm install --frozen-lockfile
 pnpm dev
 pnpm exec tsc --noEmit
-node scripts/verify-junction.cjs
-pnpm build
+pnpm test
+pnpm lint
+pnpm test:builds
 ```
 
 การทดสอบ geometry สร้างภาพตรวจในโฟลเดอร์ชั่วคราวที่ไม่บันทึกลง Git
@@ -55,9 +68,9 @@ pnpm build
 
 - TypeScript ผ่าน
 - Geometry/render: ตั้งฉาก, 3 ขาทั้ง 4 แบบ, มุมเฉียงร่วมกับ Slip lane และถนนกว้างต่างกัน, Slip lane ทุกมุม, วงเวียนมุมเฉียง, แถบหน้าตัดและวัตถุริมทาง
-- เส้นแบ่งเลนทั้งสองทิศเริ่มที่ขอบด้านรอของเส้นหยุด คิดครึ่งความหนาเส้นหยุด และทึบต่อไป 30 เมตร: 12 กรณี
+- เส้นแบ่งเลนขาเข้าอ้างจากแนวควบคุม/เส้นหยุด ส่วนขาออกอ้างจาก datum ด้านออกของปากแยกหรือแนวสัมผัสทางออกวงเวียน และรองรับช่วงเส้นทึบแยกกันตามทิศทาง
 - การย้ายข้อมูล JSON เดิม การปฏิเสธข้อมูลผิดและมุมแคบเกินไป
-- Browser: เปลี่ยนมุม/ความยาว เปิด Slip lane, ลากปลายถนนและ Undo, แถบหน้าตัด, 2D/3D, ต้นไม้/เสาไฟ
+- Regression: median-first Auto allocation, explicit retained-median override, independent auxiliary widths, receiving-lane departure datum, lane-level selection/markings, fixed cross-section orientation, Free Draw shared allocation and schema migration
 - Browser PNG/JPEG: ส่งออก 2400×2400 พิกเซล PNG มุมภาพ alpha 0; JPEG มุมภาพ RGB 255,255,255
 
 ยังไม่ได้ทดสอบทุกขนาดหน้าจอหรือทุกชุดค่าทางเรขาคณิต
@@ -92,7 +105,7 @@ Browser verification covers reset/undo, 3D zoom buttons, opposite-arm alignment,
 - Roadside settings belong to each arm and its incoming/outgoing sidewalk. Choose one side or both, or apply the displayed values to the same sides of all enabled arms. Existing global-setting JSON files retain their old appearance until edited.
 - Tree height/crown diameter, pole height/diameter/arm reach, spacing, start setback and curb-to-center offset are editable. New curb offsets default to 0.5 m. Object centers are clamped 0.35 m inside sidewalk edges; sidewalks narrower than 0.75 m omit objects.
 - Streetlights have arms pointing toward the road and downward-facing luminaires. Traffic signals are raised cantilever models with horizontal red-yellow-green lenses facing incoming traffic; the flat 2D symbol is removed from the 3D texture. The model does not simulate illumination or signal cycles.
-- Each arm can use dashed lane dividers or a configurable solid segment (default 30 m), followed by dashes. Both travel directions share the waiting-side edge of the stop line, including its half-width. Increase road length when needed to fit the selected segment and its dashed continuation.
+- Each arm can use dashed lane dividers or a configurable solid segment (default 30 m), followed by dashes. Incoming dividers begin from the incoming control datum; outgoing dividers begin from the departure-side road-mouth/tangency datum. Increase road length when needed to fit the selected segment and its dashed continuation.
 - Verified model migration, independent side settings, 0.5 m curb positioning, inward arms on four road directions, signal meshes, configurable divider lengths and all previous geometry regressions. Browser checks cover independent offsets, solid/dashed changes, 3D furniture and PNG export preview/download.
 
 Lane divider controls now select incoming, outgoing or both directions within the selected arm. Each direction retains its own mode and solid length; changing incoming values does not change outgoing values. Legacy files without outgoing overrides inherit their former shared settings. Markings-copy includes both directions, and road-length checks consider directions that actually contain lane dividers. Regression coverage includes independent modes, lengths, other-arm isolation, legacy imports and rendered SVG paths.
@@ -121,9 +134,11 @@ Tests cover the reported 315°/90°/180°/270° layout, unaffected west/south ap
 
 Select an arm, open **ถนน**, then select **ทิศทางหน้าตัด**. Incoming and outgoing directions independently retain lane width, sidewalk width and ordered shoulder/bicycle/motorcycle/separator bands. Existing designs inherit their original shared dimensions until edited.
 
-Each direction supports 0–3 additional lanes on either side: left is curb-side and right is median-side, relative to travel. Incoming additions are turning pockets; outgoing additions are receiving lanes. Set full-width length and taper length separately. Full-width length starts at the stop-line reference and excludes the taper. Increase approach length when the complete pocket and taper do not fit. Tapers cannot start inside a corner/slip-lane curve.
+Each direction supports 0–3 additional lanes on either side: left is curb-side and right is median-side, relative to travel. Incoming additions are turning pockets; outgoing additions are receiving lanes. Incoming full-width/storage length is referenced from the incoming control datum. Outgoing receiving length is referenced from the actual departure-side road-mouth/tangency datum, followed by its merge taper.
 
-The road, sidewalks, bands, dividers, arrows and roadside objects follow the selected corridor constraint in 2D and 3D. New designs preserve the corridor: right pockets consume median reserve and left pockets consume shoulder/buffer space. Explicit widening retains the former outward-shift behavior. Schema-2 imports retain widening to preserve their existing geometry. Section-copy includes both directions and their pockets. These are conceptual geometric lanes, without vehicle routing or capacity simulation.
+**Auto space allocation is feature-driven.** A median-side auxiliary lane uses available median width first and widens outward only by the actual deficit. A curb-side auxiliary lane widens outward by default. Shoulder/buffer reallocation and retained-median constraints are explicit choices rather than hidden Auto rules. A narrow residual median produces feedback; it does not silently force widening. Schema-4 imports preserve their former visual result through explicit migrated allocation settings.
+
+Main and auxiliary lanes have lane identity and editable arrow markings. Outgoing receiving lanes default to a semantic **merge-to-main** arrow that is mirrored from local lane geometry rather than geographic screen direction. These remain conceptual geometric lanes without vehicle routing, capacity simulation or standards certification.
 
 Verification: `node scripts/verify-junction.cjs` followed by `node scripts/verify-pockets.cjs`. Tests cover independent dimensions, legacy defaults, JSON validation, insufficient length, both pocket sides, outgoing receiving lanes, skew approaches, slip lanes and roundabouts. Browser checks cover independent directional controls, six added lanes, and 2D/3D rendering.
 

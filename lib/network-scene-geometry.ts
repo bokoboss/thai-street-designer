@@ -1,0 +1,102 @@
+import {profiledParallel} from './alignment';
+import {resolveLinkSectionGeometry} from './network-link-geometry';
+import {
+  resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
+  type JunctionSceneSurfaceKind
+} from '../app/junction/scene-surfaces';
+import {furnitureFaces} from '../app/junction/furniture3d';
+import {worldJunctionRotation,type JunctionInstance,type NetworkProject,type WorldPoint} from './network-project';
+
+export type NetworkSceneSurfaceKind=JunctionSceneSurfaceKind;
+export type NetworkSceneSurface={
+  id:string;
+  kind:NetworkSceneSurfaceKind;
+  points:WorldPoint[];
+  z:number;
+};
+export type NetworkSceneFace={
+  id:string;
+  points:{x:number;y:number;z:number}[];
+  color:string;
+};
+
+const strip=(center:WorldPoint[],inner:number[],outer:number[])=>[
+  ...profiledParallel(center,inner),
+  ...profiledParallel(center,outer).reverse()
+];
+const bandKind=(type:string):NetworkSceneSurfaceKind=>
+  type==='bike'||type==='motorcycle'||type==='shoulder'||type==='buffer'?type:'shoulder';
+const transformPoint=(junction:JunctionInstance,p:WorldPoint)=>{
+  const angle=worldJunctionRotation(junction)*Math.PI/180,cos=Math.cos(angle),sin=Math.sin(angle);
+  return{x:junction.x+p.x*cos-p.y*sin,y:junction.y+p.x*sin+p.y*cos};
+};
+
+export function resolveJunctionSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
+  return project.junctions.flatMap(junction=>
+    resolveLocalJunctionSceneSurfaces(junction.design).map(surface=>({
+      id:`${junction.id}:${surface.id}`,
+      kind:surface.kind,
+      points:surface.points.map(p=>transformPoint(junction,p)),
+      z:surface.z
+    }))
+  ).filter(surface=>surface.points.length>=3&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
+
+export function resolveJunctionSceneFaces(project:NetworkProject):NetworkSceneFace[]{
+  return project.junctions.flatMap(junction=>
+    furnitureFaces(junction.design).map((face,index)=>({
+      id:`${junction.id}:furniture:${index}`,
+      color:face.color,
+      points:face.points.map(p=>({...transformPoint(junction,p),z:p.z}))
+    }))
+  ).filter(face=>face.points.length>=3&&face.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z)));
+}
+
+export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
+  const out:NetworkSceneSurface[]=[];
+  for(const link of project.links){
+    const g=resolveLinkSectionGeometry(project,link);
+    if(!g||g.points.length<2)continue;
+    out.push({
+      id:link.id+':road',
+      kind:'road',
+      points:strip(g.points,g.right.map(v=>-v),g.left),
+      z:.03
+    });
+    if(g.medianHalf.some(v=>v>.01))out.push({
+      id:link.id+':median',
+      kind:'median',
+      points:strip(g.points,g.medianHalf.map(v=>-v),g.medianHalf),
+      z:.16
+    });
+    g.forwardBands.forEach((band,index)=>out.push({
+      id:`${link.id}:forward-band:${index}`,
+      kind:bandKind(band.type),
+      points:strip(g.points,band.inner,band.outer),
+      z:band.type==='buffer'?.07:.06
+    }));
+    g.backwardBands.forEach((band,index)=>out.push({
+      id:`${link.id}:backward-band:${index}`,
+      kind:bandKind(band.type),
+      points:strip(g.points,band.inner,band.outer),
+      z:band.type==='buffer'?.07:.06
+    }));
+    if(g.forwardWalk)out.push({
+      id:link.id+':forward-walk',
+      kind:'sidewalk',
+      points:strip(g.points,g.forwardWalk.inner,g.forwardWalk.outer),
+      z:.18
+    });
+    if(g.backwardWalk)out.push({
+      id:link.id+':backward-walk',
+      kind:'sidewalk',
+      points:strip(g.points,g.backwardWalk.inner,g.backwardWalk.outer),
+      z:.18
+    });
+  }
+  return out.filter(surface=>surface.points.length>=4&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
+
+export function resolveNetworkSceneSurfaces(project:NetworkProject){
+  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project)];
+}

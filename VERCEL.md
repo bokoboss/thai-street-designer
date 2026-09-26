@@ -15,7 +15,7 @@ The same application supports two independent build paths. No UI or geometry cod
 4. Remove conflicting old project-level build/output overrides, if any. Do not choose `dist`, Vite or Cloudflare for the Vercel target.
 5. No database, API key or additional application environment variables are required by the current road editor.
 
-This preparation does not create a Vercel project or deploy to Vercel. Sites publication and audience are unchanged. Browser-local saved designs are origin-specific; export JSON from the Sites address and import it at the new address to transfer a design.
+The repository is now connected to Vercel through Git integration. Audit-branch commits create Vercel Preview deployments automatically; production should remain on the configured production branch until the audit PR is deliberately merged. Sites publication and audience are unchanged. Browser-local saved designs are origin-specific; export JSON from one origin and import it at another to transfer a design.
 
 ## Local commands
 
@@ -49,6 +49,6 @@ Tested with Node 24.19.0 and pnpm 11.19.0. The Vercel path uses `.next-vercel/` 
 - Next production server: `/`, `/junction`, `/roads` and each page's JavaScript asset returned HTTP 200.
 - Sites configuration/runtime scripts and dependency lockfile: unchanged from the baseline.
 
-These are local production-build and HTTP smoke checks, not a Vercel-hosted deployment or a new full visual/UI acceptance pass. Vercel project provisioning and its first remote deployment remain to be done.
+These local production-build and HTTP smoke checks are supplemented by Vercel Preview build status on GitHub. A successful Preview check proves the branch builds on Vercel, but it is not a substitute for a deliberate visual/interaction acceptance pass. Production deployment remains controlled by the production branch.
 
 References: [Vercel build configuration](https://vercel.com/docs/builds/configure-a-build), [Next.js custom TypeScript configuration](https://nextjs.org/docs/app/api-reference/config/typescript#custom-tsconfig-path).
