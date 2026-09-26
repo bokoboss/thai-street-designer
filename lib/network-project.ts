@@ -523,20 +523,19 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const p=point&&typeof point==='object'?point as Record<string,unknown>:{};
         return{x:Number(p.x),y:Number(p.y),radius:source.schemaVersion===1?0:linkRadius(p.radius)};
       }):[],
-      components:LinkStationComponent[]=Number(source.schemaVersion)===3&&Array.isArray(item.components)?item.components.flatMap((value,index)=>{
-        if(!value||typeof value!=='object')return[];
+      components:LinkStationComponent[]=Number(source.schemaVersion)===3&&Array.isArray(item.components)?item.components.reduce<LinkStationComponent[]>((out,value,index)=>{
+        if(!value||typeof value!=='object')return out;
         const component=value as Record<string,unknown>,id=String(component.id??`C-${index+1}`),direction:LinkDirection=component.direction==='backward'?'backward':'forward',
           start=Number(component.start),end=Number(component.end),taperIn=Number(component.taperIn),taperOut=Number(component.taperOut);
         if(component.kind==='lane'){
           const side=component.side==='median'?'median':'curb';
-          return[{id,kind:'lane' as const,direction,side,start,end,taperIn,taperOut}];
-        }
-        if(component.kind==='width'){
+          out.push({id,kind:'lane',direction,side,start,end,taperIn,taperOut});
+        }else if(component.kind==='width'){
           const targetRaw=String(component.target??'walk'),target:LinkWidthTarget=['shoulder','bike','motorcycle','buffer'].includes(targetRaw)?targetRaw as Band['type']:'walk';
-          return[{id,kind:'width' as const,direction,target,start,end,taperIn,taperOut,delta:Number(component.delta)}];
+          out.push({id,kind:'width',direction,target,start,end,taperIn,taperOut,delta:Number(component.delta)});
         }
-        return[];
-      }):[];
+        return out;
+      },[]):[];
     const forwardLaneTransition=readTransition(profile?.forwardLaneTransition),backwardLaneTransition=readTransition(profile?.backwardLaneTransition),
       sectionProfile:LinkSectionProfile={mode};
     if(forwardLaneTransition)sectionProfile.forwardLaneTransition=forwardLaneTransition;
