@@ -55,7 +55,7 @@ function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
     <div className="network-section-components">
       {pieces.map(p=><div key={p.key} className={'network-section-piece '+p.kind.replace(/ /g,'-')} style={{flex:Math.max(.18,p.width)}} title={p.label+' '+p.width.toFixed(2)+' m'}><span>{p.label}</span><b>{p.width.toFixed(2)}</b></div>)}
     </div>
-    <footer><span>{resolved.linear?'Resolved geometric transition':'Review / constant display mode'}</span><span>{backwardCount.toFixed(2)} lanes ← · → {forwardCount.toFixed(2)} lanes</span></footer>
+    <footer><span>{resolved.linear?'Resolved geometric transition':'Review / constant display mode'}{link.components.length?` · ${link.components.length} station component${link.components.length===1?'':'s'}`:''}</span><span>{backwardCount.toFixed(2)} lanes ← · → {forwardCount.toFixed(2)} lanes</span></footer>
   </section>;
 }
 

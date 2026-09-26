@@ -57,6 +57,35 @@ export function sampleStationProfile(profile:StationValueProfile,stations:number
   return stations.map(station=>valueAtStation(profile,station));
 }
 
+export function windowStationProfile(total:number,start:number,end:number,taperIn:number,taperOut:number,value=1):StationValueProfile{
+  const length=Math.max(0,Number.isFinite(total)?total:0),a=clamp(Number.isFinite(start)?start:0,0,length),b=clamp(Number.isFinite(end)?end:length,0,length),
+    lo=Math.min(a,b),hi=Math.max(a,b),span=Math.max(0,hi-lo),rawIn=Math.max(0,Number.isFinite(taperIn)?taperIn:0),rawOut=Math.max(0,Number.isFinite(taperOut)?taperOut:0),
+    scale=rawIn+rawOut>span&&rawIn+rawOut>0?span/(rawIn+rawOut):1,inLen=rawIn*scale,outLen=rawOut*scale;
+  const enter=inLen>1e-9?lo+inLen:Math.min(hi,lo+1e-6),exit=outLen>1e-9?hi-outLen:Math.max(lo,hi-1e-6);
+  return createStationProfile([
+    {station:0,value:0},
+    {station:lo,value:0},
+    {station:enter,value},
+    {station:exit,value},
+    {station:hi,value:0},
+    {station:length,value:0}
+  ],'smooth');
+}
+
+export function profileSampleStations(profile:StationValueProfile,subdivisions=4){
+  const knots=profile.knots;if(!knots.length)return[];
+  const out:number[]=[];
+  for(let i=1;i<knots.length;i++){
+    const a=knots[i-1],b=knots[i];out.push(a.station);
+    if(profile.interpolation==='smooth'&&Math.abs(a.value-b.value)>1e-9&&b.station-a.station>1e-6){
+      for(let step=1;step<subdivisions;step++)out.push(a.station+(b.station-a.station)*step/subdivisions);
+    }
+  }
+  out.push(knots.at(-1)!.station);
+  return [...new Set(out.map(v=>+v.toFixed(9)))].sort((a,b)=>a-b);
+}
+
+
 export function sampleStationSeries(stations:number[],values:number[],station:number){
   if(!stations.length||!values.length)return 0;
   if(station<=stations[0])return values[0]??0;

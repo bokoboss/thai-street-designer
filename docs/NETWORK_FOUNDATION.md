@@ -16,9 +16,12 @@ NetworkProject
    ├─ from PortRef
    ├─ to PortRef
    ├─ LinkVia[] = PI world point + radius
-   └─ sectionProfile
-      ├─ review
-      └─ linear
+   ├─ sectionProfile
+   │  ├─ review
+   │  └─ linear
+   └─ components[]
+      ├─ lane lifecycle
+      └─ edge-width lifecycle
 ```
 
 A `JunctionInstance` owns:
@@ -35,6 +38,7 @@ A `RoadLink` owns:
 - PI/control alignment points and their curve radii
 - the resolved tangent–arc–tangent corridor alignment
 - explicit section-continuity mode
+- persisted station-based corridor components owned by the RoadLink
 
 A port is a semantic reference:
 
@@ -93,7 +97,7 @@ For a Link from Junction A to Junction B:
 - B `incoming` lanes = Link forward lanes at the B end
 - B `outgoing` lanes = Link backward lanes at the B end
 
-RoadLink schema v2 does not silently invent lane topology when the two ends disagree.
+RoadLink schema v3 retains the v2 rule that it does not silently invent lane topology when the two ends disagree.
 
 Two section-profile modes are explicit:
 
@@ -170,15 +174,16 @@ They are implementation surfaces during the transition, not the long-term produc
 
 ## Persistence
 
-Network project schema is **v2**. The browser storage key remains:
+Network project schema is **v3**. The browser storage key remains:
 
 `thai-street-network-project-v1`
 
-The storage key is intentionally retained so existing local projects are discovered and migrated instead of being orphaned. On restore, schema-v1 projects migrate to v2 with:
+The storage key is intentionally retained so existing local projects are discovered and migrated instead of being orphaned. On restore:
 
-- existing via points preserved at R0;
-- section profile set to `review`;
-- embedded Junction Designs migrated through the existing Design migration path.
+- schema-v1 projects migrate directly to v3 with existing via points preserved at R0 and section profile set to `review`;
+- schema-v2 projects migrate to v3 with `components: []`;
+- embedded Junction Designs still migrate through the existing Design migration path;
+- schema-v3 persists RoadLink station components as semantic project state, not renderer geometry.
 
 Temporary detail-edit bridge:
 
@@ -196,7 +201,7 @@ Phase 3B removes the remaining flat Junction plan texture from Network 3D. The N
 - median, splitter and roundabout islands use `armIslands()` / the existing roundabout model;
 - Slip pavement, sidewalk, island, gore and raised separator consume Slip-v6 overlay geometry directly;
 - every Junction surface is transformed to world coordinates only through the `JunctionInstance` transform;
-- RoadLink surfaces continue to use the schema-v2 resolved section/alignment geometry;
+- RoadLink surfaces continue to use the shared resolved section/alignment geometry, including schema-v3 station components;
 - the reference map remains a ground texture.
 
 The standalone Junction 3D view also consumes the shared Junction scene resolver for its raised sidewalk/island meshes, so Network 3D does not own a parallel Junction geometry implementation.
@@ -377,7 +382,7 @@ This feature must follow the ownership lesson from Slip lanes and must not creat
 
 ## Near-term roadmap
 
-Completed foundation milestones now include RoadLink schema-v2 curves, explicit one-lane transitions, the contextual section/profile dock, direct Junction section editing, transaction-safe Undo/Redo, browser-level acceptance coverage, and resolved RoadLink 3D surfaces.
+Completed foundation milestones now include RoadLink curves, explicit one-lane transitions, the contextual section/profile dock, direct Junction section editing, transaction-safe Undo/Redo, browser-level acceptance coverage, resolved RoadLink 3D surfaces, calibrated local references, the shared station-profile engine, and persisted schema-v3 station components.
 
 Next priorities:
 
@@ -414,3 +419,24 @@ The foundation consists of:
 - the RoadLink section dock using the same shared station-series sampler rather than maintaining a second interpolation implementation.
 
 This phase deliberately does **not** persist arbitrary component lifecycles yet. Existing schema-v2 `review`, `linear` and explicit one-lane transition behavior remains the source of truth, so saved projects and visible geometry remain backward compatible. The next step can add RoadLink-owned station components (lane add/drop, taper, widening and edge components) on top of this tested profile primitive instead of introducing feature-specific geometry.
+
+### Phase 5B.2 persisted station components
+
+Network schema v3 adds RoadLink-owned lifecycle components while keeping the storage key and all Junction Design v6 semantics unchanged.
+
+Two persisted component families are introduced first:
+
+- `lane` — one auxiliary-lane lifecycle with direction, curb/median side, start/end station and independent taper-in/taper-out lengths;
+- `width` — a localized width delta applied to a sidewalk or an existing continuous edge band such as bike, buffer, shoulder or motorcycle space.
+
+Engineering rules in this phase:
+
+- station components are semantic RoadLink state and are stored in project JSON;
+- they are active only on a resolved `linear` RoadLink section profile;
+- same-direction auxiliary-lane lifecycles may not overlap yet, avoiding ambiguous lane identity in the first persisted version;
+- edge-width components may overlap and combine additively, but width is clamped at zero;
+- the renderer inserts additional centerline samples at lifecycle/taper stations so a transition cannot disappear merely because the base alignment has few vertices;
+- curb-side auxiliary lanes widen outward; median-side auxiliary lanes shift the common lane stack outward while keeping the median datum explicit;
+- 2D, section dock and Network 3D all consume the same `resolveLinkSectionGeometry()` result.
+
+Schema migration is intentionally small: v1/v2 projects gain `components: []`; no Junction Design data is rewritten. Review mode cannot be re-enabled while persisted station components remain, preventing the UI from silently discarding corridor lifecycle semantics.

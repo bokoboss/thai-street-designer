@@ -38,10 +38,11 @@ export function RoadLinkDrawing({
     issues=linkIssues(project,link),compatible=issues.length===0,linear=!!resolved?.linear&&linkLinearTransitionPossible(project,link),
     laneCompatible=!issues.some(v=>['lane-count','lane-width','median','alignment','missing-port'].includes(v.kind)),
     edgeCompatible=!issues.some(v=>['lane-count','lane-width','median','edge-section','alignment','missing-port'].includes(v.kind)),
+    renderPoints=resolved?.points??ps,
     left0=Math.max(a.left,b.left),right0=Math.max(a.right,b.right),roadWidth=resolved?Math.max(...resolved.left.map((v,i)=>v+resolved.right[i])):left0+right0,center=path(ps),
-    roadSurface=resolved?profiledStripPath(ps,resolved.right.map(v=>-v),resolved.left):variableStripPath(ps,-right0,-right0,left0,left0),
-    leftEdge=resolved?path(profiledParallel(ps,resolved.left)):path(variableParallel(ps,left0,left0)),
-    rightEdge=resolved?path(profiledParallel(ps,resolved.right.map(v=>-v))):path(variableParallel(ps,-right0,-right0)),
+    roadSurface=resolved?profiledStripPath(renderPoints,resolved.right.map(v=>-v),resolved.left):variableStripPath(ps,-right0,-right0,left0,left0),
+    leftEdge=resolved?path(profiledParallel(renderPoints,resolved.left)):path(variableParallel(ps,left0,left0)),
+    rightEdge=resolved?path(profiledParallel(renderPoints,resolved.right.map(v=>-v))):path(variableParallel(ps,-right0,-right0)),
     midpoint=ps[Math.floor(ps.length/2)];
   const laneLines:{start:number;end:number;key:string}[]=[];
   if(from&&to&&!linear&&laneCompatible){
@@ -50,10 +51,10 @@ export function RoadLinkDrawing({
   }
   const edgePieces:React.ReactNode[]=[];
   if(resolved&&(linear||edgeCompatible)){
-    resolved.forwardBands.forEach((band,index)=>edgePieces.push(<path key={'rf-'+index} data-network-link-band={band.type} data-link-side="forward" d={profiledStripPath(ps,band.inner,band.outer)} fill={bandFill[band.type]}/>));
-    resolved.backwardBands.forEach((band,index)=>edgePieces.push(<path key={'rb-'+index} data-network-link-band={band.type} data-link-side="backward" d={profiledStripPath(ps,band.inner,band.outer)} fill={bandFill[band.type]}/>));
-    if(resolved.forwardWalk)edgePieces.push(<path key="rf-walk" data-network-link-sidewalk="forward" d={profiledStripPath(ps,resolved.forwardWalk.inner,resolved.forwardWalk.outer)} fill="#b9c5cc"/>);
-    if(resolved.backwardWalk)edgePieces.push(<path key="rb-walk" data-network-link-sidewalk="backward" d={profiledStripPath(ps,resolved.backwardWalk.inner,resolved.backwardWalk.outer)} fill="#b9c5cc"/>);
+    resolved.forwardBands.forEach((band,index)=>edgePieces.push(<path key={'rf-'+index} data-network-link-band={band.type} data-link-side="forward" d={profiledStripPath(renderPoints,band.inner,band.outer)} fill={bandFill[band.type]}/>));
+    resolved.backwardBands.forEach((band,index)=>edgePieces.push(<path key={'rb-'+index} data-network-link-band={band.type} data-link-side="backward" d={profiledStripPath(renderPoints,band.inner,band.outer)} fill={bandFill[band.type]}/>));
+    if(resolved.forwardWalk)edgePieces.push(<path key="rf-walk" data-network-link-sidewalk="forward" d={profiledStripPath(renderPoints,resolved.forwardWalk.inner,resolved.forwardWalk.outer)} fill="#b9c5cc"/>);
+    if(resolved.backwardWalk)edgePieces.push(<path key="rb-walk" data-network-link-sidewalk="backward" d={profiledStripPath(renderPoints,resolved.backwardWalk.inner,resolved.backwardWalk.outer)} fill="#b9c5cc"/>);
   }else if(from&&to&&edgeCompatible){
     let f0=a.left;
     from.forwardBands.forEach((band,index)=>{edgePieces.push(<path key={'f-'+index} data-network-link-band={band.type} data-link-side="forward" d={variableStripPath(ps,f0,f0,f0+band.width,f0+band.width)} fill={bandFill[band.type]}/>);f0+=band.width;});
@@ -66,10 +67,10 @@ export function RoadLinkDrawing({
     {edgePieces}
     {selected&&<path d={roadSurface} stroke="#1c7974" strokeWidth="1.2" fill="#35424e" strokeLinejoin="round"/>}
     {!selected&&<path d={roadSurface} stroke="#9aa8ae" strokeWidth=".35" fill="#35424e" strokeLinejoin="round"/>}
-    {from&&to&&(from.median>0||to.median>0)&&<path data-network-link-median="true" d={resolved?profiledStripPath(ps,resolved.medianHalf.map(v=>-v),resolved.medianHalf):variableStripPath(ps,-from.median/2,-from.median/2,from.median/2,from.median/2)} fill="#83957a"/>}
+    {from&&to&&(from.median>0||to.median>0)&&<path data-network-link-median="true" d={resolved?profiledStripPath(renderPoints,resolved.medianHalf.map(v=>-v),resolved.medianHalf):variableStripPath(ps,-from.median/2,-from.median/2,from.median/2,from.median/2)} fill="#83957a"/>}
     <path data-scene-detail="true" d={leftEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path data-scene-detail="true" d={rightEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
-    {linear&&resolved?resolved.laneLines.flatMap(line=>profiledLinePaths(ps,line.offsets).map((d,index)=><path key={line.id+'-'+index} data-scene-detail="true" data-network-link-lane-transition={line.id} d={d} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)):laneLines.map(line=><path key={line.key} data-scene-detail="true" data-network-link-lane-line="true" d={path(variableParallel(ps,line.start,line.end))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+    {linear&&resolved?resolved.laneLines.flatMap(line=>profiledLinePaths(renderPoints,line.offsets).map((d,index)=><path key={line.id+'-'+index} data-scene-detail="true" data-network-link-lane-transition={line.id} d={d} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)):laneLines.map(line=><path key={line.key} data-scene-detail="true" data-network-link-lane-line="true" d={path(variableParallel(ps,line.start,line.end))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
     {!compatible&&<g transform={`translate(${midpoint.x} ${midpoint.y})`} pointerEvents="none"><circle data-network-link-warning="true" r="3.2" fill="#c3914c" stroke="white" strokeWidth=".6"/><text y=".9" textAnchor="middle" fontSize="2.6" fill="white" fontWeight="700">!</text></g>}
     <path d={center} stroke="transparent" strokeWidth={Math.max(14,roadWidth+8)} fill="none"/>
     {selected&&link.via.map((p,index)=><g key={'via-'+index} data-link-via-group={index}><circle data-link-via={index} cx={p.x} cy={p.y} r={selectedVertex===index?2.8:2.2} fill={selectedVertex===index?'#0f7d77':'white'} stroke="#0f7d77" strokeWidth=".6" onPointerDown={e=>{e.stopPropagation();onVertexSelect(index);onVertexMoveStart(index,e);}} style={{cursor:'move'}}/>{p.radius>0&&<text x={p.x+3.5} y={p.y-2.8} fontSize="2.4" fill="#0f6f69" pointerEvents="none">R{Math.round(p.radius)}</text>}</g>)}

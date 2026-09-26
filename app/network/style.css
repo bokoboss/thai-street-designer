@@ -118,3 +118,16 @@
 .network-local-reference-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 0}.network-local-reference-actions button{border:1px solid var(--ws-border);background:#fff;border-radius:6px;padding:6px 7px;color:var(--ws-ink);font-size:10.5px}.network-local-reference-actions button.active{border-color:#73b9b1;background:var(--ws-active);color:var(--ws-accent);font-weight:700}.network-local-reference-actions button.danger{color:#9b4242;background:#fff9f9}.network-local-reference-actions button:disabled{opacity:.4}
 .network-local-reference-meta{display:flex;flex-direction:column;gap:2px;margin:8px 0;padding:7px 8px;border:1px solid #d7e5e3;border-radius:6px;background:#f8fbfb;overflow:hidden}.network-local-reference-meta b{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.network-local-reference-meta span{font-size:9.5px;color:var(--ws-muted)}
 .network-local-calibration{margin:8px 0;padding:8px;border:1px solid #e5dcc4;border-radius:6px;background:#fffaf0}.network-local-calibration label{margin:0!important}.network-local-calibration-status{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:center;margin-top:6px}.network-local-calibration-status span{font-size:9.5px;color:#7b642f}.network-local-calibration-status button{border:1px solid #d8c28d;background:#fff;border-radius:5px;padding:5px 7px;color:#6f5722;font-size:9.5px}.network-local-calibration-status button:disabled{opacity:.4}
+
+.network-station-components{margin-top:10px;padding:9px;border:1px solid #cfdedc;border-radius:7px;background:#fbfdfd}
+.network-station-add{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 0}
+.network-station-add button{border:1px solid #a9ccc7;background:#fff;border-radius:6px;padding:6px 7px;color:#126f69;font-size:10px;font-weight:650}
+.network-station-add button:disabled{opacity:.38;cursor:not-allowed}
+.network-station-component-list{display:grid;gap:7px;margin-top:8px}
+.network-station-component-card{padding:8px;border:1px solid #d9e5e3;border-radius:6px;background:#fff}
+.network-station-component-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.network-station-component-title>div{display:flex;align-items:baseline;gap:6px}.network-station-component-title span{font-size:8.5px;letter-spacing:.08em;color:var(--ws-accent);font-weight:800}.network-station-component-title b{font-size:10px;color:var(--ws-muted)}
+.network-station-component-title button{border:1px solid #e2caca;background:#fff9f9;color:#984848;border-radius:5px;padding:3px 7px;font-size:9px}
+.network-station-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 7px}
+.network-station-grid label{margin:0!important;font-size:9.5px}.network-station-grid input,.network-station-grid select{margin-top:3px!important;padding:5px 6px!important;font-size:9.8px!important}
+@media(max-width:900px){.network-station-grid{grid-template-columns:1fr}.network-station-add{grid-template-columns:1fr}}

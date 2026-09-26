@@ -125,7 +125,7 @@ assert(networkSource.includes('pastRef=useRef<NetworkProject[]>([])')&&networkSo
 assert(networkSource.includes('updateLinkViaRadius')&&networkSource.includes('CURVE AT PI'),'RoadLink PI radius must be directly editable in the root Network workspace');
 assert(networkSource.includes('updateLinkSectionProfile')&&networkSource.includes('Resolved geometric transition'),'RoadLink section continuity mode must be explicit and user-controlled');
 assert(networkSource.includes('linkControlPoints')&&networkSource.includes('R0 = polyline เดิม'),'PI insertion/editing must operate on control geometry while rendering uses the resolved alignment');
-assert(networkSource.includes('Network schema v2'),'root workspace must expose the migrated Network schema v2 state');
+assert(networkSource.includes('Network schema v3'),'root workspace must expose the persisted Network schema v3 state');
 assert(networkDrawingSource.includes('variableParallel')&&networkDrawingSource.includes('data-network-link-median'),'RoadLink renderer must consume variable-width resolved geometry instead of a constant max-width stroke');
 assert(networkSource.includes('NetworkSectionDock'),'root Network workspace must expose the contextual section/profile dock');
 const networkSectionSource=fs.readFileSync('app/network/network-section-dock.tsx','utf8'),stationProfileSource=fs.readFileSync('lib/station-profile.ts','utf8'),alignmentSource=fs.readFileSync('lib/alignment.ts','utf8');
@@ -134,6 +134,13 @@ assert(networkSectionSource.includes('Station')&&networkSectionSource.includes('
 assert(stationProfileSource.includes('transitionStationProfile')&&stationProfileSource.includes('valueAtStation')&&stationProfileSource.includes("StationInterpolation='linear'|'smooth'|'hold'"),'RoadLink station lifecycle foundation must use one reusable deterministic profile primitive');
 assert(networkSectionSource.includes('sampleStationSeries')&&networkLinkGeometrySource.includes('sampleStationProfile')&&networkLinkGeometrySource.includes('stationOffsets(points)'),'renderer and section inspector must consume the shared station/profile engine rather than duplicate interpolation logic');
 assert(alignmentSource.includes('stationOffsets')&&alignmentSource.includes('station:along')&&alignmentSource.includes('offset:signedOffset'),'alignment projection must expose engineering station and signed lateral offset for future station-attached features');
+assert(networkProjectSource.includes("kind:'lane'")&&networkProjectSource.includes("kind:'width'")&&networkProjectSource.includes('components:LinkStationComponent[]'),'Network v3 RoadLink must persist semantic station components instead of storing derived shapes');
+assert(networkProjectSource.includes('addLinkStationComponent')&&networkProjectSource.includes('updateLinkStationComponent')&&networkProjectSource.includes('removeLinkStationComponent'),'station components must use explicit model update functions that can participate in Network undo/redo transactions');
+assert(networkLinkGeometrySource.includes('windowStationProfile')&&networkLinkGeometrySource.includes('profileSampleStations')&&networkLinkGeometrySource.includes('componentWindow'),'RoadLink renderer must resolve persisted lifecycle components through the shared station-profile engine');
+assert(networkDrawingSource.includes('renderPoints=resolved?.points??ps')&&networkDrawingSource.includes('profiledLinePaths(renderPoints'),'2D RoadLink drawing must consume the densified resolved centerline used by station lifecycles');
+assert(networkSource.includes('data-network-station-components="true"')&&networkSource.includes('data-network-station-add="lane"')&&networkSource.includes('data-network-station-add="width"'),'Network Inspector must expose persisted auxiliary-lane and edge-width lifecycle editing');
+assert(networkSource.includes('linkWidthTargets')&&networkSource.includes('Δ width (m)')&&networkSource.includes('Taper in (m)'),'station component editing must expose semantic target, station range and taper controls');
+
 assert(networkSource.includes('editFromNetworkSection')&&networkSource.includes('onJunctionEdit={editFromNetworkSection}'),'Junction section dock edits must route through the shared Network/Junction update functions');
 
 console.log('PASS schema 4 visual migration, schema 3 migration to schema 6, independent auxiliary widths, actual departure datum, lane markings, manual arrow placement, deterministic lane selection and fixed section orientation');
