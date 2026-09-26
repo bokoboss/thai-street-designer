@@ -4,6 +4,8 @@ import {GitBranch,Link2,Map,Minus,MousePointer2,Plus,RotateCw,Trash2,Undo2,Redo2
 import '../junction/style.css';
 import './style.css';
 import MapBackground,{IMAGERY_BASEMAP_OPTIONS,MAP_PROVIDER_CREDENTIALS_STORAGE,MAP_REFERENCE_STORAGE,STREET_BASEMAP_OPTIONS,basemapAccessLabel,basemapCredentialKey,basemapDescription,basemapKind,mapProviderCredentialsDefaults,mapReferenceDefaults,restoreMapProviderCredentials,restoreMapReference,searchMapPlaces,searchOpenAerialMapImagery,type MapBasemap,type MapPlace,type MapProviderCredentials,type MapReference,type OamImagerySummary} from '../junction/map-background';
+import LocalImageReferenceLayer,{clearLocalImageBlob,loadLocalImageBlob,readLocalImageDimensions,saveLocalImageBlob} from './local-reference-layer';
+import {LOCAL_IMAGE_REFERENCE_STORAGE,calibrateLocalImageReference,initialLocalImageReference,localImageFootprint,localImageReferenceDefaults,restoreLocalImageReference,type LocalImageReference} from '@/lib/local-reference';
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
@@ -15,12 +17,13 @@ import {
   projectBounds,removeJunction,removeLink,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
-type Tool='select'|'junction'|'link'|'pan'|'map-align'|'delete';
+type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
 type ArmDragState={kind:'arm';id:string;armId:number;before:NetworkProject;startPointer:WorldPoint;startEndpoint:WorldPoint};
 type Drag=
   |{kind:'pan';start:{x:number;y:number};pan:{x:number;y:number}}
   |{kind:'junction';id:string;before:NetworkProject;offset:WorldPoint}
   |{kind:'network-align';before:NetworkProject;start:WorldPoint}
+  |{kind:'local-image';start:WorldPoint;center:WorldPoint}
   |ArmDragState
   |{kind:'link-via';id:string;index:number;before:NetworkProject}
   |null;
@@ -67,9 +70,12 @@ export default function NetworkWorkspace(){
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[mapCredentials,setMapCredentials]=useState<MapProviderCredentials>(mapProviderCredentialsDefaults),[view,setView]=useState<'2d'|'3d'>('2d'),
     [linkCursor,setLinkCursor]=useState<WorldPoint|null>(null),[mapQuery,setMapQuery]=useState(''),[mapPlaces,setMapPlaces]=useState<MapPlace[]>([]),[mapSearching,setMapSearching]=useState(false),
     [oamSummary,setOamSummary]=useState<OamImagerySummary|null>(null),[oamSearching,setOamSearching]=useState(false),[oamError,setOamError]=useState(false),
-    [inspectorOpen,setInspectorOpen]=useState(true),[armGuide,setArmGuide]=useState<ArmDragGuide|null>(null),[mapAlignRotation,setMapAlignRotation]=useState(0);
+    [inspectorOpen,setInspectorOpen]=useState(true),[armGuide,setArmGuide]=useState<ArmDragGuide|null>(null),[mapAlignRotation,setMapAlignRotation]=useState(0),
+    [localReference,setLocalReference]=useState<LocalImageReference>(localImageReferenceDefaults),[localImageUrl,setLocalImageUrl]=useState<string|null>(null),
+    [calibrationPoints,setCalibrationPoints]=useState<WorldPoint[]>([]),[calibrationDistance,setCalibrationDistance]=useState(20);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
-    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null);
+    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
+    localImageInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
 
   const viewWidthMeters=NETWORK_VIEW_SPAN/zoom,scaleMeters=niceScaleMeters(viewWidthMeters*.18),scaleWidthPercent=scaleMeters/viewWidthMeters*100;
   useEffect(()=>{projectRef.current=project;},[project]);
@@ -77,8 +83,8 @@ export default function NetworkWorkspace(){
     let active=true;
     try{
       localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);
-      const restoredProject=restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE));
-      queueMicrotask(()=>{if(!active)return;storageReady.current=true;setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);});
+      const restoredProject=restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE)),restoredLocalReference=restoreLocalImageReference(localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE));
+      queueMicrotask(()=>{if(!active)return;storageReady.current=true;setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);setLocalReference(restoredLocalReference);});
     }catch{storageReady.current=true;}
     return()=>{active=false;};
   },[]);
@@ -86,6 +92,15 @@ export default function NetworkWorkspace(){
   useEffect(()=>()=>{if(armMoveFrame.current!==null)cancelAnimationFrame(armMoveFrame.current);},[]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_PROVIDER_CREDENTIALS_STORAGE,JSON.stringify(mapCredentials));}catch{}},[mapCredentials]);
+  useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(LOCAL_IMAGE_REFERENCE_STORAGE,JSON.stringify(localReference));}catch{}},[localReference]);
+  useEffect(()=>{
+    let active=true;
+    loadLocalImageBlob().then(blob=>{
+      if(!active||!blob)return;
+      const url=URL.createObjectURL(blob);if(localImageUrlRef.current)URL.revokeObjectURL(localImageUrlRef.current);localImageUrlRef.current=url;setLocalImageUrl(url);
+    }).catch(()=>{});
+    return()=>{active=false;if(localImageUrlRef.current){URL.revokeObjectURL(localImageUrlRef.current);localImageUrlRef.current=null;}};
+  },[]);
   useEffect(()=>{
     if(!mapReference.enabled||mapReference.basemap!=='oam-global')return;
     let stale=false;const timer=window.setTimeout(()=>{
@@ -98,7 +113,8 @@ export default function NetworkWorkspace(){
     return()=>{stale=true;window.clearTimeout(timer);};
   },[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng]);
 
-  const mapKind=basemapKind(mapReference.basemap),mapCredentialKey=basemapCredentialKey(mapReference.basemap),
+  const localImageSize=localImageFootprint(localReference),calibrationMeasured=calibrationPoints.length===2?Math.hypot(calibrationPoints[1].x-calibrationPoints[0].x,calibrationPoints[1].y-calibrationPoints[0].y):null,
+    mapKind=basemapKind(mapReference.basemap),mapCredentialKey=basemapCredentialKey(mapReference.basemap),
     selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
     selectedLink=selection?.kind==='link'?project.links.find(l=>l.id===selection.id):undefined,
     selectedArmData=selectedJunction&&selectedArm!==null&&selectedJunction.design.enabled[selectedArm]?selectedJunction.design.arms[selectedArm]:undefined,
@@ -131,7 +147,7 @@ export default function NetworkWorkspace(){
     setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
   }
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
-  function choose(next:Tool){setTool(next);setArmGuide(null);if(next==='map-align'){setView('2d');if(!mapReference.enabled)setMapReference(v=>({...v,enabled:true}));}if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='map-align'?'ลากพื้นที่ว่างเพื่อย้าย Network ทั้งชุดบนแผนที่ · Design v6 ภายในไม่เปลี่ยน':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลาก Arm อิสระ หรือกด Shift ระหว่างลากเพื่อ snap 15°');}
+  function choose(next:Tool){setTool(next);setArmGuide(null);if(next==='map-align'){setView('2d');if(!mapReference.enabled)setMapReference(v=>({...v,enabled:true}));}if(next==='image-align'||next==='image-calibrate'){setView('2d');if(localImageUrl)setLocalReference(v=>({...v,enabled:true}));}if(next==='image-calibrate')setCalibrationPoints([]);if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='map-align'?'ลากพื้นที่ว่างเพื่อย้าย Network ทั้งชุดบนแผนที่ · Design v6 ภายในไม่เปลี่ยน':next==='image-align'?'ลากบน canvas เพื่อย้ายภาพอ้างอิง · engineering geometry ไม่เปลี่ยน':next==='image-calibrate'?'คลิกจุด A และ B บนภาพอ้างอิง แล้ว Apply ตามระยะจริงที่กำหนด':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลาก Arm อิสระ หรือกด Shift ระหว่างลากเพื่อ snap 15°');}
   function beginFieldEdit(){fieldBefore.current=projectRef.current;}
   function finishFieldEdit(){const before=fieldBefore.current;fieldBefore.current=null;if(before&&before!==projectRef.current)remember(before);}
   async function findPlace(){
@@ -140,6 +156,26 @@ export default function NetworkWorkspace(){
     try{const places=await searchMapPlaces(q);setMapPlaces(places);if(!places.length)setNotice('ไม่พบสถานที่จากคำค้นนี้');}
     catch{setMapPlaces([]);setNotice('ค้นหาสถานที่ไม่สำเร็จ · ตรวจการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่');}
     finally{setMapSearching(false);}
+  }
+  async function importLocalReference(file:File|undefined){
+    if(!file)return;
+    if(!['image/png','image/jpeg'].includes(file.type)||file.size>50*1024*1024){setNotice('รองรับ JPG/PNG ขนาดไม่เกิน 50 MB');return;}
+    try{
+      const dimensions=await readLocalImageDimensions(file);await saveLocalImageBlob(file);
+      const url=URL.createObjectURL(file);if(localImageUrlRef.current)URL.revokeObjectURL(localImageUrlRef.current);localImageUrlRef.current=url;setLocalImageUrl(url);
+      setLocalReference(initialLocalImageReference(file.name,dimensions.width,dimensions.height,pan,Math.min(360,NETWORK_VIEW_SPAN/zoom*.75)));
+      setCalibrationPoints([]);setCalibrationDistance(20);choose('select');setNotice('นำเข้าภาพอ้างอิงแล้ว · ตั้งระยะ A–B เพื่อ calibrate สเกลจริงก่อนใช้อ้างอิง');
+    }catch{setNotice('อ่านหรือบันทึกภาพอ้างอิงไม่สำเร็จ · ลองใช้ JPG/PNG ไฟล์อื่น');}
+  }
+  async function removeLocalReference(){
+    try{await clearLocalImageBlob();}catch{}
+    if(localImageUrlRef.current){URL.revokeObjectURL(localImageUrlRef.current);localImageUrlRef.current=null;}setLocalImageUrl(null);setLocalReference(localImageReferenceDefaults());setCalibrationPoints([]);choose('select');setNotice('ลบภาพอ้างอิงออกจาก browser นี้แล้ว');
+  }
+  function applyLocalReferenceCalibration(){
+    if(calibrationPoints.length!==2)return;
+    const next=calibrateLocalImageReference(localReference,calibrationPoints[0],calibrationPoints[1],calibrationDistance);
+    if(!next){setNotice('Calibration ใช้ไม่ได้ · จุด A–B ต้องห่างกันและระยะจริงต้องมากกว่า 0');return;}
+    setLocalReference(next);setCalibrationPoints([]);choose('select');setNotice(`Calibrate ภาพแล้ว · A–B = ${calibrationDistance.toFixed(2)} m · scale ${next.metersPerPixel.toFixed(4)} m/px`);
   }
   function rotateNetworkForMapAlignment(){
     const degrees=Number(mapAlignRotation);if(!Number.isFinite(degrees)||Math.abs(degrees)<1e-6){setNotice('ระบุมุมหมุน Network ที่ไม่เป็นศูนย์ก่อน');return;}
@@ -190,6 +226,14 @@ export default function NetworkWorkspace(){
   function canvasDown(e:React.PointerEvent<SVGSVGElement>){
     if(e.button===1||tool==='pan'){drag.current={kind:'pan',start:{x:e.clientX,y:e.clientY},pan};e.currentTarget.setPointerCapture(e.pointerId);return;}
     if(tool==='map-align'){drag.current={kind:'network-align',before:projectRef.current,start:point(e)};e.currentTarget.setPointerCapture(e.pointerId);return;}
+    if(tool==='image-align'){
+      if(!localImageUrl||!localReference.enabled||localReference.locked){setNotice('ปลดล็อกและเปิดภาพอ้างอิงก่อนย้าย');return;}
+      drag.current={kind:'local-image',start:point(e),center:{x:localReference.x,y:localReference.y}};e.currentTarget.setPointerCapture(e.pointerId);return;
+    }
+    if(tool==='image-calibrate'){
+      if(!localImageUrl||!localReference.enabled||localReference.locked){setNotice('ปลดล็อกและเปิดภาพอ้างอิงก่อน calibrate');return;}
+      const p=point(e),next=calibrationPoints.length>=2?[p]:[...calibrationPoints,p];setCalibrationPoints(next);setNotice(next.length===1?'เลือกจุด A แล้ว · คลิกจุด B บนภาพ':'เลือก A–B แล้ว · ตรวจระยะจริงและกด Apply calibration');return;
+    }
     if(tool==='junction'){
       const before=projectRef.current,result=addJunction(before,point(e));commit(result.project,before);setSelection({kind:'junction',id:result.junction.id});choose('select');setNotice('สร้าง Junction instance แล้ว · ลากจุดกลางเพื่อจัดตำแหน่ง');return;
     }
@@ -206,6 +250,9 @@ export default function NetworkWorkspace(){
     if(current.kind==='network-align'){
       const next=transformNetworkProject(current.before,{origin:{x:0,y:0},translation:{x:p.x-current.start.x,y:p.y-current.start.y},rotation:0});
       setProjectNow(next);return;
+    }
+    if(current.kind==='local-image'){
+      setLocalReference(v=>({...v,x:current.center.x+(p.x-current.start.x),y:current.center.y+(p.y-current.start.y)}));return;
     }
     if(current.kind==='link-via'){
       const next=moveLinkVia(projectRef.current,current.id,current.index,p);
@@ -231,6 +278,7 @@ export default function NetworkWorkspace(){
     }
     drag.current=null;setArmGuide(null);
     try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
+    if(current?.kind==='local-image'){setNotice('ย้ายภาพอ้างอิงแล้ว · geometry ของ Network ไม่เปลี่ยน');return;}
     if(current?.kind==='junction'||current?.kind==='link-via'||current?.kind==='network-align'){
       const after=projectRef.current;
       if(after!==current.before){
@@ -397,13 +445,15 @@ export default function NetworkWorkspace(){
         <div className="network-viewbar"><div><b>{project.title}</b><span>{project.junctions.length} junctions · {project.links.length} road links</span></div><div className="network-view-mode"><button data-network-view="2d" className={view==='2d'?'active':''} onClick={()=>setView('2d')}>2D Network</button><button data-network-view="3d" className={view==='3d'?'active':''} onClick={()=>setView('3d')}>3D Overview</button></div><div className="network-view-links"><button data-network-action="toggle-inspector" aria-pressed={inspectorOpen} onClick={()=>setInspectorOpen(v=>!v)}>{inspectorOpen?'Hide Inspector':'Inspector'}</button><a href="junction/">Junction detail</a><a href="roads/">Road alignment lab</a></div></div>
         <div className="network-canvas">
           {view==='2d'&&<MapBackground reference={mapReference} credentials={mapCredentials} view={{zoom,pan,span:NETWORK_VIEW_SPAN,minZoom:NETWORK_MIN_ZOOM}}/>}
+          {view==='2d'&&<LocalImageReferenceLayer reference={localReference} imageUrl={localImageUrl} view={{zoom,pan,span:NETWORK_VIEW_SPAN,minZoom:NETWORK_MIN_ZOOM}}/>}
           <svg ref={svg} data-network-plan="true" data-network-view-span={NETWORK_VIEW_SPAN} data-network-zoom={zoom.toFixed(4)} className={view==='3d'?'network-plan-hidden':''} viewBox={[(-NETWORK_VIEW_SPAN/2/zoom+pan.x),(-NETWORK_VIEW_SPAN/2/zoom+pan.y),(NETWORK_VIEW_SPAN/zoom),(NETWORK_VIEW_SPAN/zoom)].join(' ')}
             onPointerDown={canvasDown} onPointerMove={movePointer} onPointerUp={endPointer} onPointerCancel={endPointer} onLostPointerCapture={endPointer}
             onWheel={e=>{e.preventDefault();zoomAt(e.deltaY>0?.88:1.14,{x:e.clientX,y:e.clientY});}}>
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled?0.42:1}/>
-            <g data-network-map-align-layer={tool==='map-align'?'disabled':'interactive'} pointerEvents={tool==='map-align'?'none':'auto'}><NetworkDrawing project={project} zoom={zoom} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/></g>
+            <g data-network-map-align-layer={tool==='map-align'?'disabled':'interactive'} data-network-reference-tool={tool} pointerEvents={['map-align','image-align','image-calibrate'].includes(tool)?'none':'auto'}><NetworkDrawing project={project} zoom={zoom} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/></g>
+            {view==='2d'&&tool==='image-calibrate'&&calibrationPoints.length>0&&(()=>{const markerScale=1/Math.max(.35,zoom),a=calibrationPoints[0],b=calibrationPoints[1];return <g data-local-reference-calibration="true" pointerEvents="none">{calibrationPoints.map((p,index)=><g key={index}><circle cx={p.x} cy={p.y} r={4*markerScale} fill={index===0?'#0f7d77':'#d18a24'} stroke="white" strokeWidth="1" vectorEffect="non-scaling-stroke"/><text x={p.x+6*markerScale} y={p.y-6*markerScale} fontSize={8*markerScale} fontWeight="800" fill="#263b44" stroke="white" strokeWidth={2.5*markerScale} paintOrder="stroke">{index===0?'A':'B'}</text></g>)}{b&&<><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d18a24" strokeWidth="1" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/><text x={(a.x+b.x)/2} y={(a.y+b.y)/2-7*markerScale} textAnchor="middle" fontSize={7*markerScale} fontWeight="700" fill="#7b5a23" stroke="white" strokeWidth={2.2*markerScale} paintOrder="stroke">{calibrationMeasured?.toFixed(2)} m current</text></>}</g>;})()}
             {armGuide&&(()=>{const junction=junctionById(project,armGuide.junctionId);if(!junction)return null;const a=armGuide.worldAngle*Math.PI/180,reach=Math.max(140,armGuide.length+70),end={x:junction.x+Math.cos(a)*armGuide.length,y:junction.y+Math.sin(a)*armGuide.length},hint=armGuide.hint,hintA=(hint?.worldAngle??armGuide.worldAngle)*Math.PI/180;return <g data-network-arm-guide={armGuide.junctionId+':'+armGuide.armId} data-network-arm-snap={armGuide.snapped?'true':'false'} data-network-arm-guide-kind={hint?.kind??'free'} pointerEvents="none">
               {hint&&<line x1={hint.kind==='parallel'?junction.x-Math.cos(hintA)*reach:junction.x} y1={hint.kind==='parallel'?junction.y-Math.sin(hintA)*reach:junction.y} x2={junction.x+Math.cos(hintA)*reach} y2={junction.y+Math.sin(hintA)*reach} stroke={hint.kind==='snap'?'#d18a24':hint.kind==='parallel'?'#567f9c':'#7e98a6'} strokeWidth=".65" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/>}
               <circle cx={end.x} cy={end.y} r="5" fill="none" stroke={armGuide.snapped?'#d18a24':'#0e8995'} strokeWidth=".6" vectorEffect="non-scaling-stroke"/>
@@ -509,6 +559,7 @@ export default function NetworkWorkspace(){
         </section>}
         {!selection&&<section><p className="network-note">เลือก Junction หรือ Road Link บนแผน หรือใช้เครื่องมือ “ทางแยก” เพื่อสร้าง instance ใหม่ และ “เชื่อมถนน” เพื่อเชื่อม arm-to-arm.</p></section>}
         <section className="network-map-panel"><h3><Map size={15}/> แผนที่อ้างอิง</h3><label className="network-switch"><input type="checkbox" checked={mapReference.enabled} onChange={e=>setMapReference(v=>({...v,enabled:e.target.checked}))}/> แสดงแผนที่</label>{mapReference.enabled&&<><div className="network-map-search"><input type="search" placeholder="ค้นหาสถานที่ / ถนน / ทางแยก" value={mapQuery} onChange={e=>setMapQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void findPlace();}}}/><button disabled={mapSearching||mapQuery.trim().length<2} onClick={()=>void findPlace()}>{mapSearching?'กำลังค้นหา…':'ค้นหา'}</button></div>{!!mapPlaces.length&&<div className="network-map-results">{mapPlaces.map((place,i)=><button key={place.label+i} onClick={()=>{setMapReference(v=>({...v,lat:place.lat,lng:place.lng,offsetX:0,offsetY:0}));setMapPlaces([]);setMapQuery(place.label);setNotice('ย้ายแผนที่อ้างอิงไปยัง '+place.label);}}>{place.label}</button>)}</div>}<div className="network-map-source" aria-label="ชนิดพื้นแผนที่"><button data-network-map-source="street" className={mapKind==='street'?'active':''} onClick={()=>setMapReference(v=>({...v,basemap:'positron'}))}>Street / Map</button><button data-network-map-source="imagery" className={mapKind==='imagery'?'active':''} onClick={()=>setMapReference(v=>({...v,basemap:'oam-global'}))}>Aerial / Satellite</button></div><label>Provider<select value={mapReference.basemap} onChange={e=>setMapReference(v=>({...v,basemap:e.target.value as MapBasemap}))}>{Object.entries(mapKind==='street'?STREET_BASEMAP_OPTIONS:IMAGERY_BASEMAP_OPTIONS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><div className="map-provider-meta"><span className="map-access-badge">{basemapAccessLabel(mapReference.basemap)}</span><span>{basemapDescription(mapReference.basemap)}</span></div>{mapReference.basemap==='oam-global'&&<div className="map-oam-status" data-oam-coverage-status={oamSearching?'loading':oamError?'error':oamSummary?'ready':'idle'}>{oamSearching?'กำลังตรวจ OpenAerialMap รอบจุดนี้…':oamError?'ตรวจ catalog ไม่สำเร็จ · Global Mosaic ยังเปิดใช้งานได้':oamSummary?(oamSummary.count?'พบ open imagery '+oamSummary.count+' ชุด ภายในรัศมี 3 km'+(oamSummary.latest?' · ล่าสุด '+new Date(oamSummary.latest).toLocaleDateString('th-TH'):'')+(oamSummary.bestGsd!==null?' · GSD ดีที่สุดในตัวอย่าง ~'+oamSummary.bestGsd.toFixed(oamSummary.bestGsd<1?2:1)+' m':''):'ยังไม่พบ OpenAerialMap imagery ภายในรัศมี 3 km · ลอง provider อื่นหรือย้ายตำแหน่ง'):''}</div>}{mapCredentialKey&&<div className="network-map-credential"><label>{mapCredentialKey==='esri'?'ArcGIS / Esri API key':'MapTiler API key'}<input type="password" autoComplete="off" value={mapCredentials[mapCredentialKey]} placeholder="ใส่ key ของคุณ" onChange={e=>setMapCredentials(v=>({...v,[mapCredentialKey]:e.target.value}))}/></label><p className="network-note">เก็บเฉพาะใน browser นี้ ไม่เข้า Project JSON · ควรจำกัด key ให้ใช้ได้เฉพาะ origin bokoboss.github.io</p></div>}<div className="network-coords"><label>Lat<input type="number" step=".00001" value={mapReference.lat} onChange={e=>setMapReference(v=>({...v,lat:Number(e.target.value)}))}/></label><label>Lng<input type="number" step=".00001" value={mapReference.lng} onChange={e=>setMapReference(v=>({...v,lng:Number(e.target.value)}))}/></label></div><div className="network-coords"><label>Offset X (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetX.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetX:n}));}}/></label><label>Offset Y (m)<input type="number" step=".5" disabled={mapReference.locked} value={+mapReference.offsetY.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setMapReference(v=>({...v,offsetY:n}));}}/></label></div><div className="network-map-align" data-network-map-align="true"><div className="network-map-align-head"><span>MAP ALIGN</span><b>Rigid Network Transform</b></div><p className="network-note">ล็อกแผนที่ไว้ แล้วลาก Network ทั้งชุดเพื่อจัดตำแหน่งจริงใน world metres. การย้าย/หมุนจะเปลี่ยนเฉพาะ Junction instance + RoadLink via points ไม่แก้ geometry ภายใน Design v6.</p><div className="network-map-align-actions"><button data-network-map-align-action="drag" className={tool==='map-align'?'active':''} onClick={()=>choose(tool==='map-align'?'select':'map-align')}>{tool==='map-align'?'เสร็จสิ้นการลาก':'ลาก Network บนแผนที่'}</button><div className="network-map-align-rotation"><label>หมุนทั้ง Network Δ°<input type="number" step=".1" value={mapAlignRotation} onChange={e=>setMapAlignRotation(Number(e.target.value))}/></label><button data-network-map-align-action="rotate" disabled={!Number.isFinite(mapAlignRotation)||Math.abs(mapAlignRotation)<1e-6} onClick={rotateNetworkForMapAlignment}>Apply</button></div></div><p className="network-note">การหมุนใช้กึ่งกลาง footprint ปัจจุบันเป็น pivot และบันทึกเป็น Undo 1 ครั้ง. Offset X/Y ด้านบนยังคงเป็น reference-only adjustment สำหรับทดลองซ้อนแผนที่โดยไม่แตะ engineering state.</p></div><label>Opacity<input type="range" min="10" max="100" step="5" value={mapReference.opacity*100} onChange={e=>setMapReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={mapReference.locked} onChange={e=>setMapReference(v=>({...v,locked:e.target.checked}))}/> ล็อกตำแหน่งแผนที่</label><button className="network-map-reset" disabled={mapReference.locked} onClick={()=>setMapReference(v=>({...v,offsetX:0,offsetY:0}))}>คืน Offset เป็น 0</button><p className="network-note">Map และ Network ใช้ world scale เดียวกัน: 1 หน่วย = 1 เมตรบนพื้นดิน · scale bar มุมล่างซ้ายเปลี่ยนตาม zoom อัตโนมัติ · X/Y ใช้จัดแนวโดยไม่แก้ geometry</p>{mapReference.basemap==='oam-global'&&<p className="network-note">OpenAerialMap เป็น local open imagery: ระดับ zoom ต่ำแสดง coverage grid; zoom 14+ จะแสดงภาพจริงในพื้นที่ที่มีข้อมูล.</p>}{mapReference.basemap==='satellite-eox-2016'&&<p className="network-note">Satellite ฟรีชุดนี้เป็น Sentinel-2 cloudless 2016 ความละเอียดต้นฉบับประมาณ 10 m เหมาะสำหรับบริบทพื้นที่ ไม่ใช้แทนภาพ orthophoto สำหรับขอบคันหิน/ช่องจราจร</p>}</>}</section>
+        <section className="network-local-reference-panel" data-local-reference-panel="true"><h3><Map size={15}/> Site plan / local image</h3><input ref={localImageInput} type="file" accept="image/png,image/jpeg" hidden onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';void importLocalReference(file);}}/><div className="network-local-reference-actions"><button data-local-reference-action="import" onClick={()=>localImageInput.current?.click()}>นำเข้า JPG / PNG</button>{localImageUrl&&<button className="danger" data-local-reference-action="remove" onClick={()=>void removeLocalReference()}>ลบภาพ</button>}</div>{localImageUrl&&localReference.fileName?<><label className="network-switch"><input type="checkbox" checked={localReference.enabled} onChange={e=>setLocalReference(v=>({...v,enabled:e.target.checked}))}/> แสดงภาพอ้างอิง</label><div className="network-local-reference-meta"><b>{localReference.fileName}</b><span>{Math.round(localReference.widthPx)} × {Math.round(localReference.heightPx)} px · {localImageSize.width.toFixed(1)} × {localImageSize.height.toFixed(1)} m · {localReference.calibrated?'CALIBRATED':'UNCALIBRATED'}</span></div><div className="network-coords"><label>Center X (m)<input type="number" step=".5" disabled={localReference.locked} value={+localReference.x.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setLocalReference(v=>({...v,x:n}));}}/></label><label>Center Y (m)<input type="number" step=".5" disabled={localReference.locked} value={+localReference.y.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setLocalReference(v=>({...v,y:n}));}}/></label></div><label>Rotation (°)<input type="number" step=".1" disabled={localReference.locked} value={+localReference.rotation.toFixed(2)} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setLocalReference(v=>({...v,rotation:normalizeAngle(n)}));}}/></label><label>Opacity<input type="range" min="5" max="100" step="5" value={localReference.opacity*100} onChange={e=>setLocalReference(v=>({...v,opacity:Number(e.target.value)/100}))}/></label><label className="network-switch"><input type="checkbox" checked={localReference.locked} onChange={e=>{const locked=e.target.checked;setLocalReference(v=>({...v,locked}));if(locked&&(tool==='image-align'||tool==='image-calibrate'))choose('select');}}/> ล็อกภาพอ้างอิง</label><div className="network-local-reference-actions"><button data-local-reference-action="move" className={tool==='image-align'?'active':''} disabled={localReference.locked||!localReference.enabled} onClick={()=>choose(tool==='image-align'?'select':'image-align')}>{tool==='image-align'?'เสร็จสิ้นการย้าย':'ย้ายภาพบน canvas'}</button><button data-local-reference-action="calibrate" className={tool==='image-calibrate'?'active':''} disabled={localReference.locked||!localReference.enabled} onClick={()=>choose(tool==='image-calibrate'?'select':'image-calibrate')}>{tool==='image-calibrate'?'ยกเลิก A–B':'เลือกจุด A–B'}</button></div><div className="network-local-calibration"><label>ระยะจริง A–B (m)<input type="number" min=".1" step=".1" value={calibrationDistance} onChange={e=>setCalibrationDistance(Number(e.target.value))}/></label><div className="network-local-calibration-status"><span>{calibrationPoints.length===0?'ยังไม่เลือกจุด':calibrationPoints.length===1?'เลือก A แล้ว · รอ B':`ระยะบน canvas ปัจจุบัน ${calibrationMeasured?.toFixed(2)} m`}</span><button data-local-reference-action="apply-calibration" disabled={calibrationPoints.length!==2||!Number.isFinite(calibrationDistance)||calibrationDistance<=0} onClick={applyLocalReferenceCalibration}>Apply calibration</button></div></div><button className="network-map-reset" disabled={localReference.locked} onClick={()=>{const reset=initialLocalImageReference(localReference.fileName,localReference.widthPx,localReference.heightPx,pan,Math.min(360,NETWORK_VIEW_SPAN/zoom*.75));setLocalReference({...reset,enabled:localReference.enabled,opacity:localReference.opacity});setCalibrationPoints([]);setNotice('คืนตำแหน่ง/rotation/scale ของภาพเป็นค่าเริ่มต้นแบบยังไม่ calibrated แล้ว');}}>Reset image transform</button><p className="network-note">ภาพถูกเก็บใน IndexedDB ของ browser นี้ ส่วน scale/ตำแหน่ง/rotation เก็บเป็น reference metadata แยกจาก NetworkProject JSON. Calibration ขยาย/ย่อแบบ uniform โดยยึดจุด A ไว้คงที่ จึงไม่บิด geometry ของภาพ.</p></>:<p className="network-note">นำเข้า site plan, survey export หรือ orthophoto แบบ JPG/PNG แล้วกำหนดระยะจริง A–B เพื่อให้ภาพอยู่ใน world scale หน่วยเมตรเดียวกับ Network. รุ่น 5A.2 ใช้เป็น reference ใน 2D ก่อน.</p>}</section>
         {selection&&<button className="network-delete" onClick={deleteSelection}><Trash2 size={15}/> ลบวัตถุที่เลือก</button>}
       </aside>
     </div>
