@@ -21,6 +21,8 @@ const a=require('../.sites-runtime/network-alignment.cjs'),
 let r={id:'a',name:'A',a:{x:0,y:0},b:{x:40,y:30},vertices:[{x:0,y:0},{x:40,y:0},{x:40,y:30}],config:g.presets['4-Lane Divided']};
 assert.equal(g.generateRoad(r).length,70);
 assert.equal(a.station(r.vertices,55).angle,90);
+assert.deepEqual(a.stationOffsets(r.vertices),[0,40,70]);
+const alignmentProjection=a.projectAlignment(r.vertices,{x:42,y:15});assert.equal(alignmentProjection.station,55);assert.equal(alignmentProjection.offset,-2);assert.equal(alignmentProjection.distance,2);
 assert.equal(g.project(r,{x:42,y:15}).distance,2);
 assert(a.validAlignment(r.vertices));
 assert(!a.validAlignment([{x:0,y:0},{x:20,y:0},{x:1,y:1}]));

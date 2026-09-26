@@ -400,3 +400,17 @@ The Network Foundation does not add:
 - queue simulation
 
 The product remains an engineering-informed concept design and visualization environment.
+
+### Phase 5B.1 station/profile foundation
+
+RoadLink section geometry now uses a shared deterministic station-profile layer without changing Network schema v2 or saved project behavior.
+
+The foundation consists of:
+
+- `alignment.stationOffsets(points)` as the canonical cumulative station array for a resolved alignment;
+- `projectAlignment()` returning both engineering `station` and signed lateral `offset` in addition to the existing normalized projection data;
+- `station-profile.ts` with reusable constant, endpoint-linear and localized transition profiles using `linear`, `smooth` or `hold` interpolation;
+- the RoadLink resolver using those profiles for median width, lane width, lane-count transition, edge-band width and sidewalk width;
+- the RoadLink section dock using the same shared station-series sampler rather than maintaining a second interpolation implementation.
+
+This phase deliberately does **not** persist arbitrary component lifecycles yet. Existing schema-v2 `review`, `linear` and explicit one-lane transition behavior remains the source of truth, so saved projects and visible geometry remain backward compatible. The next step can add RoadLink-owned station components (lane add/drop, taper, widening and edge components) on top of this tested profile primitive instead of introducing feature-specific geometry.

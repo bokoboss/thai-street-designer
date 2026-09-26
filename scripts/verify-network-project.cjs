@@ -5,11 +5,13 @@ for(const file of ['allocation.ts','planting.ts','cross-section.ts','roundabout.
     .outputText.replace(/require\("\.\/([a-z-]+)"\)/g,'require("./$1.cjs")');
   fs.writeFileSync('.sites-runtime/'+file.replace(/\.ts$/,'.cjs'),code);
 }
+const stationProfileCode=ts.transpileModule(fs.readFileSync('lib/station-profile.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+fs.writeFileSync('.sites-runtime/station-profile.cjs',stationProfileCode);
 const projectCode=ts.transpileModule(fs.readFileSync('lib/network-project.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
 fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
 const linkGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-link-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
-  .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")');
+  .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")').replace(/require\("\.\/station-profile"\)/g,'require("./station-profile.cjs")');
 fs.writeFileSync('.sites-runtime/network-link-geometry.cjs',linkGeometryCode);
 const sceneGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-scene-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/network-link-geometry"\)/g,'require("./network-link-geometry.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")').replace(/require\("\.\.\/app\/junction\/scene-surfaces"\)/g,'require("./scene-surfaces.cjs")').replace(/require\("\.\.\/app\/junction\/furniture3d"\)/g,'require("./furniture3d.cjs")');
@@ -17,10 +19,12 @@ fs.writeFileSync('.sites-runtime/network-scene-geometry.cjs',sceneGeometryCode);
 
 const localReferenceCode=ts.transpileModule(fs.readFileSync('lib/local-reference.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 fs.writeFileSync('.sites-runtime/local-reference.cjs',localReferenceCode);
-const n=require('../.sites-runtime/network-project.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs'),sg=require('../.sites-runtime/network-scene-geometry.cjs'),js=require('../.sites-runtime/scene-surfaces.cjs'),lr=require('../.sites-runtime/local-reference.cjs');
+const n=require('../.sites-runtime/network-project.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs'),sg=require('../.sites-runtime/network-scene-geometry.cjs'),js=require('../.sites-runtime/scene-surfaces.cjs'),lr=require('../.sites-runtime/local-reference.cjs'),sp=require('../.sites-runtime/station-profile.cjs');
 
 const localRef=lr.initialLocalImageReference('site-plan.png',4000,2000,{x:10,y:-20},300),localFootprint=lr.localImageFootprint(localRef);assert(Math.abs(localFootprint.width-300)<1e-8&&Math.abs(localFootprint.height-150)<1e-8,'uncalibrated local image should fit a bounded initial world span');
 const calibrationA={x:-20,y:15},calibrationB={x:20,y:15},calibratedLocal=lr.calibrateLocalImageReference(localRef,calibrationA,calibrationB,100);assert(calibratedLocal&&calibratedLocal.calibrated);assert(Math.abs(calibratedLocal.metersPerPixel/localRef.metersPerPixel-2.5)<1e-8,'A-B calibration must apply one uniform scale factor');assert(Math.abs(calibratedLocal.x-(calibrationA.x+(localRef.x-calibrationA.x)*2.5))<1e-8&&Math.abs(calibratedLocal.y-(calibrationA.y+(localRef.y-calibrationA.y)*2.5))<1e-8,'A-B calibration must keep point A fixed while scaling the image transform');assert.equal(lr.calibrateLocalImageReference(localRef,calibrationA,calibrationA,100),null,'zero-length calibration pick must be rejected');assert.deepEqual(lr.restoreLocalImageReference(JSON.stringify(calibratedLocal)),calibratedLocal,'local reference metadata must round-trip independently from NetworkProject');
+
+const profile=sp.transitionStationProfile(0,3.5,100,20,60,'smooth');assert.equal(sp.valueAtStation(profile,0),0);assert.equal(sp.valueAtStation(profile,20),0);assert(Math.abs(sp.valueAtStation(profile,40)-1.75)<1e-8);assert.equal(sp.valueAtStation(profile,60),3.5);assert.equal(sp.valueAtStation(profile,100),3.5);assert.deepEqual(sp.sampleStationProfile(sp.endpointStationProfile(3,4,100),[0,25,50,75,100]),[3,3.25,3.5,3.75,4]);assert.deepEqual(sp.endpointEnvelopeValues([0,25,50,75,100],3,4,5,100),[3,5,5,5,4]);
 
 let p=n.createNetworkProject();
 assert.equal(p.schemaVersion,2);
@@ -152,4 +156,4 @@ assert.equal(n.restoreNetworkProject('{bad').schemaVersion,2);
 const bounds=n.projectBounds(removed);
 assert(bounds.w>100&&bounds.h>=100);
 const wideBoundsProject=structuredClone(removed),wideJ=wideBoundsProject.junctions[0];wideJ.design.arms[1].incomingSection={width:4.5,walk:5,bands:[{id:'wide-bike',type:'bike',width:3},{id:'wide-shoulder',type:'shoulder',width:4}]};const wideBounds=n.projectBounds(wideBoundsProject);assert(wideBounds.w>=bounds.w&&wideBounds.h>=bounds.h,'fit bounds must include resolved carriageway/edge-zone footprint, not only Junction centers and ports');
-console.log('PASS network project v2: PI radius curves, explicit curb/median lane transitions, local-image A-B calibration, v1 migration, direct Arm edits, rigid Map Align transform, semantic ports, Complete Streets continuity and persistence');
+console.log('PASS network project v2: shared station profiles, PI radius curves, explicit curb/median lane transitions, local-image A-B calibration, v1 migration, direct Arm edits, rigid Map Align transform, semantic ports, Complete Streets continuity and persistence');

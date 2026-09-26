@@ -4,6 +4,7 @@ import {CrossSection,sectionStart} from '../junction/section-view';
 import {armMouth} from '../junction/geometry';
 import type {Selection} from '../junction/selection';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
+import {sampleStationSeries} from '@/lib/station-profile';
 import type {JunctionInstance,NetworkProject,RoadLink} from '@/lib/network-project';
 
 type Props={
@@ -15,19 +16,6 @@ type Props={
 };
 
 const bandLabel:Record<string,string>={bike:'จักรยาน',motorcycle:'มอเตอร์ไซค์',shoulder:'ไหล่ทาง',buffer:'คั่น'};
-const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
-
-function sample(stations:number[],values:number[],station:number){
-  if(!stations.length||!values.length)return 0;
-  if(station<=stations[0])return values[0]??0;
-  for(let i=1;i<stations.length;i++){
-    if(station<=stations[i]){
-      const a=stations[i-1],b=stations[i],t=(station-a)/(b-a||1);
-      return mix(values[i-1]??0,values[i]??0,t);
-    }
-  }
-  return values.at(-1)??0;
-}
 function lanePieces(count:number,width:number,prefix:string){
   const out:{key:string;label:string;width:number;kind:string}[]=[];
   const full=Math.floor(count+1e-6),fraction=Math.max(0,count-full);
@@ -39,14 +27,14 @@ function lanePieces(count:number,width:number,prefix:string){
 function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
   const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(()=>(resolveLinkSectionGeometry(project,link)?.total??0)/2);
   if(!resolved)return <section className="network-section-dock"><div className="network-section-empty">Road Link นี้ยังไม่มี resolved section geometry</div></section>;
-  const s=Math.max(0,Math.min(resolved.total,station)),median=sample(resolved.stations,resolved.medianHalf,s)*2,
-    fw=sample(resolved.stations,resolved.forwardLaneWidth,s),bw=sample(resolved.stations,resolved.backwardLaneWidth,s),
-    left=sample(resolved.stations,resolved.left,s),right=sample(resolved.stations,resolved.right,s),
+  const s=Math.max(0,Math.min(resolved.total,station)),median=sampleStationSeries(resolved.stations,resolved.medianHalf,s)*2,
+    fw=sampleStationSeries(resolved.stations,resolved.forwardLaneWidth,s),bw=sampleStationSeries(resolved.stations,resolved.backwardLaneWidth,s),
+    left=sampleStationSeries(resolved.stations,resolved.left,s),right=sampleStationSeries(resolved.stations,resolved.right,s),
     forwardCount=fw>0?Math.max(0,(left-median/2)/fw):0,backwardCount=bw>0?Math.max(0,(right-median/2)/bw):0,
-    forwardBands=resolved.forwardBands.map((band,i)=>({key:'fb-'+i,label:bandLabel[band.type]??band.type,width:Math.abs(sample(resolved.stations,band.outer,s)-sample(resolved.stations,band.inner,s)),kind:'band '+band.type})),
-    backwardBands=resolved.backwardBands.map((band,i)=>({key:'bb-'+i,label:bandLabel[band.type]??band.type,width:Math.abs(sample(resolved.stations,band.outer,s)-sample(resolved.stations,band.inner,s)),kind:'band '+band.type})),
-    forwardWalk=resolved.forwardWalk?Math.abs(sample(resolved.stations,resolved.forwardWalk.outer,s)-sample(resolved.stations,resolved.forwardWalk.inner,s)):0,
-    backwardWalk=resolved.backwardWalk?Math.abs(sample(resolved.stations,resolved.backwardWalk.outer,s)-sample(resolved.stations,resolved.backwardWalk.inner,s)):0,
+    forwardBands=resolved.forwardBands.map((band,i)=>({key:'fb-'+i,label:bandLabel[band.type]??band.type,width:Math.abs(sampleStationSeries(resolved.stations,band.outer,s)-sampleStationSeries(resolved.stations,band.inner,s)),kind:'band '+band.type})),
+    backwardBands=resolved.backwardBands.map((band,i)=>({key:'bb-'+i,label:bandLabel[band.type]??band.type,width:Math.abs(sampleStationSeries(resolved.stations,band.outer,s)-sampleStationSeries(resolved.stations,band.inner,s)),kind:'band '+band.type})),
+    forwardWalk=resolved.forwardWalk?Math.abs(sampleStationSeries(resolved.stations,resolved.forwardWalk.outer,s)-sampleStationSeries(resolved.stations,resolved.forwardWalk.inner,s)):0,
+    backwardWalk=resolved.backwardWalk?Math.abs(sampleStationSeries(resolved.stations,resolved.backwardWalk.outer,s)-sampleStationSeries(resolved.stations,resolved.backwardWalk.inner,s)):0,
     pieces=[
       ...(backwardWalk>.01?[{key:'bw',label:'ทางเท้า',width:backwardWalk,kind:'walk'}]:[]),
       ...[...backwardBands].reverse(),
