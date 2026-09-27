@@ -13,7 +13,7 @@ export const pocketOriginFor=(origins:TreatmentOrigins,dir:Direction,side:'left'
   const key=treatmentOriginKey(dir,side);
   return origins[key]??origins[dir]??0;
 };
-export const pocketFactor=(p:{length:number;taper:number},x:number,origin:number)=>taperOutFactor(x,origin+p.length,p.taper);
+export const pocketFactor=(p:{length:number;taper:number;continuation?:'local'|'corridor'},x:number,origin:number)=>p.continuation==='corridor'?1:taperOutFactor(x,origin+p.length,p.taper);
 export const pocketFactorAt=(p:{length:number;taper:number},x:number,origins:TreatmentOrigins,dir:Direction,side:'left'|'right')=>{
   const origin=pocketOriginFor(origins,dir,side);
   const custom=typeof origins!=='number'&&Object.prototype.hasOwnProperty.call(origins,treatmentOriginKey(dir,side));
@@ -52,7 +52,7 @@ export function allocate(a:Arm,x=0,origins:TreatmentOrigins=0){
       const requested=pocketLaneWidth(a,dir,side)*p.lanes*pocketFactorAt(p,x,origins,dir,side);
       result[dir][side]={
         requested,medianUsed:0,reallocated:0,widening:requested,
-        start:origin,end:origin+p.length+p.taper,mode
+        start:origin,end:p.continuation==='corridor'?a.length:origin+p.length+p.taper,mode
       };
       if(side==='right'&&requested&&['auto','median','retain','legacy-preserve'].includes(mode)){
         if(mode==='legacy-preserve')legacyDemand+=requested;

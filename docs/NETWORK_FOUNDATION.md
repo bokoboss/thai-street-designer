@@ -491,3 +491,28 @@ When applicable, only the treatment **remaining beyond the port** is copied. A F
 Apply is atomic: it switches the RoadLink to resolved linear mode when needed and creates the missing lane lifecycles in one Network history transaction. Multi-lane proposals create independent components with stable IDs. Because Phase 5B.3 established deterministic lifecycle stacking, overlapping same-direction corridor lane components are now supported rather than rejected.
 
 No schema bump is required. The proposal itself is transient and no hidden live binding is introduced between Junction Design v6 and RoadLink v3; after Apply, the RoadLink components are normal explicit corridor engineering state. Fractional handoff (the Network port falling inside a Junction taper) remains blocked rather than approximated, and is a future cross-boundary feature if that workflow proves necessary.
+
+### Phase 5B.5 explicit cross-boundary handoff
+
+Pocket / receiving-lane continuity is now an explicit engineering intent rather than an inferred visual coincidence.
+
+Design v6 gains an optional backward-compatible Pocket field:
+
+- `continuation: 'local'` — existing behavior; full-length + taper are contained inside the Junction arm;
+- `continuation: 'corridor'` — the auxiliary lane stays full-width from its treatment origin through the semantic Network port. Longitudinal taper ownership moves to the connected RoadLink.
+
+No Design or Network schema number bump is required because both additions are optional and existing v6/v3 files remain valid. Network v3 lane components may now carry optional `JunctionAuxiliarySource` provenance identifying handoff id, Junction, arm, source direction/side and lane identity.
+
+The Network Inspector exposes the choice explicitly as **Junction only** versus **Continue into Corridor**. Continue performs one atomic Network transaction:
+
+1. set the source Pocket / receiving lane to corridor continuation;
+2. recompute the source at the semantic port;
+3. switch the RoadLink to resolved linear mode when needed;
+4. adopt an equivalent legacy 5B.4 component when possible or create the missing lane components;
+5. tag those components with handoff provenance.
+
+For a normal Junction-only treatment that previously tapered to zero before the port, explicit Continue does **not** stretch that taper across the boundary. Instead the Junction lane stays full to the port and the existing taper length is resolved from RoadLink station 0 (or toward the TO boundary for the reverse direction). If the user's full-length already extends beyond the port, only the remaining full segment plus taper is carried into the corridor.
+
+The reverse action **Back to Junction only** removes only RoadLink lane components owned by that handoff id and restores local Pocket taper behavior. Manually created corridor components are left untouched. If a handoff-owned component is manually edited through generic Corridor Lifecycle controls, its provenance is cleared immediately, intentionally converting it to independent corridor state and preventing hidden synchronization.
+
+This closes the semantic boundary without moving Pocket ownership out of Design v6: the Junction still owns the local treatment, RoadLink still owns corridor geometry, and the explicit handoff records why the two meet continuously.

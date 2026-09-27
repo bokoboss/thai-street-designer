@@ -5,7 +5,7 @@ import {defaultSlip,validSlip,type SlipLane} from './slip-model';
 export type Band={id:string;type:"shoulder"|"bike"|"motorcycle"|"buffer";width:number};
 export type Direction='incoming'|'outgoing';
 export type Section={width:number;walk:number;bands:Band[]};
-export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;lanes:number;length:number;taper:number};
+export type Pocket={allocation?:AllocationMode;retainedMedian?:number;width?:number;continuation?:'local'|'corridor';lanes:number;length:number;taper:number};
 export type Pockets={left:Pocket;right:Pocket};
 export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
@@ -34,6 +34,7 @@ const validPockets=(p:Pockets)=>!!p&&['left','right'].every(k=>{
     &&(v.allocation===undefined||['auto','median','retain','widen','reallocate','legacy-preserve'].includes(v.allocation))
     &&(v.retainedMedian===undefined||(Number.isFinite(v.retainedMedian)&&v.retainedMedian>=0&&v.retainedMedian<=12))
     &&(v.width===undefined||(Number.isFinite(v.width)&&v.width>=2.5&&v.width<=4.5))
+    &&(v.continuation===undefined||['local','corridor'].includes(v.continuation))
     &&[0,1,2,3].includes(v.lanes)
     &&Number.isFinite(v.length)&&v.length>=5&&v.length<=140
     &&Number.isFinite(v.taper)&&v.taper>=5&&v.taper<=80;

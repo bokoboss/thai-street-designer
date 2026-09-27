@@ -154,6 +154,11 @@ assert(junctionAuxProposalSource.includes("direction==='outgoing'?'forward':'bac
 assert(junctionAuxProposalSource.includes('portFactor<.999')&&junctionAuxProposalSource.includes('gapToPort'),'proposal engine must reject disconnected and fractional-port handoffs rather than silently create width jumps');
 assert(networkSource.includes('data-network-auxiliary-proposals="true"')&&networkSource.includes('data-network-auxiliary-apply=')&&networkSource.includes('JUNCTION → CORRIDOR PROPOSALS'),'Network Inspector must expose proposal status and require an explicit Apply action');
 assert(stationProfileSource.includes('openAtStart')&&stationProfileSource.includes('openAtEnd'),'station window profiles must support full-width boundary-active lifecycles for valid Junction-to-corridor handoffs');
+assert(junctionAuxProposalSource.includes('continueJunctionAuxiliaryToCorridor')&&junctionAuxProposalSource.includes('returnJunctionAuxiliaryToLocal')&&junctionAuxProposalSource.includes("{continuation:'corridor'}"),'Phase 5B.5 must make cross-boundary continuation an explicit reversible Junction intent rather than an inferred geometry side effect');
+assert(networkProjectSource.includes("kind:'junction-auxiliary'")&&networkProjectSource.includes('handoffId')&&networkProjectSource.includes('source?:JunctionAuxiliarySource'),'RoadLink handoff lanes must persist source provenance so detach/repair does not delete manual corridor components');
+assert(networkProjectSource.includes('source:undefined')&&networkProjectSource.includes('updateLinkStationComponent'),'manual editing of a handoff-owned RoadLink lane must break provenance explicitly instead of retaining hidden synchronization');
+assert(networkSource.includes('data-network-handoff-action="local"')&&networkSource.includes('data-network-handoff-action="continue"')&&networkSource.includes('JUNCTION → CORRIDOR HANDOFF'),'Network Inspector must expose Junction only versus Continue into Corridor as an explicit user choice');
+assert(allocationSource.includes("p.continuation==='corridor'?1")&&allocationSource.includes("p.continuation==='corridor'?a.length"),'Junction allocation must keep a corridor-continuation Pocket/Receiving lane full-width through the semantic port and move taper ownership outside the Arm');
 
 
 

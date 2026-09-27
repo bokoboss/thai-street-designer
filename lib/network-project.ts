@@ -20,7 +20,8 @@ export type LinkDirection='forward'|'backward';
 export type LinkLaneTransition={side:'curb'|'median';center:number;length:number};
 export type LinkSectionProfile={mode:'review'|'linear';forwardLaneTransition?:LinkLaneTransition;backwardLaneTransition?:LinkLaneTransition};
 export type LinkWidthTarget='walk'|Band['type'];
-export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number};
+export type JunctionAuxiliarySource={kind:'junction-auxiliary';handoffId:string;junctionId:string;armId:number;direction:Direction;side:'left'|'right';lane:number};
+export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number;source?:JunctionAuxiliarySource};
 export type LinkStationWidthComponent={id:string;kind:'width';direction:LinkDirection;target:LinkWidthTarget;start:number;end:number;taperIn:number;taperOut:number;delta:number};
 export type LinkStationComponent=LinkStationLaneComponent|LinkStationWidthComponent;
 export type LinkStationComponentPatch={direction?:LinkDirection;side?:'curb'|'median';target?:LinkWidthTarget;start?:number;end?:number;taperIn?:number;taperOut?:number;delta?:number};
@@ -231,7 +232,7 @@ export function updateLinkStationComponent(project:NetworkProject,id:string,comp
   const total=Math.max(.5,linkLength(project,link)),direction=patch.direction??current.direction,range=stationRange(total,patch.start??current.start,patch.end??current.end,patch.taperIn??current.taperIn,patch.taperOut??current.taperOut);
   let component:LinkStationComponent;
   if(current.kind==='lane'){
-    component={...current,direction,side:patch.side??current.side,...range};
+    component={...current,direction,side:patch.side??current.side,...range,source:undefined};
   }else{
     const target=patch.target??current.target,base=linkWidthTargetRange(project,link,direction,target);
     if(!base)return{project,error:'Edge-width target นี้ไม่มีอยู่ต่อเนื่องที่ปลาย Road Link ทั้งสองด้าน'};
@@ -461,10 +462,15 @@ export function validateNetworkProject(project:NetworkProject){
   const occupied=new Set<string>();
   for(const l of project.links){
     const validTransition=(t:LinkLaneTransition|undefined)=>!t||(['curb','median'].includes(t.side)&&Number.isFinite(t.center)&&t.center>=0&&Number.isFinite(t.length)&&t.length>=3&&t.length<=1000),
+      validSource=(input:unknown)=>{
+        if(input===undefined)return true;if(!input||typeof input!=='object')return false;
+        const source=input as JunctionAuxiliarySource;
+        return source.kind==='junction-auxiliary'&&typeof source.handoffId==='string'&&source.handoffId.length>0&&source.handoffId.length<=160&&typeof source.junctionId==='string'&&source.junctionId.length>0&&source.junctionId.length<=40&&Number.isInteger(source.armId)&&source.armId>=0&&source.armId<4&&['incoming','outgoing'].includes(source.direction)&&['left','right'].includes(source.side)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
+      },
       validComponent=(input:unknown)=>{
         if(!input||typeof input!=='object')return false;
         const component=input as LinkStationComponent;
-        return !!component.id&&component.id.length<=40&&['forward','backward'].includes(component.direction)&&Number.isFinite(component.start)&&component.start>=0&&Number.isFinite(component.end)&&component.end>component.start&&Number.isFinite(component.taperIn)&&component.taperIn>=0&&Number.isFinite(component.taperOut)&&component.taperOut>=0&&(component.kind==='lane'?['curb','median'].includes(component.side):(component.kind==='width'&&['walk','shoulder','bike','motorcycle','buffer'].includes(component.target)&&Number.isFinite(component.delta)&&Math.abs(component.delta)>=.01&&component.delta>=-5&&component.delta<=5));
+        return !!component.id&&component.id.length<=40&&['forward','backward'].includes(component.direction)&&Number.isFinite(component.start)&&component.start>=0&&Number.isFinite(component.end)&&component.end>component.start&&Number.isFinite(component.taperIn)&&component.taperIn>=0&&Number.isFinite(component.taperOut)&&component.taperOut>=0&&(component.kind==='lane'?(['curb','median'].includes(component.side)&&validSource(component.source)):(component.kind==='width'&&['walk','shoulder','bike','motorcycle','buffer'].includes(component.target)&&Number.isFinite(component.delta)&&Math.abs(component.delta)>=.01&&component.delta>=-5&&component.delta<=5));
       },
       componentList=Array.isArray(l.components)?l.components:[];
     if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
@@ -521,8 +527,12 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const component=value as Record<string,unknown>,id=String(component.id??`C-${index+1}`),direction:LinkDirection=component.direction==='backward'?'backward':'forward',
           start=Number(component.start),end=Number(component.end),taperIn=Number(component.taperIn),taperOut=Number(component.taperOut);
         if(component.kind==='lane'){
-          const side=component.side==='median'?'median':'curb';
-          out.push({id,kind:'lane',direction,side,start,end,taperIn,taperOut});
+          const side=component.side==='median'?'median':'curb',rawSource=component.source&&typeof component.source==='object'?component.source as Record<string,unknown>:null,
+            sourceValue:JunctionAuxiliarySource|undefined=rawSource?.kind==='junction-auxiliary'?{
+              kind:'junction-auxiliary',handoffId:String(rawSource.handoffId??''),junctionId:String(rawSource.junctionId??''),armId:Number(rawSource.armId),
+              direction:rawSource.direction==='outgoing'?'outgoing':'incoming',side:rawSource.side==='right'?'right':'left',lane:Number(rawSource.lane)
+            }:undefined;
+          out.push({id,kind:'lane',direction,side,start,end,taperIn,taperOut,...(sourceValue?{source:sourceValue}:{})});
         }else if(component.kind==='width'){
           const targetRaw=String(component.target??'walk'),target:LinkWidthTarget=['shoulder','bike','motorcycle','buffer'].includes(targetRaw)?targetRaw as Band['type']:'walk';
           out.push({id,kind:'width',direction,target,start,end,taperIn,taperOut,delta:Number(component.delta)});

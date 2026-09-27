@@ -1,9 +1,9 @@
 import {pocketFactorAt,pocketOriginFor} from '../app/junction/allocation';
 import {armTreatmentOrigins} from '../app/junction/geometry';
-import {pocketsFor,type Direction} from '../app/junction/model';
+import {pocketsFor,type Direction,type Pocket} from '../app/junction/model';
 import {
-  junctionById,linkLength,linkLinearTransitionPossible,validateNetworkProject,
-  type LinkDirection,type LinkStationLaneComponent,type NetworkProject,type RoadLink
+  junctionById,linkLength,linkLinearTransitionPossible,updateJunctionArmPocket,validateNetworkProject,
+  type JunctionAuxiliarySource,type LinkDirection,type LinkStationLaneComponent,type NetworkProject,type RoadLink
 } from './network-project';
 
 export type JunctionAuxiliaryProposalStatus='ready'|'applied'|'local-only'|'blocked';
@@ -17,6 +17,8 @@ export type JunctionAuxiliaryProposal={
   sourceSide:'left'|'right';
   linkDirection:LinkDirection;
   linkSide:'curb'|'median';
+  continuation:'local'|'corridor';
+  canContinue:boolean;
   lanes:number;
   sourceLength:number;
   sourceTaper:number;
@@ -26,6 +28,7 @@ export type JunctionAuxiliaryProposal={
   portStation:number;
   portFactor:number;
   gapToPort:number;
+  extensionToPort:number;
   remainingFull:number;
   corridorStart:number;
   corridorEnd:number;
@@ -34,8 +37,9 @@ export type JunctionAuxiliaryProposal={
   status:JunctionAuxiliaryProposalStatus;
   message:string;
   existing:number;
+  linked:number;
 };
-export type JunctionAuxiliaryApplyResult={project:NetworkProject;created:string[];error:string|null};
+export type JunctionAuxiliaryApplyResult={project:NetworkProject;created:string[];removed?:string[];error:string|null};
 
 const near=(a:number,b:number,tolerance=.05)=>Math.abs(a-b)<=tolerance;
 const proposalId=(link:RoadLink,end:'from'|'to',direction:Direction,side:'left'|'right')=>`${link.id}:${end}:${direction}:${side}`;
@@ -53,6 +57,13 @@ function nextComponentId(link:RoadLink){
   while(ids.has(`C-${n}`))n++;
   return `C-${n}`;
 }
+function sourceFor(proposal:JunctionAuxiliaryProposal,lane:number):JunctionAuxiliarySource{
+  return{kind:'junction-auxiliary',handoffId:proposal.id,junctionId:proposal.junctionId,armId:proposal.armId,direction:proposal.sourceDirection,side:proposal.sourceSide,lane};
+}
+function proposalPocket(project:NetworkProject,proposal:JunctionAuxiliaryProposal):Pocket|null{
+  const junction=junctionById(project,proposal.junctionId);if(!junction||!junction.design.enabled[proposal.armId])return null;
+  return pocketsFor(junction.design.arms[proposal.armId],proposal.sourceDirection)[proposal.sourceSide];
+}
 
 export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink):JunctionAuxiliaryProposal[]{
   const total=Math.max(0,linkLength(project,link)),out:JunctionAuxiliaryProposal[]=[];
@@ -66,43 +77,48 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
       const pockets=pocketsFor(arm,direction);
       for(const side of ['left','right'] as const){
         const pocket=pockets[side];if(!pocket.lanes)continue;
-        const sourceOrigin=pocketOriginFor(origins,direction,side),sourceFullEnd=sourceOrigin+pocket.length,
+        const continuation=pocket.continuation??'local',sourceOrigin=pocketOriginFor(origins,direction,side),sourceFullEnd=sourceOrigin+pocket.length,
           sourceTreatmentEnd=sourceFullEnd+pocket.taper,portStation=arm.length,
           portFactor=pocketFactorAt(pocket,portStation,origins,direction,side),gapToPort=portStation-sourceTreatmentEnd,
-          remainingFull=Math.max(0,sourceFullEnd-portStation),remaining=Math.max(0,remainingFull+pocket.taper),
-          linkDirection=mapDirection(end,direction),linkSide=mapSide(side),
+          extensionToPort=Math.max(0,portStation-sourceFullEnd),remainingFull=Math.max(0,sourceFullEnd-portStation),
+          remaining=Math.max(0,remainingFull+pocket.taper),linkDirection=mapDirection(end,direction),linkSide=mapSide(side),
           corridorStart=end==='from'?0:Math.max(0,total-remaining),corridorEnd=end==='from'?Math.min(total,remaining):total,
           corridorTaperIn=end==='from'?0:Math.min(pocket.taper,remaining),
           corridorTaperOut=end==='from'?Math.min(pocket.taper,remaining):0,
-          base:Omit<JunctionAuxiliaryProposal,'status'|'message'|'existing'>={
+          base:Omit<JunctionAuxiliaryProposal,'status'|'message'|'existing'|'linked'|'canContinue'>={
             id:proposalId(link,end,direction,side),linkId:link.id,end,junctionId:junction.id,armId:ref.armId,
-            sourceDirection:direction,sourceSide:side,linkDirection,linkSide,lanes:pocket.lanes,
+            sourceDirection:direction,sourceSide:side,linkDirection,linkSide,continuation,lanes:pocket.lanes,
             sourceLength:pocket.length,sourceTaper:pocket.taper,sourceOrigin,sourceFullEnd,sourceTreatmentEnd,portStation,
-            portFactor,gapToPort,remainingFull,corridorStart,corridorEnd,corridorTaperIn,corridorTaperOut
-          };
-        const existing=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&equivalentLane(component,{...base,status:'ready',message:'',existing:0})).length;
+            portFactor,gapToPort,extensionToPort,remainingFull,corridorStart,corridorEnd,corridorTaperIn,corridorTaperOut
+          },
+          probe={...base,status:'ready' as const,message:'',existing:0,linked:0,canContinue:false},
+          existing=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&equivalentLane(component,probe)).length,
+          linked=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===base.id).length,
+          explicitRemaining=Math.max(.5,remaining),capacityOk=link.components.length-linked+pocket.lanes<=24,
+          topologyOk=linkLinearTransitionPossible(project,link),fits=explicitRemaining<=total+.05,
+          canContinue=continuation==='local'&&topologyOk&&fits&&capacityOk;
         let status:JunctionAuxiliaryProposalStatus='ready',message='';
-        if(portFactor<=.001){
-          status='local-only';
-          message=gapToPort>=0
-            ?`Junction treatment จบก่อน port ${gapToPort.toFixed(1)} m · ไม่ควรสร้าง RoadLink lane ที่ขาดช่วง`
-            :'Junction treatment ไม่ active ที่ port · ไม่สร้าง continuation อัตโนมัติ';
-        }else if(portFactor<.999){
-          status='blocked';message=`Port อยู่กลาง taper (active ${(portFactor*100).toFixed(0)}%) · ต้องมี fractional handoff ก่อนจึงจะต่อได้โดยไม่กระโดดความกว้าง`;
-        }else if(remaining<.5){
-          status='local-only';message='Junction treatment ไม่มีช่วงเหลือต่อออกนอก port';
-        }else if(remaining>total+.05){
-          status='blocked';message=`Road Link สั้นกว่าช่วง continuation ที่เหลือ ${(remaining-total).toFixed(1)} m · ไม่ลดความยาวให้เอง`;
-        }else if(!linkLinearTransitionPossible(project,link)){
-          status='blocked';message='Road Link ยังมี endpoint topology/edge mismatch ที่ต้อง resolve ก่อนสร้าง corridor lifecycle';
-        }else if(existing>=pocket.lanes){
-          status='applied';message=`มี corridor lifecycle รูปแบบเดียวกันครบ ${pocket.lanes} เลนแล้ว`;
-        }else if(link.components.length+(pocket.lanes-existing)>24){
+        if(!topologyOk){
+          status='blocked';message='Road Link ยังมี endpoint topology/edge mismatch ที่ต้อง resolve ก่อนทำ cross-boundary handoff';
+        }else if(!fits){
+          status='blocked';message=`Road Link สั้นกว่าช่วง continuation ที่ต้องใช้ ${(explicitRemaining-total).toFixed(1)} m`;
+        }else if(!capacityOk){
           status='blocked';message='จำนวน station components จะเกินขอบเขต 24 รายการของ Road Link';
+        }else if(continuation==='local'&&portFactor<.999){
+          status='local-only';
+          message=portFactor<=.001
+            ?`Junction only · treatment จบก่อน Port ${Math.max(0,gapToPort).toFixed(1)} m · Continue จะยืด lane เต็มถึง Port แล้วใช้ taper ${pocket.taper.toFixed(0)} m ใน Corridor`
+            :`Junction only · Port อยู่กลาง taper (active ${(portFactor*100).toFixed(0)}%) · Continue จะย้าย taper ทั้งช่วงไปไว้ใน Corridor`;
+        }else if(continuation==='corridor'&&linked>pocket.lanes){
+          status='blocked';message=`Handoff เดิมมี ${linked} lane components แต่ Junction เหลือ ${pocket.lanes} เลน · กลับ Junction only แล้ว Apply ใหม่`;
+        }else if(existing>=pocket.lanes){
+          status='applied';message=`Cross-boundary handoff ต่อเนื่องครบ ${pocket.lanes} เลนแล้ว`;
         }else{
-          message=`พร้อมสร้าง ${pocket.lanes-existing} เลน · ${end==='from'?`Sta. 0–${corridorEnd.toFixed(1)}`:`Sta. ${corridorStart.toFixed(1)}–${total.toFixed(1)}`} m${link.sectionProfile.mode==='review'?' · จะเปิด Resolved profile ใน transaction เดียวกัน':''}`;
+          message=continuation==='corridor'
+            ?`พร้อมสร้าง/ซ่อม handoff ${pocket.lanes-existing} เลน · ${end==='from'?`Sta. 0–${corridorEnd.toFixed(1)}`:`Sta. ${corridorStart.toFixed(1)}–${total.toFixed(1)}`} m`
+            :`Geometry ผ่าน Port อยู่แล้ว แต่ยังเป็น Junction only · เลือก Continue into Corridor เพื่อบันทึก intent และ provenance`;
         }
-        out.push({...base,status,message,existing});
+        out.push({...base,status,message,existing,linked,canContinue});
       }
     }
   }
@@ -113,20 +129,57 @@ export function applyJunctionAuxiliaryProposal(project:NetworkProject,linkId:str
   const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
   const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id);
   if(!proposal)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal'};
-  if(proposal.status==='applied')return{project,created:[],error:null};
-  if(proposal.status!=='ready')return{project,created:[],error:proposal.message};
-  const currentMatches=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&equivalentLane(component,proposal)).length,
-    missing=Math.max(0,proposal.lanes-currentMatches);
-  if(!missing)return{project,created:[],error:null};
-  let nextLink:RoadLink={...link,sectionProfile:{...link.sectionProfile,mode:'linear'},components:[...link.components]};const created:string[]=[];
-  for(let lane=0;lane<missing;lane++){
-    const id=nextComponentId(nextLink),component:LinkStationLaneComponent={
-      id,kind:'lane',direction:proposal.linkDirection,side:proposal.linkSide,
+  if(proposal.continuation!=='corridor')return{project,created:[],error:'เลือก Continue into Corridor ก่อนสร้าง cross-boundary handoff'};
+  if(proposal.status==='blocked')return{project,created:[],error:proposal.message};
+  const sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===proposal.id),
+    unsourcedMatches=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&!component.source&&equivalentLane(component,proposal)),
+    keep=link.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===proposal.id)),
+    adopted=unsourcedMatches.slice(0,proposal.lanes),adoptIds=new Set(adopted.map(component=>component.id)),
+    baseComponents=keep.map(component=>{
+      if(component.kind!=='lane'||!adoptIds.has(component.id))return component;
+      const lane=adopted.findIndex(value=>value.id===component.id);
+      return{...component,source:sourceFor(proposal,lane)};
+    });
+  let nextLink:RoadLink={...link,sectionProfile:{...link.sectionProfile,mode:'linear'},components:baseComponents};const created:string[]=[];
+  for(let lane=adopted.length;lane<proposal.lanes;lane++){
+    const componentId=nextComponentId(nextLink),component:LinkStationLaneComponent={
+      id:componentId,kind:'lane',direction:proposal.linkDirection,side:proposal.linkSide,
       start:+proposal.corridorStart.toFixed(2),end:+proposal.corridorEnd.toFixed(2),
-      taperIn:+proposal.corridorTaperIn.toFixed(2),taperOut:+proposal.corridorTaperOut.toFixed(2)
+      taperIn:+proposal.corridorTaperIn.toFixed(2),taperOut:+proposal.corridorTaperOut.toFixed(2),
+      source:sourceFor(proposal,lane)
     };
-    nextLink={...nextLink,components:[...nextLink.components,component]};created.push(id);
+    nextLink={...nextLink,components:[...nextLink.components,component]};created.push(componentId);
   }
   const next={...project,links:project.links.map(item=>item.id===linkId?nextLink:item)},error=validateNetworkProject(next);
-  return error?{project,created:[],error}:{project:next,created,error:null};
+  return error?{project,created:[],error}:{project:next,created:[...adopted.map(v=>v.id),...created],removed:sourced.map(v=>v.id),error:null};
+}
+
+export function continueJunctionAuxiliaryToCorridor(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
+  const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
+  const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id);
+  if(!proposal)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal'};
+  if(proposal.continuation==='local'&&!proposal.canContinue)return{project,created:[],error:proposal.message};
+  const edited=updateJunctionArmPocket(project,proposal.junctionId,proposal.armId,proposal.sourceDirection,proposal.sourceSide,{continuation:'corridor'});
+  if(edited.error)return{project,created:[],error:edited.error};
+  const updatedLink=edited.project.links.find(item=>item.id===linkId);if(!updatedLink)return{project,created:[],error:'Road Link หายระหว่างสร้าง handoff'};
+  const updated=junctionAuxiliaryProposals(edited.project,updatedLink).find(item=>item.id===id);
+  if(!updated||updated.status==='blocked')return{project,created:[],error:updated?.message??'สร้าง handoff ไม่สำเร็จ'};
+  return applyJunctionAuxiliaryProposal(edited.project,linkId,id);
+}
+
+export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
+  const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
+  const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id);if(!proposal)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal'};
+  const edited=updateJunctionArmPocket(project,proposal.junctionId,proposal.armId,proposal.sourceDirection,proposal.sourceSide,{continuation:'local'});
+  if(edited.error)return{project,created:[],error:edited.error};
+  const removed=link.components.filter(component=>component.kind==='lane'&&component.source?.handoffId===id).map(component=>component.id),
+    next={...edited.project,links:edited.project.links.map(item=>item.id===linkId?{...item,components:item.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===id))}:item)},
+    error=validateNetworkProject(next);
+  return error?{project,created:[],error}:{project:next,created:[],removed,error:null};
+}
+
+export function junctionAuxiliaryPocket(project:NetworkProject,linkId:string,id:string){
+  const link=project.links.find(item=>item.id===linkId);if(!link)return null;
+  const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id);if(!proposal)return null;
+  return proposalPocket(project,proposal);
 }
