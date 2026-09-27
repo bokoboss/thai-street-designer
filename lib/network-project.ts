@@ -232,7 +232,8 @@ export function updateLinkStationComponent(project:NetworkProject,id:string,comp
   const total=Math.max(.5,linkLength(project,link)),direction=patch.direction??current.direction,range=stationRange(total,patch.start??current.start,patch.end??current.end,patch.taperIn??current.taperIn,patch.taperOut??current.taperOut);
   let component:LinkStationComponent;
   if(current.kind==='lane'){
-    component={...current,direction,side:patch.side??current.side,...range,source:undefined};
+    const {source:_source,...detached}=current;
+    component={...detached,direction,side:patch.side??current.side,...range};
   }else{
     const target=patch.target??current.target,base=linkWidthTargetRange(project,link,direction,target);
     if(!base)return{project,error:'Edge-width target นี้ไม่มีอยู่ต่อเนื่องที่ปลาย Road Link ทั้งสองด้าน'};
