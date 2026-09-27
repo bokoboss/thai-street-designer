@@ -516,3 +516,35 @@ For a normal Junction-only treatment that previously tapered to zero before the 
 The reverse action **Back to Junction only** removes only RoadLink lane components owned by that handoff id and restores local Pocket taper behavior. Manually created corridor components are left untouched. If a handoff-owned component is manually edited through generic Corridor Lifecycle controls, its provenance is cleared immediately, intentionally converting it to independent corridor state and preventing hidden synchronization.
 
 This closes the semantic boundary without moving Pocket ownership out of Design v6: the Junction still owns the local treatment, RoadLink still owns corridor geometry, and the explicit handoff records why the two meet continuously.
+
+### Phase 5B.6 corridor handoff integrity cleanup
+
+Cross-boundary handoff is now audited after later Network edits instead of assuming that the state created in Phase 5B.5 remains valid forever.
+
+The integrity owner remains `junction-auxiliary-proposal.ts`, not generic `linkIssues()`. This avoids a circular dependency from RoadLink foundation code back into Junction auxiliary semantics.
+
+For each RoadLink lane component carrying `JunctionAuxiliarySource` provenance, the audit resolves the current Junction source and classifies four failure modes:
+
+- **STALE** — the source still exists and declares corridor continuation, but lane identity, station range or taper no longer matches the current Pocket / receiving-lane treatment;
+- **ORPHAN** — provenance no longer resolves to the current linked Junction/arm/side/direction, the source auxiliary has been removed, or the source no longer declares corridor continuation;
+- **OUT OF RANGE** — the current RoadLink is shorter than the remaining full-width + taper distance required by the Junction handoff;
+- **TOPOLOGY** — endpoint lane/edge topology no longer supports a resolved linear RoadLink transition.
+
+The Network Inspector exposes a dedicated **HANDOFF INTEGRITY** card only when one of these conditions exists. No audit condition mutates engineering state automatically.
+
+Available explicit actions are:
+
+- **Repair from Junction** — remove/rebuild or adopt the RoadLink-owned lane lifecycle using the current Junction source. This is enabled only when RoadLink length and endpoint topology can support the treatment.
+- **Detach as manual** — preserve the existing RoadLink geometry exactly but delete its Junction provenance. The lane becomes an independent corridor lifecycle and is excluded from future handoff auditing.
+- **Back to Junction only** — restore local taper ownership on the source Pocket / receiving lane and remove only components owned by that handoff. This can also recover from an orphaned proposal when the persisted provenance still points to an existing raw Pocket.
+
+Important behavior after later edits:
+
+- changing Pocket taper / full length or lane count does not silently rewrite RoadLink station geometry;
+- reducing a multi-lane source produces a repairable stale issue, and Repair removes surplus owned lane identities;
+- shortening a RoadLink below the required treatment length produces an out-of-range issue and blocks Repair rather than clipping the taper;
+- changing endpoint lane topology blocks Repair until the RoadLink transition is resolved explicitly;
+- removing a source auxiliary leaves existing corridor geometry intact until the user chooses Detach or Back to Junction only;
+- generic manual editing of a handoff-owned lifecycle still detaches provenance immediately, so there is no hidden synchronization path.
+
+No Design or Network schema bump is required. The cleanup operates entirely on the optional Phase 5B.5 provenance already stored in Network schema v3.

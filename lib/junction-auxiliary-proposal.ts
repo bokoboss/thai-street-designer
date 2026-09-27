@@ -39,7 +39,19 @@ export type JunctionAuxiliaryProposal={
   existing:number;
   linked:number;
 };
-export type JunctionAuxiliaryApplyResult={project:NetworkProject;created:string[];removed?:string[];error:string|null};
+export type JunctionAuxiliaryApplyResult={project:NetworkProject;created:string[];removed?:string[];detached?:string[];error:string|null};
+export type JunctionAuxiliaryHandoffIssueKind='stale'|'orphan'|'range'|'topology';
+export type JunctionAuxiliaryHandoffIssue={
+  id:string;
+  handoffId:string;
+  kind:JunctionAuxiliaryHandoffIssueKind;
+  level:'warning'|'error';
+  componentIds:string[];
+  message:string;
+  canRepair:boolean;
+  canDetach:boolean;
+  canReturnLocal:boolean;
+};
 
 const near=(a:number,b:number,tolerance=.05)=>Math.abs(a-b)<=tolerance;
 const proposalId=(link:RoadLink,end:'from'|'to',direction:Direction,side:'left'|'right')=>`${link.id}:${end}:${direction}:${side}`;
@@ -63,6 +75,15 @@ function sourceFor(proposal:JunctionAuxiliaryProposal,lane:number):JunctionAuxil
 function proposalPocket(project:NetworkProject,proposal:JunctionAuxiliaryProposal):Pocket|null{
   const junction=junctionById(project,proposal.junctionId);if(!junction||!junction.design.enabled[proposal.armId])return null;
   return pocketsFor(junction.design.arms[proposal.armId],proposal.sourceDirection)[proposal.sourceSide];
+}
+function rawPocketForSource(project:NetworkProject,source:JunctionAuxiliarySource):Pocket|undefined{
+  const junction=junctionById(project,source.junctionId);if(!junction||!junction.design.enabled[source.armId])return undefined;
+  const arm=junction.design.arms[source.armId],set=source.direction==='incoming'?arm.incomingPockets:arm.outgoingPockets;
+  return set?.[source.side];
+}
+function sourceMatchesProposal(source:JunctionAuxiliarySource,proposal:JunctionAuxiliaryProposal){
+  return source.handoffId===proposal.id&&source.junctionId===proposal.junctionId&&source.armId===proposal.armId
+    &&source.direction===proposal.sourceDirection&&source.side===proposal.sourceSide;
 }
 
 export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink):JunctionAuxiliaryProposal[]{
@@ -110,9 +131,11 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
             ?`Junction only · treatment จบก่อน Port ${Math.max(0,gapToPort).toFixed(1)} m · Continue จะยืด lane เต็มถึง Port แล้วใช้ taper ${pocket.taper.toFixed(0)} m ใน Corridor`
             :`Junction only · Port อยู่กลาง taper (active ${(portFactor*100).toFixed(0)}%) · Continue จะย้าย taper ทั้งช่วงไปไว้ใน Corridor`;
         }else if(continuation==='corridor'&&linked>pocket.lanes){
-          status='blocked';message=`Handoff เดิมมี ${linked} lane components แต่ Junction เหลือ ${pocket.lanes} เลน · กลับ Junction only แล้ว Apply ใหม่`;
+          status='ready';message=`Handoff เดิมมี ${linked} lane components แต่ Junction เหลือ ${pocket.lanes} เลน · ใช้ Repair เพื่อลบ lane identity ส่วนเกินอย่าง explicit`;
         }else if(existing>=pocket.lanes){
-          status='applied';message=`Cross-boundary handoff ต่อเนื่องครบ ${pocket.lanes} เลนแล้ว`;
+          status='applied';message=linked>=pocket.lanes
+            ?`Cross-boundary handoff ต่อเนื่องครบ ${pocket.lanes} เลนแล้ว`
+            :`Corridor geometry ต่อเนื่องครบ ${pocket.lanes} เลนแล้วในสถานะ manual / detached · ไม่มี hidden synchronization`;
         }else{
           message=continuation==='corridor'
             ?`พร้อมสร้าง/ซ่อม handoff ${pocket.lanes-existing} เลน · ${end==='from'?`Sta. 0–${corridorEnd.toFixed(1)}`:`Sta. ${corridorStart.toFixed(1)}–${total.toFixed(1)}`} m`
@@ -123,6 +146,63 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
     }
   }
   return out;
+}
+
+export function junctionAuxiliaryHandoffIssues(project:NetworkProject,link:RoadLink):JunctionAuxiliaryHandoffIssue[]{
+  const proposals=junctionAuxiliaryProposals(project,link),proposalMap=new Map(proposals.map(proposal=>[proposal.id,proposal])),
+    groups=new Map<string,LinkStationLaneComponent[]>();
+  for(const component of link.components){
+    if(component.kind!=='lane'||!component.source)continue;
+    const list=groups.get(component.source.handoffId)??[];list.push(component);groups.set(component.source.handoffId,list);
+  }
+  const total=Math.max(0,linkLength(project,link)),out:JunctionAuxiliaryHandoffIssue[]=[];
+  for(const [handoffId,components] of groups){
+    const proposal=proposalMap.get(handoffId),source=components[0].source!,componentIds=components.map(component=>component.id),
+      sourcePocket=rawPocketForSource(project,source),base={id:`${link.id}:handoff:${handoffId}`,handoffId,componentIds,canDetach:true,canReturnLocal:!!sourcePocket};
+    if(!proposal||components.some(component=>!component.source||!sourceMatchesProposal(component.source,proposal))){
+      out.push({...base,kind:'orphan',level:'warning',canRepair:false,message:'Handoff provenance ไม่ตรงกับ Junction/arm ที่ Road Link นี้เชื่อมอยู่แล้ว · อาจเกิดจากย้าย endpoint, ลบ Pocket หรือเปลี่ยน source semantics'});
+      continue;
+    }
+    if(proposal.continuation!=='corridor'){
+      out.push({...base,kind:'orphan',level:'warning',canRepair:false,message:'Junction ไม่ได้ประกาศ Continue into Corridor แล้ว แต่ RoadLink ยังมี handoff-owned lane components ค้างอยู่'});
+      continue;
+    }
+    const required=Math.max(.5,proposal.remainingFull+proposal.sourceTaper);
+    if(required>total+.05){
+      out.push({...base,kind:'range',level:'error',canRepair:false,message:`Road Link ปัจจุบันยาว ${total.toFixed(1)} m แต่ handoff ต้องใช้ ${required.toFixed(1)} m · ปรับ alignment/ความยาว treatment หรือกลับเป็น Junction only ก่อน`});
+      continue;
+    }
+    if(!linkLinearTransitionPossible(project,link)){
+      out.push({...base,kind:'topology',level:'error',canRepair:false,message:'Endpoint lane/edge topology เปลี่ยนจน Road Link ไม่สามารถ resolve handoff แบบ linear ได้ · แก้ endpoint transition ก่อน Repair'});
+      continue;
+    }
+    const laneIds=components.map(component=>component.source!.lane),expectedLanes=new Set(Array.from({length:proposal.lanes},(_,lane)=>lane)),
+      identityOk=components.length===proposal.lanes&&new Set(laneIds).size===proposal.lanes&&laneIds.every(lane=>expectedLanes.has(lane)),
+      geometryOk=components.every(component=>equivalentLane(component,proposal));
+    if(!identityOk||!geometryOk){
+      out.push({...base,kind:'stale',level:'warning',canRepair:true,message:`Junction treatment เปลี่ยนหลังสร้าง handoff · RoadLink provenance ยังอยู่ แต่ lane identity / station profile ไม่ตรงกับ source ปัจจุบัน (${components.length}→${proposal.lanes} lanes)`});
+    }
+  }
+  return out;
+}
+
+export function repairJunctionAuxiliaryHandoff(project:NetworkProject,linkId:string,handoffId:string):JunctionAuxiliaryApplyResult{
+  const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
+  const issue=junctionAuxiliaryHandoffIssues(project,link).find(item=>item.handoffId===handoffId);
+  if(!issue)return{project,created:[],error:'Handoff นี้ไม่พบ stale/orphan condition ที่ต้อง Repair'};
+  if(!issue.canRepair)return{project,created:[],error:issue.message};
+  return applyJunctionAuxiliaryProposal(project,linkId,handoffId);
+}
+
+export function detachJunctionAuxiliaryHandoff(project:NetworkProject,linkId:string,handoffId:string):JunctionAuxiliaryApplyResult{
+  const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
+  const detached=link.components.filter(component=>component.kind==='lane'&&component.source?.handoffId===handoffId).map(component=>component.id);
+  if(!detached.length)return{project,created:[],error:'ไม่พบ handoff-owned lane components'};
+  const next={...project,links:project.links.map(item=>item.id!==linkId?item:{...item,components:item.components.map(component=>{
+    if(component.kind!=='lane'||component.source?.handoffId!==handoffId)return component;
+    const {source:_source,...manual}=component;return manual;
+  })})},error=validateNetworkProject(next);
+  return error?{project,created:[],error}:{project:next,created:[],detached,error:null};
 }
 
 export function applyJunctionAuxiliaryProposal(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
@@ -169,11 +249,22 @@ export function continueJunctionAuxiliaryToCorridor(project:NetworkProject,linkI
 
 export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
   const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
-  const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id);if(!proposal)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal'};
-  const edited=updateJunctionArmPocket(project,proposal.junctionId,proposal.armId,proposal.sourceDirection,proposal.sourceSide,{continuation:'local'});
-  if(edited.error)return{project,created:[],error:edited.error};
-  const removed=link.components.filter(component=>component.kind==='lane'&&component.source?.handoffId===id).map(component=>component.id),
-    next={...edited.project,links:edited.project.links.map(item=>item.id===linkId?{...item,components:item.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===id))}:item)},
+  const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id),
+    sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===id),
+    fallbackSource=sourced[0]?.source;
+  if(!proposal&&!fallbackSource)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal หรือ provenance สำหรับ handoff นี้'};
+  let edited=project;
+  if(proposal){
+    const result=updateJunctionArmPocket(project,proposal.junctionId,proposal.armId,proposal.sourceDirection,proposal.sourceSide,{continuation:'local'});
+    if(result.error)return{project,created:[],error:result.error};edited=result.project;
+  }else if(fallbackSource&&rawPocketForSource(project,fallbackSource)){
+    const result=updateJunctionArmPocket(project,fallbackSource.junctionId,fallbackSource.armId,fallbackSource.direction,fallbackSource.side,{continuation:'local'});
+    if(result.error)return{project,created:[],error:result.error};edited=result.project;
+  }else{
+    return{project,created:[],error:'Source Pocket/Receiving lane ไม่มีอยู่แล้ว · ใช้ Detach เพื่อเก็บ corridor geometry เป็น manual state'};
+  }
+  const removed=sourced.map(component=>component.id),
+    next={...edited,links:edited.links.map(item=>item.id===linkId?{...item,components:item.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===id))}:item)},
     error=validateNetworkProject(next);
   return error?{project,created:[],error}:{project:next,created:[],removed,error:null};
 }
