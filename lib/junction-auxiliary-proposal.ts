@@ -118,7 +118,7 @@ export function applyJunctionAuxiliaryProposal(project:NetworkProject,linkId:str
   const currentMatches=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&equivalentLane(component,proposal)).length,
     missing=Math.max(0,proposal.lanes-currentMatches);
   if(!missing)return{project,created:[],error:null};
-  let nextLink:RoadLink={...link,sectionProfile:{...link.sectionProfile,mode:'linear'},components:[...link.components]},created:string[]=[];
+  let nextLink:RoadLink={...link,sectionProfile:{...link.sectionProfile,mode:'linear'},components:[...link.components]};const created:string[]=[];
   for(let lane=0;lane<missing;lane++){
     const id=nextComponentId(nextLink),component:LinkStationLaneComponent={
       id,kind:'lane',direction:proposal.linkDirection,side:proposal.linkSide,
