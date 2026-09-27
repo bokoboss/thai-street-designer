@@ -61,16 +61,18 @@ export function sampleStationProfile(profile:StationValueProfile,stations:number
 export function windowStationProfile(total:number,start:number,end:number,taperIn:number,taperOut:number,value=1):StationValueProfile{
   const length=Math.max(0,Number.isFinite(total)?total:0),a=clamp(Number.isFinite(start)?start:0,0,length),b=clamp(Number.isFinite(end)?end:length,0,length),
     lo=Math.min(a,b),hi=Math.max(a,b),span=Math.max(0,hi-lo),rawIn=Math.max(0,Number.isFinite(taperIn)?taperIn:0),rawOut=Math.max(0,Number.isFinite(taperOut)?taperOut:0),
-    scale=rawIn+rawOut>span&&rawIn+rawOut>0?span/(rawIn+rawOut):1,inLen=rawIn*scale,outLen=rawOut*scale;
-  const enter=inLen>1e-9?lo+inLen:Math.min(hi,lo+1e-6),exit=outLen>1e-9?hi-outLen:Math.max(lo,hi-1e-6);
-  return createStationProfile([
-    {station:0,value:0},
-    {station:lo,value:0},
-    {station:enter,value},
-    {station:exit,value},
-    {station:hi,value:0},
-    {station:length,value:0}
-  ],'smooth');
+    scale=rawIn+rawOut>span&&rawIn+rawOut>0?span/(rawIn+rawOut):1,inLen=rawIn*scale,outLen=rawOut*scale,
+    openAtStart=lo<=1e-9&&inLen<=1e-9,openAtEnd=length-hi<=1e-9&&outLen<=1e-9,
+    enter=inLen>1e-9?lo+inLen:Math.min(hi,lo+1e-6),exit=outLen>1e-9?hi-outLen:Math.max(lo,hi-1e-6),
+    knots:StationValueKnot[]=[{station:0,value:openAtStart?value:0}];
+  if(!openAtStart)knots.push({station:lo,value:0},{station:enter,value});
+  else if(hi>0)knots.push({station:Math.min(hi,1e-6),value});
+  if(!openAtEnd)knots.push({station:exit,value},{station:hi,value:0},{station:length,value:0});
+  else{
+    if(exit<length)knots.push({station:exit,value});
+    knots.push({station:length,value});
+  }
+  return createStationProfile(knots,'smooth');
 }
 
 export function profileSampleStations(profile:StationValueProfile,subdivisions=4){

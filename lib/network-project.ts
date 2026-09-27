@@ -214,9 +214,6 @@ function linkWidthTargetRange(project:NetworkProject,link:RoadLink,direction:Lin
     from=bandsA.find(v=>v.type===target),to=bandsB.find(v=>v.type===target);
   return from&&to?{from:from.width,to:to.width}:null;
 }
-function laneComponentOverlaps(components:LinkStationComponent[],candidate:LinkStationLaneComponent){
-  return components.some(component=>component.kind==='lane'&&component.id!==candidate.id&&component.direction===candidate.direction&&Math.max(component.start,candidate.start)<Math.min(component.end,candidate.end)-.01);
-}
 export function addLinkStationComponent(project:NetworkProject,id:string,kind:'lane'|'width'):LinkStationComponentResult{
   const link=project.links.find(l=>l.id===id);if(!link)return{project,error:'ไม่พบ Road Link'};
   if(link.sectionProfile.mode!=='linear'||!linkLinearTransitionPossible(project,link))return{project,error:'เปิด Resolved geometric transition ให้เรียบร้อยก่อนเพิ่ม station component'};
@@ -226,7 +223,6 @@ export function addLinkStationComponent(project:NetworkProject,id:string,kind:'l
     component:LinkStationComponent=kind==='lane'
       ?{id:componentId,kind:'lane',direction:'forward',side:'curb',...range}
       :{id:componentId,kind:'width',direction:'forward',target:'walk',delta:1,...range};
-  if(component.kind==='lane'&&laneComponentOverlaps(link.components,component))return{project,error:'Auxiliary lane components ทิศเดียวกันยังห้ามซ้อนช่วง station กันใน Phase 5B.2'};
   const next={...project,links:project.links.map(l=>l.id===id?{...l,components:[...l.components,component]}:l)};
   return{project:next,component,error:null};
 }
@@ -236,7 +232,6 @@ export function updateLinkStationComponent(project:NetworkProject,id:string,comp
   let component:LinkStationComponent;
   if(current.kind==='lane'){
     component={...current,direction,side:patch.side??current.side,...range};
-    if(laneComponentOverlaps(link.components,component))return{project,error:'Auxiliary lane components ทิศเดียวกันยังห้ามซ้อนช่วง station กันใน Phase 5B.2'};
   }else{
     const target=patch.target??current.target,base=linkWidthTargetRange(project,link,direction,target);
     if(!base)return{project,error:'Edge-width target นี้ไม่มีอยู่ต่อเนื่องที่ปลาย Road Link ทั้งสองด้าน'};
@@ -471,10 +466,8 @@ export function validateNetworkProject(project:NetworkProject){
         const component=input as LinkStationComponent;
         return !!component.id&&component.id.length<=40&&['forward','backward'].includes(component.direction)&&Number.isFinite(component.start)&&component.start>=0&&Number.isFinite(component.end)&&component.end>component.start&&Number.isFinite(component.taperIn)&&component.taperIn>=0&&Number.isFinite(component.taperOut)&&component.taperOut>=0&&(component.kind==='lane'?['curb','median'].includes(component.side):(component.kind==='width'&&['walk','shoulder','bike','motorcycle','buffer'].includes(component.target)&&Number.isFinite(component.delta)&&Math.abs(component.delta)>=.01&&component.delta>=-5&&component.delta<=5));
       },
-      componentList=Array.isArray(l.components)?l.components:[],
-      laneComponents=componentList.filter((component):component is LinkStationLaneComponent=>!!component&&typeof component==='object'&&component.kind==='lane'),
-      laneOverlap=laneComponents.some((component,index)=>laneComponents.slice(index+1).some(other=>other.direction===component.direction&&Math.max(component.start,other.start)<Math.min(component.end,other.end)-.01));
-    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v))||laneOverlap)return'Road Link ไม่สมบูรณ์';
+      componentList=Array.isArray(l.components)?l.components:[];
+    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }

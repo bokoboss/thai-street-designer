@@ -433,7 +433,7 @@ Engineering rules in this phase:
 
 - station components are semantic RoadLink state and are stored in project JSON;
 - they are active only on a resolved `linear` RoadLink section profile;
-- same-direction auxiliary-lane lifecycles may not overlap yet, avoiding ambiguous lane identity in the first persisted version;
+- Phase 5B.2 initially prohibited overlapping same-direction auxiliary lanes; Phase 5B.4 removes that temporary restriction because the unified lifecycle resolver now preserves independent lane identity and deterministic side stacking;
 - edge-width components may overlap and combine additively, but width is clamped at zero;
 - the renderer inserts additional centerline samples at lifecycle/taper stations so a transition cannot disappear merely because the base alignment has few vertices;
 - curb-side auxiliary lanes widen outward; median-side auxiliary lanes shift the common lane stack outward while keeping the median datum explicit;
@@ -463,3 +463,31 @@ The Junction side also shares the same low-level easing primitive now: `Pocket` 
 Median-side stacking is now deterministic when an endpoint transition and a corridor auxiliary overlap: each lifecycle keeps a separate divider identity and common lanes shift by the total active median-side lifecycle width. Curb-side lifecycle stacking follows the same ordered rule outside the common lane stack.
 
 This phase does **not** move Junction Pocket / receiving-lane ownership out of Design v6. Pocket geometry remains local to the Junction arm. The architectural boundary is now prepared for the next step: mapping selected Junction auxiliary treatments into corridor lifecycle proposals without creating a second taper or lane-identity engine.
+
+### Phase 5B.4 Junction auxiliary → corridor proposal
+
+The Network Inspector can now derive explicit proposals from Pocket / receiving-lane semantics on both Junction ports of a selected RoadLink. The proposal layer is intentionally separate from persistence: it reads Design v6, maps the source to RoadLink direction/side/stationing, validates the boundary, and mutates engineering state only after an explicit Apply action.
+
+Direction mapping is fixed by the semantic port end:
+
+- FROM outgoing → RoadLink forward;
+- FROM incoming → RoadLink backward;
+- TO incoming → RoadLink forward;
+- TO outgoing → RoadLink backward.
+
+Junction `left` auxiliary maps to corridor curb side; Junction `right` maps to median side, matching the current LHT section convention.
+
+The proposal checks the actual Junction treatment factor at `arm.length`, which is the Network port datum. This prevents a common but invalid shortcut: copying a local Junction Pocket that already tapers to zero before the port into a RoadLink and thereby creating a disconnected lane. Such cases are reported as `Local only` with the measured gap and are not applicable.
+
+A proposal is applicable only when:
+
+- the Junction auxiliary is fully active at the port;
+- the remaining full-length + taper fits inside the RoadLink;
+- endpoint topology/edge continuity can be resolved;
+- component capacity remains within the Network v3 limit.
+
+When applicable, only the treatment **remaining beyond the port** is copied. A FROM-boundary continuation is full-width at station 0 and tapers out later; a TO-boundary continuation is full-width at the final RoadLink station. `windowStationProfile()` therefore now supports boundary-active zero-taper ends instead of forcing every lifecycle to zero at both link boundaries.
+
+Apply is atomic: it switches the RoadLink to resolved linear mode when needed and creates the missing lane lifecycles in one Network history transaction. Multi-lane proposals create independent components with stable IDs. Because Phase 5B.3 established deterministic lifecycle stacking, overlapping same-direction corridor lane components are now supported rather than rejected.
+
+No schema bump is required. The proposal itself is transient and no hidden live binding is introduced between Junction Design v6 and RoadLink v3; after Apply, the RoadLink components are normal explicit corridor engineering state. Fractional handoff (the Network port falling inside a Junction taper) remains blocked rather than approximated, and is a future cross-boundary feature if that workflow proves necessary.
