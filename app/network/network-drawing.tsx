@@ -104,16 +104,16 @@ export function JunctionInstanceDrawing({
       const p=portPoint(junction,armId),arm=junction.design.arms[armId],hitWidth=Math.max(arm.median+(arm.incoming+arm.outgoing)*arm.width+10,20*interactionScale),armSelected=selected&&selectedArm===armId,
         gripHit=12*interactionScale,gripVisible=3.6*interactionScale;
       return <g key={'hit-'+armId}>
-        <line data-network-junction-hit={`${junction.id}:${armId}`} data-network-arm-drag-target="true" x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
+        <line data-network-junction-hit={`${junction.id}:${armId}`} data-network-arm-select-target="true" x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
           stroke="transparent" strokeWidth={hitWidth} pointerEvents={linkMode?'none':'stroke'}
-          onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelect();onArmSelect(armId);onArmMoveStart(armId,e);}} style={{cursor:linkMode?undefined:'grab'}}/>
+          onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelect();onArmSelect(armId);}} style={{cursor:linkMode?undefined:'pointer'}}/>
         {armSelected&&<line data-network-arm-selection={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
           stroke="#0eabb8" strokeWidth={1.15*interactionScale} strokeDasharray={`${2.4*interactionScale} ${1.5*interactionScale}`} pointerEvents="none"/>}
         {armSelected&&!linkMode&&<>
           <circle data-network-arm-handle-visible={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r={gripVisible} fill="#ffffff" stroke="#0e8995" strokeWidth={.75*interactionScale} pointerEvents="none"/>
           <circle data-network-arm-handle={`${junction.id}:${armId}`} data-network-arm-hit-radius={gripHit.toFixed(2)} cx={p.x} cy={p.y} r={gripHit} fill="transparent" stroke="transparent"
             onPointerDown={e=>{e.preventDefault();e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'grab'}}>
-            <title>ลากจาก grip หรือจากตัว Arm ได้โดยตรง</title>
+            <title>ลากจาก grip ที่ปลายแขนเพื่อเปลี่ยนมุม/ความยาว</title>
           </circle>
         </>}
       </g>;

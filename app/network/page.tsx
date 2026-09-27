@@ -19,7 +19,7 @@ import {
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
-type ArmDragState={kind:'arm';id:string;armId:number;before:NetworkProject;startPointer:WorldPoint;startEndpoint:WorldPoint};
+type ArmDragState={kind:'arm';id:string;armId:number;before:NetworkProject;startPointer:WorldPoint;startEndpoint:WorldPoint;startClient:{x:number;y:number};active:boolean};
 type Drag=
   |{kind:'pan';start:{x:number;y:number};pan:{x:number;y:number}}
   |{kind:'junction';id:string;before:NetworkProject;offset:WorldPoint}
@@ -263,13 +263,24 @@ export default function NetworkWorkspace(){
       if(next===projectRef.current){setNotice('จุดแนวนี้ทำให้ Link หักกลับ/ตัดตัวเองหรือมีท่อนสั้นเกินไป');return;}
       setProjectNow(next);return;
     }
-    if(current.kind==='arm'){scheduleArmMove(current,p,e.shiftKey);return;}
+    if(current.kind==='arm'){
+      if(!current.active){
+        if(Math.hypot(e.clientX-current.startClient.x,e.clientY-current.startClient.y)<5)return;
+        current.active=true;
+      }
+      scheduleArmMove(current,p,e.shiftKey);return;
+    }
     const next=moveJunction(projectRef.current,current.id,{x:p.x+current.offset.x,y:p.y+current.offset.y});
     setProjectNow(next);
   }
   function endPointer(e:React.PointerEvent<SVGSVGElement>){
     const current=drag.current;
     if(current?.kind==='arm'){
+      if(!current.active){
+        drag.current=null;setArmGuide(null);
+        try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
+        return;
+      }
       armMovePending.current={drag:current,point:point(e),shiftKey:e.shiftKey};flushArmMove();
       const previewJunction=junctionById(projectRef.current,current.id),previewArm=previewJunction?.design.arms[current.armId],
         validated=previewArm?updateJunctionArmGeometry(current.before,current.id,current.armId,previewArm.angle,previewArm.length):{project:current.before,error:'ไม่พบขาถนนที่เลือก'};
@@ -299,7 +310,7 @@ export default function NetworkWorkspace(){
     svg.current?.setPointerCapture(e.pointerId);
   }
   function selectArm(id:string,armId:number){
-    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · ลากได้จากตัวแขนหรือ grip ที่ปลาย · Shift = snap 15°');
+    if(tool!=='select')return;setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);const junction=junctionById(projectRef.current,id),arm=junction?.design.arms[armId];if(arm)setNotice(arm.name+' · คลิกเพื่อเลือก · ลาก geometry ได้เฉพาะ grip ที่ปลายแขน · Shift = snap 15°');
   }
   function startArmMove(id:string,armId:number,e:React.PointerEvent<SVGElement>){
     if(tool!=='select')return;
@@ -308,10 +319,9 @@ export default function NetworkWorkspace(){
     if(armMoveFrame.current!==null){cancelAnimationFrame(armMoveFrame.current);armMoveFrame.current=null;}armMovePending.current=null;
     const startPointer=point(e),startEndpoint=portPoint(junction,armId);
     setSelection({kind:'junction',id});setSelectedArm(armId);setSelectedDirection('incoming');setSelectedLinkVertex(null);
-    drag.current={kind:'arm',id,armId,before:projectRef.current,startPointer,startEndpoint};
-    const worldAngle=normalizeAngle(worldJunctionRotation(junction)+arm.angle);
-    setArmGuide({junctionId:id,armId,worldAngle,localAngle:arm.angle,length:arm.length,snapped:false,hint:nearestArmGuide(projectRef.current,id,armId,worldAngle)});
-    setNotice(arm.name+' · กำลังลากแบบ direct manipulation · Shift = snap 15°');
+    drag.current={kind:'arm',id,armId,before:projectRef.current,startPointer,startEndpoint,startClient:{x:e.clientX,y:e.clientY},active:false};
+    setArmGuide(null);
+    setNotice(arm.name+' · จับ grip ที่ปลายแล้วลากเพื่อเปลี่ยนมุม/ความยาว · Shift = snap 15°');
     try{svg.current?.setPointerCapture(e.pointerId);}catch{}
   }
   function editSelectedArm(patch:Parameters<typeof updateJunctionArmBasics>[3]){
