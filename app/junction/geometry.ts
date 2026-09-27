@@ -129,6 +129,14 @@ export function treatmentOrigins(a:Arm,core:number,round=false,settings=roundDef
  return {incoming:stopPosition(a,core),outgoing:departurePosition(a,core,round,settings)} as const;
 }
 export const STOP_LINE_WIDTH = .55;
+/** Zebra bands distributed across the complete curb-to-curb span with balanced edge clearance. */
+export function crosswalkStripeBands(lo:number,hi:number,stripe=.65,pitch=1.2,margin=.15):[number,number][]{
+ const low=Math.min(lo,hi),high=Math.max(lo,hi),usable=Math.max(0,high-low-2*margin);
+ if(usable<=1e-6)return[];
+ if(usable<=stripe)return[[low+margin,high-margin]];
+ const count=Math.max(2,Math.ceil((usable-stripe)/pitch)+1),first=low+margin,last=high-margin-stripe,step=(last-first)/(count-1);
+ return Array.from({length:count},(_,i)=>{const start=first+step*i;return[start,Math.min(high-margin,start+stripe)] as [number,number];});
+}
 /** Common longitudinal datum for approach/departure lane markings at a normal junction. */
 export function junctionMarkingStart(a:Arm,core:number,round=false){
  return round?core:stopPosition(a,core)+(a.stop&&a.incoming>0?STOP_LINE_WIDTH/2:0);
