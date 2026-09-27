@@ -1,9 +1,15 @@
 name: Audit Preview
 # Pages preview for audit branch
 
-# Run manually only at visual checkpoints to conserve free GitHub Actions / Pages usage.
+# Run only at explicit visual checkpoints to conserve free GitHub Actions / Pages usage.
+# Updating .github/PREVIEW_CHECKPOINT is the deliberate branch-preview deploy signal.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - chatgpt/full-engineering-ui-audit
+    paths:
+      - '.github/PREVIEW_CHECKPOINT'
 
 permissions:
   contents: read

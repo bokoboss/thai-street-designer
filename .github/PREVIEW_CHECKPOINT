@@ -1,0 +1,8 @@
+Thai Street Designer audit preview checkpoint
+2026-09-27
+Includes:
+- no-median centerline trim at stop-line datum
+- curb-to-curb crosswalk stripe coverage
+- Junction Arm body select-only interaction
+- endpoint-grip-only geometry drag with 5 px activation threshold
+Source head before checkpoint: 5e2eaa7f193022af588bb209b42df9ffa8e9309f
