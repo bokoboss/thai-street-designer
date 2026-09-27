@@ -165,16 +165,19 @@ try{
   await waitFor(()=>evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)<.35`),'2D zoom below legacy 35% floor');
   await clickSelector('[data-network-zoom-action="fit"]');await sleep(180);
 
-  mark('free-arm-drag');
+  mark('endpoint-arm-drag');
   const armAngleBefore=(await project()).junctions.find(j=>j.id==='J-1').design.arms[1].angle;
   await smoothDragSelector('[data-network-junction-hit="J-1:1"]',31,-17,12);
-  const gripRect=await waitFor(()=>rectBySelector('[data-network-arm-handle="J-1:1"]'),'Arm grip hit target');
-  assert(gripRect.w>=14&&gripRect.h>=14,'Arm endpoint grip must retain a usable screen-space hit target after direct dragging');
-  const freeArm=await waitFor(async()=>{const p=await project(),arm=p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[1];return arm&&Math.abs(arm.angle-armAngleBefore)>.05?arm:null;},'free Arm drag');
-  assert(Math.abs(freeArm.angle-Math.round(freeArm.angle))>.001,'normal Arm drag must preserve a fractional angle instead of integer snapping');
-  await smoothDragSelector('[data-network-junction-hit="J-1:1"]',22,13,10,8);
-  const snappedArm=await waitFor(async()=>{const p=await project(),j=p?.junctions?.find(v=>v.id==='J-1'),arm=j?.design?.arms?.[1];if(!j||!arm)return null;const world=((j.rotation+j.design.rotation+arm.angle)%360+360)%360;return Math.abs(world/15-Math.round(world/15))<.001?{arm,world}:null;},'Shift Arm snap 15 degrees');
-  assert(Math.abs(snappedArm.world/15-Math.round(snappedArm.world/15))<.001,'Shift drag must snap Arm world heading to 15 degree increments');
+  const bodyDragArm=(await project()).junctions.find(j=>j.id==='J-1').design.arms[1];
+  assert(Math.abs(bodyDragArm.angle-armAngleBefore)<1e-8,'dragging the Arm body must select only and must not edit geometry');
+  const gripRect=await waitFor(()=>rectBySelector('[data-network-arm-handle="J-1:1"]'),'Arm endpoint grip hit target');
+  assert(gripRect.w>=14&&gripRect.h>=14,'Arm endpoint grip must retain a usable screen-space hit target');
+  await smoothDragSelector('[data-network-arm-handle="J-1:1"]',31,-17,12);
+  const freeArm=await waitFor(async()=>{const p=await project(),arm=p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[1];return arm&&Math.abs(arm.angle-armAngleBefore)>.05?arm:null;},'endpoint Arm drag');
+  assert(Math.abs(freeArm.angle-Math.round(freeArm.angle))>.001,'normal endpoint drag must preserve a fractional angle instead of integer snapping');
+  await smoothDragSelector('[data-network-arm-handle="J-1:1"]',22,13,10,8);
+  const snappedArm=await waitFor(async()=>{const p=await project(),j=p?.junctions?.find(v=>v.id==='J-1'),arm=j?.design?.arms?.[1];if(!j||!arm)return null;const world=((j.rotation+j.design.rotation+arm.angle)%360+360)%360;return Math.abs(world/15-Math.round(world/15))<.001?{arm,world}:null;},'Shift endpoint Arm snap 15 degrees');
+  assert(Math.abs(snappedArm.world/15-Math.round(snappedArm.world/15))<.001,'Shift endpoint drag must snap Arm world heading to 15 degree increments');
 
   mark('create-junction');
   await clickSelector('[data-network-tool="junction"]');
