@@ -548,3 +548,41 @@ Important behavior after later edits:
 - generic manual editing of a handoff-owned lifecycle still detaches provenance immediately, so there is no hidden synchronization path.
 
 No Design or Network schema bump is required. The cleanup operates entirely on the optional Phase 5B.5 provenance already stored in Network schema v3.
+
+### Phase 5C.1 Existing / Alternative scenario foundation
+
+Scenario comparison is introduced as a workspace layer **above** NetworkProject rather than by adding scenario fields to every Junction, RoadLink or geometry primitive.
+
+The persisted container is:
+
+```
+NetworkScenarioWorkspace v1
+├─ activeScenarioId
+└─ scenarios[]
+   ├─ Existing      → NetworkProject v3
+   ├─ Alt A         → NetworkProject v3
+   └─ Alt B ...     → NetworkProject v3
+```
+
+This preserves the existing ownership boundary: Junction Design v6 and NetworkProject v3 remain the complete engineering source of truth for one scenario. Geometry, handoff, station-profile, validation, 2D, cross-section and 3D engines do not need scenario-specific branches.
+
+Existing project storage remains discoverable through the same `thai-street-network-project-v1` key. On restore:
+
+- legacy NetworkProject v1/v2/v3 JSON is normalized using the existing migration path and wrapped as a single **Existing** scenario;
+- Scenario Workspace v1 normalizes every contained NetworkProject independently;
+- malformed scenario containers fall back to a fresh workspace rather than partially mixing invalid scenario state.
+
+Scenario behavior in 5C.1:
+
+- exactly one scenario has `kind: 'existing'`; it is the non-deletable baseline;
+- **+ Alternative** deep-copies the currently active NetworkProject, so Alt A may be derived from Existing and a later alternative may intentionally be derived from another alternative;
+- alternatives retain `sourceScenarioId` provenance but are independent engineering states after creation;
+- scenario names are unique and editable; workspace size is capped at eight scenarios;
+- switching scenario replaces the active NetworkProject without changing shared reference layers such as online map, local calibrated image, camera pan/zoom or view mode;
+- Undo/Redo history is stored separately per scenario and restored when switching back;
+- Reset affects only the active scenario;
+- deleting the active alternative returns to Existing.
+
+The scenario strip is intentionally a workspace/navigation concern. No cross-scenario live binding exists: editing Alt A does not mutate Existing, and later changes to Existing do not propagate into an already-created alternative.
+
+Phase 5C.1 does **not** yet draw comparison overlays or calculate deltas. Those belong in the next scenario phase after the persistence/switching/isolation foundation is proven through migration, model regression and browser acceptance.

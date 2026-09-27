@@ -146,14 +146,27 @@ try{
     const bytes=Buffer.from(shot.data,'base64');assert(bytes.length>5000,'Screenshot is unexpectedly small: '+name);
     writeFileSync(artifactDir+'/'+name,bytes);return bytes.length;
   }
-  const project=()=>evalValue(`(()=>{try{return JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null')}catch{return null}})()`);
-  const projectSummary=p=>({version:p?.version,junctions:p?.junctions?.length??0,links:p?.links?.length??0,link2:p?.links?.find(v=>v.id==='L-2')??null});
+  const scenarioWorkspace=()=>evalValue(`(()=>{try{return JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null')}catch{return null}})()`);
+  const project=()=>evalValue(`(()=>{try{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null');if(w?.workspaceVersion===1&&Array.isArray(w.scenarios))return w.scenarios.find(s=>s.id===w.activeScenarioId)?.project??null;return w}catch{return null}})()`);
+  const projectSummary=p=>({version:p?.version??p?.schemaVersion,junctions:p?.junctions?.length??0,links:p?.links?.length??0,link2:p?.links?.find(v=>v.id==='L-2')??null});
 
   mark('workspace-load');
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'Network workspace load');
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
+  const initialScenarioWorkspace=await scenarioWorkspace();assert.equal(initialScenarioWorkspace?.workspaceVersion,1,'Network storage must use the scenario workspace wrapper');assert.equal(initialScenarioWorkspace?.activeScenarioId,'existing');assert.equal(initialScenarioWorkspace?.scenarios?.length,1);assert.equal(initialScenarioWorkspace.scenarios[0].name,'Existing');
+  mark('scenario-isolation');
+  await clickSelector('[data-network-scenario-add]');
+  await waitFor(async()=>{const w=await scenarioWorkspace();return w?.scenarios?.length===2&&w.activeScenarioId==='alt-1'&&w.scenarios.find(s=>s.id==='alt-1')?.name==='Alt A';},'create Alt A from Existing');
+  let scenarioPlan=await rectBySelector('svg[data-network-plan="true"]');await clickSelector('[data-network-tool="junction"]');await clickAt({x:scenarioPlan.x+scenarioPlan.w*.18,y:scenarioPlan.y-scenarioPlan.h*.18});
+  await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'edit Alt A independently');
+  await clickSelector('[data-network-scenario="existing"]');
+  await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&p?.junctions?.length===2;},'Existing remains unchanged after Alt edit');
+  await clickSelector('[data-network-scenario="alt-1"]');
+  await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'Alt A restores its own geometry');
+  await clickSelector('[data-network-scenario-delete]');
+  await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&w?.scenarios?.length===1&&p?.junctions?.length===2;},'delete Alt A and return Existing');
   const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
   assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
   assert.equal(initial2d.inspector,'open','Inspector should open by default');
@@ -267,7 +280,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: whole-Arm smooth drag + stable grip + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  console.log('PASS browser acceptance: scenario isolation → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

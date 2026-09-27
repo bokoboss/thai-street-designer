@@ -9,13 +9,14 @@ import {LOCAL_IMAGE_REFERENCE_STORAGE,calibrateLocalImageReference,initialLocalI
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {applyJunctionAuxiliaryProposal,continueJunctionAuxiliaryToCorridor,detachJunctionAuxiliaryHandoff,junctionAuxiliaryHandoffIssues,junctionAuxiliaryProposals,repairJunctionAuxiliaryHandoff,returnJunctionAuxiliaryToLocal,type JunctionAuxiliaryProposalStatus} from '@/lib/junction-auxiliary-proposal';
 import {NetworkDrawing,type NetworkSelection} from './network-drawing';
+import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/lib/network-scenarios';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,addLinkStationComponent,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,linkWidthTargets,moveJunction,moveLinkVia,portKey,portPoint,
-  projectBounds,removeJunction,removeLink,removeLinkStationComponent,removeLinkVia,restoreNetworkProject,rotateJunction,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type PortRef,type WorldPoint
+  projectBounds,removeJunction,removeLink,removeLinkStationComponent,removeLinkVia,rotateJunction,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
@@ -66,7 +67,8 @@ const tools:[Tool,string,typeof MousePointer2][]=[
 ];
 
 export default function NetworkWorkspace(){
-  const [project,setProject]=useState<NetworkProject>(createNetworkProject),[selection,setSelection]=useState<NetworkSelection>({kind:'junction',id:'J-1'}),
+  const [scenarioWorkspace,setScenarioWorkspace]=useState<NetworkScenarioWorkspace>(createNetworkScenarioWorkspace),
+    [project,setProject]=useState<NetworkProject>(()=>activeNetworkProject(scenarioWorkspace)),[selection,setSelection]=useState<NetworkSelection>({kind:'junction',id:'J-1'}),
     [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedArm,setSelectedArm]=useState<number|null>(null),[selectedDirection,setSelectedDirection]=useState<Direction>('incoming'),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
@@ -76,22 +78,23 @@ export default function NetworkWorkspace(){
     [inspectorOpen,setInspectorOpen]=useState(true),[armGuide,setArmGuide]=useState<ArmDragGuide|null>(null),[mapAlignRotation,setMapAlignRotation]=useState(0),
     [localReference,setLocalReference]=useState<LocalImageReference>(localImageReferenceDefaults),[localImageUrl,setLocalImageUrl]=useState<string|null>(null),
     [calibrationPoints,setCalibrationPoints]=useState<WorldPoint[]>([]),[calibrationDistance,setCalibrationDistance]=useState(20);
-  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
-    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
+  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),scenarioWorkspaceRef=useRef(scenarioWorkspace),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
+    pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),scenarioHistoryRef=useRef(new Map<string,{past:NetworkProject[];future:NetworkProject[]}>()),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
     localImageInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
 
   const viewWidthMeters=NETWORK_VIEW_SPAN/zoom,scaleMeters=niceScaleMeters(viewWidthMeters*.18),scaleWidthPercent=scaleMeters/viewWidthMeters*100;
   useEffect(()=>{projectRef.current=project;},[project]);
+  useEffect(()=>{scenarioWorkspaceRef.current=scenarioWorkspace;},[scenarioWorkspace]);
   useEffect(()=>{
     let active=true;
     try{
       localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);
-      const restoredProject=restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE)),restoredLocalReference=restoreLocalImageReference(localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE));
-      queueMicrotask(()=>{if(!active)return;storageReady.current=true;setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);setLocalReference(restoredLocalReference);});
+      const restoredWorkspace=restoreNetworkScenarioWorkspace(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredProject=activeNetworkProject(restoredWorkspace),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE)),restoredLocalReference=restoreLocalImageReference(localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE));
+      queueMicrotask(()=>{if(!active)return;storageReady.current=true;scenarioWorkspaceRef.current=restoredWorkspace;projectRef.current=restoredProject;setScenarioWorkspace(restoredWorkspace);setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);setLocalReference(restoredLocalReference);});
     }catch{storageReady.current=true;}
     return()=>{active=false;};
   },[]);
-  useEffect(()=>{if(!storageReady.current||drag.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>{if(!storageReady.current||drag.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(scenarioWorkspace));}catch{}},[scenarioWorkspace]);
   useEffect(()=>()=>{if(armMoveFrame.current!==null)cancelAnimationFrame(armMoveFrame.current);},[]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_REFERENCE_STORAGE,JSON.stringify(mapReference));}catch{}},[mapReference]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_PROVIDER_CREDENTIALS_STORAGE,JSON.stringify(mapCredentials));}catch{}},[mapCredentials]);
@@ -116,7 +119,8 @@ export default function NetworkWorkspace(){
     return()=>{stale=true;window.clearTimeout(timer);};
   },[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng]);
 
-  const localImageSize=localImageFootprint(localReference),calibrationMeasured=calibrationPoints.length===2?Math.hypot(calibrationPoints[1].x-calibrationPoints[0].x,calibrationPoints[1].y-calibrationPoints[0].y):null,
+  const currentScenario=activeNetworkScenario(scenarioWorkspace),
+    localImageSize=localImageFootprint(localReference),calibrationMeasured=calibrationPoints.length===2?Math.hypot(calibrationPoints[1].x-calibrationPoints[0].x,calibrationPoints[1].y-calibrationPoints[0].y):null,
     mapKind=basemapKind(mapReference.basemap),mapCredentialKey=basemapCredentialKey(mapReference.basemap),
     selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
     selectedLink=selection?.kind==='link'?project.links.find(l=>l.id===selection.id):undefined,
@@ -129,11 +133,21 @@ export default function NetworkWorkspace(){
     selectedAuxiliaryProposals=selectedLink?junctionAuxiliaryProposals(project,selectedLink):[],
     selectedHandoffIssues=selectedLink?junctionAuxiliaryHandoffIssues(project,selectedLink):[];
 
-  function setProjectNow(next:NetworkProject){projectRef.current=next;setProject(next);}
-  function persistProjectSnapshot(next:NetworkProject){if(!storageReady.current)return;try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(next));}catch{}}
+  function setProjectNow(next:NetworkProject){
+    projectRef.current=next;setProject(next);
+    const workspace=replaceActiveNetworkProject(scenarioWorkspaceRef.current,next);
+    scenarioWorkspaceRef.current=workspace;setScenarioWorkspace(workspace);
+  }
+  function persistProjectSnapshot(next:NetworkProject){
+    if(!storageReady.current)return;
+    const workspace=replaceActiveNetworkProject(scenarioWorkspaceRef.current,next);
+    scenarioWorkspaceRef.current=workspace;setScenarioWorkspace(workspace);
+    try{localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(workspace));}catch{}
+  }
   function remember(before:NetworkProject){
-    const nextPast=[...pastRef.current.slice(-39),before];
+    const nextPast=[...pastRef.current.slice(-39),before],scenarioId=scenarioWorkspaceRef.current.activeScenarioId;
     pastRef.current=nextPast;futureRef.current=[];setPast(nextPast);setFuture([]);
+    scenarioHistoryRef.current.set(scenarioId,{past:nextPast,future:[]});
   }
   function commit(next:NetworkProject,before=projectRef.current){
     if(next===before)return;
@@ -142,14 +156,43 @@ export default function NetworkWorkspace(){
   function undo(){
     const history=pastRef.current,previous=history.at(-1);if(!previous)return;
     const nextPast=history.slice(0,-1),nextFuture=[projectRef.current,...futureRef.current.slice(0,39)];
-    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);setProjectNow(previous);
+    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);scenarioHistoryRef.current.set(scenarioWorkspaceRef.current.activeScenarioId,{past:nextPast,future:nextFuture});setProjectNow(previous);
     setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
   }
   function redo(){
     const next=futureRef.current[0];if(!next)return;
     const nextPast=[...pastRef.current.slice(-39),projectRef.current],nextFuture=futureRef.current.slice(1);
-    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);setProjectNow(next);
+    pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);scenarioHistoryRef.current.set(scenarioWorkspaceRef.current.activeScenarioId,{past:nextPast,future:nextFuture});setProjectNow(next);
     setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
+  }
+  function installScenarioWorkspace(next:NetworkScenarioWorkspace,message:string,saveCurrentHistory=true){
+    const currentId=scenarioWorkspaceRef.current.activeScenarioId;
+    if(saveCurrentHistory)scenarioHistoryRef.current.set(currentId,{past:pastRef.current,future:futureRef.current});
+    scenarioWorkspaceRef.current=next;setScenarioWorkspace(next);
+    const nextProject=activeNetworkProject(next),history=scenarioHistoryRef.current.get(next.activeScenarioId)??{past:[],future:[]};
+    projectRef.current=nextProject;setProject(nextProject);pastRef.current=history.past;futureRef.current=history.future;setPast(history.past);setFuture(history.future);
+    setSelection(null);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setArmGuide(null);setNotice(message);
+  }
+  function selectScenario(id:string){
+    if(id===scenarioWorkspaceRef.current.activeScenarioId)return;
+    const next=switchNetworkScenario(scenarioWorkspaceRef.current,id),scenario=activeNetworkScenario(next);
+    installScenarioWorkspace(next,`สลับไป ${scenario.name} · geometry และ Undo/Redo แยกจาก scenario อื่น`);
+  }
+  function addAlternativeScenario(){
+    const result=duplicateNetworkScenario(scenarioWorkspaceRef.current);
+    if(result.error||!result.scenario){setNotice(result.error??'สร้าง Alternative ไม่สำเร็จ');return;}
+    scenarioHistoryRef.current.set(result.scenario.id,{past:[],future:[]});
+    installScenarioWorkspace(result.workspace,`สร้าง ${result.scenario.name} จาก ${currentScenario.name} แล้ว · เริ่มแก้แบบทางเลือกได้โดยไม่กระทบต้นฉบับ`);
+  }
+  function renameCurrentScenario(name:string){
+    const result=renameNetworkScenario(scenarioWorkspaceRef.current,scenarioWorkspaceRef.current.activeScenarioId,name);
+    if(result.error){setNotice(result.error);return;}
+    scenarioWorkspaceRef.current=result.workspace;setScenarioWorkspace(result.workspace);setNotice(`เปลี่ยนชื่อ scenario เป็น ${result.scenario?.name}`);
+  }
+  function deleteCurrentScenario(){
+    const id=scenarioWorkspaceRef.current.activeScenarioId,scenario=activeNetworkScenario(scenarioWorkspaceRef.current),result=removeNetworkScenario(scenarioWorkspaceRef.current,id);
+    if(result.error){setNotice(result.error);return;}
+    scenarioHistoryRef.current.delete(id);installScenarioWorkspace(result.workspace,`ลบ ${scenario.name} แล้ว · กลับ Existing`,false);
   }
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
   function choose(next:Tool){setTool(next);setArmGuide(null);if(next==='map-align'){setView('2d');if(!mapReference.enabled)setMapReference(v=>({...v,enabled:true}));}if(next==='image-align'||next==='image-calibrate'){setView('2d');if(localImageUrl)setLocalReference(v=>({...v,enabled:true}));}if(next==='image-calibrate')setCalibrationPoints([]);if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='map-align'?'ลากพื้นที่ว่างเพื่อย้าย Network ทั้งชุดบนแผนที่ · Design v6 ภายในไม่เปลี่ยน':next==='image-align'?'ลากบน canvas เพื่อย้ายภาพอ้างอิง · engineering geometry ไม่เปลี่ยน':next==='image-calibrate'?'คลิกจุด A และ B บนภาพอ้างอิง แล้ว Apply ตามระยะจริงที่กำหนด':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลาก Arm อิสระ หรือกด Shift ระหว่างลากเพื่อ snap 15°');}
@@ -490,13 +533,17 @@ export default function NetworkWorkspace(){
   function deleteSelection(){
     if(!selection)return;const before=projectRef.current,after=selection.kind==='junction'?removeJunction(before,selection.id):removeLink(before,selection.id);commit(after,before);setSelection(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);
   }
-  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice('คืนค่า Network Foundation demo แล้ว');}
+  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
 
   return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setPendingPort(null);setLinkCursor(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
-      <div className="network-header-actions"><button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset demo</button></div>
+      <div className="network-header-actions"><button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset scenario</button></div>
     </header>
+    <nav className="network-scenario-strip" data-network-scenarios={scenarioWorkspace.scenarios.length} data-network-active-scenario={currentScenario.id}>
+      <div className="network-scenario-tabs">{scenarioWorkspace.scenarios.map(scenario=><button key={scenario.id} data-network-scenario={scenario.id} className={scenario.id===currentScenario.id?'active':''} title={scenario.sourceScenarioId?`Created from ${scenarioWorkspace.scenarios.find(s=>s.id===scenario.sourceScenarioId)?.name??scenario.sourceScenarioId}`:'Baseline existing condition'} onClick={()=>selectScenario(scenario.id)}><span>{scenario.kind==='existing'?'BASE':'ALT'}</span><b>{scenario.name}</b></button>)}</div>
+      <div className="network-scenario-actions"><label>Scenario<input data-network-scenario-name key={currentScenario.id+'-'+currentScenario.name} defaultValue={currentScenario.name} onBlur={e=>{if(e.currentTarget.value.trim()!==currentScenario.name)renameCurrentScenario(e.currentTarget.value);}}/></label><button data-network-scenario-add disabled={scenarioWorkspace.scenarios.length>=NETWORK_SCENARIO_LIMIT} onClick={addAlternativeScenario}>＋ Alternative</button>{currentScenario.kind==='alternative'&&<button className="danger" data-network-scenario-delete onClick={deleteCurrentScenario}>Delete alt</button>}</div>
+    </nav>
     <div className={'network-body'+(!inspectorOpen?' inspector-collapsed':'')} data-network-inspector={inspectorOpen?'open':'closed'}>
       <aside className="network-tools">{tools.map(([id,label,Icon])=><button key={id} data-network-tool={id} className={tool===id?'active':''} title={label} onClick={()=>choose(id)}><Icon size={20}/><span>{label}</span></button>)}</aside>
       <section className="network-canvas-wrap">
@@ -624,6 +671,6 @@ export default function NetworkWorkspace(){
         {selection&&<button className="network-delete" onClick={deleteSelection}><Trash2 size={15}/> ลบวัตถุที่เลือก</button>}
       </aside>
     </div>
-    <footer className="network-footer"><span>Network schema v3 · Junction Design schema v6 · Thailand left-hand traffic</span><span>Concept design · no traffic analysis / simulation</span></footer>
+    <footer className="network-footer"><span>Scenario workspace v1 · Network schema v3 · Junction Design schema v6 · Thailand left-hand traffic</span><span>{currentScenario.name} · Concept design · no traffic analysis / simulation</span></footer>
   </main>;
 }
