@@ -102,13 +102,6 @@ export default function NetworkWorkspace(){
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_PROVIDER_CREDENTIALS_STORAGE,JSON.stringify(mapCredentials));}catch{}},[mapCredentials]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(LOCAL_IMAGE_REFERENCE_STORAGE,JSON.stringify(localReference));}catch{}},[localReference]);
   useEffect(()=>{
-    const candidates=scenarioWorkspace.scenarios.filter(s=>s.id!==scenarioWorkspace.activeScenarioId);
-    if(!candidates.length){if(compareScenarioId!==null)setCompareScenarioId(null);if(compareGhostVisible)setCompareGhostVisible(false);return;}
-    if(!compareScenarioId||compareScenarioId===scenarioWorkspace.activeScenarioId||!candidates.some(s=>s.id===compareScenarioId)){
-      setCompareScenarioId((candidates.find(s=>s.kind==='existing')??candidates[0]).id);
-    }
-  },[scenarioWorkspace.activeScenarioId,scenarioWorkspace.scenarios,compareScenarioId,compareGhostVisible]);
-  useEffect(()=>{
     let active=true;
     loadLocalImageBlob().then(blob=>{
       if(!active||!blob)return;
@@ -130,7 +123,7 @@ export default function NetworkWorkspace(){
 
   const currentScenario=activeNetworkScenario(scenarioWorkspace),
     comparisonCandidates=scenarioWorkspace.scenarios.filter(s=>s.id!==currentScenario.id),
-    comparisonScenario=comparisonCandidates.find(s=>s.id===compareScenarioId)??null,
+    comparisonScenario=comparisonCandidates.find(s=>s.id===compareScenarioId)??comparisonCandidates.find(s=>s.kind==='existing')??comparisonCandidates[0]??null,
     scenarioComparison=comparisonScenario?compareNetworkProjects(comparisonScenario.project,project):null,
     localImageSize=localImageFootprint(localReference),calibrationMeasured=calibrationPoints.length===2?Math.hypot(calibrationPoints[1].x-calibrationPoints[0].x,calibrationPoints[1].y-calibrationPoints[0].y):null,
     mapKind=basemapKind(mapReference.basemap),mapCredentialKey=basemapCredentialKey(mapReference.basemap),
@@ -204,7 +197,7 @@ export default function NetworkWorkspace(){
   function deleteCurrentScenario(){
     const id=scenarioWorkspaceRef.current.activeScenarioId,scenario=activeNetworkScenario(scenarioWorkspaceRef.current),result=removeNetworkScenario(scenarioWorkspaceRef.current,id);
     if(result.error){setNotice(result.error);return;}
-    scenarioHistoryRef.current.delete(id);installScenarioWorkspace(result.workspace,`ลบ ${scenario.name} แล้ว · กลับ Existing`,false);
+    scenarioHistoryRef.current.delete(id);if(result.workspace.scenarios.length<2){setCompareScenarioId(null);setCompareGhostVisible(false);}installScenarioWorkspace(result.workspace,`ลบ ${scenario.name} แล้ว · กลับ Existing`,false);
   }
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
   function choose(next:Tool){setTool(next);setArmGuide(null);if(next==='map-align'){setView('2d');if(!mapReference.enabled)setMapReference(v=>({...v,enabled:true}));}if(next==='image-align'||next==='image-calibrate'){setView('2d');if(localImageUrl)setLocalReference(v=>({...v,enabled:true}));}if(next==='image-calibrate')setCalibrationPoints([]);if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='map-align'?'ลากพื้นที่ว่างเพื่อย้าย Network ทั้งชุดบนแผนที่ · Design v6 ภายในไม่เปลี่ยน':next==='image-align'?'ลากบน canvas เพื่อย้ายภาพอ้างอิง · engineering geometry ไม่เปลี่ยน':next==='image-calibrate'?'คลิกจุด A และ B บนภาพอ้างอิง แล้ว Apply ตามระยะจริงที่กำหนด':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลาก Arm อิสระ หรือกด Shift ระหว่างลากเพื่อ snap 15°');}
