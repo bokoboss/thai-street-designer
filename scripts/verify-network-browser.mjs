@@ -155,6 +155,9 @@ try{
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
+  const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
+  assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
+  assert.equal(initial2d.inspector,'open','Inspector should open by default');
   const initialScenarioWorkspace=await scenarioWorkspace();assert.equal(initialScenarioWorkspace?.workspaceVersion,1,'Network storage must use the scenario workspace wrapper');assert.equal(initialScenarioWorkspace?.activeScenarioId,'existing');assert.equal(initialScenarioWorkspace?.scenarios?.length,1);assert.equal(initialScenarioWorkspace.scenarios[0].name,'Existing');
   mark('scenario-isolation');
   await clickSelector('[data-network-scenario-add]');
@@ -175,9 +178,6 @@ try{
   await clickSelector('[data-network-scenario-delete]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&w?.scenarios?.length===1&&p?.junctions?.length===2;},'delete Alt A and return Existing');
   await waitFor(()=>evalValue(`!document.querySelector('[data-network-comparison="true"]')&&!document.querySelector('[data-network-comparison-ghost="true"]')`),'comparison UI clears when no reference scenario remains');
-  const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
-  assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
-  assert.equal(initial2d.inspector,'open','Inspector should open by default');
   await clickSelector('[data-network-action="toggle-inspector"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'collapse Inspector');
   await clickSelector('[data-network-action="toggle-inspector"]');
