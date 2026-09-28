@@ -8,7 +8,8 @@ import LocalImageReferenceLayer,{clearLocalImageBlob,loadLocalImageBlob,readLoca
 import {LOCAL_IMAGE_REFERENCE_STORAGE,calibrateLocalImageReference,initialLocalImageReference,localImageFootprint,localImageReferenceDefaults,restoreLocalImageReference,type LocalImageReference} from '@/lib/local-reference';
 import {clampZoom,panZoom2D} from '../junction/gestures';
 import {applyJunctionAuxiliaryProposal,continueJunctionAuxiliaryToCorridor,detachJunctionAuxiliaryHandoff,junctionAuxiliaryHandoffIssues,junctionAuxiliaryProposals,repairJunctionAuxiliaryHandoff,returnJunctionAuxiliaryToLocal,type JunctionAuxiliaryProposalStatus} from '@/lib/junction-auxiliary-proposal';
-import {NetworkDrawing,type NetworkSelection} from './network-drawing';
+import {NetworkComparisonGhost,NetworkDrawing,type NetworkSelection} from './network-drawing';
+import {compareNetworkProjects} from '@/lib/network-scenario-comparison';
 import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/lib/network-scenarios';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
@@ -77,7 +78,8 @@ export default function NetworkWorkspace(){
     [oamSummary,setOamSummary]=useState<OamImagerySummary|null>(null),[oamSearching,setOamSearching]=useState(false),[oamError,setOamError]=useState(false),
     [inspectorOpen,setInspectorOpen]=useState(true),[armGuide,setArmGuide]=useState<ArmDragGuide|null>(null),[mapAlignRotation,setMapAlignRotation]=useState(0),
     [localReference,setLocalReference]=useState<LocalImageReference>(localImageReferenceDefaults),[localImageUrl,setLocalImageUrl]=useState<string|null>(null),
-    [calibrationPoints,setCalibrationPoints]=useState<WorldPoint[]>([]),[calibrationDistance,setCalibrationDistance]=useState(20);
+    [calibrationPoints,setCalibrationPoints]=useState<WorldPoint[]>([]),[calibrationDistance,setCalibrationDistance]=useState(20),
+    [compareScenarioId,setCompareScenarioId]=useState<string|null>(null),[compareGhostVisible,setCompareGhostVisible]=useState(false);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),scenarioWorkspaceRef=useRef(scenarioWorkspace),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),scenarioHistoryRef=useRef(new Map<string,{past:NetworkProject[];future:NetworkProject[]}>()),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
     localImageInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
@@ -100,6 +102,13 @@ export default function NetworkWorkspace(){
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(MAP_PROVIDER_CREDENTIALS_STORAGE,JSON.stringify(mapCredentials));}catch{}},[mapCredentials]);
   useEffect(()=>{if(!storageReady.current)return;try{localStorage.setItem(LOCAL_IMAGE_REFERENCE_STORAGE,JSON.stringify(localReference));}catch{}},[localReference]);
   useEffect(()=>{
+    const candidates=scenarioWorkspace.scenarios.filter(s=>s.id!==scenarioWorkspace.activeScenarioId);
+    if(!candidates.length){if(compareScenarioId!==null)setCompareScenarioId(null);if(compareGhostVisible)setCompareGhostVisible(false);return;}
+    if(!compareScenarioId||compareScenarioId===scenarioWorkspace.activeScenarioId||!candidates.some(s=>s.id===compareScenarioId)){
+      setCompareScenarioId((candidates.find(s=>s.kind==='existing')??candidates[0]).id);
+    }
+  },[scenarioWorkspace.activeScenarioId,scenarioWorkspace.scenarios,compareScenarioId,compareGhostVisible]);
+  useEffect(()=>{
     let active=true;
     loadLocalImageBlob().then(blob=>{
       if(!active||!blob)return;
@@ -120,6 +129,9 @@ export default function NetworkWorkspace(){
   },[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng]);
 
   const currentScenario=activeNetworkScenario(scenarioWorkspace),
+    comparisonCandidates=scenarioWorkspace.scenarios.filter(s=>s.id!==currentScenario.id),
+    comparisonScenario=comparisonCandidates.find(s=>s.id===compareScenarioId)??null,
+    scenarioComparison=comparisonScenario?compareNetworkProjects(comparisonScenario.project,project):null,
     localImageSize=localImageFootprint(localReference),calibrationMeasured=calibrationPoints.length===2?Math.hypot(calibrationPoints[1].x-calibrationPoints[0].x,calibrationPoints[1].y-calibrationPoints[0].y):null,
     mapKind=basemapKind(mapReference.basemap),mapCredentialKey=basemapCredentialKey(mapReference.basemap),
     selectedJunction=selection?.kind==='junction'?junctionById(project,selection.id):undefined,
@@ -233,8 +245,9 @@ export default function NetworkWorkspace(){
     commit(next,before);setMapAlignRotation(0);setNotice(`หมุน Network ทั้งชุด ${degrees.toFixed(2)}° รอบกึ่งกลาง footprint แล้ว · Junction Design และ RoadLink semantics เดิมไม่เปลี่ยน`);
   }
   function fit(){
-    const b=projectBounds(project),center={x:b.x+b.w/2,y:b.y+b.h/2},
-      next=clampZoom(NETWORK_VIEW_SPAN/Math.max(b.w,b.h)*.9,NETWORK_MIN_ZOOM,Math.min(4.5,NETWORK_MAX_ZOOM));
+    const activeBounds=projectBounds(project),referenceBounds=compareGhostVisible&&comparisonScenario?projectBounds(comparisonScenario.project):null,
+      b=referenceBounds?{x:Math.min(activeBounds.x,referenceBounds.x),y:Math.min(activeBounds.y,referenceBounds.y),w:Math.max(activeBounds.x+activeBounds.w,referenceBounds.x+referenceBounds.w)-Math.min(activeBounds.x,referenceBounds.x),h:Math.max(activeBounds.y+activeBounds.h,referenceBounds.y+referenceBounds.h)-Math.min(activeBounds.y,referenceBounds.y)}:activeBounds,
+      center={x:b.x+b.w/2,y:b.y+b.h/2},next=clampZoom(NETWORK_VIEW_SPAN/Math.max(b.w,b.h)*.9,NETWORK_MIN_ZOOM,Math.min(4.5,NETWORK_MAX_ZOOM));
     setPan(center);setZoom(next);
   }
   function zoomAt(factor:number,screen?:{x:number;y:number}){
@@ -544,6 +557,11 @@ export default function NetworkWorkspace(){
       <div className="network-scenario-tabs">{scenarioWorkspace.scenarios.map(scenario=><button key={scenario.id} data-network-scenario={scenario.id} className={scenario.id===currentScenario.id?'active':''} title={scenario.sourceScenarioId?`Created from ${scenarioWorkspace.scenarios.find(s=>s.id===scenario.sourceScenarioId)?.name??scenario.sourceScenarioId}`:'Baseline existing condition'} onClick={()=>selectScenario(scenario.id)}><span>{scenario.kind==='existing'?'BASE':'ALT'}</span><b>{scenario.name}</b></button>)}</div>
       <div className="network-scenario-actions"><label>Scenario<input data-network-scenario-name key={currentScenario.id+'-'+currentScenario.name} defaultValue={currentScenario.name} onBlur={e=>{if(e.currentTarget.value.trim()!==currentScenario.name)renameCurrentScenario(e.currentTarget.value);}}/></label><button data-network-scenario-add disabled={scenarioWorkspace.scenarios.length>=NETWORK_SCENARIO_LIMIT} onClick={addAlternativeScenario}>＋ Alternative</button>{currentScenario.kind==='alternative'&&<button className="danger" data-network-scenario-delete onClick={deleteCurrentScenario}>Delete alt</button>}</div>
     </nav>
+    {comparisonScenario&&scenarioComparison&&<div className="network-comparison-bar" data-network-comparison="true" data-network-comparison-active={currentScenario.id} data-network-comparison-reference={comparisonScenario.id}>
+      <div className="network-comparison-picker"><span>COMPARE</span><b>{currentScenario.name}</b><em>against</em><select data-network-compare-scenario value={comparisonScenario.id} onChange={e=>setCompareScenarioId(e.target.value)}>{comparisonCandidates.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      <div className="network-comparison-quick">{scenarioComparison.metrics.filter(m=>['junctions','roadLinks','mainLanes','pocketLanes','receivingLanes'].includes(m.key)).map(metric=><span key={metric.key} data-network-comparison-metric={metric.key} data-network-comparison-delta={metric.delta}><b>{metric.label}</b> {metric.delta===0?'0':metric.delta>0?'+'+metric.delta:metric.delta}</span>)}</div>
+      <label className="network-comparison-ghost-toggle"><input data-network-comparison-ghost-toggle type="checkbox" checked={compareGhostVisible} onChange={e=>setCompareGhostVisible(e.target.checked)}/> Ghost {comparisonScenario.name}</label>
+    </div>}
     <div className={'network-body'+(!inspectorOpen?' inspector-collapsed':'')} data-network-inspector={inspectorOpen?'open':'closed'}>
       <aside className="network-tools">{tools.map(([id,label,Icon])=><button key={id} data-network-tool={id} className={tool===id?'active':''} title={label} onClick={()=>choose(id)}><Icon size={20}/><span>{label}</span></button>)}</aside>
       <section className="network-canvas-wrap">
@@ -557,6 +575,7 @@ export default function NetworkWorkspace(){
             <defs><pattern id="network-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" stroke="#d8e2e6" strokeWidth=".12" fill="none"/></pattern></defs>
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled||(localReference.enabled&&!!localImageUrl)?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled||(localReference.enabled&&!!localImageUrl)?0.42:1}/>
+            {view==='2d'&&compareGhostVisible&&comparisonScenario&&<NetworkComparisonGhost project={comparisonScenario.project}/>}
             <g data-network-map-align-layer={tool==='map-align'?'disabled':'interactive'} data-network-reference-tool={tool} pointerEvents={['map-align','image-align','image-calibrate'].includes(tool)?'none':'auto'}><NetworkDrawing project={project} zoom={zoom} selection={selection} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/></g>
             {view==='2d'&&tool==='image-calibrate'&&calibrationPoints.length>0&&(()=>{const markerScale=1/Math.max(.35,zoom),a=calibrationPoints[0],b=calibrationPoints[1];return <g data-local-reference-calibration="true" pointerEvents="none">{calibrationPoints.map((p,index)=><g key={index}><circle cx={p.x} cy={p.y} r={4*markerScale} fill={index===0?'#0f7d77':'#d18a24'} stroke="white" strokeWidth="1" vectorEffect="non-scaling-stroke"/><text x={p.x+6*markerScale} y={p.y-6*markerScale} fontSize={8*markerScale} fontWeight="800" fill="#263b44" stroke="white" strokeWidth={2.5*markerScale} paintOrder="stroke">{index===0?'A':'B'}</text></g>)}{b&&<><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d18a24" strokeWidth="1" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/><text x={(a.x+b.x)/2} y={(a.y+b.y)/2-7*markerScale} textAnchor="middle" fontSize={7*markerScale} fontWeight="700" fill="#7b5a23" stroke="white" strokeWidth={2.2*markerScale} paintOrder="stroke">{calibrationMeasured?.toFixed(2)} m current</text></>}</g>;})()}
             {armGuide&&(()=>{const junction=junctionById(project,armGuide.junctionId);if(!junction)return null;const a=armGuide.worldAngle*Math.PI/180,reach=Math.max(140,armGuide.length+70),end={x:junction.x+Math.cos(a)*armGuide.length,y:junction.y+Math.sin(a)*armGuide.length},hint=armGuide.hint,hintA=(hint?.worldAngle??armGuide.worldAngle)*Math.PI/180;return <g data-network-arm-guide={armGuide.junctionId+':'+armGuide.armId} data-network-arm-snap={armGuide.snapped?'true':'false'} data-network-arm-guide-kind={hint?.kind??'free'} pointerEvents="none">
@@ -609,6 +628,7 @@ export default function NetworkWorkspace(){
       </section>
       <aside className={'network-inspector'+(!inspectorOpen?' is-hidden':'')}>
         <div className="network-inspector-title"><span>NETWORK OBJECT</span><b>{selectedJunction?.name??selectedLink?.name??'ยังไม่ได้เลือกวัตถุ'}</b></div>
+        {comparisonScenario&&scenarioComparison&&<section className="network-comparison-panel" data-network-comparison-summary="true"><div className="network-arm-editor-head"><span>SCENARIO COMPARISON</span><b>{comparisonScenario.name} → {currentScenario.name}</b></div><div className="network-comparison-counts"><span><b>{scenarioComparison.counts.added}</b> added</span><span><b>{scenarioComparison.counts.removed}</b> removed</span><span><b>{scenarioComparison.counts.changed}</b> changed</span></div><div className="network-comparison-metrics">{scenarioComparison.metrics.map(metric=><div key={metric.key} data-network-comparison-summary-metric={metric.key} data-network-comparison-summary-delta={metric.delta}><span>{metric.label}</span><b>{metric.reference}{metric.unit?' '+metric.unit:''} → {metric.active}{metric.unit?' '+metric.unit:''}</b><em className={metric.delta===0?'zero':metric.delta>0?'positive':'negative'}>{metric.delta===0?'0':metric.delta>0?'+'+metric.delta:metric.delta}{metric.unit?' '+metric.unit:''}</em></div>)}</div>{scenarioComparison.objects.length===0?<p className="network-note">สอง scenario มี engineering state ตรงกันในขอบเขต comparison ปัจจุบัน</p>:<div className="network-comparison-object-list">{scenarioComparison.objects.slice(0,12).map(item=><div key={item.kind+':'+item.id} data-network-comparison-object={item.status}><span>{item.kind==='junction'?'JUNCTION':'ROAD LINK'} · {item.id}</span><b>{item.name}</b><em>{item.status.toUpperCase()}</em><p>{item.changes.join(' · ')}</p></div>)}{scenarioComparison.objects.length>12&&<p className="network-note">และอีก {scenarioComparison.objects.length-12} รายการ</p>}</div>}<p className="network-note">Delta = active − reference. Comparison เป็น read-only workspace analysis: ไม่เข้า Undo/Redo, ไม่แก้ Scenario JSON และ ghost overlay ใช้เฉพาะ 2D.</p></section>}
         {selectedJunction&&<section>
           <p className="network-object-type">Junction Instance · {selectedJunction.id}</p>
           <div className="network-arm-tabs" aria-label="เลือกขาถนน">{selectedJunction.design.enabled.map((enabled,armId)=>enabled?<button key={armId} className={selectedArm===armId?'active':''} onClick={()=>selectArm(selectedJunction.id,armId)}>{selectedJunction.design.arms[armId].name||('Arm '+(armId+1))}</button>:null)}</div>

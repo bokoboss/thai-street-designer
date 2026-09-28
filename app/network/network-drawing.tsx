@@ -140,6 +140,35 @@ export function JunctionInstanceDrawing({
   </g>;
 }
 
+function RoadLinkComparisonGhost({project,link}:{project:NetworkProject;link:RoadLink}){
+  const ps=linkPoints(project,link);if(ps.length<2)return null;
+  const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),resolved=resolveLinkSectionGeometry(project,link),
+    renderPoints=resolved?.points??ps,left0=Math.max(a.left,b.left),right0=Math.max(a.right,b.right),
+    leftEdge=resolved?path(profiledParallel(renderPoints,resolved.left)):path(variableParallel(ps,left0,left0)),
+    rightEdge=resolved?path(profiledParallel(renderPoints,resolved.right.map(v=>-v))):path(variableParallel(ps,-right0,-right0));
+  return <g data-network-comparison-link={link.id}>
+    <path d={leftEdge} stroke="#b56f2d" strokeWidth=".7" strokeDasharray="4 3" fill="none" vectorEffect="non-scaling-stroke"/>
+    <path d={rightEdge} stroke="#b56f2d" strokeWidth=".7" strokeDasharray="4 3" fill="none" vectorEffect="non-scaling-stroke"/>
+    <path d={path(ps)} stroke="#b56f2d" strokeWidth=".45" strokeDasharray="2 3" fill="none" vectorEffect="non-scaling-stroke"/>
+  </g>;
+}
+
+export function NetworkComparisonGhost({project}:{project:NetworkProject}){
+  return <g data-network-comparison-ghost="true" pointerEvents="none">
+    {project.links.map(link=><RoadLinkComparisonGhost key={link.id} project={project} link={link}/>)}
+    {project.junctions.map(junction=>{
+      const display=junctionDisplayDesign(junction),rotation=worldJunctionRotation(junction);
+      return <g key={junction.id} data-network-comparison-junction={junction.id}>
+        <g transform={`translate(${junction.x} ${junction.y}) rotate(${rotation})`} opacity=".18">
+          <Drawing d={display} selected={-1} onSelect={()=>{}} handlesEnabled={false}/>
+        </g>
+        {activeArmIds(junction).map(armId=>{const p=portPoint(junction,armId);return <line key={armId} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y} stroke="#b56f2d" strokeWidth=".45" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>;})}
+        <circle cx={junction.x} cy={junction.y} r="4" fill="#fff7ec" fillOpacity=".65" stroke="#b56f2d" strokeWidth=".7" vectorEffect="non-scaling-stroke"/>
+      </g>;
+    })}
+  </g>;
+}
+
 export function NetworkDrawing({
   project,zoom,selection,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{

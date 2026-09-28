@@ -586,3 +586,60 @@ Scenario behavior in 5C.1:
 The scenario strip is intentionally a workspace/navigation concern. No cross-scenario live binding exists: editing Alt A does not mutate Existing, and later changes to Existing do not propagate into an already-created alternative.
 
 Phase 5C.1 does **not** yet draw comparison overlays or calculate deltas. Those belong in the next scenario phase after the persistence/switching/isolation foundation is proven through migration, model regression and browser acceptance.
+
+### Phase 5C.2 scenario comparison mode
+
+Scenario comparison remains a read-only workspace layer above the independent NetworkProject v3 states introduced in Phase 5C.1.
+
+The comparison engine accepts two complete NetworkProjects:
+
+- **reference** — the scenario selected for comparison / ghost display;
+- **active** — the scenario currently being edited.
+
+All numeric delta values are reported as **active − reference**. The comparison does not write to either project, does not enter Undo/Redo history and is not persisted as engineering state.
+
+#### Semantic metrics
+
+The summary intentionally goes beyond raw object counts. It reports:
+
+- Junction count;
+- RoadLink count;
+- total enabled main-lane count across Junction arms;
+- incoming Pocket lane count;
+- outgoing Receiving-lane count;
+- number of arms carrying a median;
+- summed enabled-arm median width as a comparison index;
+- persisted RoadLink station-component count;
+- total resolved RoadLink alignment length.
+
+#### Object-level change classification
+
+Objects use their stable Junction / RoadLink ids inherited when an Alternative is duplicated.
+
+Each object is classified as:
+
+- **added** — exists only in the active scenario;
+- **removed** — exists only in the reference scenario;
+- **changed** — same semantic id exists in both but relevant engineering state differs.
+
+Changed Junctions identify categories such as geometry, active arms, main lanes, median, Pocket / Receiving treatment, cross-section and traffic-control settings. Changed RoadLinks identify endpoint changes, resolved alignment / port movement, endpoint section changes, section transitions and station components.
+
+The RoadLink comparison intentionally checks resolved alignment and endpoint sections in addition to the persisted RoadLink object. A Junction move or lane-section edit can therefore appear as both a Junction change and a dependent RoadLink change, which reflects the actual network-level design impact rather than only JSON ownership.
+
+#### 2D reference ghost
+
+The active scenario remains the only editable drawing. The selected reference can be shown as an opt-in **Ghost** layer beneath it in 2D.
+
+The ghost renderer:
+
+- has dedicated `data-network-comparison-*` selectors;
+- uses `pointerEvents="none"` and never exposes active handles, ports or selection hit targets;
+- draws RoadLink reference edges / centerline as dashed reference geometry;
+- renders Junction reference geometry translucently with reference arm axes;
+- is intentionally not shown in 3D in Phase 5C.2.
+
+When the ghost is visible, **Fit** uses the union of active and reference project bounds so moved or removed reference geometry is not clipped.
+
+The Inspector shows the metric table plus up to twelve changed objects with semantic reasons. The compact comparison bar remains visible above the workspace so users can switch the reference scenario and toggle the ghost without leaving the design canvas.
+
+No Scenario Workspace, NetworkProject or Junction Design schema bump is required.

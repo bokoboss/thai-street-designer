@@ -161,12 +161,20 @@ try{
   await waitFor(async()=>{const w=await scenarioWorkspace();return w?.scenarios?.length===2&&w.activeScenarioId==='alt-1'&&w.scenarios.find(s=>s.id==='alt-1')?.name==='Alt A';},'create Alt A from Existing');
   let scenarioPlan=await rectBySelector('svg[data-network-plan="true"]');await clickSelector('[data-network-tool="junction"]');await clickAt({x:scenarioPlan.x+scenarioPlan.w*.18,y:scenarioPlan.y-scenarioPlan.h*.18});
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'edit Alt A independently');
+  await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),metric=document.querySelector('[data-network-comparison-metric="junctions"]');return bar?.getAttribute('data-network-comparison-active')==='alt-1'&&bar?.getAttribute('data-network-comparison-reference')==='existing'&&Number(metric?.getAttribute('data-network-comparison-delta'))===1;})()`),'Alt A comparison against Existing');
+  assert(await evalValue(`!!document.querySelector('[data-network-comparison-object="added"]')`),'comparison summary must identify the added Alt A junction');
+  assert.equal(await evalValue(`!!document.querySelector('[data-network-comparison-ghost="true"]')`),false,'comparison ghost must be opt-in');
+  await clickSelector('[data-network-comparison-ghost-toggle]');
+  await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'2D Existing ghost overlay');
+  await clickSelector('[data-network-action="fit"]');await sleep(120);
   await clickSelector('[data-network-scenario="existing"]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&p?.junctions?.length===2;},'Existing remains unchanged after Alt edit');
+  await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),metric=document.querySelector('[data-network-comparison-metric="junctions"]');return bar?.getAttribute('data-network-comparison-reference')==='alt-1'&&Number(metric?.getAttribute('data-network-comparison-delta'))===-1;})()`),'reverse comparison direction on Existing');
   await clickSelector('[data-network-scenario="alt-1"]');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'Alt A restores its own geometry');
   await clickSelector('[data-network-scenario-delete]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&w?.scenarios?.length===1&&p?.junctions?.length===2;},'delete Alt A and return Existing');
+  await waitFor(()=>evalValue(`!document.querySelector('[data-network-comparison="true"]')&&!document.querySelector('[data-network-comparison-ghost="true"]')`),'comparison UI clears when no reference scenario remains');
   const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
   assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
   assert.equal(initial2d.inspector,'open','Inspector should open by default');
@@ -280,7 +288,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: scenario isolation → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  console.log('PASS browser acceptance: scenario comparison + ghost isolation → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
