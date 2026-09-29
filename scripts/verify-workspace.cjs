@@ -179,6 +179,14 @@ assert(networkSource.includes('data-network-comparison="true"')&&networkSource.i
 assert(networkSource.includes('data-network-comparison-summary="true"')&&networkSource.includes('data-network-comparison-summary-metric')&&networkSource.includes('data-network-comparison-object'),'Inspector must surface scenario metric and semantic object deltas');
 assert(networkSource.includes("view==='2d'&&compareGhostVisible&&comparisonScenario")&&networkSource.includes('<NetworkComparisonGhost project={comparisonScenario.project}/>'),'ghost overlay must stay 2D-only in Phase 5C.2');
 assert(networkSource.includes('activeBounds=projectBounds(project)')&&networkSource.includes('referenceBounds=compareGhostVisible&&comparisonScenario'),'Fit must include the visible reference ghost footprint instead of clipping removed/moved comparison geometry');
+assert(networkScenarioComparisonSource.includes('SCENARIO_CHANGE_FILTERS')&&networkScenarioComparisonSource.includes('scenarioChangeCategories')&&networkScenarioComparisonSource.includes('filterScenarioObjectDeltas'),'Phase 5C.3 must filter semantic comparison changes without mutating either scenario');
+assert(networkScenarioComparisonSource.includes('scenarioObjectInspection')&&networkScenarioComparisonSource.includes("['Main lanes'")&&networkScenarioComparisonSource.includes("['Station components'"),'comparison inspection must expose before/after engineering values for Junction and RoadLink objects');
+assert(networkScenarioComparisonSource.includes('scenarioObjectBounds')&&networkScenarioComparisonSource.includes('junctionFocusPoints')&&networkScenarioComparisonSource.includes('roadLinkFocusPoints'),'comparison navigation must derive focus extents from both active/reference semantic geometry');
+assert(networkSource.includes('data-network-comparison-filter=')&&networkSource.includes('data-network-comparison-inspect=')&&networkSource.includes('data-network-comparison-inspection='),'Inspector must expose filter, navigate and before/after inspection controls');
+assert(networkSource.includes('function inspectComparisonObject')&&networkSource.includes('setCompareGhostVisible(true)')&&networkSource.includes("setView('2d')")&&networkSource.includes('scenarioObjectBounds(comparisonScenario.project,project,item)'),'clicking a comparison change must switch to 2D reference inspection and zoom to the active/reference union bounds');
+assert(networkDrawingSource.includes('data-network-comparison-active-focus')&&networkDrawingSource.includes('data-network-comparison-reference-focus'),'active and reference objects must have distinct non-destructive comparison highlight layers');
+assert(networkDrawingSource.includes('pointerEvents="none"')&&networkDrawingSource.includes('data-network-comparison-active-focus-path'),'comparison highlights must not replace existing edit hit targets');
+
 
 
 

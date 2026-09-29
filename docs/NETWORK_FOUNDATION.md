@@ -643,3 +643,75 @@ When the ghost is visible, **Fit** uses the union of active and reference projec
 The Inspector shows the metric table plus up to twelve changed objects with semantic reasons. The compact comparison bar remains visible above the workspace so users can switch the reference scenario and toggle the ghost without leaving the design canvas.
 
 No Scenario Workspace, NetworkProject or Junction Design schema bump is required.
+
+### Phase 5C.3 change inspection and compare navigation
+
+Phase 5C.3 turns the read-only comparison summary into an inspection workflow for large networks. The comparison state remains a workspace concern and does not alter Scenario Workspace v1, NetworkProject v3 or Junction Design v6.
+
+#### Semantic filters
+
+The comparison list can be filtered by:
+
+- **Geometry** — Junction position/rotation/Arm geometry, RoadLink endpoints/alignment, and added/removed topology;
+- **Lanes** — main-lane and endpoint/cross-section changes;
+- **Median** — Junction median changes;
+- **Auxiliary** — Pocket / Receiving-lane changes;
+- **Corridor** — RoadLink endpoint-section, section-transition and persisted station-component changes;
+- **Controls** — crossing, signal and stop-control changes.
+
+One changed object may appear in more than one filter because the filters describe engineering impact, not mutually exclusive object types. Added Junctions are Geometry changes. Added/removed RoadLinks are Geometry + Corridor changes.
+
+#### Change inspection
+
+Clicking an Added / Removed / Changed item:
+
+1. stores only an ephemeral comparison focus key (`kind + id`);
+2. switches the workspace to 2D Select mode;
+3. enables the selected reference scenario Ghost;
+4. derives the union bounds of the Active and Reference object geometry;
+5. pans/zooms to that union;
+6. highlights the Active object separately from the Reference Ghost;
+7. exposes a read-only before → after table in the Inspector.
+
+The focus extent is semantic:
+
+- Junction focus uses the Junction center plus all enabled Arm port points in both scenarios;
+- RoadLink focus uses the resolved RoadLink alignment points in both scenarios.
+
+This means a moved Junction or changed RoadLink alignment remains visible as a true before/after spatial difference rather than zooming only to the active object.
+
+#### Active vs Reference highlighting
+
+Comparison focus is deliberately separate from normal editing selection.
+
+- Active focus is rendered in teal over the normal editable drawing.
+- Reference focus is rendered in orange inside the non-interactive Ghost layer.
+- Reference Ghost continues to use `pointerEvents="none"`, so comparison inspection cannot steal Junction/Arm/RoadLink editing hit targets.
+- Clearing comparison focus removes the highlight without changing the normal Network selection.
+
+#### Before / after detail
+
+The inspection table reports stable engineering summaries rather than dumping raw JSON.
+
+Junction rows include:
+
+- position;
+- rotation;
+- enabled Arm count;
+- main-lane count;
+- Pocket / Receiving-lane count;
+- median-arm count and summed median width;
+- signal / crossing / stop counts.
+
+RoadLink rows include:
+
+- semantic endpoint ports;
+- resolved length;
+- PI / via-point count;
+- section mode;
+- endpoint forward/backward lane counts;
+- persisted station-component count.
+
+Changed rows are highlighted. Missing objects use an em dash, so Added and Removed objects still produce a useful one-sided inspection.
+
+Filters, focus, Ghost visibility and navigation are not persisted in the engineering project and never enter Undo/Redo.

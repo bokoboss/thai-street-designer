@@ -164,11 +164,21 @@ try{
   await waitFor(async()=>{const w=await scenarioWorkspace();return w?.scenarios?.length===2&&w.activeScenarioId==='alt-1'&&w.scenarios.find(s=>s.id==='alt-1')?.name==='Alt A';},'create Alt A from Existing');
   let scenarioPlan=await rectBySelector('svg[data-network-plan="true"]');await clickSelector('[data-network-tool="junction"]');await clickAt({x:scenarioPlan.x+scenarioPlan.w*.18,y:scenarioPlan.y-scenarioPlan.h*.18});
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'edit Alt A independently');
-  await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),metric=document.querySelector('[data-network-comparison-metric="junctions"]');return bar?.getAttribute('data-network-comparison-active')==='alt-1'&&bar?.getAttribute('data-network-comparison-reference')==='existing'&&Number(metric?.getAttribute('data-network-comparison-delta'))===1;})()`),'Alt A comparison against Existing');
+  const laneArm=await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null'),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project,j=p.junctions.find(v=>v.id==='J-1');return j.design.arms.findIndex((a,i)=>j.design.enabled[i]&&a.incoming<4)})()`);assert(laneArm>=0,'Alt comparison test needs one editable incoming lane');
+  const laneBefore=(await project()).junctions.find(j=>j.id==='J-1').design.arms[laneArm].incoming;
+  await clickSelector('[data-network-tool="select"]');await clickSelector(`[data-network-junction-hit="J-1:${laneArm}"]`);await clickSelector('[data-network-context-action="incoming-inc"]');
+  await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[laneArm]?.incoming===laneBefore+1;},'edit existing Junction lane only in Alt A');
+  await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),junctions=document.querySelector('[data-network-comparison-metric="junctions"]'),lanes=document.querySelector('[data-network-comparison-metric="mainLanes"]');return bar?.getAttribute('data-network-comparison-active')==='alt-1'&&bar?.getAttribute('data-network-comparison-reference')==='existing'&&Number(junctions?.getAttribute('data-network-comparison-delta'))===1&&Number(lanes?.getAttribute('data-network-comparison-delta'))===1;})()`),'Alt A semantic comparison against Existing');
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-object="added"]')`),'comparison summary must identify the added Alt A junction');
-  assert.equal(await evalValue(`!!document.querySelector('[data-network-comparison-ghost="true"]')`),false,'comparison ghost must be opt-in');
-  await clickSelector('[data-network-comparison-ghost-toggle]');
-  await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'2D Existing ghost overlay');
+  assert.equal(await evalValue(`!!document.querySelector('[data-network-comparison-ghost="true"]')`),false,'comparison ghost must remain opt-in until an inspection action');
+  await clickSelector('[data-network-comparison-filter="lanes"]');
+  await waitFor(()=>evalValue(`Number(document.querySelector('[data-network-comparison-filter="lanes"]')?.getAttribute('data-network-comparison-filter-count')||0)>=1&&!!document.querySelector('[data-network-comparison-inspect="junction:J-1"]')`),'Lanes comparison filter');
+  const comparisonZoomBefore=Number(await evalValue(`document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1`));
+  await clickSelector('[data-network-comparison-inspect="junction:J-1"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-comparison-inspection="junction:J-1"]')&&!!document.querySelector('[data-network-junction="J-1"][data-network-comparison-active-focus="true"]')&&!!document.querySelector('[data-network-comparison-junction="J-1"][data-network-comparison-reference-focus="true"]')`),'comparison navigate + active/reference highlight');
+  assert(await evalValue(`document.querySelector('[data-network-comparison-detail="Main lanes"]')?.classList.contains('changed')===true`),'before/after inspector must mark changed main-lane values');
+  assert(await evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)>${comparisonZoomBefore}`),'comparison inspection should zoom toward the focused object');
+  await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'inspection auto-enables the read-only Existing ghost');
   await clickSelector('[data-network-action="fit"]');await sleep(120);
   await clickSelector('[data-network-scenario="existing"]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&p?.junctions?.length===2;},'Existing remains unchanged after Alt edit');
@@ -177,7 +187,7 @@ try{
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===3;},'Alt A restores its own geometry');
   await clickSelector('[data-network-scenario-delete]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&w?.scenarios?.length===1&&p?.junctions?.length===2;},'delete Alt A and return Existing');
-  await waitFor(()=>evalValue(`!document.querySelector('[data-network-comparison="true"]')&&!document.querySelector('[data-network-comparison-ghost="true"]')`),'comparison UI clears when no reference scenario remains');
+  await waitFor(()=>evalValue(`!document.querySelector('[data-network-comparison="true"]')&&!document.querySelector('[data-network-comparison-ghost="true"]')&&!document.querySelector('[data-network-comparison-active-focus="true"]')`),'comparison UI and focus clear when no reference scenario remains');
   await clickSelector('[data-network-action="toggle-inspector"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'collapse Inspector');
   await clickSelector('[data-network-action="toggle-inspector"]');
@@ -288,7 +298,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: scenario comparison + ghost isolation → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  console.log('PASS browser acceptance: scenario filter + change inspection + active/reference focus → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

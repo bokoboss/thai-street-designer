@@ -1,5 +1,5 @@
 import {pocketsFor,sectionFor,type Arm,type Direction} from '../app/junction/model';
-import {linkEndSection,linkLength,linkPoints,type JunctionInstance,type NetworkProject,type RoadLink} from './network-project';
+import {activeArmIds,linkEndSection,linkLength,linkPoints,portKey,portPoint,type JunctionInstance,type NetworkProject,type RoadLink} from './network-project';
 
 export type ScenarioDeltaStatus='added'|'removed'|'changed';
 export type ScenarioDeltaKind='junction'|'roadlink';
@@ -26,6 +26,10 @@ export type ScenarioComparison={
   objects:ScenarioObjectDelta[];
   counts:{added:number;removed:number;changed:number;total:number};
 };
+export type ScenarioChangeFilter='all'|'geometry'|'lanes'|'median'|'auxiliary'|'corridor'|'controls';
+export type ScenarioInspectionRow={label:string;reference:string;active:string;changed:boolean};
+export type ScenarioObjectInspection={kind:ScenarioDeltaKind;id:string;name:string;status:ScenarioDeltaStatus;rows:ScenarioInspectionRow[]};
+export type ScenarioObjectBounds={x:number;y:number;w:number;h:number};
 
 const rounded=(value:number,decimals=3)=>{
   const f=10**decimals;return Math.round(value*f)/f;
@@ -131,4 +135,86 @@ export function compareNetworkProjects(reference:NetworkProject,active:NetworkPr
     metrics=meta.map(item=>({key:item.key,label:item.label,unit:item.unit,reference:ref[item.key],active:act[item.key],delta:rounded(act[item.key]-ref[item.key],2)})),
     counts={added:objects.filter(v=>v.status==='added').length,removed:objects.filter(v=>v.status==='removed').length,changed:objects.filter(v=>v.status==='changed').length,total:objects.length};
   return{referenceTitle:reference.title,activeTitle:active.title,metrics,objects,counts};
+}
+
+
+export const SCENARIO_CHANGE_FILTERS:{id:ScenarioChangeFilter;label:string}[]=[
+  {id:'all',label:'All'},{id:'geometry',label:'Geometry'},{id:'lanes',label:'Lanes'},{id:'median',label:'Median'},
+  {id:'auxiliary',label:'Auxiliary'},{id:'corridor',label:'Corridor'},{id:'controls',label:'Controls'}
+];
+
+export function scenarioChangeCategories(delta:ScenarioObjectDelta):ScenarioChangeFilter[]{
+  if(delta.status!=='changed')return delta.kind==='roadlink'?['geometry','corridor']:['geometry'];
+  const categories=new Set<ScenarioChangeFilter>();
+  for(const change of delta.changes){
+    if(['geometry','arms','alignment / ports','endpoints'].includes(change))categories.add('geometry');
+    if(['main lanes','cross-section','endpoint section'].includes(change))categories.add('lanes');
+    if(change==='median')categories.add('median');
+    if(change==='pocket / receiving')categories.add('auxiliary');
+    if(['section transition','station components','endpoint section'].includes(change))categories.add('corridor');
+    if(change==='controls')categories.add('controls');
+  }
+  return [...categories];
+}
+export function filterScenarioObjectDeltas(objects:ScenarioObjectDelta[],filter:ScenarioChangeFilter){
+  return filter==='all'?objects:objects.filter(delta=>scenarioChangeCategories(delta).includes(filter));
+}
+
+const fmt=(value:number,decimals=1)=>rounded(value,decimals).toFixed(decimals);
+function junctionInspectionRows(junction:JunctionInstance|undefined){
+  if(!junction)return new Map<string,string>();
+  let main=0,pocket=0,receiving=0,medianArms=0,medianWidth=0,signals=0,crossings=0,stops=0;
+  for(const {arm} of enabledArms(junction)){
+    main+=arm.incoming+arm.outgoing;
+    const incoming=pocketsFor(arm,'incoming'),outgoing=pocketsFor(arm,'outgoing');
+    pocket+=incoming.left.lanes+incoming.right.lanes;receiving+=outgoing.left.lanes+outgoing.right.lanes;
+    if(arm.median>0){medianArms++;medianWidth+=arm.median;}
+    if(arm.signal)signals++;if(arm.crossing)crossings++;if(arm.stop)stops++;
+  }
+  return new Map([
+    ['Position (m)',`${fmt(junction.x)}, ${fmt(junction.y)}`],
+    ['Rotation',`${fmt(junction.rotation+junction.design.rotation)}°`],
+    ['Enabled arms',String(activeArmIds(junction).length)],
+    ['Main lanes',String(main)],
+    ['Pocket / receiving',`${pocket} / ${receiving}`],
+    ['Median',`${medianArms} arms · Σ ${fmt(medianWidth)} m`],
+    ['Controls',`signal ${signals} · crossing ${crossings} · stop ${stops}`]
+  ]);
+}
+function roadLinkInspectionRows(project:NetworkProject|undefined,link:RoadLink|undefined){
+  if(!project||!link)return new Map<string,string>();
+  const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),
+    laneText=from&&to?`${from.forwardLanes}/${from.backwardLanes} → ${to.forwardLanes}/${to.backwardLanes}`:'unresolved';
+  return new Map([
+    ['Endpoints',`${portKey(link.from)} → ${portKey(link.to)}`],
+    ['Resolved length',`${fmt(linkLength(project,link))} m`],
+    ['PI / via points',String(link.via.length)],
+    ['Section mode',link.sectionProfile.mode],
+    ['End lanes F/B',laneText],
+    ['Station components',String(link.components.length)]
+  ]);
+}
+export function scenarioObjectInspection(reference:NetworkProject,active:NetworkProject,delta:ScenarioObjectDelta):ScenarioObjectInspection{
+  const refRows=delta.kind==='junction'
+      ?junctionInspectionRows(reference.junctions.find(item=>item.id===delta.id))
+      :roadLinkInspectionRows(reference,reference.links.find(item=>item.id===delta.id)),
+    activeRows=delta.kind==='junction'
+      ?junctionInspectionRows(active.junctions.find(item=>item.id===delta.id))
+      :roadLinkInspectionRows(active,active.links.find(item=>item.id===delta.id)),
+    labels=[...new Set([...refRows.keys(),...activeRows.keys()])],
+    rows=labels.map(label=>{const referenceValue=refRows.get(label)??'—',activeValue=activeRows.get(label)??'—';return{label,reference:referenceValue,active:activeValue,changed:referenceValue!==activeValue};});
+  return{kind:delta.kind,id:delta.id,name:delta.name,status:delta.status,rows};
+}
+function junctionFocusPoints(junction:JunctionInstance|undefined){
+  if(!junction)return[];
+  return[{x:junction.x,y:junction.y},...activeArmIds(junction).map(armId=>portPoint(junction,armId))];
+}
+function roadLinkFocusPoints(project:NetworkProject,link:RoadLink|undefined){return link?linkPoints(project,link):[];}
+export function scenarioObjectBounds(reference:NetworkProject,active:NetworkProject,delta:ScenarioObjectDelta):ScenarioObjectBounds|null{
+  const points=delta.kind==='junction'
+    ?[...junctionFocusPoints(reference.junctions.find(item=>item.id===delta.id)),...junctionFocusPoints(active.junctions.find(item=>item.id===delta.id))]
+    :[...roadLinkFocusPoints(reference,reference.links.find(item=>item.id===delta.id)),...roadLinkFocusPoints(active,active.links.find(item=>item.id===delta.id))];
+  if(!points.length)return null;
+  const xs=points.map(point=>point.x),ys=points.map(point=>point.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),margin=18;
+  return{x:minX-margin,y:minY-margin,w:Math.max(36,maxX-minX+margin*2),h:Math.max(36,maxY-minY+margin*2)};
 }
