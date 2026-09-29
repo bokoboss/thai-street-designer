@@ -715,3 +715,16 @@ RoadLink rows include:
 Changed rows are highlighted. Missing objects use an em dash, so Added and Removed objects still produce a useful one-sided inspection.
 
 Filters, focus, Ghost visibility and navigation are not persisted in the engineering project and never enter Undo/Redo.
+
+
+### Phase 5C.4 comparison review actions
+
+Phase 5C.4 keeps comparison read-only with respect to the Reference scenario, but makes the inspection loop actionable for design review.
+
+- **Prev / Next** walks the currently filtered comparison list without leaving 2D review context.
+- **Select Active** converts only the Active-side focused object into the normal editable Network selection; the comparison focus and orange Reference ghost remain visible for before/after context.
+- Removed objects that exist only in the Reference scenario show **Reference only** instead of creating a fake editable object.
+- Review navigation remains ephemeral UI state: it does not enter Scenario Workspace JSON, NetworkProject, Undo/Redo or geometry ownership.
+- Browser acceptance verifies change focus → Active selection → next/previous review navigation while preserving the Reference as a non-interactive ghost.
+
+This closes the loop from **find change → inspect before/after → select the Active engineering object → edit with the normal Network tools** without adding a parallel comparison-editing model.

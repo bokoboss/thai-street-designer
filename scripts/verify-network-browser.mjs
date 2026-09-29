@@ -179,6 +179,14 @@ try{
   assert(await evalValue(`document.querySelector('[data-network-comparison-detail="Main lanes"]')?.classList.contains('changed')===true`),'before/after inspector must mark changed main-lane values');
   assert(await evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)>${comparisonZoomBefore}`),'comparison inspection should zoom toward the focused object');
   await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'inspection auto-enables the read-only Existing ghost');
+  assert(await evalValue(`!!document.querySelector('[data-network-comparison-select-active]')`),'changed active object must expose a direct Select Active action');
+  await clickSelector('[data-network-comparison-select-active]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-junction="J-1"] [data-network-instance-selection="true"]')`),'comparison review can select the focused Active object for editing without touching Reference');
+  await clickSelector('[data-network-comparison-filter="all"]');
+  await clickSelector('[data-network-comparison-next]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-comparison-focused="true"]')?.getAttribute('data-network-comparison-inspect')!=='junction:J-1'`),'comparison review advances to the next filtered change');
+  await clickSelector('[data-network-comparison-prev]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-comparison-focused="true"]')?.getAttribute('data-network-comparison-inspect')==='junction:J-1'`),'comparison review returns to the previous change');
   await clickSelector('[data-network-action="fit"]');await sleep(120);
   await clickSelector('[data-network-scenario="existing"]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&p?.junctions?.length===2;},'Existing remains unchanged after Alt edit');
@@ -298,7 +306,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: scenario filter + change inspection + active/reference focus → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  console.log('PASS browser acceptance: scenario filter + change inspection + review navigation + active selection → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
