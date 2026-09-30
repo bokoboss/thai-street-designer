@@ -962,3 +962,38 @@ The v1 project file is intentionally an **engineering project file**. It does no
 - locally imported JPG/PNG bytes.
 
 Those remain browser/session concerns. Local image embedding or a multi-file package would require a separate portability design rather than silently inflating the JSON file.
+
+
+### Phase 6E.1 unified Network engineering export
+
+The Network workspace now has a dedicated **Export** menu separate from project-file save/load and separate from Scenario Comparison export.
+
+Active-scenario engineering figures can be exported as:
+
+- **Current View · SVG**
+- **Current View · PNG**
+- **Full Network · SVG**
+- **Full Network · PNG**
+
+Current View preserves the current 2D engineering viewport. Full Network derives a deterministic frame from the complete active NetworkProject geometry.
+
+The figure pipeline clones the authoritative Network SVG and removes editing-only UI layers: Junction hit targets, move handles, Arm grips/selection guides, ports, PI handles, link previews, calibration guides and comparison focus/ghost geometry. It keeps active engineering geometry, markings and engineering warning symbols.
+
+Each output adds:
+
+- project title;
+- active scenario name;
+- Junction / RoadLink counts;
+- export scope;
+- a true world-unit scale bar;
+- `CONCEPT DESIGN · NOT FOR DETAILED ENGINEERING / CONSTRUCTION`.
+
+The scale bar is computed from the same metre-based Network world coordinates used by plan geometry rather than from screen pixels.
+
+#### Raster/background policy
+
+Phase 6E.1 is intentionally **geometry-only**.
+
+Basemap tiles, aerial imagery and locally imported raster references are not embedded. They are rendered outside the authoritative Network SVG and may also carry provider licensing / CORS constraints. A future raster-backed export must be provider-aware and must explicitly define attribution, permission and local-image packaging behavior; the engineering export does not silently screenshot those layers.
+
+Scenario Comparison retains its own Active-vs-Reference export because its title/legend/metric semantics differ from a normal active-scenario engineering figure.

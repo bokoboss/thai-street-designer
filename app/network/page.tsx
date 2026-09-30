@@ -85,6 +85,7 @@ export default function NetworkWorkspace(){
     [compareScenarioId,setCompareScenarioId]=useState<string|null>(null),[compareGhostVisible,setCompareGhostVisible]=useState(false),
     [comparisonFilter,setComparisonFilter]=useState<ScenarioChangeFilter>('all'),[comparisonFocus,setComparisonFocus]=useState<NetworkComparisonFocus>(null),
     [comparisonExporting,setComparisonExporting]=useState<'svg'|'png'|null>(null),[comparisonExportStatus,setComparisonExportStatus]=useState(''),
+    [networkExporting,setNetworkExporting]=useState<string|null>(null),[networkExportStatus,setNetworkExportStatus]=useState(''),
     [projectFileName,setProjectFileName]=useState(''),[projectFileBaseline,setProjectFileBaseline]=useState<string|null>(null),[saveAsDraft,setSaveAsDraft]=useState<string|null>(null),[fileReplaceArmed,setFileReplaceArmed]=useState<'new'|'open'|null>(null);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),scenarioWorkspaceRef=useRef(scenarioWorkspace),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),scenarioHistoryRef=useRef(new Map<string,{past:NetworkProject[];future:NetworkProject[]}>()),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
@@ -269,7 +270,7 @@ export default function NetworkWorkspace(){
     setSelection(focusedComparisonObject.kind==='junction'?{kind:'junction',id:focusedComparisonObject.id}:{kind:'link',id:focusedComparisonObject.id});
     setNotice(`เลือก ${focusedComparisonObject.kind==='junction'?'Junction':'Road Link'} ${focusedComparisonObject.id} ใน ${currentScenario.name} แล้ว · Reference ghost ยังคงเป็น read-only`);
   }
-  function downloadComparison(blob:Blob,name:string){
+  function downloadBlob(blob:Blob,name:string){
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function exportScenarioComparison(format:'svg'|'png'){
@@ -307,7 +308,7 @@ export default function NetworkWorkspace(){
       const svgBlob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}),
         baseName=`comparison-${safeFilePart(comparisonScenario.name)}-vs-${safeFilePart(currentScenario.name)}`;
       if(format==='svg'){
-        const name=baseName+'.svg';downloadComparison(svgBlob,name);setComparisonExportStatus(name);setNotice('ส่งออก Scenario Comparison SVG แล้ว · geometry-only พร้อม title / legend / summary');return;
+        const name=baseName+'.svg';downloadBlob(svgBlob,name);setComparisonExportStatus(name);setNotice('ส่งออก Scenario Comparison SVG แล้ว · geometry-only พร้อม title / legend / summary');return;
       }
       const url=URL.createObjectURL(svgBlob);
       try{
@@ -315,10 +316,60 @@ export default function NetworkWorkspace(){
         const canvas=document.createElement('canvas');canvas.width=outputWidth;canvas.height=outputHeight;const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
         ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
         const png=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!png)throw Error('PNG encode failed');
-        const name=baseName+'.png';downloadComparison(png,name);setComparisonExportStatus(name);setNotice('ส่งออก Scenario Comparison PNG แล้ว · geometry-only พร้อม title / legend / summary');
+        const name=baseName+'.png';downloadBlob(png,name);setComparisonExportStatus(name);setNotice('ส่งออก Scenario Comparison PNG แล้ว · geometry-only พร้อม title / legend / summary');
       }finally{URL.revokeObjectURL(url);}
     }catch(error){const message=error instanceof Error?error.message:'Comparison export failed';setComparisonExportStatus('error');setNotice('ส่งออก comparison ไม่สำเร็จ · '+message);}
     finally{setComparisonExporting(null);}
+  }
+  async function exportNetworkFigure(scope:'current'|'full',format:'svg'|'png'){
+    if(!svg.current||networkExporting)return;
+    const exportKey=scope+'-'+format;setNetworkExporting(exportKey);setNetworkExportStatus('');
+    try{
+      setView('2d');
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+      await document.fonts.ready;
+      const source=svg.current;if(!source)throw Error('Network canvas not ready');
+      const current=source.getAttribute('viewBox')?.trim().split(/\s+/).map(Number)??[];
+      if(current.length!==4||current.some(value=>!Number.isFinite(value)))throw Error('Invalid Network viewBox');
+      const bounds=scope==='full'?projectBounds(project,0):{x:current[0],y:current[1],w:current[2],h:current[3]},
+        w=Math.max(40,bounds.w),h=Math.max(40,bounds.h),base=Math.max(w,h,120),
+        pad=scope==='full'?Math.max(10,base*.035):0,titleSize=Math.max(5,Math.min(10,base*.018)),
+        headerH=titleSize*4.5,footerH=titleSize*2.4,vx=bounds.x-pad,vy=bounds.y-pad-headerH,
+        vw=w+pad*2,vh=h+pad*2+headerH+footerH,outputWidth=2000,outputHeight=Math.max(700,Math.min(4000,Math.round(outputWidth*vh/vw))),
+        copy=source.cloneNode(true) as SVGSVGElement;
+      copy.setAttribute('xmlns','http://www.w3.org/2000/svg');copy.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);copy.setAttribute('width',String(outputWidth));copy.setAttribute('height',String(outputHeight));
+      copy.querySelector('[data-network-background="true"]')?.setAttribute('fill','#ffffff');
+      copy.querySelector('[data-network-grid="true"]')?.setAttribute('opacity','.10');
+      copy.querySelectorAll('[data-network-junction-hit],[data-network-instance-handle],[data-network-instance-selection],[data-network-arm-handle],[data-network-arm-selection],[data-network-port],[data-link-via-group],[data-network-arm-guide],[data-network-link-preview],[data-local-reference-calibration],[data-network-comparison-ghost],[data-network-comparison-active-focus-path],[data-network-comparison-active-focus-ring]').forEach(node=>node.remove());
+      const ns='http://www.w3.org/2000/svg',overlay=document.createElementNS(ns,'g'),
+        addRect=(x:number,y:number,width:number,height:number,fill:string,stroke='none')=>{const el=document.createElementNS(ns,'rect');el.setAttribute('x',String(x));el.setAttribute('y',String(y));el.setAttribute('width',String(width));el.setAttribute('height',String(height));el.setAttribute('fill',fill);el.setAttribute('stroke',stroke);el.setAttribute('stroke-width',String(Math.max(.2,titleSize*.045)));overlay.appendChild(el);return el;},
+        addText=(x:number,y:number,text:string,size:number,weight='500',fill='#45565d',anchor='start')=>{const el=document.createElementNS(ns,'text');el.setAttribute('x',String(x));el.setAttribute('y',String(y));el.setAttribute('font-family','Arial, Noto Sans Thai, sans-serif');el.setAttribute('font-size',String(size));el.setAttribute('font-weight',weight);el.setAttribute('fill',fill);el.setAttribute('text-anchor',anchor);el.textContent=text;overlay.appendChild(el);return el;};
+      addRect(vx,vy,vw,headerH,'#f5faf9','#cedbd9');addRect(vx,bounds.y+h+pad,vw,footerH,'#ffffff','#d9e2e1');
+      const left=vx+Math.max(titleSize,pad*.55),top=vy+titleSize*1.45;
+      addText(left,top,project.title,titleSize,'800','#263b44');
+      addText(left,top+titleSize*1.45,`Scenario: ${currentScenario.name} · ${project.junctions.length} junctions · ${project.links.length} road links · ${scope==='full'?'FULL NETWORK':'CURRENT VIEW'}`,titleSize*.62,'650','#60716f');
+      addText(vx+vw-Math.max(titleSize,pad*.55),top,'Thai Street Designer',titleSize*.58,'700','#4d7772','end');
+      const scale=niceScaleMeters(w*.18),scaleX=left,footerY=bounds.y+h+pad+footerH*.52,scaleLabel=scale>=1000?(scale/1000)+' km':scale+' m',
+        line=document.createElementNS(ns,'line');line.setAttribute('x1',String(scaleX));line.setAttribute('x2',String(scaleX+scale));line.setAttribute('y1',String(footerY));line.setAttribute('y2',String(footerY));line.setAttribute('stroke','#263b44');line.setAttribute('stroke-width',String(Math.max(.35,titleSize*.07)));overlay.appendChild(line);
+      for(const x of [scaleX,scaleX+scale]){const tick=document.createElementNS(ns,'line');tick.setAttribute('x1',String(x));tick.setAttribute('x2',String(x));tick.setAttribute('y1',String(footerY-titleSize*.35));tick.setAttribute('y2',String(footerY+titleSize*.35));tick.setAttribute('stroke','#263b44');tick.setAttribute('stroke-width',String(Math.max(.35,titleSize*.07)));overlay.appendChild(tick);}
+      addText(scaleX,footerY-titleSize*.55,scaleLabel,titleSize*.55,'700','#263b44');
+      addText(vx+vw-Math.max(titleSize,pad*.55),footerY,'CONCEPT DESIGN · NOT FOR DETAILED ENGINEERING / CONSTRUCTION',titleSize*.52,'700','#7a5d47','end');
+      copy.appendChild(overlay);
+      const svgBlob=new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}),
+        baseName=`network-${safeFilePart(project.title)}-${safeFilePart(currentScenario.name)}-${scope}`;
+      if(format==='svg'){
+        const name=baseName+'.svg';downloadBlob(svgBlob,name);setNetworkExportStatus(name);setNotice(`ส่งออก ${scope==='full'?'Full Network':'Current View'} SVG แล้ว · geometry-only พร้อม title / scale / concept disclaimer`);return;
+      }
+      const url=URL.createObjectURL(svgBlob);
+      try{
+        const image=new Image();await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(Error('Render Network image failed'));image.src=url;});
+        const canvas=document.createElement('canvas');canvas.width=outputWidth;canvas.height=outputHeight;const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+        const png=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!png)throw Error('PNG encode failed');
+        const name=baseName+'.png';downloadBlob(png,name);setNetworkExportStatus(name);setNotice(`ส่งออก ${scope==='full'?'Full Network':'Current View'} PNG แล้ว · geometry-only พร้อม title / scale / concept disclaimer`);
+      }finally{URL.revokeObjectURL(url);}
+    }catch(error){const message=error instanceof Error?error.message:'Network export failed';setNetworkExportStatus('error');setNotice('ส่งออก Network ไม่สำเร็จ · '+message);}
+    finally{setNetworkExporting(null);}
   }
   function point(e:{clientX:number;clientY:number}){const matrix=svg.current?.getScreenCTM();if(!matrix)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return{x:p.x,y:p.y};}
   function choose(next:Tool){setTool(next);setArmGuide(null);setDeleteArmed(null);if(next==='map-align'){setView('2d');if(!mapReference.enabled)setMapReference(v=>({...v,enabled:true}));}if(next==='image-align'||next==='image-calibrate'){setView('2d');if(localImageUrl)setLocalReference(v=>({...v,enabled:true}));}if(next==='image-calibrate')setCalibrationPoints([]);if(next!=='link'){setPendingPort(null);setLinkCursor(null);}if(next!=='select'){setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);}setNotice(next==='junction'?'คลิกตำแหน่งบนแผนเพื่อสร้าง Junction instance':next==='link'?'คลิก port ต้นทาง แล้วเลือก port ปลายทาง · ระบบจะแสดงแนว preview':next==='pan'?'ลากพื้นที่ว่างเพื่อเลื่อนมุมมอง':next==='map-align'?'ลากพื้นที่ว่างเพื่อย้าย Network ทั้งชุดบนแผนที่ · Design v6 ภายในไม่เปลี่ยน':next==='image-align'?'ลากบน canvas เพื่อย้ายภาพอ้างอิง · engineering geometry ไม่เปลี่ยน':next==='image-calibrate'?'คลิกจุด A และ B บนภาพอ้างอิง แล้ว Apply ตามระยะจริงที่กำหนด':next==='delete'?'คลิกวัตถุเพื่อลบ หรือกด Delete':'เลือกวัตถุ · ลาก Arm อิสระ หรือกด Shift ระหว่างลากเพื่อ snap 15°');}
@@ -721,6 +772,7 @@ export default function NetworkWorkspace(){
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
       <div className="network-header-actions">
         <details className="network-file-menu"><summary data-network-file-menu="true">File ▾</summary><div className="network-file-popover"><div className="network-file-status" data-network-file-status="true" data-network-file-dirty={projectFileDirty?'true':'false'}><b>{projectFileName||'Browser autosave'}</b><span>{projectFileDirty?'Unsaved file changes':'Saved to JSON'}</span></div><input ref={networkProjectFileInput} data-network-file-input="true" type="file" accept=".json,.tsd.json,application/json" hidden onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';void openProjectFile(file);}}/><button data-network-file-action="new" data-network-file-armed={fileReplaceArmed==='new'?'true':'false'} onClick={requestNewProjectFile}>{fileReplaceArmed==='new'?'Confirm New Project':'New Project'}</button><button data-network-file-action="open" data-network-file-armed={fileReplaceArmed==='open'?'true':'false'} onClick={requestOpenProjectFile}>{fileReplaceArmed==='open'?'Confirm Open…':'Open JSON…'}</button><button data-network-file-action="save" onClick={saveProjectFile}>Save JSON</button><button data-network-file-action="save-as" onClick={()=>{setSaveAsDraft(projectFileName||suggestedProjectFileName);setFileReplaceArmed(null);}}>Save As…</button>{saveAsDraft!==null&&<div className="network-file-saveas"><input data-network-file-saveas-name value={saveAsDraft} onChange={e=>setSaveAsDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();downloadProjectFile(saveAsDraft);}if(e.key==='Escape'){e.preventDefault();setSaveAsDraft(null);}}}/><button data-network-file-saveas-confirm onClick={()=>downloadProjectFile(saveAsDraft)}>Download</button></div>}<p>Project JSON = Scenario Workspace + Network/Junction engineering state. Map credentials, Undo history, view state และ local-image bytes ไม่รวมในไฟล์.</p></div></details>
+        <details className="network-export-menu" data-network-export-status={networkExportStatus||'idle'}><summary data-network-export-menu="true">Export ▾</summary><div className="network-export-popover"><div className="network-export-head"><b>Engineering Figure</b><span>Active scenario · geometry only</span></div><button data-network-export="current-svg" disabled={!!networkExporting} onClick={()=>void exportNetworkFigure('current','svg')}>{networkExporting==='current-svg'?'Exporting…':'Current View · SVG'}</button><button data-network-export="current-png" disabled={!!networkExporting} onClick={()=>void exportNetworkFigure('current','png')}>{networkExporting==='current-png'?'Exporting…':'Current View · PNG'}</button><button data-network-export="full-svg" disabled={!!networkExporting} onClick={()=>void exportNetworkFigure('full','svg')}>{networkExporting==='full-svg'?'Exporting…':'Full Network · SVG'}</button><button data-network-export="full-png" disabled={!!networkExporting} onClick={()=>void exportNetworkFigure('full','png')}>{networkExporting==='full-png'?'Exporting…':'Full Network · PNG'}</button><p>ใส่ title, scenario, scale และ concept-design disclaimer. Basemap / aerial / local raster ไม่รวมใน engineering export.</p></div></details>
         <button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset scenario</button>
       </div>
     </header>
