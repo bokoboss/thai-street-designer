@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified Product v1 hardening baseline before Phase 6F.1: `c5dfd843bc837cc4bbbec229c0fc31e026c3d743`
+Current verified Product v1 hardening baseline entering Release Audit: `33717469edeac4c3f5cef38eb6c8ab2822541594`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -219,8 +219,12 @@ Current sequence:
 4. **Phase 6F — Design Summary / Report**
    - Phase 6F.1 adds a canonical report model, Inspector Design Summary, normalized review findings and self-contained report-ready HTML with optional scenario delta.
    - Report logic reuses Junction reviews, RoadLink continuity and handoff-integrity engines; do not create a separate validation path.
+5. **Phase 7A — Product v1 Release Audit / Final Hardening**
+   - 7A.1 persists lightweight Project File association + saved-baseline signature across reload without adding file metadata to engineering JSON.
+   - Next: failure/recovery behavior, interaction sweep, then release-status/documentation cleanup.
+   - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
-Keep Parallel / Frontage Road and advanced CAD-like editing after these Product v1 hardening milestones.
+Keep Parallel / Frontage Road and advanced CAD-like editing after Product v1 release acceptance.
 
 For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 

@@ -388,10 +388,19 @@ try{
   await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(fileEnvelope)}],'acceptance.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`document.querySelector('.network-viewbar b')?.textContent==='Project File Acceptance'`),'open portable Project JSON');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'opened Project becomes clean file baseline');
-  await evalValue(`(()=>{const d=document.querySelector('.network-file-menu');if(d&&!d.open)d.open=true;return !!d?.open;})()`);
-  await clickSelector('[data-network-file-action="new"]');
+  const fileEdit=await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null'),p=w.scenarios.find(s=>s.id===w.activeScenarioId)?.project,j=p?.junctions?.[0],armId=j?.design?.enabled?.findIndex(Boolean)??-1,arm=armId>=0?j.design.arms[armId]:null;return arm?{junctionId:j.id,armId,action:arm.median<12?'median-inc':'median-dec'}:null;})()`);assert(fileEdit&&fileEdit.armId>=0,'Project file dirty-state test needs an active Arm');
+  await clickSelector(`[data-network-junction-hit="${fileEdit.junctionId}:${fileEdit.armId}"]`);await clickSelector(`[data-network-context-action="${fileEdit.action}"]`);
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='true'`),'engineering edit marks opened Project dirty');
+  await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload dirty Project file session');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='true'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'reload preserves file name and dirty baseline');
+  await clickSelector('[data-network-file-menu="true"]');await clickSelector('[data-network-file-action="save"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'`),'Save refreshes file baseline');
+  await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload saved Project file session');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'reload preserves clean file association');
+  await clickSelector('[data-network-file-menu="true"]');await clickSelector('[data-network-file-action="new"]');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'New Project resets engineering workspace without touching schema');
   assert.equal(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')`),'true','new unsaved Project must be marked dirty');
+  assert.equal(await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),null,'New Project must clear prior file association metadata');
 
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
@@ -419,7 +428,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

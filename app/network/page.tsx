@@ -12,6 +12,7 @@ import {NetworkComparisonGhost,NetworkDrawing,type NetworkComparisonFocus,type N
 import {SCENARIO_CHANGE_FILTERS,compareNetworkProjects,filterScenarioObjectDeltas,scenarioObjectBounds,scenarioObjectInspection,type ScenarioChangeFilter,type ScenarioObjectDelta} from '@/lib/network-scenario-comparison';
 import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/lib/network-scenarios';
 import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/lib/network-project-file';
+import {NETWORK_PROJECT_FILE_SESSION_STORAGE,createNetworkProjectFileSession,networkProjectWorkspaceSignature,restoreNetworkProjectFileSession,serializeNetworkProjectFileSession} from '@/lib/network-project-file-session';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/lib/network-design-report';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
@@ -99,8 +100,8 @@ export default function NetworkWorkspace(){
     let active=true;
     try{
       localStorage.removeItem(NETWORK_EDIT_JUNCTION_STORAGE);
-      const restoredWorkspace=restoreNetworkScenarioWorkspace(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredProject=activeNetworkProject(restoredWorkspace),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE)),restoredLocalReference=restoreLocalImageReference(localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE));
-      queueMicrotask(()=>{if(!active)return;storageReady.current=true;scenarioWorkspaceRef.current=restoredWorkspace;projectRef.current=restoredProject;setScenarioWorkspace(restoredWorkspace);setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);setLocalReference(restoredLocalReference);});
+      const restoredWorkspace=restoreNetworkScenarioWorkspace(localStorage.getItem(NETWORK_PROJECT_STORAGE)),restoredProject=activeNetworkProject(restoredWorkspace),restoredMap=restoreMapReference(localStorage.getItem(MAP_REFERENCE_STORAGE)),restoredCredentials=restoreMapProviderCredentials(localStorage.getItem(MAP_PROVIDER_CREDENTIALS_STORAGE)),restoredLocalReference=restoreLocalImageReference(localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE)),restoredFileSession=restoreNetworkProjectFileSession(localStorage.getItem(NETWORK_PROJECT_FILE_SESSION_STORAGE));
+      queueMicrotask(()=>{if(!active)return;storageReady.current=true;scenarioWorkspaceRef.current=restoredWorkspace;projectRef.current=restoredProject;setScenarioWorkspace(restoredWorkspace);setProject(restoredProject);setMapReference(restoredMap);setMapCredentials(restoredCredentials);setLocalReference(restoredLocalReference);setProjectFileName(restoredFileSession?.fileName??'');setProjectFileBaseline(restoredFileSession?.baselineSignature??null);});
     }catch{storageReady.current=true;}
     return()=>{active=false;};
   },[]);
@@ -153,7 +154,7 @@ export default function NetworkWorkspace(){
     selectedHandoffIssues=selectedLink?junctionAuxiliaryHandoffIssues(project,selectedLink):[],
     selectedConnectedLinkIds=selectedJunction?junctionConnectedLinkIds(project,selectedJunction.id):[],
     deleteArmedForSelection=!!selection&&!!deleteArmed&&selection.kind===deleteArmed.kind&&selection.id===deleteArmed.id,
-    projectFileSignature=JSON.stringify(scenarioWorkspace),
+    projectFileSignature=networkProjectWorkspaceSignature(scenarioWorkspace),
     projectFileDirty=projectFileBaseline===null||projectFileBaseline!==projectFileSignature,
     suggestedProjectFileName=`${safeFilePart(scenarioWorkspace.scenarios.find(s=>s.kind==='existing')?.project.title??project.title??'street-project')}.tsd.json`;
   const designReport=buildNetworkDesignReport(project,currentScenario.name,comparisonScenario?{name:comparisonScenario.name,project:comparisonScenario.project}:undefined);
@@ -223,16 +224,24 @@ export default function NetworkWorkspace(){
     const trimmed=value.trim().replace(/[\\/:*?"<>|]+/g,'-').replace(/^\.+/,'').slice(0,100);
     return !trimmed?suggestedProjectFileName:/\.json$/i.test(trimmed)?trimmed:trimmed+'.tsd.json';
   }
+  function installProjectFileSession(fileName:string,workspace:NetworkScenarioWorkspace){
+    const session=createNetworkProjectFileSession(fileName,workspace);setProjectFileName(session.fileName);setProjectFileBaseline(session.baselineSignature);
+    try{localStorage.setItem(NETWORK_PROJECT_FILE_SESSION_STORAGE,serializeNetworkProjectFileSession(session));}catch{}
+  }
+  function clearProjectFileSession(){
+    setProjectFileName('');setProjectFileBaseline(null);
+    try{localStorage.removeItem(NETWORK_PROJECT_FILE_SESSION_STORAGE);}catch{}
+  }
   function downloadProjectFile(name:string){
     const workspace=scenarioWorkspaceRef.current,fileName=normalizeProjectFileName(name),blob=new Blob([serializeNetworkProjectFile(workspace)],{type:'application/json;charset=utf-8'}),
       url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fileName;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
-    setProjectFileName(fileName);setProjectFileBaseline(JSON.stringify(workspace));setSaveAsDraft(null);setFileReplaceArmed(null);setNotice(`บันทึก ${fileName} แล้ว · browser ดาวน์โหลด Project JSON และ autosave ยังคงแยกอยู่ในเครื่องนี้`);
+    installProjectFileSession(fileName,workspace);setSaveAsDraft(null);setFileReplaceArmed(null);setNotice(`บันทึก ${fileName} แล้ว · browser ดาวน์โหลด Project JSON และ autosave ยังคงแยกอยู่ในเครื่องนี้`);
   }
   function saveProjectFile(){downloadProjectFile(projectFileName||suggestedProjectFileName);}
   function requestNewProjectFile(){
     if(projectFileDirty&&fileReplaceArmed!=='new'){setFileReplaceArmed('new');setNotice('Project ปัจจุบันมีการเปลี่ยนแปลงที่ยังไม่ได้ Save เป็นไฟล์ · กด New อีกครั้งเพื่อยืนยัน (browser autosave ยังอยู่จนกว่าจะสร้างไฟล์ใหม่)');return;}
     const next=createNetworkScenarioWorkspace(),nextProject=activeNetworkProject(next);scenarioHistoryRef.current.clear();installScenarioWorkspace(next,'สร้าง Project ใหม่แล้ว · engineering state เริ่มจาก Network demo ใหม่',false);
-    setProjectFileName('');setProjectFileBaseline(null);setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');setPan({x:0,y:0});setZoom(1);setSelection({kind:'junction',id:nextProject.junctions[0]?.id??'J-1'});
+    clearProjectFileSession();setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');setPan({x:0,y:0});setZoom(1);setSelection({kind:'junction',id:nextProject.junctions[0]?.id??'J-1'});
   }
   function requestOpenProjectFile(){
     if(projectFileDirty&&fileReplaceArmed!=='open'){setFileReplaceArmed('open');setNotice('Project ปัจจุบันมีการเปลี่ยนแปลงที่ยังไม่ได้ Save เป็นไฟล์ · กด Open อีกครั้งเพื่อเลือกไฟล์ใหม่');return;}
@@ -244,7 +253,7 @@ export default function NetworkWorkspace(){
     try{
       const parsed=parseNetworkProjectFile(await file.text()),workspace=parsed.workspace,nextProject=activeNetworkProject(workspace),b=projectBounds(nextProject);
       scenarioHistoryRef.current.clear();installScenarioWorkspace(workspace,`เปิด ${file.name} แล้ว · ${workspace.scenarios.length} scenario`,false);
-      setProjectFileName(file.name);setProjectFileBaseline(JSON.stringify(workspace));setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');
+      installProjectFileSession(file.name,workspace);setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');
       setPan({x:b.x+b.w/2,y:b.y+b.h/2});setZoom(clampZoom(NETWORK_VIEW_SPAN/Math.max(b.w,b.h)*.9,NETWORK_MIN_ZOOM,Math.min(4.5,NETWORK_MAX_ZOOM)));
       setSelection(nextProject.junctions[0]?{kind:'junction',id:nextProject.junctions[0].id}:null);
     }catch(error){setNotice('เปิด Project ไม่สำเร็จ · '+(error instanceof Error?error.message:'ไฟล์ไม่ถูกต้อง'));}
