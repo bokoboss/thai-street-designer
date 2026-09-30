@@ -399,6 +399,10 @@ export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'t
   const candidate:RoadLink={...link,[end]:ref},candidateProject={...project,links:project.links.map(item=>item.id===id?candidate:item)},
     facing=assessPortConnection(candidateProject,candidate.from,candidate.to);
   if(!facing||facing.status==='invalid')return{project,error:'เปลี่ยน port ไม่ได้ · ปลายใหม่หันออกจากแนวเชื่อมเกิน 90°'};
+  if(parallelCorridorForLink(project,id)){
+    const corridorError=candidateProject.parallelCorridors.map(corridor=>parallelCorridorIssue(candidateProject,corridor)).find(Boolean);
+    if(corridorError)return{project,error:`เปลี่ยน port ไม่ได้ · ${corridorError} · แก้ Parallel corridor membership ก่อน`};
+  }
   const controls=linkControlPoints(candidateProject,candidate);
   if(controls.length<2||!validAlignment(controls))return{project,error:'เปลี่ยน port ไม่ได้ · PI เดิมทำให้ alignment หักกลับ/ตัดตัวเองหรือมีช่วงสั้นเกินไป · ปรับหรือลบ PI ก่อน'};
   return{project:candidateProject,link:candidate,error:null};
@@ -695,7 +699,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
     if(!value||typeof value!=='object')throw Error('Invalid parallel corridor');
     const item=value as Record<string,unknown>,frontageRaw=Array.isArray(item.frontage)?item.frontage:[];
     return{
-      id:String(item.id??`PC-${index+1}`),
+      id:String(item.id??''),
       name:String(item.name??''),
       mainlineLinkIds:Array.isArray(item.mainlineLinkIds)?item.mainlineLinkIds.map(String):[],
       frontage:frontageRaw.map(raw=>{

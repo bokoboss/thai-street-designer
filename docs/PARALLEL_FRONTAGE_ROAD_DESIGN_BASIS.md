@@ -210,6 +210,8 @@ When a referenced RoadLink is deliberately deleted:
 
 The model must not silently reorder a remaining chain to hide a broken topology.
 
+Reconnect is also topology-sensitive: if a RoadLink belongs to a ParallelCorridor, endpoint reassignment must be rejected when the new endpoint would make any persisted mainline/frontage chain discontinuous. The user must first change corridor membership or choose a topology-preserving reconnect.
+
 ## 10. Scenario / file / report behavior
 
 Because ParallelCorridor is engineering Project state:
