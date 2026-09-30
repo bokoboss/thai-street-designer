@@ -4,7 +4,24 @@
 
 รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
 
-สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md) และ [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md), [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) และ [Product v1 Release Audit](docs/PRODUCT_V1_RELEASE_AUDIT.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+
+## Product v1 release-candidate workflow
+
+ผลิตภัณฑ์ปัจจุบันเป็น **Network-first concept-design workspace** โดยยังใช้ Junction Design schema v6 เป็น source of truth ของ geometry ภายในทางแยกแต่ละแห่ง
+
+Workflow หลักอยู่ที่ `/network`:
+
+1. สร้าง/วาง Junction หลายแห่งและเชื่อมด้วย RoadLink
+2. แก้ Arm, lane, median, street section, auxiliary/receiving lane และ corridor lifecycle
+3. ตรวจ engineering review / continuity / handoff warnings
+4. สร้าง Existing / Alternative scenarios และเปรียบเทียบ Active กับ Reference
+5. Save/Open portable Project JSON พร้อม browser autosave ที่แยกจากกัน
+6. Export Current View / Full Network เป็น SVG/PNG และ Design Summary เป็น HTML
+
+`/junction` เป็น detail workspace สำหรับ geometry ภายใน Junction/Slip/Roundabout ส่วน `/roads` ยังคงเป็น alignment/free-road lab ไม่ใช่ Network source of truth หลัก
+
+สถานะ Release Audit ล่าสุดถูกบันทึกใน [docs/PRODUCT_V1_RELEASE_AUDIT.md](docs/PRODUCT_V1_RELEASE_AUDIT.md). PR #1 ยังคงเป็น Draft จนกว่าจะได้รับการยอมรับ Product v1 อย่างชัดเจน
 
 ## เริ่มใช้งาน
 
@@ -144,13 +161,18 @@ Verification: `node scripts/verify-junction.cjs` followed by `node scripts/verif
 
 ## Current verification commands
 
+Release candidate ใช้ชุด gate เดียวกับ GitHub Quality workflow:
+
 ```sh
-node scripts/verify-junction.cjs
-node scripts/verify-pockets.cjs
-node scripts/verify-constraints-roundabout.cjs
-node scripts/verify-network.cjs
-node scripts/verify-visibility.cjs
+pnpm install --frozen-lockfile
+pnpm test
+pnpm exec tsc --noEmit
+pnpm lint
+pnpm test:builds
+pnpm test:browser
 ```
+
+`pnpm test:browser` ครอบคลุม Network create/edit/review/compare, Project File recovery, keyboard destructive safety, export/report, 2D/3D และ golden Junction cases.
 
 ## Vercel (separate Next.js build)
 

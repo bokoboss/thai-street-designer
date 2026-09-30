@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified Product v1 hardening baseline entering Release Audit: `33717469edeac4c3f5cef38eb6c8ab2822541594`
+Latest verified functional Product v1 release-candidate baseline: `24171c685de4ed93bf254e618ea3e48a9558e81d` · Quality run `36702892172`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -185,18 +185,25 @@ Do **not** reintroduce old runtime fields such as `Arm.slip`, `slipReceivingMode
 
 ## Latest verification
 
-RoadLink schema-v2 code baseline `4c7acef26c2c042233bcfff09e7ee6638232b461` passed the GitHub Quality workflow:
+Functional release-candidate baseline `24171c685de4ed93bf254e618ea3e48a9558e81d` passed GitHub Quality run `36702892172`:
 
 - Geometry/workspace regressions ✅
 - TypeScript ✅
 - Lint ✅
 - Sites/vinext production build ✅
-- Vercel/Next production build command ✅
+- Vercel/Next production build ✅
+- Network browser acceptance ✅
+- Browser golden artifacts ✅
+- keyboard Delete / Escape / Ctrl+Z / Ctrl+Shift+Z release sweep ✅
+- Inspector selection/viewBox stability ✅
 
-Relevant Quality run: `35833034259`.  
-Audit Preview for the same baseline also deployed successfully: run `35833030822`.
+Vercel status for this functional baseline is **success**.
 
-These source/build checks do not replace visual/interaction acceptance of the actual geometry.
+Earlier Release Audit evidence:
+- persistent Project File baseline across reload: Quality run `36701877517`;
+- rejected malformed/unsupported Project recovery: Quality run `36702325780`.
+
+PR #1 remains **Draft**. Passing CI means the release candidate is technically gated; it does not authorize merge without explicit user acceptance.
 
 ## Immediate next work
 
@@ -222,11 +229,12 @@ Current sequence:
 5. **Phase 7A — Product v1 Release Audit / Final Hardening**
    - 7A.1 persists lightweight Project File association + saved-baseline signature across reload without adding file metadata to engineering JSON; Quality run `36701877517` passed.
    - 7A.2 pins rejected-file recovery: malformed/unsupported Open preserves engineering workspace, file association and dirty baseline; Quality run `36702325780` passed.
-   - 7A.3 pins keyboard destructive safety, Ctrl+Z / Ctrl+Shift+Z and Inspector/view/selection stability.
-   - Next: release-status/documentation cleanup.
+   - 7A.3 pins keyboard destructive safety, Ctrl+Z / Ctrl+Shift+Z and Inspector/view/selection stability; Quality run `36702892172` passed.
+   - 7A.4 refreshes release documentation, verification references and intentional Product v1 limitations.
+   - Next action is a **release decision by the user**, not another feature family.
    - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
-Keep Parallel / Frontage Road and advanced CAD-like editing after Product v1 release acceptance.
+Keep Parallel / Frontage Road and advanced CAD-like editing after explicit Product v1 release acceptance.
 
 For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 
@@ -286,7 +294,7 @@ Read `VERCEL.md`.
 
 - Git integration creates Preview deployments from the audit branch.
 - Production must remain on the configured production branch until deliberate acceptance/merge.
-- Current branch should not be merged merely because CI passes; Slip refactor still needs visual acceptance.
+- Current branch should not be merged merely because CI passes; Product v1 Release Audit is technically gated, but PR #1 remains Draft until the user explicitly accepts the release candidate.
 
 ## Important files
 

@@ -2,7 +2,7 @@
 
 Updated: 2026-09-30  
 Branch: `chatgpt/full-engineering-ui-audit`  
-Status: **Final hardening in progress — no new feature family until this audit closes.**
+Status: **Release candidate technically gated — awaiting explicit user acceptance; PR #1 remains Draft.**
 
 ## Release objective
 
@@ -85,12 +85,50 @@ The browser release flow now pins keyboard and panel behavior that can otherwise
 
 These checks complement the existing button-based Undo/Redo, comparison navigation and contextual editing cases.
 
-## Remaining audit sequence
+Quality evidence: functional release-candidate head `24171c685de4ed93bf254e618ea3e48a9558e81d` passed Quality run `36702892172`; Vercel status is success.
 
-1. **7A.4 Release documentation / status cleanup**
-   - update stale verification references;
-   - record final Quality run and preview;
-   - enumerate intentional Product v1 limitations.
-2. **Release decision**
-   - keep PR #1 Draft until the user explicitly accepts Product v1;
-   - do not begin Parallel / Frontage Road or advanced CAD editing before that decision.
+### 7A.4 Release documentation / status cleanup
+
+Release-facing documentation now identifies the product as Network-first and points to this audit as the release source of truth. Stale schema-v2 verification references have been replaced with the current functional release-candidate evidence.
+
+#### Intentional Product v1 limitations
+
+These are release boundaries, not unresolved implementation promises:
+
+- **Concept design only.** The tool does not certify compliance with Thai detailed-design standards and does not replace engineer review.
+- **No traffic analysis.** No demand forecasting, assignment, capacity/LOS, queue/microsimulation, signal timing optimization or adaptive control.
+- **No terrain/elevation design.** Network/Junction geometry is concept-level plan geometry; 3D is a presentation/review view rather than a grading, bridge or earthworks model.
+- **No CAD/BIM replacement.** Production Civil 3D/Revit/BIM integration and construction-document workflows are outside v1.
+- **No Parallel / Frontage Road family yet.** This remains deliberately after v1 acceptance because it requires its own semantic/network design basis.
+- **Raster references are references.** Basemap/aerial/local raster pixels are not embedded in engineering SVG/PNG exports; provider-aware licensing/CORS/attribution packaging is deferred.
+- **Local image bytes are browser-local.** Portable Project JSON carries engineering/scenario state, not IndexedDB image bytes or map-provider credentials.
+- **Browser Save is download-based.** The app remembers filename + saved-baseline relationship, but does not claim native in-place filesystem write access.
+- **External imagery availability varies.** Provider coverage, key requirements and imagery currency are external dependencies.
+- **Device/geometry coverage is finite.** Automated golden and geometry suites are substantial but do not constitute exhaustive testing of every screen size, physical multi-touch device or possible geometric parameter combination.
+
+#### Release gate evidence
+
+Functional head `24171c685de4ed93bf254e618ea3e48a9558e81d`:
+
+- Quality run: `36702892172` — success;
+- Geometry/workspace regressions — pass;
+- TypeScript — pass;
+- Lint — pass;
+- Next/Vercel + Sites/vinext builds — pass;
+- Network browser acceptance + golden artifacts — pass;
+- Vercel status — success.
+
+Earlier audit-specific runs:
+
+- 7A.1 file-session reload baseline: `36701877517` — success;
+- 7A.2 rejected-file recovery: `36702325780` — success.
+
+## Release decision
+
+The engineering/product release audit is technically complete. The next step is **explicit user acceptance of the Product v1 release candidate**.
+
+Until that decision:
+
+- keep PR #1 Draft;
+- do not merge into the production branch;
+- do not begin Parallel / Frontage Road, advanced CAD-like editing or another major feature family.
