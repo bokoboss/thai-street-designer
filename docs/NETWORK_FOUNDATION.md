@@ -816,9 +816,10 @@ The headless-Chrome acceptance run captures named screenshots for these high-ris
 1. **Scenario comparison** — Active + Reference ghost, focused change and presentation summary.
 2. **No-median crosswalk** — one approach with no median, a full-width zebra crossing and stop-trimmed centerline.
 3. **Asymmetric auxiliary section** — skewed Arm layout, directional section differences, a median-side incoming Pocket and curb-side outgoing Receiving lane.
-4. **Slip acceleration** — Slip-owned approach auxiliary, acceleration departure, raised separator and Slip crossing.
-5. **Single-lane roundabout** — central island, truck apron, four splitter/median profiles and four pedestrian crossings.
-6. The existing browser artifacts continue to cover the resolved multi-Junction RoadLink/corridor view and resolved Network 3D.
+4. **Slip acceleration** — verified compact Slip geometry with a Slip-owned acceleration departure and raised separator.
+5. **Slip crossing** — verified direct Slip with station-based zebra crossing and stop/control line.
+6. **Single-lane roundabout** — central island, truck apron, four splitter/median profiles and four pedestrian crossings.
+7. The existing browser artifacts continue to cover the resolved multi-Junction RoadLink/corridor view and resolved Network 3D.
 
 Each named golden case has two protections:
 
@@ -828,3 +829,6 @@ Each named golden case has two protections:
 This phase deliberately does not lock raw screenshot hashes as pass/fail criteria yet. Browser/font rasterization can differ across runtime updates; exact pixel baselines should only be promoted after the reference images have been visually accepted and the CI rendering environment is deliberately pinned. The semantic contract remains the automated gate in the meantime.
 
 The golden suite is part of the existing `pnpm test:browser` Quality gate and is uploaded with the browser acceptance artifacts. No engineering schema or production feature behavior is changed by this test instrumentation.
+
+
+Golden fixture policy: browser fixtures should preferentially reuse parameter combinations already proven valid by the model/geometry regression suite. A browser golden is a rendering/interaction reference, not a second place to invent unsupported engineering combinations.

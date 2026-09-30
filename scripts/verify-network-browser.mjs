@@ -167,8 +167,11 @@ try{
     await send('Page.reload',{ignoreCache:true});
     await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.junction-app')`),'reload Junction golden '+id);
     await clickSelector('[data-junction-file-menu="true"]');
+    const loadState=await waitFor(()=>evalValue(`(()=>{const open=!!document.querySelector('[data-junction-open-latest="true"]'),recovery=document.body.textContent?.includes('ดาวน์โหลดข้อมูลเดิม')??false,footer=document.querySelector('.j-footer')?.textContent??'';return open||recovery?{open,recovery,footer}:null;})()`),'Junction golden loader state '+id);
+    assert(loadState.open,'Golden fixture rejected by Junction loader: '+id+' '+JSON.stringify(loadState));
     await clickSelector('[data-junction-open-latest="true"]');
     await waitFor(()=>evalValue(`document.querySelector('input[aria-label="ชื่อแบบ"]')?.value===${JSON.stringify(title)}`),'activate Junction golden '+id);
+    await evalValue(`(()=>{const b=[...document.querySelectorAll('.j-zoom button')].find(v=>v.textContent?.trim()==='พอดีภาพ');b?.click();return !!b;})()`);
     await sleep(180);
     const contract=await evalValue(`(()=>{${contractBody}})()`);
     assert(contract?.ok,'Golden visual contract failed: '+id+' '+JSON.stringify(contract));
@@ -347,11 +350,15 @@ try{
     `const svg=document.querySelector('[data-junction-plan="true"]'),inPocket=svg?.querySelectorAll('[data-pocket-lane="incoming-right"]').length??0,outPocket=svg?.querySelectorAll('[data-pocket-lane="outgoing-left"]').length??0,bike=svg?.querySelectorAll('[data-band="bike"]').length??0,shoulder=svg?.querySelectorAll('[data-band="shoulder"]').length??0,walkIn=svg?.querySelectorAll('[data-resolved-sidewalk="incoming"]').length??0,walkOut=svg?.querySelectorAll('[data-resolved-sidewalk="outgoing"]').length??0;return{ok:!!svg&&inPocket===1&&outPocket===1&&bike>=1&&shoulder>=1&&walkIn>=1&&walkOut>=1,inPocket,outPocket,bike,shoulder,walkIn,walkOut};`
   );
   await loadJunctionGolden('slip-acceleration',
-    `d.slips=[{id:'slip-0',fromArm:0,toArm:1,width:4,radius:28,approach:{mode:'auxiliary',width:3.5,storage:25,taper:18},departure:{mode:'acceleration',width:3.5,length:42,merge:28,separator:'raised',separatorWidth:1.2},crossing:{enabled:true,offset:12}}]`,
-    `const svg=document.querySelector('[data-junction-plan="true"]'),overlay=svg?.querySelectorAll('[data-slip-overlay="true"]').length??0,approach=svg?.querySelectorAll('[data-slip-approach-pavement="true"]').length??0,departure=svg?.querySelectorAll('[data-slip-departure-pavement="true"]').length??0,island=svg?.querySelectorAll('[data-slip-receiving-island="true"]').length??0,crossing=svg?.querySelectorAll('[data-slip-crossing="true"]').length??0,stripes=svg?.querySelectorAll('[data-slip-crossing-stripe="true"]').length??0;return{ok:!!svg&&overlay===1&&approach===1&&departure===1&&island===1&&crossing===1&&stripes>=3,overlay,approach,departure,island,crossing,stripes};`
+    `d.arms.forEach(a=>a.length=180);d.slips=[{id:'slip-0',fromArm:0,toArm:1,width:4,radius:22,approach:{mode:'direct'},departure:{mode:'acceleration',width:4,length:40,merge:25,separator:'raised',separatorWidth:1.5},crossing:{enabled:false,offset:10}}]`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),overlay=svg?.querySelectorAll('[data-slip-overlay="true"]').length??0,departure=svg?.querySelectorAll('[data-slip-departure-pavement="true"]').length??0,island=svg?.querySelectorAll('[data-slip-receiving-island="true"]').length??0,gore=svg?.querySelectorAll('[data-slip-acceleration-gore="true"]').length??0,crossing=svg?.querySelectorAll('[data-slip-crossing="true"]').length??0;return{ok:!!svg&&overlay===1&&departure===1&&island===1&&gore===0&&crossing===0,overlay,departure,island,gore,crossing};`
+  );
+  await loadJunctionGolden('slip-crossing',
+    `d.arms.forEach(a=>a.length=180);d.slips=[{id:'slip-0',fromArm:0,toArm:1,width:4,radius:22,approach:{mode:'direct'},departure:{mode:'direct'},crossing:{enabled:true,offset:10}}]`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),overlay=svg?.querySelectorAll('[data-slip-overlay="true"]').length??0,crossing=svg?.querySelectorAll('[data-slip-crossing="true"]').length??0,stop=svg?.querySelectorAll('[data-slip-stop="true"]').length??0,stripes=svg?.querySelectorAll('[data-slip-crossing-stripe="true"]').length??0;return{ok:!!svg&&overlay===1&&crossing===1&&stop===1&&stripes>=3,overlay,crossing,stop,stripes};`
   );
   await loadJunctionGolden('roundabout-single-lane',
-    `d.type='roundabout';d.slips=[];d.ring=1;d.circulation=5.5;d.radius=15;d.roundabout={apron:1.5,entryRadius:18,exitRadius:24,splitterLength:24,splitterWidth:2.2,yieldOffset:1};d.arms=d.arms.map(a=>({...a,incoming:1,outgoing:1,median:2,medianOffset:0,crossOffset:9,signal:false,stop:true,length:100,incomingPockets:undefined,outgoingPockets:undefined,laneMarkings:undefined,arrows:['straight','straight','straight','straight']}))`,
+    `d.type='roundabout';d.slips=[];d.ring=1;d.circulation=5.5;d.arms=d.arms.map(a=>({...a,incoming:1,outgoing:1,median:2,signal:false,crossing:true,crossOffset:9,length:140}))`,
     `const svg=document.querySelector('[data-junction-plan="true"]'),central=svg?.querySelectorAll('[data-central-island="true"]').length??0,apron=svg?.querySelectorAll('[data-truck-apron="true"]').length??0,splitter=svg?.querySelectorAll('[data-median-profile="splitter-and-median"]').length??0,crosswalk=svg?.querySelectorAll('[data-crosswalk="true"]').length??0,signals=svg?.querySelectorAll('[data-traffic-signal="true"]').length??0;return{ok:!!svg&&central===1&&apron===1&&splitter===4&&crosswalk===4&&signals===0,central,apron,splitter,crosswalk,signals};`
   );
 
@@ -359,7 +366,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
