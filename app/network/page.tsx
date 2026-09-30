@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {GitBranch,Link2,Map as MapIcon,Minus,MousePointer2,Plus,RotateCw,Trash2,Undo2,Redo2,Maximize2,Move,Network} from 'lucide-react';
 import '../junction/style.css';
 import './style.css';
@@ -156,7 +156,7 @@ export default function NetworkWorkspace(){
     projectFileSignature=JSON.stringify(scenarioWorkspace),
     projectFileDirty=projectFileBaseline===null||projectFileBaseline!==projectFileSignature,
     suggestedProjectFileName=`${safeFilePart(scenarioWorkspace.scenarios.find(s=>s.kind==='existing')?.project.title??project.title??'street-project')}.tsd.json`;
-  const designReport=useMemo(()=>buildNetworkDesignReport(project,currentScenario.name,comparisonScenario?{name:comparisonScenario.name,project:comparisonScenario.project}:undefined),[project,currentScenario.name,comparisonScenario]);
+  const designReport=buildNetworkDesignReport(project,currentScenario.name,comparisonScenario?{name:comparisonScenario.name,project:comparisonScenario.project}:undefined);
 
   function setProjectNow(next:NetworkProject){
     projectRef.current=next;setProject(next);
