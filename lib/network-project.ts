@@ -472,7 +472,6 @@ export function updateJunctionDesign(project:NetworkProject,id:string,design:Des
   if(junctionDesignLinkIssue(project,id,design))return project;
   return{...project,junctions:project.junctions.map(j=>j.id===id?{...j,design:copyDesign(design)}:j)};
 }
-const linksShareJunction=(a:RoadLink,b:RoadLink)=>[a.from.junctionId,a.to.junctionId].some(id=>id===b.from.junctionId||id===b.to.junctionId);
 function orderedChainTraversal(project:NetworkProject,linkIds:string[],reverseFirst:boolean){
   const links=linkIds.map(id=>project.links.find(link=>link.id===id));if(links.some(link=>!link))return false;
   const first=links[0]!;let previous=reverseFirst?first.from.junctionId:first.to.junctionId;
@@ -495,6 +494,7 @@ export function parallelCorridorIssue(project:NetworkProject,corridor:ParallelCo
   if(!corridor||typeof corridor!=='object'||!corridor.id||corridor.id.length>40||typeof corridor.name!=='string'||!corridor.name.trim()||corridor.name.length>80)return'Parallel corridor metadata ไม่สมบูรณ์';
   if(!parallelCorridorChainContinuous(project,corridor.mainlineLinkIds))return'Parallel corridor mainline chain ไม่ต่อเนื่องหรืออ้าง Road Link ที่ไม่มีอยู่';
   if(!Array.isArray(corridor.frontage)||corridor.frontage.length<1||corridor.frontage.length>2)return'Parallel corridor ต้องมี frontage อย่างน้อยหนึ่งด้าน';
+  if(corridor.frontage.some(chain=>!chain||typeof chain!=='object'||!['left','right'].includes(chain.side)||!Array.isArray(chain.linkIds)))return'Parallel corridor frontage metadata ไม่สมบูรณ์';
   if(new Set(corridor.frontage.map(chain=>chain.side)).size!==corridor.frontage.length)return'Parallel corridor มี frontage side ซ้ำ';
   const owned=new Set(corridor.mainlineLinkIds);
   for(const chain of corridor.frontage){
@@ -699,9 +699,11 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       name:String(item.name??''),
       mainlineLinkIds:Array.isArray(item.mainlineLinkIds)?item.mainlineLinkIds.map(String):[],
       frontage:frontageRaw.map(raw=>{
-        if(!raw||typeof raw!=='object')return{side:'left' as ParallelCorridorSide,linkIds:[]};
-        const chain=raw as Record<string,unknown>,side:ParallelCorridorSide=chain.side==='right'?'right':'left';
-        return{side,linkIds:Array.isArray(chain.linkIds)?chain.linkIds.map(String):[]};
+        if(!raw||typeof raw!=='object')throw Error('Invalid parallel frontage chain');
+        const chain=raw as Record<string,unknown>;
+        if(chain.side!=='left'&&chain.side!=='right')throw Error('Invalid parallel frontage side');
+        if(!Array.isArray(chain.linkIds))throw Error('Invalid parallel frontage link list');
+        return{side:chain.side as ParallelCorridorSide,linkIds:chain.linkIds.map(String)};
       })
     };
   }):[];
