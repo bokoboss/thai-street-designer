@@ -872,7 +872,12 @@ The existing creation rule remains unchanged:
 - caution > 60° and ≤ 90° is allowed;
 - invalid > 90° is rejected.
 
-Phase 6C.1 applies the same invalid boundary to subsequent edits.
+Phase 6C.1 applies the same invalid boundary as a **state-transition guard** to subsequent edits:
+
+- valid/caution → invalid is rejected;
+- an existing/imported invalid state remains editable;
+- invalid → worse facing deviation is rejected;
+- invalid → same or improved facing is allowed so legacy geometry can be repaired incrementally.
 
 Covered commit paths:
 
