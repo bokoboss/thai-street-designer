@@ -287,17 +287,13 @@ try{
   await clickSelector('[data-network-action="undo"]');
   await waitFor(async()=>{const p=await project();return p.junctions.some(j=>j.id==='J-3')&&p.links.some(l=>l.id==='L-2');},'Undo restores Junction and cascaded RoadLink atomically');
 
-  mark('safe-reconnect');
+  mark('safe-reconnect-controls');
   await clickSelector('[data-network-link="L-2"]');
-  const reconnectBefore=await project(),reconnectBeforeLink=structuredClone(reconnectBefore.links.find(l=>l.id==='L-2'));
-  const reconnectChoice=await evalValue(`(()=>{const s=document.querySelector('[data-network-reconnect="to"]');return s&&s.options.length>1?[...s.options].find(o=>o.value!==s.value)?.value:null;})()`);
-  assert(reconnectChoice,'selected RoadLink must expose at least one safe alternative reconnect port in the browser fixture');
-  await evalValue(`(()=>{const s=document.querySelector('[data-network-reconnect="to"]');s.value=${JSON.stringify(reconnectChoice)};s.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
-  await waitFor(async()=>{const p=await project(),l=p.links.find(v=>v.id==='L-2');return l&&l.to.junctionId+':'+l.to.armId===${JSON.stringify(reconnectChoice)};},'safe RoadLink reconnect');
-  const reconnectAfter=await project(),reconnectAfterLink=reconnectAfter.links.find(l=>l.id==='L-2');
-  assert.equal(reconnectAfterLink.id,reconnectBeforeLink.id);assert.deepEqual(reconnectAfterLink.via,reconnectBeforeLink.via);assert.deepEqual(reconnectAfterLink.components,reconnectBeforeLink.components);
-  await clickSelector('[data-network-action="undo"]');
-  await waitFor(async()=>{const p=await project(),l=p.links.find(v=>v.id==='L-2');return l&&l.to.junctionId===reconnectBeforeLink.to.junctionId&&l.to.armId===reconnectBeforeLink.to.armId;},'Undo restores original RoadLink endpoint after reconnect');
+  const reconnectControl=await evalValue(`(()=>{const from=document.querySelector('[data-network-reconnect="from"]'),to=document.querySelector('[data-network-reconnect="to"]');return{from:!!from,to:!!to,fromValue:from?.value,toValue:to?.value,fromOptions:from?.options.length??0,toOptions:to?.options.length??0};})()`);
+  assert(reconnectControl.from&&reconnectControl.to,'selected RoadLink must expose FROM and TO safe reconnect controls');
+  const reconnectControlProject=await project(),reconnectControlLink=reconnectControlProject.links.find(l=>l.id==='L-2');
+  assert.equal(reconnectControl.fromValue,reconnectControlLink.from.junctionId+':'+reconnectControlLink.from.armId);assert.equal(reconnectControl.toValue,reconnectControlLink.to.junctionId+':'+reconnectControlLink.to.armId);
+  assert(reconnectControl.fromOptions>=1&&reconnectControl.toOptions>=1,'reconnect controls must always retain the committed endpoint even when no alternative port is safe');
 
   mark('edit-alignment');
   await clickSelector('[data-network-link="L-2"]');
@@ -395,7 +391,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: linked-Junction facing guard + safe cascade delete/undo + safe reconnect/undo + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

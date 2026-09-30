@@ -926,3 +926,6 @@ The engine does not silently delete PIs to force a reconnect. If preserved align
 Junction-handoff provenance is stricter: when the endpoint being replaced owns handoff-sourced lane components, reconnect is blocked until those components are deliberately **Detached as manual** or returned **Back to Junction only**. This prevents persisted provenance from silently pointing to an Arm that is no longer connected.
 
 Reconnect is one normal NetworkProject transaction and one Undo restores the original endpoint atomically.
+
+
+Phase 6C.3 acceptance note: candidate availability is geometry-dependent. A Link may legitimately have no alternative safe port in the current layout; in that state the reconnect selector stays on the committed endpoint and is disabled rather than offering an invalid choice. Model regression uses a dedicated aligned reconnect fixture to exercise the actual endpoint transaction deterministically.

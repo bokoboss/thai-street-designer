@@ -145,13 +145,14 @@ let connect=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:a.id,armId:3}
 assert.equal(connect.error,null);p=connect.project;
 assert.equal(p.links.length,2);
 const reconnectBase=structuredClone(p),reconnectLink=reconnectBase.links.find(v=>v.id==='L-2'),reconnectOriginal=structuredClone(reconnectLink),
-  reconnectCandidates=reconnectBase.junctions.flatMap(j=>j.design.enabled.map((enabled,armId)=>enabled?{junctionId:j.id,armId}:null).filter(Boolean))
-    .filter(ref=>ref.junctionId!==reconnectLink.from.junctionId&&n.portKey(ref)!==n.portKey(reconnectLink.to)&&!n.portOccupied(reconnectBase,ref,reconnectLink.id)),
-  reconnectTarget=reconnectCandidates.find(ref=>!n.reconnectLinkPort(reconnectBase,reconnectLink.id,'to',ref).error);
-assert(reconnectTarget,'test network must expose at least one safe alternative TO port');
-const reconnected=n.reconnectLinkPort(reconnectBase,reconnectLink.id,'to',reconnectTarget);assert.equal(reconnected.error,null);const reconnectedLink=reconnected.project.links.find(v=>v.id===reconnectLink.id);
+  reconnectFrom=n.worldPort(reconnectBase,reconnectLink.from),reconnectTo=n.worldPort(reconnectBase,reconnectLink.to),reconnectToJ=n.junctionById(reconnectBase,reconnectLink.to.junctionId),
+  reconnectDx=reconnectTo.x-reconnectFrom.x,reconnectDy=reconnectTo.y-reconnectFrom.y,reconnectDistance=Math.hypot(reconnectDx,reconnectDy),
+  reconnectAdded=n.addJunction(reconnectBase,{x:reconnectToJ.x+reconnectDx/reconnectDistance*160,y:reconnectToJ.y+reconnectDy/reconnectDistance*160},reconnectToJ.design),
+  reconnectFixture=reconnectAdded.project,reconnectNewJ=n.junctionById(reconnectFixture,reconnectAdded.junction.id);
+reconnectNewJ.rotation=reconnectToJ.rotation;
+const reconnectTarget={junctionId:reconnectNewJ.id,armId:reconnectLink.to.armId},reconnected=n.reconnectLinkPort(reconnectFixture,reconnectLink.id,'to',reconnectTarget);assert.equal(reconnected.error,null);const reconnectedLink=reconnected.project.links.find(v=>v.id===reconnectLink.id);
 assert.equal(reconnectedLink.id,reconnectOriginal.id);assert.equal(reconnectedLink.name,reconnectOriginal.name);assert.deepEqual(reconnectedLink.via,reconnectOriginal.via);assert.deepEqual(reconnectedLink.sectionProfile,reconnectOriginal.sectionProfile);assert.deepEqual(reconnectedLink.components,reconnectOriginal.components);assert.notDeepEqual(reconnectedLink.to,reconnectOriginal.to,'safe reconnect must change only the selected semantic endpoint');
-assert(n.reconnectLinkPort(reconnectBase,reconnectLink.id,'to',reconnectLink.from).error,'reconnect must reject using the opposite Junction');
+assert(n.reconnectLinkPort(reconnectFixture,reconnectLink.id,'to',reconnectLink.from).error,'reconnect must reject using the opposite Junction');
 const occupied=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:b.id,armId:1});
 assert(occupied.error&&/เชื่อมอยู่แล้ว/.test(occupied.error));
 const facingWarningProject=n.createNetworkProject(),facingWarningLink=facingWarningProject.links[0];facingWarningProject.junctions[0].rotation=120;assert(n.linkIssues(facingWarningProject,facingWarningLink).some(v=>v.kind==='port-facing'),'existing Links must remain editable but surface a facing warning after a Junction rotates behind its corridor');
