@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified Product v1 hardening baseline before Phase 6E.1: `c2f20f05f43061f3384d14055117d63b57b8cb1e`
+Current verified Product v1 hardening baseline before Phase 6F.1: `c5dfd843bc837cc4bbbec229c0fc31e026c3d743`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -217,7 +217,8 @@ Current sequence:
    - Phase 6E.1 adds Current View / Full Network × SVG / PNG engineering figures with title, scenario, scale and concept-design disclaimer.
    - Raster basemap / aerial / local-image inclusion remains deliberately deferred until provider-aware attribution and CORS policy is explicit.
 4. **Phase 6F — Design Summary / Report**
-   - report-ready engineering state, warnings and scenario delta.
+   - Phase 6F.1 adds a canonical report model, Inspector Design Summary, normalized review findings and self-contained report-ready HTML with optional scenario delta.
+   - Report logic reuses Junction reviews, RoadLink continuity and handoff-integrity engines; do not create a separate validation path.
 
 Keep Parallel / Frontage Road and advanced CAD-like editing after these Product v1 hardening milestones.
 

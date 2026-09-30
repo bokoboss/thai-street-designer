@@ -997,3 +997,47 @@ Phase 6E.1 is intentionally **geometry-only**.
 Basemap tiles, aerial imagery and locally imported raster references are not embedded. They are rendered outside the authoritative Network SVG and may also carry provider licensing / CORS constraints. A future raster-backed export must be provider-aware and must explicitly define attribution, permission and local-image packaging behavior; the engineering export does not silently screenshot those layers.
 
 Scenario Comparison retains its own Active-vs-Reference export because its title/legend/metric semantics differ from a normal active-scenario engineering figure.
+
+
+### Phase 6F.1 canonical Design Summary and report-ready HTML
+
+The Network workspace now has a single report model that reads the same engineering state and review engines already used by editing.
+
+The summary model includes:
+
+- Network totals: Junctions, RoadLinks, enabled Arms, resolved RoadLink length;
+- main / Pocket / Receiving lane counts;
+- Roundabout and Slip counts;
+- median, signal, crossing and stop-control coverage;
+- station-based corridor component count;
+- Junction register;
+- RoadLink register;
+- canonical engineering-review findings;
+- optional active-vs-reference Scenario Comparison delta.
+
+#### Finding ownership
+
+The report does not invent a second QA engine.
+
+It reuses:
+
+- `designError()` for invalid Junction / Slip geometry;
+- `designReviews()` for Junction engineering and concept-review findings;
+- `linkIssues()` for RoadLink port/alignment/section/corridor continuity;
+- `junctionAuxiliaryHandoffIssues()` for cross-boundary provenance integrity.
+
+Finding levels are normalized only for presentation:
+
+- invalid geometry, missing ports, invalid port facing and invalid alignment → **error**;
+- engineering review, endpoint continuity mismatch and handoff warnings → **warning**;
+- advisory concept-review observations → **note**.
+
+The Inspector exposes a compact Design Summary with totals and the first six findings. Full detail is exported from **Export → Design Summary · HTML**.
+
+#### HTML report scope
+
+The HTML output is self-contained and print-friendly. It contains Engineering Summary, Junction Register, RoadLink Register, Engineering Review Findings and Scenario Delta when a reference scenario is available.
+
+User-controlled project/object text is HTML-escaped before output.
+
+The report explicitly states that it is a concept-design summary and does **not** perform traffic capacity, LOS, demand forecasting or simulation. It should therefore be used as a review/reporting artifact, not as a detailed-design certification.

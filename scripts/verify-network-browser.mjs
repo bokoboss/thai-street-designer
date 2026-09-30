@@ -365,6 +365,9 @@ try{
   const shot3d=await screenshot('network-browser-3d.png');
   const finalProject=await project();
 
+  mark('design-summary');
+  assert(await evalValue(`!!document.querySelector('[data-network-design-summary="true"]')&&Number(document.querySelector('[data-network-design-summary="true"]')?.getAttribute('data-network-design-finding-count'))>=0`),'Inspector must expose canonical Design Summary from active engineering state');
+
   mark('unified-network-export');
   await clickSelector('[data-network-export-menu="true"]');
   assert(await evalValue(`!!document.querySelector('[data-network-export="current-svg"]')&&!!document.querySelector('[data-network-export="current-png"]')&&!!document.querySelector('[data-network-export="full-svg"]')&&!!document.querySelector('[data-network-export="full-png"]')`),'Export menu must expose Current/Full × SVG/PNG');
@@ -373,6 +376,9 @@ try{
   await evalValue(`(()=>{const d=document.querySelector('.network-export-menu');if(d&&!d.open)d.open=true;return !!d?.open;})()`);
   await clickSelector('[data-network-export="current-png"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-export-menu')?.getAttribute('data-network-export-status')?.endsWith('-current.png')===true`),'Current View PNG export');
+  await evalValue(`(()=>{const d=document.querySelector('.network-export-menu');if(d&&!d.open)d.open=true;return !!d?.open;})()`);
+  await clickSelector('[data-network-export="report-html"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-export-menu')?.getAttribute('data-network-export-status')?.endsWith('.html')===true`),'Design Summary HTML export');
 
   mark('project-file-workflow');
   await clickSelector('[data-network-file-menu="true"]');
@@ -413,7 +419,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
