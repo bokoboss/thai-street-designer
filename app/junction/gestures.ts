@@ -15,9 +15,9 @@ export class PointerGesture {
   return {dx:a.x-b.x,dy:a.y-b.y,factor,before:b,after:a,count:after.length};
  }
 }
-export const clampZoom=(n:number)=>Math.max(.35,Math.min(5,n));
+export const clampZoom=(n:number,min=.35,max=5)=>Math.max(min,Math.min(max,n));
 /** Keep the point below the old gesture center below the new one. */
-export function panZoom2D(pan:Point,zoom:number,g:GestureDelta,center:Point,pixels:number){
- const next=clampZoom(zoom*g.factor),oldScale=250/zoom/pixels,newScale=250/next/pixels;
+export function panZoom2D(pan:Point,zoom:number,g:GestureDelta,center:Point,pixels:number,worldSpan=250,minZoom=.35,maxZoom=5){
+ const next=clampZoom(zoom*g.factor,minZoom,maxZoom),oldScale=worldSpan/zoom/pixels,newScale=worldSpan/next/pixels;
  return {zoom:next,pan:{x:pan.x+(g.before.x-center.x)*oldScale-(g.after.x-center.x)*newScale,y:pan.y+(g.before.y-center.y)*oldScale-(g.after.y-center.y)*newScale}};
 }

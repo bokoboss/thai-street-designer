@@ -1,1 +1,1 @@
-export {default} from './junction/page';
+export {default} from './network/page';
