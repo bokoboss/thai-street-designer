@@ -120,7 +120,7 @@ Because Slip width may transition between connected lane width and requested cha
 
 Do not assume one constant width across the entire Slip.
 
-Phase 6B uses about **6 m downstream clear distance** as a concept-review trigger when the zebra is pushed close to the Slip exit / downstream control-conflict area. This is based on the “about one vehicle length” separation principle found in supplementary FHWA channelized-turn guidance. It is **not** a Thai statutory or design-standard minimum and therefore remains a review warning rather than geometry rejection.
+Phase 6B records downstream clear distance explicitly, but does **not** turn the supplementary “about one vehicle length” guidance into an automatic threshold. Runtime Review only intervenes when the zebra is effectively touching the end of the Slip turning roadway. Project-specific control strategy, visibility and storage remain engineering-review inputs rather than hidden software warrants.
 
 ## 8. Width transition principle
 

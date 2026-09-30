@@ -843,7 +843,7 @@ The first engineering-audit pass after the golden visual suite intentionally cha
 - Ownership is coherent: Slip remains a schema-v6 overlay; base Junction edges are unchanged.
 - 2D, section resolution and 3D scene surfaces consume the same Slip-owned geometry.
 - The previous review rule that flagged every `acceleration + crossing` combination was too broad.
-- Review is now station-based: the engine measures clear distance from the downstream edge of the zebra crossing to the end of the Slip and only flags a short downstream clearance (about 6 m concept reference).
+- Review is now station-based: the engine measures clear distance from the downstream edge of the zebra crossing to the end of the Slip. It flags only endpoint-level geometric crowding; supplementary vehicle-length guidance is documented but not enforced as a Product v1 threshold.
 - Existing geometry errors for insufficient auxiliary / departure / acceleration length remain unchanged.
 
 #### Roundabout findings
@@ -852,7 +852,7 @@ The first engineering-audit pass after the golden visual suite intentionally cha
 - The documented crossing review had drifted from implementation. Phase 6B restores it with explicit per-Arm metrics:
   - representative crossing setback from the entry yield reference;
   - actual finite splitter refuge width at the zebra station.
-- Review flags a crossing setback below about 7.5 m, a splitter refuge below about 1.8 m, or a crossing that sits beyond the finite splitter refuge. These are supplementary concept references, not Thai compliance checks.
+- The audit records the commonly cited ~7.5 m crossing setback and ~1.8 m refuge width as reference metrics, but does not warn merely because they are missed. Runtime Review flags physical/semantic conflicts instead: zebra/yield overlap and crossings outside the finite splitter refuge.
 - Multilane path design, fastest-path speed, swept paths and design-vehicle certification remain deliberately out of Product v1 geometry automation.
 
 #### Source check

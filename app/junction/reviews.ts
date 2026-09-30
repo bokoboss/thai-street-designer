@@ -77,11 +77,11 @@ export function designReviews(d:Design):Review[]{
       const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.id===slip.id);
       if(slipGeom){
         const clearance=slipCrossingClearance(slipGeom,slip);
-        if(clearance.downstream<6){
+        if(clearance.downstream<.75){
           out.push({
             level:'engineering',
             selection:{kind:'slipCrossing',arm:i},
-            message:`${a.name} · ทางข้ามบน Slip เหลือระยะหลัง zebra ถึงปลาย Slip ประมาณ ${clearance.downstream.toFixed(1)} ม.${slip.departure.mode==='acceleration'?' ก่อนเข้าสู่ acceleration treatment':''} — ทบทวนตำแหน่งทางข้าม/แนวควบคุม; ~6 ม. ใช้เป็น concept review ไม่ใช่มาตรฐานไทย`
+            message:`${a.name} · ปลาย zebra บน Slip เกือบชนปลาย turning roadway (เหลือประมาณ ${clearance.downstream.toFixed(1)} ม.) — ขยับทางข้ามเข้าด้านในก่อนใช้ภาพ concept`
           });
         }
       }

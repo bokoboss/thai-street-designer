@@ -41,9 +41,8 @@ export function roundArmAudit(d:Design,armId:number):RoundArmAudit{
 export function roundArmFeedback(d:Design,armId:number){
  const a=d.arms[armId];if(d.type!=='roundabout'||!d.enabled[armId]||!a.crossing)return[];
  const m=roundArmAudit(d,armId),warnings:string[]=[];
- if(m.crossingSetback<7.5)warnings.push(`${a.name} · ทางข้ามอยู่ใกล้แนวให้ทาง เหลือระยะประมาณ ${m.crossingSetback.toFixed(1)} ม. — ทบทวน visibility / yielding; 7.5 ม. เป็นแนวอ้างอิง concept จาก FHWA ไม่ใช่มาตรฐานไทย`);
+ if(m.crossingSetback<.5)warnings.push(`${a.name} · ทางข้ามเกือบซ้อนแนวให้ทางของวงเวียน — ขยับทางข้ามออกจาก conflict area ก่อนใช้ภาพ concept`);
  if(m.refugeWidth<.05)warnings.push(`${a.name} · ทางข้ามอยู่นอกช่วง Splitter ที่มีพื้นที่พักคนข้าม — ทบทวนตำแหน่งทางข้ามหรือความยาว Splitter`);
- else if(m.refugeWidth<1.8)warnings.push(`${a.name} · พื้นที่พักคนข้ามใน Splitter ณ ทางข้ามประมาณ ${m.refugeWidth.toFixed(1)} ม. — ควรทบทวน refuge; 1.8 ม. เป็นแนวอ้างอิง concept จาก FHWA ไม่ใช่มาตรฐานไทย`);
  return warnings;
 }
 export function roundFeedback(d:Design){const r=roundSettings(d),maxEntry=Math.max(...d.arms.filter((_,i)=>d.enabled[i]).map(a=>a.incoming*(a.incomingSection?.width??a.width)));const warnings:string[]=[];if(d.ring>1)warnings.push('วงเวียนหลายเลนยังเป็นแบบแนวคิด ต้องตรวจเส้นทางรถและการทับซ้อนระหว่างเลน');if(d.arms.some((a,i)=>d.enabled[i]&&Math.min(a.incoming*(a.incomingSection?.width??a.width)+a.median/2,a.outgoing*(a.outgoingSection?.width??a.width)+a.median/2)-r.splitterWidth/2<2.5))warnings.push('Splitter กินความกว้างทางเข้า/ออกมาก ควรทบทวนช่องว่างรถผ่าน — เกณฑ์ภาพแนวคิด ไม่ใช่มาตรฐาน');if(maxEntry>d.circulation)warnings.push('ความกว้างทางเข้ามากกว่าช่องจราจรวน ต้องทบทวนจำนวนเลนและการรวมช่อง');if(r.entryRadius>2*d.radius)warnings.push('โค้งทางเข้าค่อนข้างราบ อาจบังคับเบนแนวรถได้น้อย ควรตรวจแนววิ่ง');return warnings;}
