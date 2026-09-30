@@ -929,3 +929,36 @@ Reconnect is one normal NetworkProject transaction and one Undo restores the ori
 
 
 Phase 6C.3 acceptance note: candidate availability is geometry-dependent. A Link may legitimately have no alternative safe port in the current layout; in that state the reconnect selector stays on the committed endpoint and is disabled rather than offering an invalid choice. Model regression uses a dedicated aligned reconnect fixture to exercise the actual endpoint transaction deterministically.
+
+
+### Phase 6D.1 portable Project JSON
+
+The Network workspace now has an explicit project-file workflow separate from browser autosave.
+
+The **File** menu provides:
+
+- **New Project**;
+- **Open JSON…**;
+- **Save JSON**;
+- **Save As…** with an explicit file name.
+
+Portable files use a small versioned envelope:
+
+- `format = "thai-street-designer-network"`;
+- `fileVersion = 1`;
+- complete Scenario Workspace v1 payload.
+
+The payload therefore includes every scenario and all NetworkProject v3 / Junction Design v6 engineering state. The loader also accepts the older raw Scenario Workspace v1 and raw NetworkProject v1/v2/v3 forms, normalizing them through the existing migration path rather than creating a second importer.
+
+Browser autosave and project-file state are deliberately separate. Opening a file establishes a clean file baseline; later engineering edits mark the file state as dirty. A new project has no saved file baseline and is therefore marked dirty until saved.
+
+Because normal web downloads cannot overwrite an arbitrary local file path, **Save JSON** downloads using the remembered/opened filename and **Save As** chooses a new download filename. This is explicit UI behavior rather than pretending the browser has desktop-file write access.
+
+The v1 project file is intentionally an **engineering project file**. It does not contain:
+
+- map-provider credentials;
+- Undo/Redo stacks;
+- current pan/zoom/selection/view UI state;
+- locally imported JPG/PNG bytes.
+
+Those remain browser/session concerns. Local image embedding or a multi-file package would require a separate portability design rather than silently inflating the JSON file.

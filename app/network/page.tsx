@@ -11,6 +11,7 @@ import {applyJunctionAuxiliaryProposal,continueJunctionAuxiliaryToCorridor,detac
 import {NetworkComparisonGhost,NetworkDrawing,type NetworkComparisonFocus,type NetworkSelection} from './network-drawing';
 import {SCENARIO_CHANGE_FILTERS,compareNetworkProjects,filterScenarioObjectDeltas,scenarioObjectBounds,scenarioObjectInspection,type ScenarioChangeFilter,type ScenarioObjectDelta} from '@/lib/network-scenario-comparison';
 import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/lib/network-scenarios';
+import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/lib/network-project-file';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
@@ -83,10 +84,11 @@ export default function NetworkWorkspace(){
     [calibrationPoints,setCalibrationPoints]=useState<WorldPoint[]>([]),[calibrationDistance,setCalibrationDistance]=useState(20),
     [compareScenarioId,setCompareScenarioId]=useState<string|null>(null),[compareGhostVisible,setCompareGhostVisible]=useState(false),
     [comparisonFilter,setComparisonFilter]=useState<ScenarioChangeFilter>('all'),[comparisonFocus,setComparisonFocus]=useState<NetworkComparisonFocus>(null),
-    [comparisonExporting,setComparisonExporting]=useState<'svg'|'png'|null>(null),[comparisonExportStatus,setComparisonExportStatus]=useState('');
+    [comparisonExporting,setComparisonExporting]=useState<'svg'|'png'|null>(null),[comparisonExportStatus,setComparisonExportStatus]=useState(''),
+    [projectFileName,setProjectFileName]=useState(''),[projectFileBaseline,setProjectFileBaseline]=useState<string|null>(null),[saveAsDraft,setSaveAsDraft]=useState<string|null>(null),[fileReplaceArmed,setFileReplaceArmed]=useState<'new'|'open'|null>(null);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),scenarioWorkspaceRef=useRef(scenarioWorkspace),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),scenarioHistoryRef=useRef(new Map<string,{past:NetworkProject[];future:NetworkProject[]}>()),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
-    localImageInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
+    localImageInput=useRef<HTMLInputElement>(null),networkProjectFileInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
 
   const viewWidthMeters=NETWORK_VIEW_SPAN/zoom,scaleMeters=niceScaleMeters(viewWidthMeters*.18),scaleWidthPercent=scaleMeters/viewWidthMeters*100;
   useEffect(()=>{projectRef.current=project;},[project]);
@@ -148,7 +150,10 @@ export default function NetworkWorkspace(){
     selectedAuxiliaryProposals=selectedLink?junctionAuxiliaryProposals(project,selectedLink):[],
     selectedHandoffIssues=selectedLink?junctionAuxiliaryHandoffIssues(project,selectedLink):[],
     selectedConnectedLinkIds=selectedJunction?junctionConnectedLinkIds(project,selectedJunction.id):[],
-    deleteArmedForSelection=!!selection&&!!deleteArmed&&selection.kind===deleteArmed.kind&&selection.id===deleteArmed.id;
+    deleteArmedForSelection=!!selection&&!!deleteArmed&&selection.kind===deleteArmed.kind&&selection.id===deleteArmed.id,
+    projectFileSignature=JSON.stringify(scenarioWorkspace),
+    projectFileDirty=projectFileBaseline===null||projectFileBaseline!==projectFileSignature,
+    suggestedProjectFileName=`${safeFilePart(scenarioWorkspace.scenarios.find(s=>s.kind==='existing')?.project.title??project.title??'street-project')}.tsd.json`;
 
   function setProjectNow(next:NetworkProject){
     projectRef.current=next;setProject(next);
@@ -168,7 +173,7 @@ export default function NetworkWorkspace(){
   }
   function commit(next:NetworkProject,before=projectRef.current){
     if(next===before)return;
-    setDeleteArmed(null);remember(before);setProjectNow(next);
+    setDeleteArmed(null);setFileReplaceArmed(null);remember(before);setProjectNow(next);
   }
   function undo(){
     const history=pastRef.current,previous=history.at(-1);if(!previous)return;
@@ -210,6 +215,36 @@ export default function NetworkWorkspace(){
     const id=scenarioWorkspaceRef.current.activeScenarioId,scenario=activeNetworkScenario(scenarioWorkspaceRef.current),result=removeNetworkScenario(scenarioWorkspaceRef.current,id);
     if(result.error){setNotice(result.error);return;}
     scenarioHistoryRef.current.delete(id);if(result.workspace.scenarios.length<2){setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);}installScenarioWorkspace(result.workspace,`ลบ ${scenario.name} แล้ว · กลับ Existing`,false);
+  }
+  function normalizeProjectFileName(value:string){
+    const trimmed=value.trim().replace(/[\\/:*?"<>|]+/g,'-').replace(/^\.+/,'').slice(0,100);
+    return !trimmed?suggestedProjectFileName:/\.json$/i.test(trimmed)?trimmed:trimmed+'.tsd.json';
+  }
+  function downloadProjectFile(name:string){
+    const workspace=scenarioWorkspaceRef.current,fileName=normalizeProjectFileName(name),blob=new Blob([serializeNetworkProjectFile(workspace)],{type:'application/json;charset=utf-8'}),
+      url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fileName;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setProjectFileName(fileName);setProjectFileBaseline(JSON.stringify(workspace));setSaveAsDraft(null);setFileReplaceArmed(null);setNotice(`บันทึก ${fileName} แล้ว · browser ดาวน์โหลด Project JSON และ autosave ยังคงแยกอยู่ในเครื่องนี้`);
+  }
+  function saveProjectFile(){downloadProjectFile(projectFileName||suggestedProjectFileName);}
+  function requestNewProjectFile(){
+    if(projectFileDirty&&fileReplaceArmed!=='new'){setFileReplaceArmed('new');setNotice('Project ปัจจุบันมีการเปลี่ยนแปลงที่ยังไม่ได้ Save เป็นไฟล์ · กด New อีกครั้งเพื่อยืนยัน (browser autosave ยังอยู่จนกว่าจะสร้างไฟล์ใหม่)');return;}
+    const next=createNetworkScenarioWorkspace(),nextProject=activeNetworkProject(next);scenarioHistoryRef.current.clear();installScenarioWorkspace(next,'สร้าง Project ใหม่แล้ว · engineering state เริ่มจาก Network demo ใหม่',false);
+    setProjectFileName('');setProjectFileBaseline(null);setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');setPan({x:0,y:0});setZoom(1);setSelection({kind:'junction',id:nextProject.junctions[0]?.id??'J-1'});
+  }
+  function requestOpenProjectFile(){
+    if(projectFileDirty&&fileReplaceArmed!=='open'){setFileReplaceArmed('open');setNotice('Project ปัจจุบันมีการเปลี่ยนแปลงที่ยังไม่ได้ Save เป็นไฟล์ · กด Open อีกครั้งเพื่อเลือกไฟล์ใหม่');return;}
+    setFileReplaceArmed(null);networkProjectFileInput.current?.click();
+  }
+  async function openProjectFile(file:File|undefined){
+    if(!file)return;
+    if(file.size>20*1024*1024){setNotice('Project JSON ใหญ่เกิน 20 MB · ตรวจว่าเลือกไฟล์ Thai Street Designer ถูกต้อง');return;}
+    try{
+      const parsed=parseNetworkProjectFile(await file.text()),workspace=parsed.workspace,nextProject=activeNetworkProject(workspace),b=projectBounds(nextProject);
+      scenarioHistoryRef.current.clear();installScenarioWorkspace(workspace,`เปิด ${file.name} แล้ว · ${workspace.scenarios.length} scenario`,false);
+      setProjectFileName(file.name);setProjectFileBaseline(JSON.stringify(workspace));setSaveAsDraft(null);setFileReplaceArmed(null);setCompareScenarioId(null);setCompareGhostVisible(false);setComparisonFocus(null);setView('2d');
+      setPan({x:b.x+b.w/2,y:b.y+b.h/2});setZoom(clampZoom(NETWORK_VIEW_SPAN/Math.max(b.w,b.h)*.9,NETWORK_MIN_ZOOM,Math.min(4.5,NETWORK_MAX_ZOOM)));
+      setSelection(nextProject.junctions[0]?{kind:'junction',id:nextProject.junctions[0].id}:null);
+    }catch(error){setNotice('เปิด Project ไม่สำเร็จ · '+(error instanceof Error?error.message:'ไฟล์ไม่ถูกต้อง'));}
   }
   function inspectComparisonObject(item:ScenarioObjectDelta){
     if(!comparisonScenario)return;
@@ -681,10 +716,13 @@ export default function NetworkWorkspace(){
   function deleteSelection(){requestDelete(selection);}
   function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
 
-  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setDeleteArmed(null);setPendingPort(null);setLinkCursor(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
+  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setDeleteArmed(null);setFileReplaceArmed(null);setSaveAsDraft(null);setPendingPort(null);setLinkCursor(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
-      <div className="network-header-actions"><button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset scenario</button></div>
+      <div className="network-header-actions">
+        <details className="network-file-menu"><summary data-network-file-menu="true">File ▾</summary><div className="network-file-popover"><div className="network-file-status" data-network-file-status="true" data-network-file-dirty={projectFileDirty?'true':'false'}><b>{projectFileName||'Browser autosave'}</b><span>{projectFileDirty?'Unsaved file changes':'Saved to JSON'}</span></div><input ref={networkProjectFileInput} data-network-file-input="true" type="file" accept=".json,.tsd.json,application/json" hidden onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';void openProjectFile(file);}}/><button data-network-file-action="new" data-network-file-armed={fileReplaceArmed==='new'?'true':'false'} onClick={requestNewProjectFile}>{fileReplaceArmed==='new'?'Confirm New Project':'New Project'}</button><button data-network-file-action="open" data-network-file-armed={fileReplaceArmed==='open'?'true':'false'} onClick={requestOpenProjectFile}>{fileReplaceArmed==='open'?'Confirm Open…':'Open JSON…'}</button><button data-network-file-action="save" onClick={saveProjectFile}>Save JSON</button><button data-network-file-action="save-as" onClick={()=>{setSaveAsDraft(projectFileName||suggestedProjectFileName);setFileReplaceArmed(null);}}>Save As…</button>{saveAsDraft!==null&&<div className="network-file-saveas"><input data-network-file-saveas-name value={saveAsDraft} onChange={e=>setSaveAsDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();downloadProjectFile(saveAsDraft);}if(e.key==='Escape'){e.preventDefault();setSaveAsDraft(null);}}}/><button data-network-file-saveas-confirm onClick={()=>downloadProjectFile(saveAsDraft)}>Download</button></div>}<p>Project JSON = Scenario Workspace + Network/Junction engineering state. Map credentials, Undo history, view state และ local-image bytes ไม่รวมในไฟล์.</p></div></details>
+        <button data-network-action="undo" onClick={undo} disabled={!past.length}><Undo2 size={15}/> Undo</button><button data-network-action="redo" onClick={redo} disabled={!future.length}><Redo2 size={15}/> Redo</button><button data-network-action="fit" onClick={fit}><Maximize2 size={15}/> Fit</button><button onClick={reset}>Reset scenario</button>
+      </div>
     </header>
     <nav className="network-scenario-strip" data-network-scenarios={scenarioWorkspace.scenarios.length} data-network-active-scenario={currentScenario.id}>
       <div className="network-scenario-tabs">{scenarioWorkspace.scenarios.map(scenario=><button key={scenario.id} data-network-scenario={scenario.id} className={scenario.id===currentScenario.id?'active':''} title={scenario.sourceScenarioId?`Created from ${scenarioWorkspace.scenarios.find(s=>s.id===scenario.sourceScenarioId)?.name??scenario.sourceScenarioId}`:'Baseline existing condition'} onClick={()=>selectScenario(scenario.id)}><span>{scenario.kind==='existing'?'BASE':'ALT'}</span><b>{scenario.name}</b></button>)}</div>

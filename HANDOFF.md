@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified Product v1 hardening baseline before Phase 6C.3: `c487e0c803196191b38d028ae6cca7d1c1359721`
+Current verified Product v1 hardening baseline before Phase 6D.1: `42c5cd756f756293d39b8cc4c096e5fdfd42e7dd`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -211,7 +211,8 @@ Current sequence:
    - safe cascade-delete + Undo completed;
    - safe endpoint reconnect preserving Link-owned state completed in Phase 6C.3.
 2. **Phase 6D — Project File Workflow**
-   - New / Open / Save / Save As / Import / Export with explicit project-file ownership.
+   - Phase 6D.1 adds versioned portable Project JSON, New / Open / Save / Save As, dirty-file status and legacy import through the canonical migration path.
+   - Keep local raster bytes and credentials outside engineering JSON unless a later packaging design explicitly owns them.
 3. **Phase 6E — Unified Network Export**
    - current/full-network output, scale/legend/title treatment and map/reference inclusion policy.
 4. **Phase 6F — Design Summary / Report**
