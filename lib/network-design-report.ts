@@ -1,5 +1,5 @@
 import {designError} from '../app/junction/design-validation';
-import {pocketsFor,sectionFor} from '../app/junction/model';
+import {pocketsFor} from '../app/junction/model';
 import {designReviews} from '../app/junction/reviews';
 import {junctionAuxiliaryHandoffIssues} from './junction-auxiliary-proposal';
 import {compareNetworkProjects,type ScenarioComparison} from './network-scenario-comparison';
@@ -62,7 +62,7 @@ export function buildNetworkDesignReport(project:NetworkProject,scenarioName:str
     const ids=activeArmIds(junction),arms=ids.map(id=>junction.design.arms[id]);
     const invalid=designError(junction.design);
     if(invalid)findings.push({level:'error',objectKind:'junction',objectId:junction.id,objectName:junction.name,category:'geometry',message:invalid});
-    for(const review of designReviews(junction.design))findings.push({
+    else for(const review of designReviews(junction.design))findings.push({
       level:review.level==='geometry'?'error':review.level==='engineering'?'warning':'note',
       objectKind:'junction',objectId:junction.id,objectName:junction.name,category:review.level,message:review.message
     });
