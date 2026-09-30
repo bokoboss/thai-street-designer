@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdirSync,rmSync,writeFileSync} from 'node:fs';
 import {createServer} from 'node:net';
@@ -141,10 +142,37 @@ try{
     }
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x+dx,y:p.y+dy,button:'left',clickCount:1,modifiers});
   }
-  async function screenshot(name){
+  async function captureScreenshot(name){
     const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false},20000);
     const bytes=Buffer.from(shot.data,'base64');assert(bytes.length>5000,'Screenshot is unexpectedly small: '+name);
-    writeFileSync(artifactDir+'/'+name,bytes);return bytes.length;
+    writeFileSync(artifactDir+'/'+name,bytes);
+    return{file:name,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+  }
+  async function screenshot(name){return (await captureScreenshot(name)).bytes;}
+  const goldenArtifacts=[];
+  async function goldenScreenshot(id,contract){
+    const meta=await captureScreenshot('network-browser-golden-'+id+'.png');
+    const item={id,...meta,contract};goldenArtifacts.push(item);return item;
+  }
+  async function loadJunctionGolden(id,mutateBody,contractBody){
+    mark('golden-'+id);
+    await send('Page.navigate',{url:baseUrl+'junction/'});
+    await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.junction-app')`),'Junction workspace '+id);
+    await evalValue(`localStorage.clear();true`);
+    await send('Page.reload',{ignoreCache:true});
+    await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.junction-app')`),'clean Junction workspace '+id);
+    await waitFor(()=>evalValue(`!!localStorage.getItem('thai-street-design-v2')`),'default Junction autosave '+id,7000);
+    const title='Golden · '+id;
+    await evalValue(`(()=>{const d=JSON.parse(localStorage.getItem('thai-street-design-v2'));d.title=${JSON.stringify(title)};${mutateBody};localStorage.setItem('thai-street-design-v2',JSON.stringify(d));return true;})()`);
+    await send('Page.reload',{ignoreCache:true});
+    await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.junction-app')`),'reload Junction golden '+id);
+    await clickSelector('[data-junction-file-menu="true"]');
+    await clickSelector('[data-junction-open-latest="true"]');
+    await waitFor(()=>evalValue(`document.querySelector('input[aria-label="ชื่อแบบ"]')?.value===${JSON.stringify(title)}`),'activate Junction golden '+id);
+    await sleep(180);
+    const contract=await evalValue(`(()=>{${contractBody}})()`);
+    assert(contract?.ok,'Golden visual contract failed: '+id+' '+JSON.stringify(contract));
+    return goldenScreenshot(id,contract);
   }
   const scenarioWorkspace=()=>evalValue(`(()=>{try{return JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null')}catch{return null}})()`);
   const project=()=>evalValue(`(()=>{try{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')||'null');if(w?.workspaceVersion===1&&Array.isArray(w.scenarios))return w.scenarios.find(s=>s.id===w.activeScenarioId)?.project??null;return w}catch{return null}})()`);
@@ -180,6 +208,9 @@ try{
   assert(await evalValue(`document.querySelector('[data-network-comparison-detail="Main lanes"]')?.classList.contains('changed')===true`),'before/after inspector must mark changed main-lane values');
   assert(await evalValue(`Number(document.querySelector('.network-zoom')?.getAttribute('data-network-zoom-value')||1)>${comparisonZoomBefore}`),'comparison inspection should zoom toward the focused object');
   await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'inspection auto-enables the read-only Existing ghost');
+  const comparisonGoldenContract=await evalValue(`(()=>{const active=document.querySelector('[data-network-junction="J-1"][data-network-comparison-active-focus="true"]'),reference=document.querySelector('[data-network-comparison-junction="J-1"][data-network-comparison-reference-focus="true"]'),summary=document.querySelector('[data-network-comparison-presentation-summary="true"]');return{ok:!!active&&!!reference&&!!summary&&!!document.querySelector('[data-network-comparison-ghost="true"]'),activeFocus:!!active,referenceFocus:!!reference,summary:!!summary};})()`);
+  assert(comparisonGoldenContract?.ok,'Scenario comparison golden contract failed');
+  await goldenScreenshot('scenario-comparison',comparisonGoldenContract);
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-select-active]')`),'changed active object must expose a direct Select Active action');
   await clickSelector('[data-network-comparison-select-active]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-junction="J-1"] [data-network-instance-selection="true"]')`),'comparison review can select the focused Active object for editing without touching Reference');
@@ -304,12 +335,31 @@ try{
   await waitFor(()=>evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return Math.abs(Number(c?.getAttribute('data-network-camera-pan-x')||0))<.001&&Math.abs(Number(c?.getAttribute('data-network-camera-pan-y')||0))<.001;})()`),'3D Fit recenters camera');
   await sleep(600);
   const shot3d=await screenshot('network-browser-3d.png');
-
-  assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   const finalProject=await project();
+
+  mark('golden-junction-suite');
+  await loadJunctionGolden('no-median-crosswalk',
+    `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),cross=svg?.querySelector('[data-crosswalk-arm="0"]'),center=svg?.querySelector('[data-centerline="true"]'),stripes=cross?.querySelectorAll('[data-crosswalk-stripe="true"]').length??0,start=Number(cross?.getAttribute('data-crosswalk-span-start')),end=Number(cross?.getAttribute('data-crosswalk-span-end')),span=Math.abs(end-start);return{ok:!!svg&&!!cross&&center?.getAttribute('data-centerline-stop-trimmed')==='true'&&stripes>=8&&span>12,crosswalkStripes:stripes,crosswalkSpan:+span.toFixed(2),centerlineTrimmed:center?.getAttribute('data-centerline-stop-trimmed')};`
+  );
+  await loadJunctionGolden('asymmetric-auxiliary',
+    `d.arms[0].angle=12;d.arms[1].angle=100;d.arms[2].angle=192;d.arms[3].angle=282;const a=d.arms[0];a.median=5;a.incomingSection={width:3.5,walk:2.5,bands:[{id:'gold-bike',type:'bike',width:1.5}]};a.outgoingSection={width:3.25,walk:1.5,bands:[{id:'gold-shoulder',type:'shoulder',width:1}]};a.incomingPockets={left:{lanes:0,length:25,taper:15},right:{lanes:1,length:30,taper:20,width:3.25,allocation:'auto'}};a.outgoingPockets={left:{lanes:1,length:25,taper:20,width:3,allocation:'auto'},right:{lanes:0,length:25,taper:15}};a.laneMarkings=undefined`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),inPocket=svg?.querySelectorAll('[data-pocket-lane="incoming-right"]').length??0,outPocket=svg?.querySelectorAll('[data-pocket-lane="outgoing-left"]').length??0,bike=svg?.querySelectorAll('[data-band="bike"]').length??0,shoulder=svg?.querySelectorAll('[data-band="shoulder"]').length??0,walkIn=svg?.querySelectorAll('[data-resolved-sidewalk="incoming"]').length??0,walkOut=svg?.querySelectorAll('[data-resolved-sidewalk="outgoing"]').length??0;return{ok:!!svg&&inPocket===1&&outPocket===1&&bike>=1&&shoulder>=1&&walkIn>=1&&walkOut>=1,inPocket,outPocket,bike,shoulder,walkIn,walkOut};`
+  );
+  await loadJunctionGolden('slip-acceleration',
+    `d.slips=[{id:'slip-0',fromArm:0,toArm:1,width:4,radius:28,approach:{mode:'auxiliary',width:3.5,storage:25,taper:18},departure:{mode:'acceleration',width:3.5,length:42,merge:28,separator:'raised',separatorWidth:1.2},crossing:{enabled:true,offset:12}}]`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),overlay=svg?.querySelectorAll('[data-slip-overlay="true"]').length??0,approach=svg?.querySelectorAll('[data-slip-approach-pavement="true"]').length??0,departure=svg?.querySelectorAll('[data-slip-departure-pavement="true"]').length??0,island=svg?.querySelectorAll('[data-slip-receiving-island="true"]').length??0,crossing=svg?.querySelectorAll('[data-slip-crossing="true"]').length??0,stripes=svg?.querySelectorAll('[data-slip-crossing-stripe="true"]').length??0;return{ok:!!svg&&overlay===1&&approach===1&&departure===1&&island===1&&crossing===1&&stripes>=3,overlay,approach,departure,island,crossing,stripes};`
+  );
+  await loadJunctionGolden('roundabout-single-lane',
+    `d.type='roundabout';d.slips=[];d.ring=1;d.circulation=5.5;d.radius=15;d.roundabout={apron:1.5,entryRadius:18,exitRadius:24,splitterLength:24,splitterWidth:2.2,yieldOffset:1};d.arms=d.arms.map(a=>({...a,incoming:1,outgoing:1,median:2,medianOffset:0,crossOffset:9,signal:false,stop:true,length:100,incomingPockets:undefined,outgoingPockets:undefined,laneMarkings:undefined,arrows:['straight','straight','straight','straight']}))`,
+    `const svg=document.querySelector('[data-junction-plan="true"]'),central=svg?.querySelectorAll('[data-central-island="true"]').length??0,apron=svg?.querySelectorAll('[data-truck-apron="true"]').length??0,splitter=svg?.querySelectorAll('[data-median-profile="splitter-and-median"]').length??0,crosswalk=svg?.querySelectorAll('[data-crosswalk="true"]').length??0,signals=svg?.querySelectorAll('[data-traffic-signal="true"]').length??0;return{ok:!!svg&&central===1&&apron===1&&splitter===4&&crosswalk===4&&signals===0,central,apron,splitter,crosswalk,signals};`
+  );
+
+  writeFileSync(artifactDir+'/network-browser-golden-manifest.json',JSON.stringify({schema:1,viewport:{width:1440,height:1000},artifacts:goldenArtifacts},null,2));
+  assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
-  writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: scenario presentation/export + change inspection + review navigation + active selection → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
+  console.log('PASS browser acceptance + golden visual suite: scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

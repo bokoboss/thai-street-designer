@@ -805,3 +805,26 @@ The export is deterministic and geometry-first:
 Online basemap tiles and locally imported raster reference images are intentionally excluded from this export path. This avoids cross-origin / licensing ambiguity and produces a stable figure suitable for reports and presentations. Raster-backed presentation export can be added later as a separate, provider-aware workflow.
 
 Export state is UI-only. It does not mutate the active scenario, the reference scenario, Undo/Redo history or persisted engineering JSON.
+
+
+### Phase 6A.1 deterministic golden visual suite
+
+Product v1 hardening now has a deterministic browser-level visual acceptance set in addition to the existing geometry/model regressions.
+
+The headless-Chrome acceptance run captures named screenshots for these high-risk reference cases:
+
+1. **Scenario comparison** — Active + Reference ghost, focused change and presentation summary.
+2. **No-median crosswalk** — one approach with no median, a full-width zebra crossing and stop-trimmed centerline.
+3. **Asymmetric auxiliary section** — skewed Arm layout, directional section differences, a median-side incoming Pocket and curb-side outgoing Receiving lane.
+4. **Slip acceleration** — Slip-owned approach auxiliary, acceleration departure, raised separator and Slip crossing.
+5. **Single-lane roundabout** — central island, truck apron, four splitter/median profiles and four pedestrian crossings.
+6. The existing browser artifacts continue to cover the resolved multi-Junction RoadLink/corridor view and resolved Network 3D.
+
+Each named golden case has two protections:
+
+- a **semantic visual contract** asserted against rendered SVG/DOM attributes, so missing or structurally wrong visual elements fail CI;
+- a deterministic **1440 × 1000 PNG artifact** with SHA-256 recorded in `network-browser-golden-manifest.json` for visual review and future baseline promotion.
+
+This phase deliberately does not lock raw screenshot hashes as pass/fail criteria yet. Browser/font rasterization can differ across runtime updates; exact pixel baselines should only be promoted after the reference images have been visually accepted and the CI rendering environment is deliberately pinned. The semantic contract remains the automated gate in the meantime.
+
+The golden suite is part of the existing `pnpm test:browser` Quality gate and is uploaded with the browser acceptance artifacts. No engineering schema or production feature behavior is changed by this test instrumentation.

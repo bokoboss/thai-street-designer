@@ -37,7 +37,7 @@ jobs:
         run: pnpm test:builds
       - name: Network browser acceptance
         run: pnpm test:browser
-      - name: Upload browser acceptance screenshot
+      - name: Upload browser acceptance and golden artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
