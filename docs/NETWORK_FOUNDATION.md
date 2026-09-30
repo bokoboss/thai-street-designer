@@ -728,3 +728,37 @@ Phase 5C.4 keeps comparison read-only with respect to the Reference scenario, bu
 - Browser acceptance verifies change focus → Active selection → next/previous review navigation while preserving the Reference as a non-interactive ghost.
 
 This closes the loop from **find change → inspect before/after → select the Active engineering object → edit with the normal Network tools** without adding a parallel comparison-editing model.
+
+
+### Phase 5C.5 scenario comparison presentation and export
+
+Phase 5C.5 adds a presentation layer to the existing read-only comparison workflow without changing Scenario Workspace v1, NetworkProject v3 or Junction Design v6.
+
+#### On-screen presentation summary
+
+The comparison bar now exposes an explicit visual legend:
+
+- **Active** = teal;
+- **Reference** = orange.
+
+The Inspector adds a compact presentation summary with the number of engineering objects that differ and up to four non-zero headline metric deltas. The detailed metric table and semantic object list remain available underneath for audit work.
+
+#### Comparison figure export
+
+The active/reference comparison can be exported directly as:
+
+- **SVG** for vector editing and report production;
+- **PNG** for slides and quick sharing.
+
+The export is deterministic and geometry-first:
+
+1. it switches to the 2D comparison view and ensures the Reference ghost is present;
+2. it uses the union of Active and Reference project bounds, so moved/removed geometry is not clipped;
+3. it removes editing-only hit areas, ports, grips, PI handles and calibration guides;
+4. it keeps the engineering geometry, markings and comparison ghost;
+5. it adds a clean title band containing the scenario direction, Active/Reference legend, Added/Removed/Changed counts and headline metric deltas;
+6. it uses a white engineering background with a very light grid.
+
+Online basemap tiles and locally imported raster reference images are intentionally excluded from this export path. This avoids cross-origin / licensing ambiguity and produces a stable figure suitable for reports and presentations. Raster-backed presentation export can be added later as a separate, provider-aware workflow.
+
+Export state is UI-only. It does not mutate the active scenario, the reference scenario, Undo/Redo history or persisted engineering JSON.

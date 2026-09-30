@@ -170,6 +170,7 @@ try{
   await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[laneArm]?.incoming===scenarioLaneBefore+1;},'edit existing Junction lane only in Alt A');
   await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),junctions=document.querySelector('[data-network-comparison-metric="junctions"]'),lanes=document.querySelector('[data-network-comparison-metric="mainLanes"]');return bar?.getAttribute('data-network-comparison-active')==='alt-1'&&bar?.getAttribute('data-network-comparison-reference')==='existing'&&Number(junctions?.getAttribute('data-network-comparison-delta'))===1&&Number(lanes?.getAttribute('data-network-comparison-delta'))>0;})()`),'Alt A semantic comparison against Existing');
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-object="added"]')`),'comparison summary must identify the added Alt A junction');
+  assert(await evalValue(`!!document.querySelector('[data-network-comparison-presentation-summary="true"]')&&!!document.querySelector('.network-comparison-legend .active')&&!!document.querySelector('.network-comparison-legend .reference')`),'comparison presentation summary and Active/Reference legend must be visible');
   assert.equal(await evalValue(`!!document.querySelector('[data-network-comparison-ghost="true"]')`),false,'comparison ghost must remain opt-in until an inspection action');
   await clickSelector('[data-network-comparison-filter="lanes"]');
   await waitFor(()=>evalValue(`Number(document.querySelector('[data-network-comparison-filter="lanes"]')?.getAttribute('data-network-comparison-filter-count')||0)>=1&&!!document.querySelector('[data-network-comparison-inspect="junction:J-1"]')`),'Lanes comparison filter');
@@ -187,6 +188,8 @@ try{
   await waitFor(()=>evalValue(`document.querySelector('[data-network-comparison-focused="true"]')?.getAttribute('data-network-comparison-inspect')!=='junction:J-1'`),'comparison review advances to the next filtered change');
   await clickSelector('[data-network-comparison-prev]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-comparison-focused="true"]')?.getAttribute('data-network-comparison-inspect')==='junction:J-1'`),'comparison review returns to the previous change');
+  await clickSelector('[data-network-comparison-export="svg"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-comparison-actions')?.getAttribute('data-network-comparison-export-status')?.endsWith('.svg')===true`),'comparison SVG export completes with deterministic presentation metadata');
   await clickSelector('[data-network-action="fit"]');await sleep(120);
   await clickSelector('[data-network-scenario="existing"]');
   await waitFor(async()=>{const w=await scenarioWorkspace(),p=await project();return w?.activeScenarioId==='existing'&&p?.junctions?.length===2;},'Existing remains unchanged after Alt edit');
@@ -306,7 +309,7 @@ try{
   const finalProject=await project();
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance: scenario filter + change inspection + review navigation + active selection → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
+  console.log('PASS browser acceptance: scenario presentation/export + change inspection + review navigation + active selection → endpoint-only Arm drag + Shift snap → port-facing guardrail → continuity → resolved 3D detail');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
