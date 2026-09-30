@@ -72,6 +72,9 @@ const invalidFacing=n.assessPortConnection(p,{junctionId:a.id,armId:2},{junction
 const angleDelta=(x,y)=>Math.abs((((x-y)+540)%360)-180),segmentHeading=(u,v)=>(Math.atan2(v.y-u.y,v.x-u.x)*180/Math.PI+360)%360;
 assert(angleDelta(segmentHeading(points[0],points[1]),n.portHeading(a,0))<.001,'Road Link must leave the FROM Arm tangent to the semantic port heading');
 assert(angleDelta(segmentHeading(points.at(-2),points.at(-1)),(n.portHeading(b,2)+180)%360)<.001,'Road Link must enter the TO Arm tangent to the semantic port heading');
+const invalidMove=n.moveJunctionChecked(p,b.id,{x:a.x-400,y:a.y});assert(invalidMove.error&&/Road Link/.test(invalidMove.error));assert.deepEqual(invalidMove.project,p,'moving a linked Junction behind its connected port must be rejected atomically');
+const invalidRotate=n.rotateJunctionChecked(p,b.id,b.rotation+180);assert(invalidRotate.error&&/Road Link/.test(invalidRotate.error));assert.deepEqual(invalidRotate.project,p,'rotating a linked Junction so its port faces away must be rejected atomically');
+const validMove=n.moveJunctionChecked(p,b.id,{x:b.x+20,y:b.y+10});assert.equal(validMove.error,null);assert.notDeepEqual(validMove.project,p,'a linked Junction may still move while all attached ports remain within the valid facing envelope');
 const directBefore=n.linkPoints(p,link)[0],direct=n.updateJunctionArmGeometry(p,a.id,0,a.design.arms[0].angle,120);
 assert.equal(direct.error,null);assert.equal(direct.project.junctions[0].design.arms[0].length,120);
 const directAfter=n.linkPoints(direct.project,direct.project.links[0])[0];assert(Math.hypot(directAfter.x-directBefore.x,directAfter.y-directBefore.y)>20,'stretching an Arm must move the attached Road Link endpoint');

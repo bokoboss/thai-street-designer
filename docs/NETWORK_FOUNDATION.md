@@ -858,3 +858,30 @@ The first engineering-audit pass after the golden visual suite intentionally cha
 #### Source check
 
 The audit rechecked the product basis against current/supplementary sources. Austroads `AGRD04B-25`, *Guide to Road Design Part 4B: Roundabouts*, Edition 3.3, was published 12 August 2025 and remains the current Austroads roundabout geometric-design guide. FHWA roundabout/channelized-turn guidance continues to support splitter refuge, crossing setback, entry deflection and pedestrian-visibility principles. Thai authority requirements remain the governing source for project-specific compliance.
+
+
+### Phase 6C.1 post-connect port-facing guardrail
+
+Network editing now preserves a stronger semantic invariant after a RoadLink has been created:
+
+> A direct Junction edit must not silently turn an attached RoadLink from a valid/caution connection into a port-facing-invalid connection.
+
+The existing creation rule remains unchanged:
+
+- valid ≤ 60° worst endpoint deviation;
+- caution > 60° and ≤ 90° is allowed;
+- invalid > 90° is rejected.
+
+Phase 6C.1 applies the same invalid boundary to subsequent edits.
+
+Covered commit paths:
+
+- whole-Junction drag;
+- precision X/Y move;
+- Junction world rotation and ±15° controls;
+- direct Arm angle/length commit;
+- saving a Design-v6 Junction back from Junction Detail.
+
+Direct drag preview remains fluid. Validation happens at commit/pointer-up; an invalid result rolls back to the previous NetworkProject and does not enter Undo history. Rigid whole-Network map alignment remains unaffected because it preserves relative port headings by construction.
+
+This is topology hardening, not a new geometry feature. Existing `linkIssues()` still reports imported/legacy invalid states, while normal direct editing now prevents creating a new invalid state silently.

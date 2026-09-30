@@ -270,6 +270,14 @@ try{
   await clickSelector('[data-network-port="J-3:2"]');
   await waitFor(async()=>{const p=await project();return p?.links?.length===2&&p.links.some(l=>l.id==='L-2');},'connect L-2');
 
+  mark('linked-junction-facing-guard');
+  await clickSelector('[data-network-junction-hit="J-3:2"]');
+  const rotationBefore=await evalValue(`Number(document.querySelector('[data-network-junction-rotation]')?.value)`);
+  await evalValue(`(()=>{const el=document.querySelector('[data-network-junction-rotation]');el.focus();el.value=String((Number(el.value)+180)%360);el.dispatchEvent(new Event('input',{bubbles:true}));el.blur();return true;})()`);
+  await waitFor(()=>evalValue(`document.querySelector('.network-status')?.textContent?.includes('Road Link')===true`),'linked Junction rotation rejected by facing guardrail');
+  const rotationAfter=await evalValue(`Number(document.querySelector('[data-network-junction-rotation]')?.value)`);
+  assert.equal(rotationAfter,rotationBefore,'rejected linked-Junction rotation must restore the committed rotation');
+
   mark('edit-alignment');
   await clickSelector('[data-network-link="L-2"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='link'`),'RoadLink contextual command bar');
@@ -366,7 +374,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: linked-Junction facing guard + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

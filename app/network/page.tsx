@@ -16,8 +16,8 @@ import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import {
-  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,addLinkStationComponent,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,linkWidthTargets,moveJunction,moveLinkVia,portKey,portPoint,
-  projectBounds,removeJunction,removeLink,removeLinkStationComponent,removeLinkVia,rotateJunction,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type PortRef,type WorldPoint
+  NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,addLinkStationComponent,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,linkWidthTargets,moveJunction,moveJunctionChecked,moveLinkVia,portKey,portPoint,
+  projectBounds,removeJunction,removeLink,removeLinkStationComponent,removeLinkVia,rotateJunction,rotateJunctionChecked,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
@@ -428,11 +428,20 @@ export default function NetworkWorkspace(){
     drag.current=null;setArmGuide(null);
     try{e.currentTarget.releasePointerCapture(e.pointerId);}catch{}
     if(current?.kind==='local-image'){setNotice('ย้ายภาพอ้างอิงแล้ว · geometry ของ Network ไม่เปลี่ยน');return;}
-    if(current?.kind==='junction'||current?.kind==='link-via'||current?.kind==='network-align'){
+    if(current?.kind==='junction'){
+      const preview=junctionById(projectRef.current,current.id);
+      if(!preview){setProjectNow(current.before);return;}
+      const validated=moveJunctionChecked(current.before,current.id,{x:preview.x,y:preview.y});
+      if(validated.error){setProjectNow(current.before);setNotice(validated.error+' · ยกเลิกการย้ายและคืนตำแหน่งเดิม');return;}
+      setProjectNow(validated.project);
+      if(validated.project!==current.before){remember(current.before);persistProjectSnapshot(validated.project);setNotice('ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port และยังผ่าน facing guardrail');}
+      return;
+    }
+    if(current?.kind==='link-via'||current?.kind==='network-align'){
       const after=projectRef.current;
       if(after!==current.before){
         remember(current.before);persistProjectSnapshot(after);
-        setNotice(current.kind==='junction'?'ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port อัตโนมัติ':current.kind==='network-align'?'ย้าย Network ทั้งชุดแล้ว · Junction Design v6 ไม่ถูกแก้ และ RoadLink via points เคลื่อนแบบ rigid transform':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
+        setNotice(current.kind==='network-align'?'ย้าย Network ทั้งชุดแล้ว · Junction Design v6 ไม่ถูกแก้ และ RoadLink via points เคลื่อนแบบ rigid transform':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
       }
     }
   }
@@ -467,6 +476,14 @@ export default function NetworkWorkspace(){
     if(result.error){setNotice(result.error);return;}commit(result.project,before);
     if(!enabled&&selectedArm===armId)setSelectedArm(null);
     setNotice(enabled?'เปิดขาถนนแล้ว':'เปลี่ยนเป็นทางแยก 3 ขาแล้ว');
+  }
+  function moveSelectedJunctionTo(point:WorldPoint){
+    if(!selectedJunction)return;const before=projectRef.current,result=moveJunctionChecked(before,selectedJunction.id,point);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('ย้าย Junction แล้ว · Road Link ที่ผูกอยู่ยังผ่าน port-facing guardrail');
+  }
+  function rotateSelectedJunctionTo(rotation:number){
+    if(!selectedJunction)return;const before=projectRef.current,result=rotateJunctionChecked(before,selectedJunction.id,rotation);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice('หมุน Junction แล้ว · Road Link ที่ผูกอยู่ยังผ่าน port-facing guardrail');
   }
   function editSelectedArmGeometry(angle:number,length:number){
     if(!selectedJunction||selectedArm===null)return;const before=projectRef.current,result=updateJunctionArmGeometry(before,selectedJunction.id,selectedArm,angle,length);
@@ -716,9 +733,9 @@ export default function NetworkWorkspace(){
           <div className="network-arm-tabs" aria-label="เลือกขาถนน">{selectedJunction.design.enabled.map((enabled,armId)=>enabled?<button key={armId} className={selectedArm===armId?'active':''} onClick={()=>selectArm(selectedJunction.id,armId)}>{selectedJunction.design.arms[armId].name||('Arm '+(armId+1))}</button>:null)}</div>
           <div className="network-leg-config"><span>ขาทางแยก</span>{selectedJunction.design.enabled.map((enabled,armId)=><label key={armId} className={enabled?'active':''}><input type="checkbox" checked={enabled} onChange={e=>toggleJunctionArm(armId,e.target.checked)}/>{selectedJunction.design.arms[armId].name||('Arm '+(armId+1))}</label>)}</div>
           <label>ชื่อทางแยก<input value={selectedJunction.name} onFocus={beginFieldEdit} onChange={e=>{const before=projectRef.current,next={...before,junctions:before.junctions.map(j=>j.id===selectedJunction.id?{...j,name:e.target.value}:j)};setProjectNow(next);}} onBlur={finishFieldEdit}/></label>
-          <div className="network-coords"><label>X (m)<input key={'x-'+selectedJunction.id+'-'+selectedJunction.x} type="number" defaultValue={+selectedJunction.x.toFixed(2)} onFocus={beginFieldEdit} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setProjectNow(moveJunction(projectRef.current,selectedJunction.id,{x:n,y:selectedJunction.y}));}} onBlur={finishFieldEdit}/></label><label>Y (m)<input key={'y-'+selectedJunction.id+'-'+selectedJunction.y} type="number" defaultValue={+selectedJunction.y.toFixed(2)} onFocus={beginFieldEdit} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setProjectNow(moveJunction(projectRef.current,selectedJunction.id,{x:selectedJunction.x,y:n}));}} onBlur={finishFieldEdit}/></label></div>
-          <label>หมุน Junction ใน world (°)<input key={'rotation-'+selectedJunction.id+'-'+selectedJunction.rotation} type="number" min="0" max="359" step="1" defaultValue={Math.round(selectedJunction.rotation)} onFocus={beginFieldEdit} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setProjectNow(rotateJunction(projectRef.current,selectedJunction.id,n));}} onBlur={finishFieldEdit}/></label>
-          <div className="network-inline-actions"><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation-15),before);}}><RotateCw size={14}/> −15°</button><button onClick={()=>{const before=projectRef.current;commit(rotateJunction(before,selectedJunction.id,selectedJunction.rotation+15),before);}}><RotateCw size={14}/> +15°</button></div>
+          <div className="network-coords"><label>X (m)<input data-network-junction-x key={'x-'+selectedJunction.id+'-'+selectedJunction.x} type="number" defaultValue={+selectedJunction.x.toFixed(2)} onBlur={e=>{const n=Number(e.currentTarget.value);if(Number.isFinite(n))moveSelectedJunctionTo({x:n,y:selectedJunction.y});}}/></label><label>Y (m)<input data-network-junction-y key={'y-'+selectedJunction.id+'-'+selectedJunction.y} type="number" defaultValue={+selectedJunction.y.toFixed(2)} onBlur={e=>{const n=Number(e.currentTarget.value);if(Number.isFinite(n))moveSelectedJunctionTo({x:selectedJunction.x,y:n});}}/></label></div>
+          <label>หมุน Junction ใน world (°)<input data-network-junction-rotation key={'rotation-'+selectedJunction.id+'-'+selectedJunction.rotation} type="number" min="0" max="359" step="1" defaultValue={Math.round(selectedJunction.rotation)} onBlur={e=>{const n=Number(e.currentTarget.value);if(Number.isFinite(n))rotateSelectedJunctionTo(n);}}/></label>
+          <div className="network-inline-actions"><button data-network-junction-rotate="-15" onClick={()=>rotateSelectedJunctionTo(selectedJunction.rotation-15)}><RotateCw size={14}/> −15°</button><button data-network-junction-rotate="+15" onClick={()=>rotateSelectedJunctionTo(selectedJunction.rotation+15)}><RotateCw size={14}/> +15°</button></div>
           {selectedArmData&&selectedArm!==null&&<div className="network-arm-editor">
             <div className="network-arm-editor-head"><span>DIRECT ARM EDIT</span><b>{selectedArmData.name}</b></div>
             <p className="network-arm-hint">ลากปลายขาได้อิสระ · กด <b>Shift</b> ระหว่างลากเพื่อ snap world heading ทุก 15° · เส้น guide ที่ขึ้นเองเป็นเพียงแนวอ้างอิง ไม่ดูดมุม</p>

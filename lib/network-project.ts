@@ -342,6 +342,24 @@ export function rotateJunction(project:NetworkProject,id:string,rotation:number)
   const normalized=((rotation%360)+360)%360;
   return{...project,junctions:project.junctions.map(j=>j.id===id?{...j,rotation:normalized}:j)};
 }
+export function junctionLinkFacingIssue(project:NetworkProject,id:string){
+  for(const link of project.links){
+    if(link.from.junctionId!==id&&link.to.junctionId!==id)continue;
+    const facing=assessPortConnection(project,link.from,link.to);
+    if(!facing||facing.status==='invalid')return `แก้ Junction ไม่ได้ เพราะจะทำให้ Road Link ${link.id} หันออกจาก port เกิน 90° · ย้าย/หมุน Junction ให้อยู่ในแนวเชื่อม หรือเปลี่ยน arm ที่เชื่อมก่อน`;
+  }
+  return null;
+}
+export function moveJunctionChecked(project:NetworkProject,id:string,point:WorldPoint):NetworkEditResult{
+  if(!junctionById(project,id))return{project,error:'ไม่พบ Junction ที่เลือก'};
+  const next=moveJunction(project,id,point),error=junctionLinkFacingIssue(next,id);
+  return error?{project,error}:{project:next,error:null};
+}
+export function rotateJunctionChecked(project:NetworkProject,id:string,rotation:number):NetworkEditResult{
+  if(!junctionById(project,id))return{project,error:'ไม่พบ Junction ที่เลือก'};
+  const next=rotateJunction(project,id,rotation),error=junctionLinkFacingIssue(next,id);
+  return error?{project,error}:{project:next,error:null};
+}
 export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):ConnectPortsResult{
   if(portKey(from)===portKey(to))return{project,error:'เลือก port เดิมซ้ำ'};
   if(from.junctionId===to.junctionId)return{project,error:'Road Link รุ่น foundation เชื่อมคนละทางแยกเท่านั้น'};
@@ -358,6 +376,7 @@ export function updateJunctionArmGeometry(project:NetworkProject,id:string,armId
   const design=copyDesign(junction.design),normalized=((angle%360)+360)%360,nextLength=Math.max(45,Math.min(400,length));
   design.arms[armId]={...design.arms[armId],angle:+normalized.toFixed(2),length:+nextLength.toFixed(2)};
   const error=designError(design);if(error)return{project,error};
+  const linkError=junctionDesignLinkIssue(project,id,design);if(linkError)return{project,error:linkError};
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
 export function updateJunctionArmBasics(project:NetworkProject,id:string,armId:number,patch:Partial<Pick<Arm,'name'|'incoming'|'outgoing'|'median'|'crossing'|'signal'|'stop'|'crossOffset'|'stopOffset'>>):NetworkEditResult{
@@ -410,7 +429,9 @@ export function linkedArmIds(project:NetworkProject,junctionId:string){
 }
 export function junctionDesignLinkIssue(project:NetworkProject,id:string,design:Design){
   const disabled=linkedArmIds(project,id).filter(armId=>!design.enabled[armId]);
-  return disabled.length?`บันทึกกลับ Network ไม่ได้: arm ${disabled.map(v=>v+1).join(', ')} ยังมี Road Link เชื่อมอยู่ · ลบ/ย้าย Link ก่อนปิด arm`:null;
+  if(disabled.length)return `บันทึกกลับ Network ไม่ได้: arm ${disabled.map(v=>v+1).join(', ')} ยังมี Road Link เชื่อมอยู่ · ลบ/ย้าย Link ก่อนปิด arm`;
+  const candidate={...project,junctions:project.junctions.map(j=>j.id===id?{...j,design:copyDesign(design)}:j)};
+  return junctionLinkFacingIssue(candidate,id);
 }
 export function updateJunctionDesign(project:NetworkProject,id:string,design:Design):NetworkProject{
   if(junctionDesignLinkIssue(project,id,design))return project;

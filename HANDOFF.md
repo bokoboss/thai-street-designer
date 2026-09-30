@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified feature baseline before this guardrail documentation commit: `d5d6d21ede8634073933789d6e82a74d6e154172`
+Current verified feature baseline before Phase 6C.1: `3aa0c216dc3d018b2e6d7f93460c7fa423fd8208`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -200,16 +200,24 @@ These source/build checks do not replace visual/interaction acceptance of the ac
 
 ## Immediate next work
 
-1. Complete visual/interaction acceptance for RoadLink v2:
-   - R0 preserves the old polyline exactly;
-   - R>0 produces plausible tangent–arc–tangent geometry;
-   - dragging a PI preserves its radius;
-   - radius is clamped safely when adjacent tangent lengths are insufficient;
-   - Fit, plan and Network 3D projected texture agree.
-2. Add an explicit **lane-count transition model** owned by RoadLink. Do not infer whether a lane is added/dropped on the curb or median side.
-3. Add Network cross-section dock / section-profile visualization so link continuity is visible rather than numeric-only.
-4. Improve Browser E2E / visual regression for create → connect → curve → transition → undo/redo → reload.
-5. Keep Parallel / Frontage Road work after RoadLink topology/section semantics are stable.
+Product v1 is now in hardening rather than foundation expansion.
+
+Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
+
+Current sequence:
+
+1. **Phase 6C — Network Editing Hardening**
+   - preserve semantic port validity after connect during Junction/Arm direct edits;
+   - harden destructive delete/cancel behavior;
+   - improve reconnect/disconnect and alignment editing only where it reduces editing friction without creating parallel ownership.
+2. **Phase 6D — Project File Workflow**
+   - New / Open / Save / Save As / Import / Export with explicit project-file ownership.
+3. **Phase 6E — Unified Network Export**
+   - current/full-network output, scale/legend/title treatment and map/reference inclusion policy.
+4. **Phase 6F — Design Summary / Report**
+   - report-ready engineering state, warnings and scenario delta.
+
+Keep Parallel / Frontage Road and advanced CAD-like editing after these Product v1 hardening milestones.
 
 For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 
