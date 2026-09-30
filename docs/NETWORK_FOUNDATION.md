@@ -1041,3 +1041,21 @@ The HTML output is self-contained and print-friendly. It contains Engineering Su
 User-controlled project/object text is HTML-escaped before output.
 
 The report explicitly states that it is a concept-design summary and does **not** perform traffic capacity, LOS, demand forecasting or simulation. It should therefore be used as a review/reporting artifact, not as a detailed-design certification.
+
+
+## Phase 8A.1a — Parallel / Frontage relationship model
+
+Post-v1 Network schema v4 adds `parallelCorridors[]` as relationship metadata over existing RoadLinks.
+
+The relationship owns only:
+- group id/name;
+- ordered mainline RoadLink IDs;
+- ordered left/right frontage RoadLink IDs.
+
+It does **not** own centerline coordinates, section geometry or rendering geometry.
+
+Validation requires each ordered chain to be a simple traversable sequence through Junctions, prevents the same RoadLink from holding multiple corridor roles/groups, and rejects missing/discontinuous chains.
+
+Network v1/v2/v3 projects migrate to v4 with `parallelCorridors: []`. RoadLink station components from v3 remain intact.
+
+RoadLink/Junction deletion cleans relationship metadata in the same NetworkProject transaction. A frontage chain made discontinuous by deletion is removed rather than reordered; the whole group disappears if its mainline is invalid or it has no valid frontage side remaining.

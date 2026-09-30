@@ -201,9 +201,11 @@ Parallel-corridor grouping must not make ordinary Network objects undeletable.
 
 When a referenced RoadLink is deliberately deleted:
 
-- its group membership should be removed in the same NetworkProject transaction;
+- its group membership is removed in the same NetworkProject transaction;
+- a frontage chain that becomes discontinuous is removed as a whole rather than silently reconnecting/reordering the surviving Links;
 - an empty frontage chain is removed;
-- a group with no frontage chain remaining is removed;
+- if the mainline chain becomes empty/discontinuous, the group is removed;
+- a group with no valid frontage chain remaining is removed;
 - Undo restores both the RoadLink and its prior group membership atomically.
 
 The model must not silently reorder a remaining chain to hide a broken topology.
