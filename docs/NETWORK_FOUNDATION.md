@@ -887,6 +887,6 @@ Covered commit paths:
 - direct Arm angle/length commit;
 - saving a Design-v6 Junction back from Junction Detail.
 
-Direct drag preview remains fluid. Validation happens at commit/pointer-up; an invalid result rolls back to the previous NetworkProject and does not enter Undo history. Rigid whole-Network map alignment remains unaffected because it preserves relative port headings by construction.
+Direct drag preview remains fluid. Validation happens at commit/pointer-up; an invalid result rolls back to the previous NetworkProject and does not enter Undo history. Precision X/Y/rotation fields also restore the committed value immediately after a rejected edit, so the visible control cannot disagree with engineering state. Rigid whole-Network map alignment remains unaffected because it preserves relative port headings by construction.
 
 This is topology hardening, not a new geometry feature. Existing `linkIssues()` still reports imported/legacy invalid states, while normal direct editing now prevents creating a new invalid state silently.
