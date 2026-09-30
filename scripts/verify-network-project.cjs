@@ -146,10 +146,10 @@ assert.equal(connect.error,null);p=connect.project;
 assert.equal(p.links.length,2);
 const occupied=n.connectPorts(p,{junctionId:c.id,armId:3},{junctionId:b.id,armId:1});
 assert(occupied.error&&/เชื่อมอยู่แล้ว/.test(occupied.error));
-const facingWarningProject=n.createNetworkProject(),facingWarningLink=facingWarningProject.links[0];facingWarningProject.junctions[0].rotation=180;assert(n.linkIssues(facingWarningProject,facingWarningLink).some(v=>v.kind==='port-facing'),'existing Links must remain editable but surface a facing warning after a Junction rotates behind its corridor');
+const facingWarningProject=n.createNetworkProject(),facingWarningLink=facingWarningProject.links[0];facingWarningProject.junctions[0].rotation=120;assert(n.linkIssues(facingWarningProject,facingWarningLink).some(v=>v.kind==='port-facing'),'existing Links must remain editable but surface a facing warning after a Junction rotates behind its corridor');
 const legacyTitleDesign=structuredClone(facingWarningProject.junctions[0].design);legacyTitleDesign.title='legacy warning remains editable';const legacyTitleEdit=n.updateJunctionDesign(facingWarningProject,facingWarningProject.junctions[0].id,legacyTitleDesign);assert.equal(legacyTitleEdit.junctions[0].design.title,'legacy warning remains editable','unrelated edits must remain possible when an imported/existing Link is already facing-invalid');
-const improvingLegacy=n.rotateJunctionChecked(facingWarningProject,facingWarningProject.junctions[0].id,150);assert.equal(improvingLegacy.error,null,'an already-invalid Junction must be allowed to move toward a better facing state even before it is fully valid');
-const worseningLegacy=n.rotateJunctionChecked(facingWarningProject,facingWarningProject.junctions[0].id,210);assert(worseningLegacy.error&&/มากกว่าเดิม/.test(worseningLegacy.error),'an already-invalid Junction must not be allowed to worsen its port-facing deviation');
+const improvingLegacy=n.rotateJunctionChecked(facingWarningProject,facingWarningProject.junctions[0].id,100);assert.equal(improvingLegacy.error,null,'an already-invalid Junction must be allowed to move toward a better facing state even before it is fully valid');
+const worseningLegacy=n.rotateJunctionChecked(facingWarningProject,facingWarningProject.junctions[0].id,140);assert(worseningLegacy.error&&/มากกว่าเดิม/.test(worseningLegacy.error),'an already-invalid Junction must not be allowed to worsen its port-facing deviation');
 
 const mismatched=structuredClone(p),target=mismatched.junctions.find(j=>j.id===b.id);
 target.design.arms[2].incoming=3;
