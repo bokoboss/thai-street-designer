@@ -373,7 +373,8 @@ try{
   await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(fileEnvelope)}],'acceptance.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`document.querySelector('.network-viewbar b')?.textContent==='Project File Acceptance'`),'open portable Project JSON');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'opened Project becomes clean file baseline');
-  await clickSelector('[data-network-file-menu="true"]');await clickSelector('[data-network-file-action="new"]');
+  await evalValue(`(()=>{const d=document.querySelector('.network-file-menu');if(d&&!d.open)d.open=true;return !!d?.open;})()`);
+  await clickSelector('[data-network-file-action="new"]');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'New Project resets engineering workspace without touching schema');
   assert.equal(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')`),'true','new unsaved Project must be marked dirty');
 
