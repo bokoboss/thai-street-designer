@@ -3,6 +3,7 @@
 Updated: 2026-09-30  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
+Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — merged 2026-09-30**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
@@ -209,6 +210,10 @@ Product v1 was explicitly accepted by the user and PR #1 was merged to `main` as
 ## Immediate next work
 
 Product v1 hardening is complete and the audited release has been merged to `main`.
+
+Post-v1 work has started with **Phase 8A — Parallel / Frontage Corridor Foundation** on `chatgpt/post-v1-parallel-corridor-foundation`.
+
+Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feature family. The first step is a Network semantic relationship over existing RoadLinks, not a second geometry engine and not an Arm-level frontage flag.
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
 
