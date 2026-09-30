@@ -1,10 +1,10 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-09-23  
+Updated: 2026-09-30  
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Code baseline immediately before this handoff documentation commit: `4c7acef26c2c042233bcfff09e7ee6638232b461`
+Current verified feature baseline before this guardrail documentation commit: `d5d6d21ede8634073933789d6e82a74d6e154172`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -18,18 +18,111 @@ Code baseline immediately before this handoff documentation commit: `4c7acef26c2
 6. Inspect PR #1 and the latest branch commit/status before modifying anything.
 7. Run the full quality gates before accepting a code change.
 
+## Product v1 mission and guardrails
+
+> **Do not expand Thai Street Designer into traffic simulation, network assignment, signal optimization, or general transportation-analysis software during Product v1. The current objective is to complete, harden, and polish a professional concept-level street geometry design workspace.**
+
+### Product definition
+
+Thai Street Designer is a **concept-level street, junction and corridor geometry design workspace for Thailand / left-hand traffic**.
+
+Its primary job is to help an engineer or designer:
+
+1. **create** street / junction / corridor concepts;
+2. **edit** geometry and cross-sections predictably;
+3. **review** engineering semantics, continuity and warnings;
+4. **compare** design alternatives;
+5. **present / export** concept designs clearly.
+
+If a proposed feature does not materially improve one of those five jobs, treat it as out of Product v1 scope unless the product definition is deliberately revised.
+
+### In scope for Product v1
+
+- Junction geometry and direct editing.
+- RoadLink / corridor geometry and section continuity.
+- Lane, median, sidewalk and semantic edge-band composition.
+- Pocket / receiving lanes and other concept-level auxiliary-lane treatments.
+- Slip-lane and roundabout concept geometry.
+- Multi-junction Network workspace.
+- Map and calibrated local-image reference.
+- Existing / Alternative scenarios and comparison.
+- Engineering review warnings and deterministic design checks.
+- Project file workflow, export, design summary and report-ready figures.
+- Stability, performance, visual regression and UX hardening of the above.
+
+### Explicitly out of scope for Product v1
+
+Do **not** start these merely because they are technically adjacent or interesting:
+
+- traffic assignment or route choice;
+- microsimulation or queue simulation;
+- signal timing / signal optimization / adaptive control;
+- demand forecasting;
+- capacity / LOS analysis as a parallel analysis product;
+- autonomous AI street design;
+- production-grade BIM / Civil 3D integration;
+- general-purpose GIS or CAD replacement;
+- unrelated transportation-analysis modules.
+
+These ideas may be recorded as future possibilities, but they must not displace Product v1 hardening.
+
+### Engineering boundary
+
+This is an **engineering-informed concept design / design-support tool**, not a certified detailed-design package. The application should expose assumptions and unresolved conditions rather than implying detailed-design compliance that the engine has not actually checked.
+
+### Architecture guardrail
+
+New functionality must extend the existing ownership model. Do not create a parallel geometry, renderer, section, Slip, scenario or Network engine to obtain a quick visual result.
+
+Prefer:
+
+`one semantic model → one resolver → many consumers (2D / section / 3D / export / review)`
+
+over feature-specific geometry branches.
+
+### UX guardrail
+
+The root interaction hierarchy remains:
+
+**Select → direct manipulate / quick edit → precision tune in Inspector / section dock → review / compare / export**
+
+A new feature should not make basic selection, dragging or editing materially harder. Advanced controls should stay contextual or progressively disclosed.
+
+### Release / priority guardrail
+
+Until Product v1 is declared ready, prioritize:
+
+**Correctness → regression safety → stability/performance → usability → export/reporting → new features**
+
+Do not begin another major feature family while a known core geometry or interaction regression remains unresolved.
+
+### Scope decision gate
+
+Before implementing a new feature, answer all of the following:
+
+1. Does it directly support **create / edit / review / compare / present** concept geometry?
+2. Can it use the existing semantic ownership model rather than creating a parallel engine?
+3. Is there a clear Product v1 user workflow that needs it now?
+4. Can its engineering behavior be stated and regression-tested?
+5. Is it more important than the current hardening / correctness backlog?
+
+If the answer to **1** is no, defer it from Product v1.  
+If **2** or **4** is no, research/design the model first rather than coding the feature.  
+If **5** is no, put it in the future backlog and continue the current v1 milestone.
+
 ## Current project state
 
 The product is now **Network-first**, while preserving the schema-v6 Junction engine as the local intersection source of truth.
 
-Current Network schema is **v2**:
+Current Network schema is **v3**:
 
 - each `RoadLink` owns semantic endpoints, `LinkVia[]` control points and a radius per PI;
+- each `RoadLink` can persist station-based corridor components for lane and width lifecycles;
 - `linkPoints()` resolves PI/radius controls into tangent–arc–tangent geometry;
 - `RoadLink.sectionProfile.mode` is explicit: `review` or `linear`;
 - linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
 - lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
-- Network schema v1 imports migrate conservatively to v2 with legacy via radii set to 0 and `sectionProfile.mode='review'`;
+- Network schema v1/v2 imports migrate conservatively to v3; legacy via radii remain 0, older projects retain explicit review semantics, and v1/v2 links gain `components: []`;
 - plan rendering, link length and Fit consume the same resolved RoadLink alignment.
 
 The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.

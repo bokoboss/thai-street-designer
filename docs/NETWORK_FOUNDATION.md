@@ -6,6 +6,49 @@ The product is evolving from a single-junction editor into a semantic street-net
 
 The network layer must not replace or flatten the junction model. It wraps the existing schema-v6 junction design with explicit world placement and corridor ownership.
 
+## Product v1 scope control
+
+The Network Foundation exists to support a **professional concept-level street geometry design workspace**, not to turn Thai Street Designer into a general transportation-analysis platform.
+
+The Product v1 workflow is intentionally bounded to:
+
+**create → edit → review → compare → present**
+
+for Junction, RoadLink, cross-section, auxiliary-lane and related street-concept geometry.
+
+### Product v1 non-goals
+
+The following are outside the current product milestone:
+
+- traffic assignment / route choice;
+- microsimulation / queue simulation;
+- signal optimization or adaptive control;
+- demand forecasting;
+- general capacity / LOS analysis modules;
+- autonomous AI design;
+- production-grade BIM / Civil 3D integration;
+- general GIS / CAD replacement.
+
+Do not introduce model fields, UI architecture or dependencies for these future domains unless the Product v1 definition is deliberately changed.
+
+### Decision rules for new Network features
+
+A proposed feature should proceed only when it:
+
+1. materially helps create, edit, review, compare or present concept geometry;
+2. has explicit semantic ownership in the current Junction / Network / RoadLink architecture;
+3. can be consumed consistently by the relevant 2D / section / 3D / export / review paths;
+4. has deterministic validation or regression coverage appropriate to its engineering impact;
+5. is more important than unresolved Product v1 correctness or hardening work.
+
+When these conditions are not met, record the idea as backlog rather than extending the active implementation.
+
+Until Product v1 release, the priority order is:
+
+**Correctness → regression safety → stability/performance → usability → export/reporting → new features**
+
+This scope rule is intentionally stronger than feature enthusiasm: an adjacent capability is not automatically a Thai Street Designer capability.
+
 ## Ownership hierarchy
 
 ```
