@@ -359,7 +359,7 @@ try{
   );
   await loadJunctionGolden('roundabout-single-lane',
     `d.type='roundabout';d.slips=[];d.ring=1;d.circulation=5.5;d.arms=d.arms.map(a=>({...a,incoming:1,outgoing:1,median:2,signal:false,crossing:true,crossOffset:9,length:140}))`,
-    `const svg=document.querySelector('[data-junction-plan="true"]'),central=svg?.querySelectorAll('[data-central-island="true"]').length??0,apron=svg?.querySelectorAll('[data-truck-apron="true"]').length??0,splitter=svg?.querySelectorAll('[data-median-profile="splitter-and-median"]').length??0,crosswalk=svg?.querySelectorAll('[data-crosswalk="true"]').length??0,signals=svg?.querySelectorAll('[data-traffic-signal="true"]').length??0;return{ok:!!svg&&central===1&&apron===1&&splitter===4&&crosswalk===4&&signals===0,central,apron,splitter,crosswalk,signals};`
+    `const svg=document.querySelector('[data-junction-plan="true"]'),central=svg?.querySelectorAll('[data-central-island="true"]').length??0,apron=svg?.querySelectorAll('[data-truck-apron="true"]').length??0,splitter=svg?[...svg.querySelectorAll('[data-median-profile="splitter-and-median"]')].filter(v=>!v.closest('mask')).length:0,crosswalk=svg?.querySelectorAll('[data-crosswalk="true"]').length??0,signals=svg?.querySelectorAll('[data-traffic-signal="true"]').length??0;return{ok:!!svg&&central===1&&apron===1&&splitter===4&&crosswalk===4&&signals===0,central,apron,splitter,crosswalk,signals};`
   );
 
   writeFileSync(artifactDir+'/network-browser-golden-manifest.json',JSON.stringify({schema:1,viewport:{width:1440,height:1000},artifacts:goldenArtifacts},null,2));
