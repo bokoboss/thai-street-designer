@@ -832,3 +832,29 @@ The golden suite is part of the existing `pnpm test:browser` Quality gate and is
 
 
 Golden fixture policy: browser fixtures should preferentially reuse parameter combinations already proven valid by the model/geometry regression suite. A browser golden is a rendering/interaction reference, not a second place to invent unsupported engineering combinations.
+
+
+### Phase 6B.1 Slip + roundabout engineering audit
+
+The first engineering-audit pass after the golden visual suite intentionally changes **review logic, not product scope**.
+
+#### Slip findings
+
+- Ownership is coherent: Slip remains a schema-v6 overlay; base Junction edges are unchanged.
+- 2D, section resolution and 3D scene surfaces consume the same Slip-owned geometry.
+- The previous review rule that flagged every `acceleration + crossing` combination was too broad.
+- Review is now station-based: the engine measures clear distance from the downstream edge of the zebra crossing to the end of the Slip and only flags a short downstream clearance (about 6 m concept reference).
+- Existing geometry errors for insufficient auxiliary / departure / acceleration length remain unchanged.
+
+#### Roundabout findings
+
+- Entry/exit fillets, finite splitter polygons, pedestrian crossings, truck apron and central island remain concept geometry.
+- The documented crossing review had drifted from implementation. Phase 6B restores it with explicit per-Arm metrics:
+  - representative crossing setback from the entry yield reference;
+  - actual finite splitter refuge width at the zebra station.
+- Review flags a crossing setback below about 7.5 m, a splitter refuge below about 1.8 m, or a crossing that sits beyond the finite splitter refuge. These are supplementary concept references, not Thai compliance checks.
+- Multilane path design, fastest-path speed, swept paths and design-vehicle certification remain deliberately out of Product v1 geometry automation.
+
+#### Source check
+
+The audit rechecked the product basis against current/supplementary sources. Austroads `AGRD04B-25`, *Guide to Road Design Part 4B: Roundabouts*, Edition 3.3, was published 12 August 2025 and remains the current Austroads roundabout geometric-design guide. FHWA roundabout/channelized-turn guidance continues to support splitter refuge, crossing setback, entry deflection and pedestrian-visibility principles. Thai authority requirements remain the governing source for project-specific compliance.

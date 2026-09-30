@@ -2,9 +2,9 @@ import {sectionFor,type Design} from './model';
 import {allocate} from './allocation';
 import {activeIds,armMouth,armTreatmentOrigins,edges} from './geometry';
 import {resolveStreetSection} from './lane-configuration';
-import {slipGeometries} from './slip-geometry';
+import {slipCrossingClearance,slipGeometries} from './slip-geometry';
 import {plantingPlan} from './planting';
-import {roundFeedback} from './roundabout';
+import {roundArmFeedback,roundFeedback} from './roundabout';
 import type {Selection} from './selection';
 export type Review={level:'geometry'|'engineering'|'note';message:string;selection:Selection};
 
@@ -73,12 +73,18 @@ export function designReviews(d:Design):Review[]{
         });
       }
     }
-    if(slip?.departure.mode==='acceleration'&&slip.crossing.enabled){
-      out.push({
-        level:'engineering',
-        selection:{kind:'slip',arm:i},
-        message:`${a.name} · Slip acceleration lane ใช้ร่วมกับทางข้าม — ภาพแนวคิดมี conflict ระหว่างทางข้ามกับช่วงเร่ง/รวมรถ ควรทบทวน treatment`
-      });
+    if(slip?.crossing.enabled){
+      const edgeSet=edges(d),slipGeom=slipGeometries(d,edgeSet).find(v=>v.id===slip.id);
+      if(slipGeom){
+        const clearance=slipCrossingClearance(slipGeom,slip);
+        if(clearance.downstream<6){
+          out.push({
+            level:'engineering',
+            selection:{kind:'slipCrossing',arm:i},
+            message:`${a.name} · ทางข้ามบน Slip เหลือระยะหลัง zebra ถึงปลาย Slip ประมาณ ${clearance.downstream.toFixed(1)} ม.${slip.departure.mode==='acceleration'?' ก่อนเข้าสู่ acceleration treatment':''} — ทบทวนตำแหน่งทางข้าม/แนวควบคุม; ~6 ม. ใช้เป็น concept review ไม่ใช่มาตรฐานไทย`
+          });
+        }
+      }
     }
 
     const mouth=armMouth(d,i),origins=armTreatmentOrigins(d,i);
@@ -117,6 +123,9 @@ export function designReviews(d:Design):Review[]{
   if(d.type==='roundabout'){
     for(const message of roundFeedback(d)){
       out.push({level:'engineering',selection:{kind:'central',arm:activeIds(d)[0]},message});
+    }
+    for(const i of activeIds(d))for(const message of roundArmFeedback(d,i)){
+      out.push({level:'engineering',selection:{kind:'crossing',arm:i},message});
     }
   }
   return out;

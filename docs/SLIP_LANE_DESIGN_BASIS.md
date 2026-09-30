@@ -116,8 +116,11 @@ Because Slip width may transition between connected lane width and requested cha
 
 - crossing width must be evaluated at the crossing station
 - stop/control line width must be evaluated independently at its own station
+- crossing placement must be reviewed against the **remaining downstream distance to the end of the Slip**, rather than inferred only from the selected departure mode
 
 Do not assume one constant width across the entire Slip.
+
+Phase 6B uses about **6 m downstream clear distance** as a concept-review trigger when the zebra is pushed close to the Slip exit / downstream control-conflict area. This is based on the “about one vehicle length” separation principle found in supplementary FHWA channelized-turn guidance. It is **not** a Thai statutory or design-standard minimum and therefore remains a review warning rather than geometry rejection.
 
 ## 8. Width transition principle
 

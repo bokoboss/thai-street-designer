@@ -1,6 +1,6 @@
 # Engineering Design Basis — Thai Street Designer
 
-Updated: 2026-09-22
+Updated: 2026-09-30
 
 This is the engineering basis for a **concept-design tool**. It does not certify compliance with a road authority and does not replace project-specific criteria, traffic analysis, swept-path analysis, road-safety audit or professional review.
 
@@ -76,10 +76,12 @@ Suggested opening locations are convenience heuristics, not spacing warrants. U-
 ### Roundabouts
 Real roundabout design requires entry deflection/path speed, design vehicle, swept paths, splitter islands, pedestrian/cyclist treatments and capacity. The current tool provides concept geometry but does not yet calculate entry-path speed or swept paths.
 
-For new single-lane conversions the default crossing setback is 9 m from the outer roundabout reference. Review warns when the approximate setback from the yield line is below 7.5 m and when a pedestrian splitter/refuge is below 1.8 m. Multilane roundabouts remain explicitly conceptual until lane-path and swept-path logic exists.
+For new single-lane conversions the default crossing setback is 9 m from the outer roundabout reference. Phase 6B now computes a representative entry-yield reference from the actual roundabout envelope and incoming-lane position, then reviews the clear distance to the near edge of the zebra crossing. It also evaluates the actual finite splitter width at the crossing station. Review warns when the approximate crossing setback is below 7.5 m, when the splitter refuge at the crossing is below 1.8 m, or when the crossing has moved beyond the finite splitter refuge. These 7.5 m / 1.8 m values are supplementary FHWA concept references, **not Thai compliance limits**. Multilane roundabouts remain explicitly conceptual until lane-path and swept-path logic exists.
 
 ### Slip lanes
-See `docs/SLIP_LANE_DESIGN_BASIS.md`. Slip remains an overlay; base junction geometry is immutable; no hidden Pocket state is allowed. Crossing, stop line and arrow consume the same Slip geometry. Zebra-stripe count now uses the **local transitioned Slip width at the crossing station**, consistent with the existing local-width stop-line rule.
+See `docs/SLIP_LANE_DESIGN_BASIS.md`. Slip remains an overlay; base junction geometry is immutable; no hidden Pocket state is allowed. Crossing, stop line and arrow consume the same Slip geometry. Zebra-stripe count uses the **local transitioned Slip width at the crossing station**, consistent with the existing local-width stop-line rule.
+
+Phase 6B replaces the earlier blanket “acceleration + crossing” warning with a geometry-based crossing-clearance review. The tool measures clear distance from the downstream edge of the Slip zebra to the end of the Slip turning roadway. A short distance (currently about 6 m as a concept-review reference) triggers review because the crossing is approaching the downstream conflict/control area. This is deliberately not treated as a Thai minimum dimension or a universal warrant.
 
 ### Roadside trees, lighting and median planting
 Placement is presentation-oriented and checks geometric fit/exclusions. It does not yet validate sight triangles, clear zone/fixed-object offset, lighting photometrics, utility conflicts or species/root-zone requirements.
@@ -105,7 +107,7 @@ Supplementary:
   https://highways.dot.gov/sites/fhwa.dot.gov/files/2022-06/fhwasa13027.pdf
 - FHWA — Dedicated Left- and Right-Turn Lanes at Intersections  
   https://highways.dot.gov/safety/proven-safety-countermeasures/dedicated-left-and-right-turn-lanes-intersections
-- Austroads — Guide to Road Design Part 4B: Roundabouts, Edition 3.3  
+- Austroads — Guide to Road Design Part 4B: Roundabouts, AGRD04B-25, Edition 3.3 (published 12 Aug 2025)  
   https://austroads.com.au/publications/road-design/agrd04b
 
 ## 5. Future implementation rule

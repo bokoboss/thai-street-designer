@@ -227,6 +227,13 @@ export function slipArcState(g:SlipGeometry,s:SlipLane){
     arrowAngle=(Math.atan2(arrowState.tangent.y,arrowState.tangent.x)*180/Math.PI+360)%360;
   return{inner,outer,centerLength,crossOffset,crossT,arrowOffset,arrowT,crossHalf,stopT,point,bounds,crossPoint,arrowPoint,arrowAngle};
 }
+export function slipCrossingClearance(g:SlipGeometry,s:SlipLane){
+  const state=slipArcState(g,s);
+  return{
+    upstream:Math.max(0,state.crossT-state.crossHalf),
+    downstream:Math.max(0,state.centerLength-(state.crossT+state.crossHalf))
+  };
+}
 
 export function slipOffsetAtPoint(g:SlipGeometry,p:P,kind:'crossing'|'arrow'){
   const length=Math.max(.001,polylineLength(g.centerline)),station=projectStation(g.centerline,p);
