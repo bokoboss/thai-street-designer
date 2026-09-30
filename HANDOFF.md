@@ -221,8 +221,9 @@ Current sequence:
    - Report logic reuses Junction reviews, RoadLink continuity and handoff-integrity engines; do not create a separate validation path.
 5. **Phase 7A — Product v1 Release Audit / Final Hardening**
    - 7A.1 persists lightweight Project File association + saved-baseline signature across reload without adding file metadata to engineering JSON; Quality run `36701877517` passed.
-   - 7A.2 pins rejected-file recovery: malformed/unsupported Open must preserve engineering workspace, file association and dirty baseline.
-   - Next: interaction sweep, then release-status/documentation cleanup.
+   - 7A.2 pins rejected-file recovery: malformed/unsupported Open preserves engineering workspace, file association and dirty baseline; Quality run `36702325780` passed.
+   - 7A.3 pins keyboard destructive safety, Ctrl+Z / Ctrl+Shift+Z and Inspector/view/selection stability.
+   - Next: release-status/documentation cleanup.
    - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
 Keep Parallel / Frontage Road and advanced CAD-like editing after Product v1 release acceptance.

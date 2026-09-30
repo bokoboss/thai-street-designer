@@ -69,15 +69,28 @@ This deliberately keeps two responsibilities separate:
 - **autosave** = browser recovery of the current working state;
 - **Project File session** = relationship between the working state and the last successful Open/Save baseline.
 
+Quality evidence: run `36702325780` passed all release gates including rejected-file browser recovery.
+
+### 7A.3 Release interaction sweep
+
+The browser release flow now pins keyboard and panel behavior that can otherwise regress when the Inspector grows:
+
+- first **Delete** on a connected Junction only arms cascade deletion;
+- **Escape** cancels the armed destructive action without changing engineering state;
+- confirmed keyboard Delete removes the Junction and connected RoadLink atomically;
+- **Ctrl+Z** restores the atomic cascade;
+- **Ctrl+Shift+Z** redoes it;
+- another Ctrl+Z restores the project before continuing the release workflow;
+- **I** toggles the Inspector without changing Scenario Workspace state, selected RoadLink context or the SVG world viewBox.
+
+These checks complement the existing button-based Undo/Redo, comparison navigation and contextual editing cases.
+
 ## Remaining audit sequence
 
-1. **7A.3 Release interaction sweep**
-   - viewport/selection stability with comparison, Design Summary and context toolbar;
-   - keyboard Escape / Undo / Redo / Delete behavior at release state.
-3. **7A.4 Release documentation / status cleanup**
+1. **7A.4 Release documentation / status cleanup**
    - update stale verification references;
    - record final Quality run and preview;
    - enumerate intentional Product v1 limitations.
-4. **Release decision**
+2. **Release decision**
    - keep PR #1 Draft until the user explicitly accepts Product v1;
    - do not begin Parallel / Frontage Road or advanced CAD editing before that decision.

@@ -124,6 +124,11 @@ try{
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x,y:p.y,button:'left',clickCount:count});
   }
   async function clickSelector(selector,index=0){const p=await waitFor(()=>rectBySelector(selector,index),selector);await clickAt(p);}
+  async function keyPress(key,code=key,modifiers=0){
+    await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,modifiers});
+    await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,modifiers});
+  }
+  async function focusWorkspace(){assert(await evalValue(`(()=>{const el=document.querySelector('.network-workspace');if(!el)return false;el.focus();return document.activeElement===el;})()`),'Network workspace must accept keyboard focus');}
   async function dragSelector(selector,dx,dy,modifiers=0){
     const p=await waitFor(()=>rectBySelector(selector),selector);
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
@@ -279,13 +284,21 @@ try{
   assert.equal(rotationAfter,rotationBefore,'rejected linked-Junction rotation must restore the committed rotation');
 
   mark('safe-cascade-delete');
-  await clickSelector('[data-network-delete="true"]');
-  await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'linked Junction deletion requires explicit second action');
-  const safeDeleteState=await project();assert(safeDeleteState.junctions.some(j=>j.id==='J-3')&&safeDeleteState.links.some(l=>l.id==='L-2'),'first delete action must not mutate linked Junction or RoadLink');
-  await clickSelector('[data-network-delete="true"]');
-  await waitFor(async()=>{const p=await project();return !p.junctions.some(j=>j.id==='J-3')&&!p.links.some(l=>l.id==='L-2');},'confirmed linked Junction cascade delete');
-  await clickSelector('[data-network-action="undo"]');
-  await waitFor(async()=>{const p=await project();return p.junctions.some(j=>j.id==='J-3')&&p.links.some(l=>l.id==='L-2');},'Undo restores Junction and cascaded RoadLink atomically');
+  await focusWorkspace();await keyPress('Delete','Delete');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'keyboard Delete arms linked Junction deletion');
+  const safeDeleteState=await project();assert(safeDeleteState.junctions.some(j=>j.id==='J-3')&&safeDeleteState.links.some(l=>l.id==='L-2'),'first keyboard Delete must not mutate linked Junction or RoadLink');
+  await keyPress('Escape','Escape');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='false'`),'Escape cancels armed linked Junction deletion');
+  assert((await project()).junctions.some(j=>j.id==='J-3'),'Escape must preserve selected Junction engineering state');
+  await keyPress('Delete','Delete');await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'keyboard Delete re-arms cascade');
+  await keyPress('Delete','Delete');
+  await waitFor(async()=>{const p=await project();return !p.junctions.some(j=>j.id==='J-3')&&!p.links.some(l=>l.id==='L-2');},'confirmed linked Junction cascade delete by keyboard');
+  await keyPress('z','KeyZ',2);
+  await waitFor(async()=>{const p=await project();return p.junctions.some(j=>j.id==='J-3')&&p.links.some(l=>l.id==='L-2');},'Ctrl+Z restores Junction and cascaded RoadLink atomically');
+  await keyPress('Z','KeyZ',10);
+  await waitFor(async()=>{const p=await project();return !p.junctions.some(j=>j.id==='J-3')&&!p.links.some(l=>l.id==='L-2');},'Ctrl+Shift+Z redoes cascade delete');
+  await keyPress('z','KeyZ',2);
+  await waitFor(async()=>{const p=await project();return p.junctions.some(j=>j.id==='J-3')&&p.links.some(l=>l.id==='L-2');},'Ctrl+Z restores cascade again for continuing release flow');
 
   mark('safe-reconnect-controls');
   await clickSelector('[data-network-link="L-2"]');
@@ -339,6 +352,15 @@ try{
   mark('section-dock');
   await clickSelector('[data-network-link="L-2"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[aria-label="Road Link section profile"]')&&document.querySelector('[aria-label="Road Link section profile"]')?.textContent?.includes('Station')`),'RoadLink section dock');
+  mark('release-interaction-sweep');
+  const interactionWorkspace=JSON.stringify(await scenarioWorkspace()),interactionViewBox=await evalValue(`document.querySelector('svg[data-network-plan="true"]')?.getAttribute('viewBox')`);
+  await focusWorkspace();await keyPress('i','KeyI');
+  await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'I shortcut hides Inspector');
+  assert.equal(JSON.stringify(await scenarioWorkspace()),interactionWorkspace,'Inspector shortcut must not mutate engineering/scenario state');
+  assert.equal(await evalValue(`document.querySelector('svg[data-network-plan="true"]')?.getAttribute('viewBox')`),interactionViewBox,'Inspector toggle must preserve world viewport');
+  await keyPress('i','KeyI');
+  await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='open'`),'I shortcut restores Inspector');
+  assert(await evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='link'`),'Inspector toggle must preserve selected RoadLink context');
   const shot2d=await screenshot('network-browser-2d.png');
 
   mark('resolved-3d');
@@ -443,7 +465,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
