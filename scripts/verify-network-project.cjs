@@ -155,6 +155,7 @@ const mismatched=structuredClone(p),target=mismatched.junctions.find(j=>j.id===b
 target.design.arms[2].incoming=3;
 assert(n.linkIssues(mismatched,mismatched.links[0]).some(v=>v.kind==='lane-count'),'lane mismatch must be explicit rather than auto-guessed');
 
+assert.deepEqual(n.junctionConnectedLinkIds(p,c.id),['L-2'],'deletion impact must expose the RoadLinks that will cascade with a Junction');
 const removed=n.removeJunction(p,c.id);
 assert.equal(removed.junctions.length,2);
 assert.equal(removed.links.length,1,'removing a Junction must remove owned Link connections');

@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified feature baseline before Phase 6C.1: `3aa0c216dc3d018b2e6d7f93460c7fa423fd8208`
+Current verified Product v1 hardening baseline before Phase 6C.2: `a133411662ec3a289879f720e22f76e4ef111bb9`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 

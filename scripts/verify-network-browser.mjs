@@ -278,6 +278,15 @@ try{
   const rotationAfter=await evalValue(`Number(document.querySelector('[data-network-junction-rotation]')?.value)`);
   assert.equal(rotationAfter,rotationBefore,'rejected linked-Junction rotation must restore the committed rotation');
 
+  mark('safe-cascade-delete');
+  await clickSelector('[data-network-delete="true"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'linked Junction deletion requires explicit second action');
+  const safeDeleteState=await project();assert(safeDeleteState.junctions.some(j=>j.id==='J-3')&&safeDeleteState.links.some(l=>l.id==='L-2'),'first delete action must not mutate linked Junction or RoadLink');
+  await clickSelector('[data-network-delete="true"]');
+  await waitFor(async()=>{const p=await project();return !p.junctions.some(j=>j.id==='J-3')&&!p.links.some(l=>l.id==='L-2');},'confirmed linked Junction cascade delete');
+  await clickSelector('[data-network-action="undo"]');
+  await waitFor(async()=>{const p=await project();return p.junctions.some(j=>j.id==='J-3')&&p.links.some(l=>l.id==='L-2');},'Undo restores Junction and cascaded RoadLink atomically');
+
   mark('edit-alignment');
   await clickSelector('[data-network-link="L-2"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='link'`),'RoadLink contextual command bar');
@@ -374,7 +383,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: linked-Junction facing guard + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: linked-Junction facing guard + safe cascade delete/undo + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

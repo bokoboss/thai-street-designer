@@ -425,6 +425,9 @@ export function setJunctionArmEnabled(project:NetworkProject,id:string,armId:num
   const error=designError(design);if(error)return{project,error};
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
+export function junctionConnectedLinkIds(project:NetworkProject,junctionId:string){
+  return project.links.filter(link=>link.from.junctionId===junctionId||link.to.junctionId===junctionId).map(link=>link.id);
+}
 export function linkedArmIds(project:NetworkProject,junctionId:string){
   return [...new Set(project.links.flatMap(link=>[
     ...(link.from.junctionId===junctionId?[link.from.armId]:[]),

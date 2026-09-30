@@ -890,3 +890,19 @@ Covered commit paths:
 Direct drag preview remains fluid. Validation happens at commit/pointer-up; an invalid result rolls back to the previous NetworkProject and does not enter Undo history. Precision X/Y/rotation fields also restore the committed value immediately after a rejected edit, so the visible control cannot disagree with engineering state. Rigid whole-Network map alignment remains unaffected because it preserves relative port headings by construction.
 
 This is topology hardening, not a new geometry feature. Existing `linkIssues()` still reports imported/legacy invalid states, while normal direct editing now prevents creating a new invalid state silently.
+
+
+### Phase 6C.2 safe destructive editing
+
+Destructive editing now distinguishes between a local deletion and a cascade deletion.
+
+- RoadLink deletion remains immediate and Undo-able.
+- PI deletion remains immediate and affects only the selected alignment control.
+- An unconnected Junction can be deleted immediately.
+- A Junction with one or more attached RoadLinks requires a second explicit delete action before any engineering state changes.
+
+The first delete action only **arms** the deletion and reports how many RoadLinks will be removed. The same Junction must be deleted again to commit the cascade. Escape, selecting another object, changing tool, switching scenario, Undo/Redo or any other committed edit clears the armed state.
+
+Confirmed Junction + RoadLink cascade removal remains one NetworkProject transaction, so a single Undo restores the Junction and every removed RoadLink atomically.
+
+This hardening applies consistently to the Delete key, Delete tool and Inspector delete button; it does not add a soft-delete state to persisted project data.
