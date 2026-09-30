@@ -906,3 +906,23 @@ The first delete action only **arms** the deletion and reports how many RoadLink
 Confirmed Junction + RoadLink cascade removal remains one NetworkProject transaction, so a single Undo restores the Junction and every removed RoadLink atomically.
 
 This hardening applies consistently to the Delete key, Delete tool and Inspector delete button; it does not add a soft-delete state to persisted project data.
+
+
+### Phase 6C.3 safe RoadLink reconnect
+
+RoadLink endpoint reassignment no longer requires deleting and rebuilding the corridor.
+
+The selected RoadLink exposes precision reconnect controls for **FROM** and **TO**. A reconnect preserves the existing Link object and therefore keeps:
+
+- RoadLink ID and name;
+- PI / via points and requested curve radii;
+- section-profile mode and explicit endpoint lane transitions;
+- manual station-based corridor components.
+
+A candidate endpoint is commit-eligible only when the target Arm exists and is enabled, the target port is not owned by another RoadLink, FROM and TO remain on different Junctions, the candidate connection does not exceed the existing 90° port-facing invalid boundary, and the preserved PI/control alignment remains valid.
+
+The engine does not silently delete PIs to force a reconnect. If preserved alignment becomes self-crossing, reversing or too short, reconnect is rejected and the user must edit the alignment explicitly.
+
+Junction-handoff provenance is stricter: when the endpoint being replaced owns handoff-sourced lane components, reconnect is blocked until those components are deliberately **Detached as manual** or returned **Back to Junction only**. This prevents persisted provenance from silently pointing to an Arm that is no longer connected.
+
+Reconnect is one normal NetworkProject transaction and one Undo restores the original endpoint atomically.

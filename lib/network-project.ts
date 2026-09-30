@@ -375,6 +375,22 @@ export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):Con
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[],sectionProfile:{mode:'review'},components:[]};
   return{project:{...project,links:[...project.links,link]},link,error:null};
 }
+export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'to',ref:PortRef):ConnectPortsResult{
+  const link=project.links.find(item=>item.id===id);if(!link)return{project,error:'ไม่พบ Road Link ที่เลือก'};
+  const current=end==='from'?link.from:link.to,other=end==='from'?link.to:link.from;
+  if(portKey(current)===portKey(ref))return{project,link,error:null};
+  if(!armForPort(project,ref))return{project,error:'ไม่พบ arm/port ปลายทางที่เลือก'};
+  if(ref.junctionId===other.junctionId)return{project,error:'Road Link ต้องเชื่อมคนละ Junction'};
+  if(portOccupied(project,ref,id))return{project,error:'port นี้มี Road Link อื่นเชื่อมอยู่แล้ว'};
+  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
+  if(ownsHandoff)return{project,error:`เปลี่ยน ${end.toUpperCase()} port ไม่ได้ขณะที่มี Junction handoff ผูกกับปลายนี้ · Detach as manual หรือ Back to Junction only ก่อน`};
+  const candidate:RoadLink={...link,[end]:ref},candidateProject={...project,links:project.links.map(item=>item.id===id?candidate:item)},
+    facing=assessPortConnection(candidateProject,candidate.from,candidate.to);
+  if(!facing||facing.status==='invalid')return{project,error:'เปลี่ยน port ไม่ได้ · ปลายใหม่หันออกจากแนวเชื่อมเกิน 90°'};
+  const controls=linkControlPoints(candidateProject,candidate);
+  if(controls.length<2||!validAlignment(controls))return{project,error:'เปลี่ยน port ไม่ได้ · PI เดิมทำให้ alignment หักกลับ/ตัดตัวเองหรือมีช่วงสั้นเกินไป · ปรับหรือลบ PI ก่อน'};
+  return{project:candidateProject,link:candidate,error:null};
+}
 export function updateJunctionArmGeometry(project:NetworkProject,id:string,armId:number,angle:number,length:number):NetworkEditResult{
   const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
   const design=copyDesign(junction.design),normalized=((angle%360)+360)%360,nextLength=Math.max(45,Math.min(400,length));

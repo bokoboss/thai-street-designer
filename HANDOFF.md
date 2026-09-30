@@ -4,7 +4,7 @@ Updated: 2026-09-30
 Repository: `bokoboss/thai-street-designer`  
 Working branch: `chatgpt/full-engineering-ui-audit`  
 Pull request: **#1 — draft**  
-Current verified Product v1 hardening baseline before Phase 6C.2: `a133411662ec3a289879f720e22f76e4ef111bb9`
+Current verified Product v1 hardening baseline before Phase 6C.3: `c487e0c803196191b38d028ae6cca7d1c1359721`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -207,9 +207,9 @@ Completed foundations include RoadLink tangent–arc–tangent geometry, explici
 Current sequence:
 
 1. **Phase 6C — Network Editing Hardening**
-   - preserve semantic port validity after connect during Junction/Arm direct edits;
-   - harden destructive delete/cancel behavior;
-   - improve reconnect/disconnect and alignment editing only where it reduces editing friction without creating parallel ownership.
+   - post-connect port-facing transition guard completed;
+   - safe cascade-delete + Undo completed;
+   - safe endpoint reconnect preserving Link-owned state completed in Phase 6C.3.
 2. **Phase 6D — Project File Workflow**
    - New / Open / Save / Save As / Import / Export with explicit project-file ownership.
 3. **Phase 6E — Unified Network Export**

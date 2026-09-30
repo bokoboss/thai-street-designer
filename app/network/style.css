@@ -86,9 +86,10 @@
 [data-network-port-state="invalid"],[data-network-port-state="occupied"]{opacity:.62}
 [data-network-link-preview] path{vector-effect:non-scaling-stroke}
 
-.network-link-editor,.network-link-profile{margin-top:10px;padding:9px;border:1px solid #d8e7e4;border-radius:7px;background:#f8fbfb}
-.network-link-profile label{margin:6px 0 0!important}
-.network-link-profile select{margin-top:4px}
+.network-link-editor,.network-link-profile,.network-link-port-editor{margin-top:10px;padding:9px;border:1px solid #d8e7e4;border-radius:7px;background:#f8fbfb}
+.network-link-profile label,.network-link-port-editor label{margin:6px 0 0!important}
+.network-link-profile select,.network-link-port-editor select{margin-top:4px}
+.network-link-port-editor small{display:block;margin-top:4px;font-size:9px;line-height:1.45;color:#9a653e}
 [data-link-via-group] text{paint-order:stroke;stroke:#edf7f5;stroke-width:1.1px;stroke-linejoin:round}
 [data-network-link-median="true"]{pointer-events:none}
 
