@@ -388,10 +388,24 @@ try{
   await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(fileEnvelope)}],'acceptance.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`document.querySelector('.network-viewbar b')?.textContent==='Project File Acceptance'`),'open portable Project JSON');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'opened Project becomes clean file baseline');
+  mark('project-file-recovery');
+  const cleanWorkspaceBeforeReject=JSON.stringify(await scenarioWorkspace()),cleanSessionBeforeReject=await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`);
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File(['{malformed'],'broken.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(()=>evalValue(`document.querySelector('.network-status')?.textContent?.includes('เปิด Project ไม่สำเร็จ')===true`),'malformed Project reports Open failure');
+  assert.equal(JSON.stringify(await scenarioWorkspace()),cleanWorkspaceBeforeReject,'malformed Project must leave clean engineering workspace untouched');
+  assert.equal(await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),cleanSessionBeforeReject,'malformed Project must preserve clean file association');
+  assert(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='false'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'malformed Project must preserve clean baseline status');
   const fileScenarioCount=(await scenarioWorkspace()).scenarios.length;assert(fileScenarioCount<6,'Project file dirty-state test requires scenario capacity');
   await clickSelector('[data-network-scenario-add]');
   await waitFor(async()=>{const w=await scenarioWorkspace();return w?.scenarios?.length===fileScenarioCount+1;},'duplicate scenario as deterministic Project edit');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='true'`),'Project edit marks opened file dirty');
+  const dirtyWorkspaceBeforeReject=JSON.stringify(await scenarioWorkspace()),dirtySessionBeforeReject=await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),
+    unsupportedEnvelope=JSON.stringify({format:'thai-street-designer-network',fileVersion:99,workspace:await scenarioWorkspace()});
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(unsupportedEnvelope)}],'future-version.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(()=>evalValue(`document.querySelector('.network-status')?.textContent?.includes('Unsupported Thai Street Designer project file version')===true`),'unsupported Project version reports Open failure');
+  assert.equal(JSON.stringify(await scenarioWorkspace()),dirtyWorkspaceBeforeReject,'unsupported Project must leave dirty engineering workspace untouched');
+  assert.equal(await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),dirtySessionBeforeReject,'unsupported Project must preserve saved file baseline metadata');
+  assert.equal(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')`),'true','unsupported Project must preserve dirty status');
   await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload dirty Project file session');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')==='true'&&document.querySelector('[data-network-file-status="true"]')?.textContent?.includes('acceptance.tsd.json')===true`),'reload preserves file name and dirty baseline');
   await clickSelector('[data-network-file-menu="true"]');await clickSelector('[data-network-file-action="save"]');
@@ -429,7 +443,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

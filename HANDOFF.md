@@ -220,8 +220,9 @@ Current sequence:
    - Phase 6F.1 adds a canonical report model, Inspector Design Summary, normalized review findings and self-contained report-ready HTML with optional scenario delta.
    - Report logic reuses Junction reviews, RoadLink continuity and handoff-integrity engines; do not create a separate validation path.
 5. **Phase 7A — Product v1 Release Audit / Final Hardening**
-   - 7A.1 persists lightweight Project File association + saved-baseline signature across reload without adding file metadata to engineering JSON.
-   - Next: failure/recovery behavior, interaction sweep, then release-status/documentation cleanup.
+   - 7A.1 persists lightweight Project File association + saved-baseline signature across reload without adding file metadata to engineering JSON; Quality run `36701877517` passed.
+   - 7A.2 pins rejected-file recovery: malformed/unsupported Open must preserve engineering workspace, file association and dirty baseline.
+   - Next: interaction sweep, then release-status/documentation cleanup.
    - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
 Keep Parallel / Frontage Road and advanced CAD-like editing after Product v1 release acceptance.
