@@ -6,7 +6,7 @@
 
 สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md), [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) และ [Product v1 Release Audit](docs/PRODUCT_V1_RELEASE_AUDIT.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
 
-## Product v1 release-candidate workflow
+## Product v1 workflow
 
 ผลิตภัณฑ์ปัจจุบันเป็น **Network-first concept-design workspace** โดยยังใช้ Junction Design schema v6 เป็น source of truth ของ geometry ภายในทางแยกแต่ละแห่ง
 
@@ -21,7 +21,7 @@ Workflow หลักอยู่ที่ `/network`:
 
 `/junction` เป็น detail workspace สำหรับ geometry ภายใน Junction/Slip/Roundabout ส่วน `/roads` ยังคงเป็น alignment/free-road lab ไม่ใช่ Network source of truth หลัก
 
-สถานะ Release Audit ล่าสุดถูกบันทึกใน [docs/PRODUCT_V1_RELEASE_AUDIT.md](docs/PRODUCT_V1_RELEASE_AUDIT.md). PR #1 ยังคงเป็น Draft จนกว่าจะได้รับการยอมรับ Product v1 อย่างชัดเจน
+Product v1 ได้รับการยอมรับและ merge เข้า `main` ผ่าน PR #1 แล้วเมื่อ 2026-09-30 (merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b`). รายละเอียด release gate และข้อจำกัดที่ตั้งใจไว้บันทึกใน [docs/PRODUCT_V1_RELEASE_AUDIT.md](docs/PRODUCT_V1_RELEASE_AUDIT.md)
 
 ## เริ่มใช้งาน
 

@@ -1,8 +1,9 @@
 # Product v1 Release Audit
 
 Updated: 2026-09-30  
-Branch: `chatgpt/full-engineering-ui-audit`  
-Status: **Release candidate technically gated — awaiting explicit user acceptance; PR #1 remains Draft.**
+Historical audit branch: `chatgpt/full-engineering-ui-audit`  
+Released branch: `main`  
+Status: **Product v1 accepted and released to `main` on 2026-09-30 via PR #1.**
 
 ## Release objective
 
@@ -125,10 +126,13 @@ Earlier audit-specific runs:
 
 ## Release decision
 
-The engineering/product release audit is technically complete. The next step is **explicit user acceptance of the Product v1 release candidate**.
+The user explicitly accepted continuation from the Product v1 Release Gate on 2026-09-30. PR #1 was marked ready and merged to `main`.
 
-Until that decision:
+Release record:
 
-- keep PR #1 Draft;
-- do not merge into the production branch;
-- do not begin Parallel / Frontage Road, advanced CAD-like editing or another major feature family.
+- PR: `#1` — merged;
+- merge commit: `98198c443b4aee96fcb25c64d5c426aa03bb8d0b`;
+- final pre-release Quality run: `36703377299` — success;
+- final pre-release Vercel status: success.
+
+Product v1 is therefore **released**. Future work is post-v1 work and should begin from released `main` on a new branch. Parallel / Frontage Road and advanced CAD-like editing are no longer blocked by the v1 release gate, but each still requires its own semantic/design basis and regression plan before coding.

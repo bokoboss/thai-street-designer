@@ -2,9 +2,10 @@
 
 Updated: 2026-09-30  
 Repository: `bokoboss/thai-street-designer`  
-Working branch: `chatgpt/full-engineering-ui-audit`  
-Pull request: **#1 — draft**  
-Latest verified functional Product v1 release-candidate baseline: `24171c685de4ed93bf254e618ea3e48a9558e81d` · Quality run `36702892172`
+Released branch: `main`  
+Historical audit branch: `chatgpt/full-engineering-ui-audit`  
+Pull request: **#1 — merged 2026-09-30**  
+Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
@@ -203,11 +204,11 @@ Earlier Release Audit evidence:
 - persistent Project File baseline across reload: Quality run `36701877517`;
 - rejected malformed/unsupported Project recovery: Quality run `36702325780`.
 
-PR #1 remains **Draft**. Passing CI means the release candidate is technically gated; it does not authorize merge without explicit user acceptance.
+Product v1 was explicitly accepted by the user and PR #1 was merged to `main` as `98198c443b4aee96fcb25c64d5c426aa03bb8d0b`.
 
 ## Immediate next work
 
-Product v1 is now in hardening rather than foundation expansion.
+Product v1 hardening is complete and the audited release has been merged to `main`.
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
 
@@ -231,10 +232,10 @@ Current sequence:
    - 7A.2 pins rejected-file recovery: malformed/unsupported Open preserves engineering workspace, file association and dirty baseline; Quality run `36702325780` passed.
    - 7A.3 pins keyboard destructive safety, Ctrl+Z / Ctrl+Shift+Z and Inspector/view/selection stability; Quality run `36702892172` passed.
    - 7A.4 refreshes release documentation, verification references and intentional Product v1 limitations.
-   - Next action is a **release decision by the user**, not another feature family.
+   - Release decision completed: user accepted Product v1 and PR #1 was merged to `main`.
    - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
-Keep Parallel / Frontage Road and advanced CAD-like editing after explicit Product v1 release acceptance.
+Parallel / Frontage Road and advanced CAD-like editing may now be considered as **post-v1** work, but must start on a new branch from released `main` and pass the scope/model gate before implementation.
 
 For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 
@@ -292,9 +293,9 @@ The GitHub workflow `.github/workflows/quality.yml` runs these gates.
 
 Read `VERCEL.md`.
 
-- Git integration creates Preview deployments from the audit branch.
-- Production must remain on the configured production branch until deliberate acceptance/merge.
-- Current branch should not be merged merely because CI passes; Product v1 Release Audit is technically gated, but PR #1 remains Draft until the user explicitly accepts the release candidate.
+- Product v1 was merged to the production branch on 2026-09-30.
+- Historical audit Preview evidence remains useful for regression tracing, but new development should branch from current `main`.
+- Production changes after v1 should again use a review branch/PR rather than direct feature work on `main`.
 
 ## Important files
 
@@ -331,4 +332,4 @@ Before claiming an issue is fixed:
 2. pass all source gates;
 3. for geometry/UI issues, complete a visual/interaction acceptance pass;
 4. distinguish a Vercel deployment problem from a source-code build failure;
-5. do not merge PR #1 until the user explicitly accepts the result.
+5. for post-v1 work, use a new branch/PR and do not merge until its own acceptance criteria pass.
