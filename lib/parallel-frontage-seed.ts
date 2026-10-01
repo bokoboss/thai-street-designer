@@ -70,8 +70,7 @@ function buildSide(project:NetworkProject,oriented:OrientedLink[],side:ParallelC
   for(let index=0;index<sources.length;index++){
     const source=sources[index]!,added=addJunction(working,offsetCenters[index],seedDesign(source.design)),
       rotated=rotateJunction(added.project,added.junction.id,source.rotation);
-    if(rotated.error)return{project,error:'สร้าง frontage seed Junction ไม่สำเร็จ · '+rotated.error};
-    working=renamedJunction(rotated.project,added.junction.id,`Frontage ${sideLabel(side)} seed · ${source.name}`);
+    working=renamedJunction(rotated,added.junction.id,`Frontage ${sideLabel(side)} seed · ${source.name}`);
     const clone=junctionById(working,added.junction.id);if(!clone)return{project,error:'สร้าง frontage seed Junction ไม่สำเร็จ'};
     cloneBySource.set(source.id,clone);
   }
@@ -98,6 +97,7 @@ function buildSide(project:NetworkProject,oriented:OrientedLink[],side:ParallelC
 }
 
 export function seedParallelFrontage(project:NetworkProject,input:AssistedFrontageSeedInput):AssistedFrontageSeedResult{
+  if(!['left','right','both'].includes(input.side))return{project,generated:[],error:'Seed side ไม่ถูกต้อง'};
   const offset=Number(input.offset),sides:ParallelCorridorSide[]=input.side==='both'?['left','right']:[input.side];
   if(!Number.isFinite(offset)||offset<20||offset>200)return{project,generated:[],error:'Seed offset ต้องอยู่ระหว่าง 20–200 m · เป็น geometric workspace guard ไม่ใช่มาตรฐานออกแบบ'};
   if(!parallelCorridorChainContinuous(project,input.mainlineLinkIds))return{project,generated:[],error:'Mainline chain ไม่ต่อเนื่อง'};
