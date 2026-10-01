@@ -817,9 +817,9 @@ export default function NetworkWorkspace(){
     requestDelete(selection);
   }
   function deleteSelection(){requestDelete(selection);}
-  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
+  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setParallelDraftMainlineId(null);setParallelTargetCorridorId('');setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
 
-  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setDeleteArmed(null);setFileReplaceArmed(null);setSaveAsDraft(null);setPendingPort(null);setLinkCursor(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
+  return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setDeleteArmed(null);setFileReplaceArmed(null);setSaveAsDraft(null);setPendingPort(null);setLinkCursor(null);setParallelDraftMainlineId(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
       <div className="network-brand"><Network size={21}/><div><b>Thai Street Designer</b><span>Network Concept Workspace</span></div></div>
       <div className="network-header-actions">

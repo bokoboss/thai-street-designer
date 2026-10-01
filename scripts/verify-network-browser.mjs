@@ -446,6 +446,10 @@ try{
   await clickSelector('[data-network-link="L-1"]');await clickSelector('[data-network-parallel-action="start"]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'&&!!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'stage mainline without engineering-state mutation');
   assert.equal((await project()).parallelCorridors.length,0,'staging a mainline must remain UI-only until a frontage Link is chosen');
+  await focusWorkspace();await keyPress('Escape','Escape');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')===null&&!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'Escape cancels UI-only parallel-corridor draft');
+  assert.equal((await project()).parallelCorridors.length,0,'cancelling a draft must not mutate engineering state');
+  await clickSelector('[data-network-parallel-action="start"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'`),'restage mainline after Escape');
   await clickSelector('[data-network-link="L-2"]');await clickSelector('[data-network-parallel-action="finalize-left"]');
   await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return g?.mainlineLinkIds?.[0]==='L-1'&&g?.frontage?.find(v=>v.side==='left')?.linkIds?.[0]==='L-2';},'create parallel corridor from staged mainline + left frontage');
   assert(await evalValue(`!!document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor="PC-1"]')&&!!document.querySelector('[data-network-parallel-role="left"][data-network-parallel-corridor="PC-1"]')`),'selected group must highlight mainline and frontage members on canvas');
