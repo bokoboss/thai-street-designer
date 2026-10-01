@@ -123,7 +123,13 @@ try{
     await send('Input.dispatchMouseEvent',{type:'mousePressed',x:p.x,y:p.y,button:'left',clickCount:count});
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x,y:p.y,button:'left',clickCount:count});
   }
-  async function clickSelector(selector,index=0){const p=await waitFor(()=>rectBySelector(selector,index),selector);await clickAt(p);}
+  async function clickSelector(selector,index=0){
+    await waitFor(()=>evalValue(`(()=>{const e=document.querySelectorAll(${JSON.stringify(selector)})[${index}];if(!e)return false;e.scrollIntoView({block:'center',inline:'nearest'});return true;})()`),selector);
+    await sleep(60);
+    const p=await waitFor(()=>rectBySelector(selector,index),selector);
+    assert(p.y>=0&&p.y<=1000&&p.x>=0&&p.x<=1440,'Click target must be inside the emulated viewport after scroll: '+selector+' '+JSON.stringify(p));
+    await clickAt(p);
+  }
   async function keyPress(key,code=key,modifiers=0){
     await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,modifiers});
     await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,modifiers});
