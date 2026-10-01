@@ -460,6 +460,7 @@ try{
   await clickSelector('[data-network-link="L-2"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-panel')==='member'&&document.querySelectorAll('[data-network-parallel-member]').length===3`),'group member Inspector list');
   await clickSelector('[data-network-parallel-action="remove-member"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.links?.some(v=>v.id==='L-2')&&g?.frontage?.length===1&&g.frontage[0].side==='right';},'remove frontage membership without deleting RoadLink geometry');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0];return g?.frontage?.length===2;},'Undo restores removed corridor membership');
+  await clickSelector('[data-network-link="L-2"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-panel')==='member'`),'reselect restored corridor member after Undo clears selection');
   await clickSelector('[data-network-parallel-action="dissolve"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===0&&p?.links?.length===3;},'Dissolve removes only relationship metadata');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===1&&p?.links?.length===3;},'Undo restores dissolved group');
 
