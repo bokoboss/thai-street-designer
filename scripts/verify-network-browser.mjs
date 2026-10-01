@@ -464,6 +464,22 @@ try{
   await clickSelector('[data-network-parallel-action="dissolve"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===0&&p?.links?.length===3;},'Dissolve removes only relationship metadata');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===1&&p?.links?.length===3;},'Undo restores dissolved group');
 
+  mark('parallel-corridor-assisted-seed');
+  await clickSelector('[data-network-link="L-3"]');await clickSelector('[data-network-parallel-action="remove-member"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'prepare existing corridor with missing right frontage');
+  const seedSourceSnapshot=JSON.stringify(await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;return{junctions:p.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:p.links.find(l=>l.id==='L-1')}})()`));
+  await clickSelector('[data-network-link="L-1"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-parallel-seed-action="right"]')&&!!document.querySelector('[data-network-parallel-seed-offset]')`),'missing-side assisted seed controls');
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-parallel-seed-offset]');input.value='45';input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await clickSelector('[data-network-parallel-seed-action="right"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return p?.junctions?.length===8&&p?.links?.length===4&&right?.linkIds?.length===1;},'assisted right frontage seed commits generated Junction/RoadLink objects atomically');
+  const seededProject=await project(),seededGroup=seededProject.parallelCorridors[0],seededRight=seededGroup.frontage.find(v=>v.side==='right'),seededLinkId=seededRight.linkIds[0],seededLink=seededProject.links.find(v=>v.id===seededLinkId),seededNodes=[seededLink.from.junctionId,seededLink.to.junctionId].map(id=>seededProject.junctions.find(j=>j.id===id));
+  assert(seededNodes.every(j=>j&&Math.abs(j.y+45)<1e-6),'assisted right seed must apply the explicit centerline offset');
+  assert(seededNodes.every(j=>j.design.slips.length===0&&j.design.arms.every(a=>a.length<=60&&!a.signal&&!a.crossing&&!a.stop)),'assisted seed nodes must strip copied junction treatments');
+  assert.equal(JSON.stringify({junctions:seededProject.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:seededProject.links.find(l=>l.id==='L-1')}),seedSourceSnapshot,'assisted seed must leave source mainline geometry untouched');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');
+  await clickSelector('[data-network-action="redo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===8&&p?.links?.length===4&&g?.frontage?.some(v=>v.side==='right');},'Redo restores assisted frontage seed atomically');
+
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
     `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
@@ -490,7 +506,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

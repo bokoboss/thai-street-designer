@@ -1072,3 +1072,19 @@ For existing groups, an ungrouped RoadLink can be added as Mainline, Frontage Le
 Selecting any member highlights the group's Mainline and Frontage chains in plan. The highlight is editing UI and does not create a second geometry representation.
 
 Phase 8A.1b also updates Network workspace status text to schema v4. Assisted offset generation remains Phase 8A.2.
+
+
+## Phase 8A.2 — assisted frontage seed
+
+The Network Inspector can now create a missing frontage chain from an ungrouped selected RoadLink or from an existing ParallelCorridor mainline chain.
+
+The operation is intentionally one-shot:
+- Left / Right is relative to the deterministic mainline-chain traversal;
+- the entered centerline offset seeds new Junction centers and RoadLink via points;
+- source Junction/RoadLink objects remain unchanged;
+- generated seed Junctions remove copied Slip/control/pocket treatment that would otherwise imply an engineered cross-street design;
+- no cross-street RoadLink, ramp or transfer connector is generated;
+- the created geometry is ordinary editable Network state and the offset is not persisted as a constraint;
+- the complete operation is one Undo/Redo transaction.
+
+Roundabout chains are rejected in assisted mode rather than approximated.

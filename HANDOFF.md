@@ -218,7 +218,8 @@ Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feat
 Phase 8A.1 status:
 - **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
 - **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
-- Next gate after 8A.1b Quality is review of the relationship UX before **8A.2 assisted parallel-road creation**.
+- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review.
+- 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
 - Do not implement mid-link ramps inside 8A.2; transfer topology remains Phase 8B.
 
 

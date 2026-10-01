@@ -1,6 +1,6 @@
 # Parallel / Frontage Road Design Basis
 
-Status: **Phase 8A.1 semantic relationship foundation + Inspector workflow implemented; assisted geometry creation remains deferred**  
+Status: **Phase 8A.1 complete; Phase 8A.2 assisted one-shot frontage seeding implemented on the working branch**  
 Updated: 2026-09-30  
 Working branch: `chatgpt/post-v1-parallel-corridor-foundation`
 
@@ -309,3 +309,67 @@ Still deferred to Phase 8A.2 / 8B:
 - persistent parametric offset constraints;
 - mainline ↔ frontage ramps / transfer topology;
 - grade separation and traffic-operation analysis.
+
+
+## 15. Phase 8A.2 endpoint and assisted-creation policy
+
+Phase 8A.2 is a **one-shot geometry seeding tool**, not a parametric corridor constraint system.
+
+### 15.1 Endpoint topology
+
+Generated frontage roads remain ordinary Junction/RoadLink objects. The tool offsets the Junction sequence of the selected mainline chain and creates a new RoadLink chain between those generated Junctions.
+
+The generated Junction is an editable **seed junction**:
+- it inherits lane / section semantics from the source Junction as a starting point;
+- copied Slip lanes are removed;
+- copied signal, crossing and stop-control states are cleared;
+- Pocket/receiving treatments are cleared;
+- roadside objects are disabled;
+- arm lengths are reduced to bounded seed stubs so the generated object does not imply a completed cross-street design.
+
+This is necessary because Product v1 does not have a separate two-arm corridor-node type. Phase 8A.2 does **not** add a second endpoint model.
+
+### 15.2 Cross-street policy
+
+The tool does **not** create cross-street RoadLinks automatically.
+
+A frontage road commonly intersects arterial/cross streets, but the resulting spacing, control and intersection form are context-sensitive. FHWA access-management guidance treats intersections/access points as conflict locations whose spacing and movement control must be deliberately managed. TxDOT frontage-road guidance likewise distinguishes conventional and spread frontage-road intersection arrangements rather than prescribing one universal geometry.
+
+Therefore generated frontage Junction stubs are review points only. The designer must explicitly connect or edit cross streets after generation.
+
+References used for this policy:
+- FHWA Corridor Access Management: https://highways.dot.gov/safety/proven-safety-countermeasures/corridor-access-management
+- FHWA Access Management in the Vicinity of Intersections: https://highways.dot.gov/safety/intersection-safety/cam/access-management-vicinity-intersections-technical-summary
+- TxDOT Roadway Design Manual — Frontage Roads: https://www.txdot.gov/manuals/des/rdw/chapter-8--freeways--4r-/8-1-design-considerations/8-1-18-frontage-roads.html
+- TxDOT Roadway Design Manual — Four-Leg Interchanges / frontage-road separation: https://www.txdot.gov/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-3-types-of-interchanges/15-3-2-four-leg-interchanges.html
+
+### 15.3 Offset semantics
+
+The user supplies an initial centerline offset. It is used only to seed generated Junction centers and RoadLink via geometry.
+
+The offset:
+- is not persisted inside `ParallelCorridor`;
+- is not a Thai design-standard value;
+- does not continue constraining the frontage geometry after creation;
+- may be edited freely with the normal Network tools after generation.
+
+The workspace currently applies a 20–200 m geometric guard to avoid degenerate seed placement. This guard is a software-domain limit, not a roadway-design criterion.
+
+### 15.4 Supported assisted generation
+
+Phase 8A.2 supports:
+- ungrouped selected RoadLink → generate Left, Right or Both and create the group atomically;
+- existing ParallelCorridor → generate a missing Left or Right side from its persisted mainline chain;
+- multi-Link continuous mainline chains;
+- source RoadLink via geometry as a seed for the new frontage alignment;
+- one Undo/Redo transaction for generated Junctions, RoadLinks and corridor membership.
+
+### 15.5 Deferred from assisted generation
+
+Still deferred:
+- roundabout-chain assisted generation;
+- automatic cross-street connections;
+- persistent offset / equation constraints;
+- mainline ↔ frontage ramps or mid-link transfer nodes;
+- grade separation;
+- access-spacing warrants, capacity, weaving, LOS or simulation.

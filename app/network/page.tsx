@@ -14,6 +14,7 @@ import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,create
 import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/lib/network-project-file';
 import {NETWORK_PROJECT_FILE_SESSION_STORAGE,createNetworkProjectFileSession,networkProjectWorkspaceSignature,restoreNetworkProjectFileSession,serializeNetworkProjectFileSession} from '@/lib/network-project-file-session';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/lib/network-design-report';
+import {seedParallelFrontage} from '@/lib/parallel-frontage-seed';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
@@ -90,7 +91,7 @@ export default function NetworkWorkspace(){
     [comparisonExporting,setComparisonExporting]=useState<'svg'|'png'|null>(null),[comparisonExportStatus,setComparisonExportStatus]=useState(''),
     [networkExporting,setNetworkExporting]=useState<string|null>(null),[networkExportStatus,setNetworkExportStatus]=useState(''),
     [projectFileName,setProjectFileName]=useState(''),[projectFileBaseline,setProjectFileBaseline]=useState<string|null>(null),[saveAsDraft,setSaveAsDraft]=useState<string|null>(null),[fileReplaceArmed,setFileReplaceArmed]=useState<'new'|'open'|null>(null),
-    [parallelDraftMainlineId,setParallelDraftMainlineId]=useState<string|null>(null),[parallelTargetCorridorId,setParallelTargetCorridorId]=useState('');
+    [parallelDraftMainlineId,setParallelDraftMainlineId]=useState<string|null>(null),[parallelTargetCorridorId,setParallelTargetCorridorId]=useState(''),[parallelSeedOffset,setParallelSeedOffset]=useState(40);
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag>(null),projectRef=useRef(project),scenarioWorkspaceRef=useRef(scenarioWorkspace),storageReady=useRef(false),fieldBefore=useRef<NetworkProject|null>(null),
     pastRef=useRef<NetworkProject[]>([]),futureRef=useRef<NetworkProject[]>([]),scenarioHistoryRef=useRef(new Map<string,{past:NetworkProject[];future:NetworkProject[]}>()),armMoveFrame=useRef<number|null>(null),armMovePending=useRef<ArmMovePending|null>(null),
     localImageInput=useRef<HTMLInputElement>(null),networkProjectFileInput=useRef<HTMLInputElement>(null),localImageUrlRef=useRef<string|null>(null);
@@ -692,6 +693,18 @@ export default function NetworkWorkspace(){
   function selectParallelMember(id:string){
     if(!projectRef.current.links.some(v=>v.id===id))return;choose('select');setSelection({kind:'link',id});setSelectedArm(null);setSelectedLinkVertex(null);setNotice(`เลือกสมาชิก Parallel corridor · ${id}`);
   }
+  function seedSelectedParallelFrontage(side:ParallelCorridorSide|'both'){
+    if(!selectedLink)return;
+    const before=projectRef.current,membership=parallelCorridorForLink(before,selectedLink.id),
+      mainlineLinkIds=membership?.corridor.mainlineLinkIds??[selectedLink.id],
+      result=seedParallelFrontage(before,{mainlineLinkIds,side,offset:parallelSeedOffset,corridorId:membership?.corridor.id});
+    if(result.error||!result.corridor){setNotice(result.error??'สร้าง Assisted frontage seed ไม่สำเร็จ');return;}
+    commit(result.project,before);setParallelDraftMainlineId(null);setParallelTargetCorridorId(result.corridor.id);
+    const firstGenerated=result.generated[0]?.linkIds[0];if(firstGenerated)setSelection({kind:'link',id:firstGenerated});
+    setSelectedArm(null);setSelectedLinkVertex(null);choose('select');
+    const generatedLinks=result.generated.reduce((sum,chain)=>sum+chain.linkIds.length,0),generatedJunctions=result.generated.reduce((sum,chain)=>sum+chain.junctionIds.length,0);
+    setNotice(`สร้าง Assisted frontage seed ${side} แล้ว · ${generatedLinks} RoadLink + ${generatedJunctions} Junction · offset ${parallelSeedOffset} m เป็นค่าเริ่มต้น ไม่ใช่ design criterion · Undo ได้ทั้งชุด`);
+  }
   function addSelectedStationComponent(kind:'lane'|'width'){
     if(!selectedLink)return;const before=projectRef.current,result=addLinkStationComponent(before,selectedLink.id,kind);
     if(result.error){setNotice(result.error);return;}commit(result.project,before);setNotice(kind==='lane'?'เพิ่ม Auxiliary lane lifecycle แล้ว · ปรับ station/taper ได้ด้านล่าง':'เพิ่ม Edge-width lifecycle แล้ว · ปรับ target/station/delta ได้ด้านล่าง');
@@ -954,7 +967,7 @@ export default function NetworkWorkspace(){
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
           <div className="network-link-metrics"><span>Resolved alignment <b>{linkLength(project,selectedLink).toFixed(1)} m</b></span><span>PI / via points <b>{selectedLink.via.length}</b></span></div>
-          <ParallelCorridorPanel project={project} selectedLink={selectedLink} draftMainlineId={parallelDraftMainlineId} targetCorridorId={effectiveParallelTargetCorridorId} onStartDraft={beginParallelCorridorDraft} onCancelDraft={()=>{setParallelDraftMainlineId(null);setNotice('ยกเลิก Parallel corridor draft แล้ว');}} onFinalizeDraft={finalizeParallelCorridorDraft} onTargetCorridor={setParallelTargetCorridorId} onAddToTarget={addSelectedLinkToParallelTarget} onRemoveMembership={removeSelectedParallelMembership} onDissolve={dissolveSelectedParallelCorridor} onSelectLink={selectParallelMember}/>
+          <ParallelCorridorPanel project={project} selectedLink={selectedLink} draftMainlineId={parallelDraftMainlineId} targetCorridorId={effectiveParallelTargetCorridorId} seedOffset={parallelSeedOffset} onSeedOffset={value=>Number.isFinite(value)&&setParallelSeedOffset(value)} onSeed={seedSelectedParallelFrontage} onStartDraft={beginParallelCorridorDraft} onCancelDraft={()=>{setParallelDraftMainlineId(null);setNotice('ยกเลิก Parallel corridor draft แล้ว');}} onFinalizeDraft={finalizeParallelCorridorDraft} onTargetCorridor={setParallelTargetCorridorId} onAddToTarget={addSelectedLinkToParallelTarget} onRemoveMembership={removeSelectedParallelMembership} onDissolve={dissolveSelectedParallelCorridor} onSelectLink={selectParallelMember}/>
           <div className="network-inline-actions"><button data-network-link-action="add-pi" onClick={addSelectedLinkPi}>＋ PI / จุดแนว</button><button data-network-link-action="remove-pi" disabled={selectedLinkVertex===null} onClick={removeSelectedLinkPi}>ลบ PI</button></div>
           {selectedVia&&selectedLinkVertex!==null&&<div className="network-link-editor"><div className="network-arm-editor-head"><span>CURVE AT PI {selectedLinkVertex+1}</span><b>R {selectedVia.radius.toFixed(0)} m</b></div><div className="network-step-row"><span>รัศมีโค้ง</span><button disabled={selectedVia.radius<=0} onClick={()=>adjustSelectedViaRadius(-5)}>−</button><b>{selectedVia.radius.toFixed(0)} m</b><button disabled={selectedVia.radius>=200} onClick={()=>adjustSelectedViaRadius(5)}>＋</button></div><button className="network-map-reset" disabled={selectedVia.radius===0} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,0),before);}}>ใช้มุม PI ตรง (R0)</button><p className="network-note">ระบบ clamp รัศมีตามระยะ tangent ที่มีจริง เพื่อไม่ให้โค้งล้ำ PI ข้างเคียง</p></div>}
           <div className="network-link-profile" data-network-endpoint-lifecycle="true"><div className="network-arm-editor-head"><span>JUNCTION ENDPOINT LIFECYCLE</span><b>{selectedLink.sectionProfile.mode==='linear'?(linearTransitionPossible?'Resolved lifecycle':'Needs topology'):'Review mismatch'}</b></div>
