@@ -1,6 +1,6 @@
 # Post-v1 Roadmap
 
-Updated: 2026-09-30  
+Updated: 2026-10-01  
 Released baseline: Product v1 on `main`
 
 Post-v1 work remains governed by the same architecture rule: new capabilities extend existing semantic ownership rather than introducing parallel geometry/rendering paths.
@@ -24,6 +24,12 @@ Design basis: `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md`.
 - no hidden long-lived copied geometry or persistent offset constraint;
 - generated seed Junctions are neutralized for review;
 - persisted seed-review markers survive Save/Reload and can be explicitly cleared after review.
+
+Acceptance / freeze gate before PR #2 merge:
+- dedicated browser golden evidence must show the generated frontage geometry, corridor highlighting and persisted review points together;
+- Thai labels in visual QA must render with a Thai-capable font rather than missing-glyph boxes;
+- one-side generation must remain legible in the narrow Inspector and clearly state that the offset is a one-shot seed, not a persistent constraint;
+- after these checks pass, freeze PR #2 at the 8A boundary and do not pull Phase 8B ramp topology into the same PR.
 
 Automatic cross-street connections remain deliberately excluded. Mid-link mainline ↔ frontage ramps remain Phase 8B.
 

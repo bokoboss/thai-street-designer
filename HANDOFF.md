@@ -1,24 +1,24 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-09-30  
+Updated: 2026-10-01  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
 Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
-Pull request: **#1 — merged 2026-09-30**  
+Product v1 pull request: **#1 — merged 2026-09-30**  
+Current post-v1 pull request: **#2 — Draft · Phase 8A Parallel / Frontage Corridor Foundation**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
 ## Start here
 
-1. Checkout/read `chatgpt/full-engineering-ui-audit`. **Do not start from `main`.**
-2. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
-3. Read this file completely for the current work/status.
-4. Read `docs/ARCHITECTURE.md`.
-5. Read `docs/SLIP_LANE_DESIGN_BASIS.md`.
-6. Inspect PR #1 and the latest branch commit/status before modifying anything.
-7. Run the full quality gates before accepting a code change.
+1. For current Phase 8A work, checkout/read `chatgpt/post-v1-parallel-corridor-foundation` and inspect PR #2 before modifying anything.
+2. Treat `main` as the released Product v1 baseline. `chatgpt/full-engineering-ui-audit` is historical audit evidence only; do not resume feature work there.
+3. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
+4. Read this file completely, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md`, `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` and `docs/POST_V1_ROADMAP.md`.
+5. If PR #2 has already been merged, start the next milestone from current `main` on a new review branch rather than continuing the historical Phase 8A branch.
+6. Run the full quality gates before accepting a code change.
 
 ## Product v1 mission and guardrails
 
@@ -189,6 +189,8 @@ Do **not** reintroduce old runtime fields such as `Arm.slip`, `slipReceivingMode
 
 ## Latest verification
 
+Post-v1 Phase 8A.2 baseline `69e9904066c5a97ce9013abf35aabf90c5db1fdf` passed GitHub Quality run `36822921692`, including schema-v4 regressions, TypeScript, lint, both production builds, browser acceptance and Vercel Preview.
+
 Functional release-candidate baseline `24171c685de4ed93bf254e618ea3e48a9558e81d` passed GitHub Quality run `36702892172`:
 
 - Geometry/workspace regressions ✅
@@ -222,7 +224,7 @@ Phase 8A.1 status:
 - **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
 - **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right uses a persisted looking-ahead Mainline reference direction. Generated seed Junction review points are persisted per frontage chain, surfaced in Design Summary/Scenario Comparison and can be explicitly Mark reviewed without changing geometry.
 - 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
-- After 8A.2 hardening Quality passes, freeze PR #2 at the Parallel/Frontage foundation boundary.
+- 8A.2 acceptance hardening now focuses on dedicated assisted-frontage golden evidence, Thai-readable visual QA and clearer one-shot/review UX; once those gates pass, freeze PR #2 at the Parallel/Frontage foundation boundary.
 - Do not implement mid-link ramps inside PR #2; transfer topology remains Phase 8B and should start from a separate model/design milestone because current PortRef semantics are Junction-Arm specific.
 
 

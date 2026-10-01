@@ -194,6 +194,8 @@ try{
 
   mark('workspace-load');
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'Network workspace load');
+  const thaiFontReady=await evalValue(`document.fonts.check('12px "Noto Sans Thai"','ภาษาไทย')||document.fonts.check('12px Tahoma','ภาษาไทย')`);
+  assert(thaiFontReady,'Visual acceptance requires a Thai-capable font so golden screenshots do not hide labels as missing glyphs');
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
@@ -477,6 +479,9 @@ try{
   const seedSourceSnapshot=JSON.stringify(await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;return{junctions:p.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:p.links.find(l=>l.id==='L-1')}})()`));
   await clickSelector('[data-network-link="L-1"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-parallel-seed-action="right"]')&&!!document.querySelector('[data-network-parallel-seed-offset]')`),'missing-side assisted seed controls');
+  const seedActionLayout=await evalValue(`(()=>{const group=document.querySelector('.network-parallel-seed-actions'),button=group?.querySelector('button');if(!group||!button)return null;const g=group.getBoundingClientRect(),b=button.getBoundingClientRect();return{count:group.getAttribute('data-network-parallel-seed-count'),container:+g.width.toFixed(1),button:+b.width.toFixed(1)}})()`);
+  assert.equal(seedActionLayout?.count,'1','missing-side assisted seed should expose one action');
+  assert(seedActionLayout?.button>=seedActionLayout?.container*.9,'single assisted-seed action should use the available Inspector width');
   await clickSelector('[data-network-parallel-seed-offset]');
   await evalValue(`(()=>{const input=document.querySelector('[data-network-parallel-seed-offset]');if(!input)return false;input.focus();input.select();return document.activeElement===input;})()`);
   await send('Input.insertText',{text:'45'});
@@ -490,6 +495,10 @@ try{
   assert(seededNodes.every(j=>j.design.slips.length===0&&j.design.arms.every(a=>a.length<=60&&!a.signal&&!a.crossing&&!a.stop)),'assisted seed nodes must strip copied junction treatments');
   assert.equal(JSON.stringify({junctions:seededProject.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:seededProject.links.find(l=>l.id==='L-1')}),seedSourceSnapshot,'assisted seed must leave source mainline geometry untouched');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-seed-review="true"]')?.textContent?.includes('2 Junctions')===true&&!!document.querySelector('[data-network-parallel-mark-reviewed="right"]')`),'Inspector exposes persisted assisted seed review points');
+  await clickSelector('[data-network-action="fit"]');await sleep(180);
+  const assistedSeedGoldenContract=await evalValue(`(()=>{const review=document.querySelector('[data-network-parallel-seed-review="true"]'),mainline=document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor]'),right=document.querySelector('[data-network-parallel-role="right"][data-network-parallel-corridor]'),generated=document.querySelector('[data-network-link="${seededLinkId}"]');return{ok:!!review&&!!mainline&&!!right&&!!generated,review:!!review,mainlineHighlight:!!mainline,rightHighlight:!!right,generatedLink:!!generated}})()`);
+  assert(assistedSeedGoldenContract?.ok,'Assisted frontage seed golden contract failed');
+  await goldenScreenshot('parallel-frontage-assisted-seed',assistedSeedGoldenContract);
   await clickSelector('[data-network-parallel-mark-reviewed="right"]');
   await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return Array.isArray(right?.seedReviewJunctionIds)&&right.seedReviewJunctionIds.length===0;},'Mark reviewed clears only persisted seed-review metadata');
   const reviewedSeed=await project();assert.equal(JSON.stringify(reviewedSeed.junctions),JSON.stringify(seededProject.junctions),'Mark reviewed must not alter seeded Junction geometry');assert.equal(JSON.stringify(reviewedSeed.links),JSON.stringify(seededProject.links),'Mark reviewed must not alter RoadLink geometry');

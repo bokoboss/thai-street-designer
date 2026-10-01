@@ -1,4 +1,4 @@
-.network-workspace{height:100dvh;display:flex;flex-direction:column;background:var(--ws-bg);color:var(--ws-ink);font:13px/1.45 var(--ws-font);font-variant-numeric:tabular-nums}
+.network-workspace{height:100dvh;display:flex;flex-direction:column;background:var(--ws-bg);color:var(--ws-ink);font:13px/1.45 var(--ws-font,Arial,"Noto Sans Thai",Tahoma,sans-serif);font-variant-numeric:tabular-nums}
 .network-workspace button,.network-workspace a,.network-workspace input,.network-workspace select{font:inherit}
 .network-header{height:50px;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--ws-border);background:#fff;position:relative;z-index:20;gap:12px}
 .network-brand{display:flex;align-items:center;gap:9px;color:var(--ws-accent)}
@@ -226,8 +226,8 @@
 .network-parallel-seed{margin:9px 0;padding:8px;border:1px solid #d8d1b8;border-radius:6px;background:#fffdf6}
 .network-parallel-seed-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}.network-parallel-seed-head span{font-size:8.5px;font-weight:800;letter-spacing:.08em;color:#7c6730}.network-parallel-seed-head b{font-size:9px;color:var(--ws-muted);font-weight:600}
 .network-parallel-seed label{margin:0!important}.network-parallel-seed input{margin-top:4px!important}
-.network-parallel-seed-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:6px}.network-parallel-seed-actions button{border:1px solid #d8c894;background:#fff;border-radius:6px;padding:6px 5px;color:#6e5720;font-size:9.5px;font-weight:700}
-.network-parallel-seed p{margin:7px 0 0;font-size:9.4px;line-height:1.5;color:#756b52}
+.network-parallel-seed-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:6px}.network-parallel-seed-actions[data-network-parallel-seed-count="1"]{grid-template-columns:1fr}.network-parallel-seed-actions[data-network-parallel-seed-count="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}.network-parallel-seed-actions button{border:1px solid #d8c894;background:#fff;border-radius:6px;padding:7px 6px;color:#6e5720;font-size:9.5px;font-weight:700}
+.network-parallel-seed p{margin:7px 0 0;font-size:9.4px;line-height:1.5;color:#756b52}.network-parallel-seed p strong{color:#745719;font-weight:800}
 @media(max-width:900px){.network-parallel-seed-actions{grid-template-columns:1fr}}
 
 .network-parallel-reference{display:grid;gap:2px;margin:7px 0;padding:7px;border:1px solid #d8e4e2;border-radius:6px;background:#fff}
