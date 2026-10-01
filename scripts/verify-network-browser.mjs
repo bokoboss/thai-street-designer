@@ -476,7 +476,7 @@ try{
   const seedSourceSnapshot=JSON.stringify(await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;return{junctions:p.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:p.links.find(l=>l.id==='L-1')}})()`));
   await clickSelector('[data-network-link="L-1"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-parallel-seed-action="right"]')&&!!document.querySelector('[data-network-parallel-seed-offset]')`),'missing-side assisted seed controls');
-  await evalValue(`(()=>{const input=document.querySelector('[data-network-parallel-seed-offset]');input.value='45';input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-parallel-seed-offset]');input.focus();input.value='45';input.dispatchEvent(new Event('input',{bubbles:true}));input.blur();return true;})()`);
   await clickSelector('[data-network-parallel-seed-action="right"]');
   await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return p?.junctions?.length===8&&p?.links?.length===4&&right?.linkIds?.length===1;},'assisted right frontage seed commits generated Junction/RoadLink objects atomically');
   const seededProject=await project(),seededGroup=seededProject.parallelCorridors[0],seededRight=seededGroup.frontage.find(v=>v.side==='right'),seededLinkId=seededRight.linkIds[0],seededLink=seededProject.links.find(v=>v.id===seededLinkId),seededNodes=[seededLink.from.junctionId,seededLink.to.junctionId].map(id=>seededProject.junctions.find(j=>j.id===id));
