@@ -1,6 +1,6 @@
 # Parallel / Frontage Road Design Basis
 
-Status: **Phase 8A research and model gate — implementation not yet complete**  
+Status: **Phase 8A.1 semantic relationship foundation + Inspector workflow implemented; assisted geometry creation remains deferred**  
 Updated: 2026-09-30  
 Working branch: `chatgpt/post-v1-parallel-corridor-foundation`
 
@@ -285,3 +285,27 @@ Phase 8A.1 does not:
 - convert an existing lane/shoulder/median into a frontage road.
 
 The first goal is to make the **semantic relationship correct and durable**. Layout automation comes after that foundation.
+
+
+## 14. Phase 8A.1 implementation status
+
+Implemented on the post-v1 branch:
+
+- Network schema v4 persists `parallelCorridors[]`.
+- Mainline and left/right frontage membership is an ordered RoadLink-chain relationship.
+- v1/v2/v3 Network projects migrate to v4 with an empty relationship list.
+- Reconnect, deletion and membership edits preserve topology invariants.
+- The Inspector uses a two-step draft for new groups so an invalid half-created engineering group is never persisted.
+- Existing groups accept additional Mainline / Frontage Left / Frontage Right RoadLinks only when the Link can extend a valid chain endpoint.
+- A selected group highlights all member RoadLinks on the 2D canvas.
+- Membership removal leaves RoadLink geometry in place and rejects a middle-Link removal that would break a chain.
+- Dissolve removes only relationship metadata.
+- Grouping, membership edits and dissolve use the existing NetworkProject transaction and Undo/Redo path.
+
+Still deferred to Phase 8A.2 / 8B:
+
+- automatic parallel-offset/frontage-road generation;
+- cross-street endpoint generation policy;
+- persistent parametric offset constraints;
+- mainline ↔ frontage ramps / transfer topology;
+- grade separation and traffic-operation analysis.

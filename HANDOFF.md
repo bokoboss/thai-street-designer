@@ -215,6 +215,13 @@ Post-v1 work has started with **Phase 8A — Parallel / Frontage Corridor Founda
 
 Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feature family. The first step is a Network semantic relationship over existing RoadLinks, not a second geometry engine and not an Arm-level frontage flag.
 
+Phase 8A.1 status:
+- **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
+- **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
+- Next gate after 8A.1b Quality is review of the relationship UX before **8A.2 assisted parallel-road creation**.
+- Do not implement mid-link ramps inside 8A.2; transfer topology remains Phase 8B.
+
+
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
 
 Current sequence:

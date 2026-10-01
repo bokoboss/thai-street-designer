@@ -1059,3 +1059,16 @@ Validation requires each ordered chain to be a simple traversable sequence throu
 Network v1/v2/v3 projects migrate to v4 with `parallelCorridors: []`. RoadLink station components from v3 remain intact.
 
 RoadLink/Junction deletion cleans relationship metadata in the same NetworkProject transaction. A frontage chain made discontinuous by deletion is removed rather than reordered; the whole group disappears if its mainline is invalid or it has no valid frontage side remaining.
+
+
+## Phase 8A.1b — Parallel / Frontage Inspector workflow
+
+The first post-v1 UI deliberately exposes relationship editing before automatic geometry generation.
+
+A RoadLink can be staged as a prospective Mainline in UI-only state. Selecting a second ungrouped RoadLink and choosing Frontage Left/Right commits the complete ParallelCorridor in one normal NetworkProject transaction; no invalid half-group is persisted.
+
+For existing groups, an ungrouped RoadLink can be added as Mainline, Frontage Left or Frontage Right only when it extends a valid chain endpoint. Membership removal preserves the RoadLink itself and rejects operations that would disconnect a chain. Dissolve removes relationship metadata only.
+
+Selecting any member highlights the group's Mainline and Frontage chains in plan. The highlight is editing UI and does not create a second geometry representation.
+
+Phase 8A.1b also updates Network workspace status text to schema v4. Assisted offset generation remains Phase 8A.2.

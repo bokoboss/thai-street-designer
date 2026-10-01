@@ -439,6 +439,26 @@ try{
   assert.equal(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')`),'true','new unsaved Project must be marked dirty');
   assert.equal(await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),null,'New Project must clear prior file association metadata');
 
+  mark('parallel-corridor-inspector');
+  await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project,clone=(source,id,name,x,y)=>{const j=structuredClone(source);j.id=id;j.name=name;j.x=x;j.y=y;return j},a=p.junctions[0],b=p.junctions[1],j3=clone(a,'J-3','Frontage A',a.x,a.y+120),j4=clone(b,'J-4','Frontage B',b.x,b.y+120),j5=clone(a,'J-5','Frontage C',a.x,a.y-120),j6=clone(b,'J-6','Frontage D',b.x,b.y-120);p.junctions.push(j3,j4,j5,j6);p.links.push({id:'L-2',name:'Frontage Left Candidate',from:{junctionId:'J-3',armId:0},to:{junctionId:'J-4',armId:2},via:[],sectionProfile:{mode:'review'},components:[]},{id:'L-3',name:'Frontage Right Candidate',from:{junctionId:'J-5',armId:0},to:{junctionId:'J-6',armId:2},via:[],sectionProfile:{mode:'review'},components:[]});p.parallelCorridors=[];localStorage.setItem(key,JSON.stringify(w));return true;})()`);
+  await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload parallel-corridor fixture');
+  await waitFor(async()=>{const p=await project();return p?.schemaVersion===4&&p?.links?.length===3&&p?.parallelCorridors?.length===0;},'parallel-corridor fixture v4');
+  await clickSelector('[data-network-link="L-1"]');await clickSelector('[data-network-parallel-action="start"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'&&!!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'stage mainline without engineering-state mutation');
+  assert.equal((await project()).parallelCorridors.length,0,'staging a mainline must remain UI-only until a frontage Link is chosen');
+  await clickSelector('[data-network-link="L-2"]');await clickSelector('[data-network-parallel-action="finalize-left"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return g?.mainlineLinkIds?.[0]==='L-1'&&g?.frontage?.find(v=>v.side==='left')?.linkIds?.[0]==='L-2';},'create parallel corridor from staged mainline + left frontage');
+  assert(await evalValue(`!!document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor="PC-1"]')&&!!document.querySelector('[data-network-parallel-role="left"][data-network-parallel-corridor="PC-1"]')`),'selected group must highlight mainline and frontage members on canvas');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>!(await project())?.parallelCorridors?.length,'Undo removes corridor relationship atomically');
+  await clickSelector('[data-network-action="redo"]');await waitFor(async()=>!!(await project())?.parallelCorridors?.length,'Redo restores corridor relationship atomically');
+  await clickSelector('[data-network-link="L-3"]');await clickSelector('[data-network-parallel-action="add-right"]');
+  await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0];return g?.frontage?.some(v=>v.side==='left'&&v.linkIds.includes('L-2'))&&g?.frontage?.some(v=>v.side==='right'&&v.linkIds.includes('L-3'));},'add ungrouped RoadLink to existing corridor as right frontage');
+  await clickSelector('[data-network-link="L-2"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-panel')==='member'&&document.querySelectorAll('[data-network-parallel-member]').length===3`),'group member Inspector list');
+  await clickSelector('[data-network-parallel-action="remove-member"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.links?.some(v=>v.id==='L-2')&&g?.frontage?.length===1&&g.frontage[0].side==='right';},'remove frontage membership without deleting RoadLink geometry');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0];return g?.frontage?.length===2;},'Undo restores removed corridor membership');
+  await clickSelector('[data-network-parallel-action="dissolve"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===0&&p?.links?.length===3;},'Dissolve removes only relationship metadata');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===1&&p?.links?.length===3;},'Undo restores dissolved group');
+
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
     `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
@@ -465,7 +485,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

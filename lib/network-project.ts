@@ -533,6 +533,53 @@ export function updateParallelCorridor(project:NetworkProject,id:string,input:Pa
 export function removeParallelCorridor(project:NetworkProject,id:string):NetworkProject{
   return project.parallelCorridors.some(v=>v.id===id)?{...project,parallelCorridors:project.parallelCorridors.filter(v=>v.id!==id)}:project;
 }
+export type ParallelCorridorMemberRole='mainline'|'frontage';
+const replaceParallelCorridor=(project:NetworkProject,corridor:ParallelCorridor):NetworkProject=>({...project,parallelCorridors:project.parallelCorridors.map(v=>v.id===corridor.id?corridor:v)});
+export function addLinkToParallelCorridor(project:NetworkProject,corridorId:string,linkId:string,role:ParallelCorridorMemberRole,side?:ParallelCorridorSide):ParallelCorridorEditResult{
+  const corridor=project.parallelCorridors.find(v=>v.id===corridorId);
+  if(!corridor)return{project,error:'ไม่พบ Parallel corridor'};
+  if(!project.links.some(v=>v.id===linkId))return{project,error:'ไม่พบ Road Link ที่เลือก'};
+  if(parallelCorridorForLink(project,linkId))return{project,error:'Road Link นี้อยู่ใน Parallel corridor แล้ว'};
+  const candidates:ParallelCorridor[]=[];
+  if(role==='mainline'){
+    for(const mainlineLinkIds of [[...corridor.mainlineLinkIds,linkId],[linkId,...corridor.mainlineLinkIds]])candidates.push({...corridor,mainlineLinkIds});
+  }else{
+    if(side!=='left'&&side!=='right')return{project,error:'ระบุ Frontage side ก่อน'};
+    const existing=corridor.frontage.find(v=>v.side===side);
+    if(!existing)candidates.push({...corridor,frontage:[...corridor.frontage,{side,linkIds:[linkId]}]});
+    else for(const linkIds of [[...existing.linkIds,linkId],[linkId,...existing.linkIds]])candidates.push({...corridor,frontage:corridor.frontage.map(v=>v.side===side?{...v,linkIds}:v)});
+  }
+  const valid=candidates.map(candidate=>({candidate,next:replaceParallelCorridor(project,candidate)})).filter(item=>validateNetworkProject(item.next)===null),
+    unique=valid.filter((item,index)=>valid.findIndex(other=>JSON.stringify(other.candidate)===JSON.stringify(item.candidate))===index);
+  if(unique.length===0)return{project,error:'เพิ่ม Road Link ไม่ได้ · Link ต้องต่อที่ปลาย chain และต้องไม่ทำให้ Parallel corridor topology ขาด'};
+  if(unique.length>1)return{project,error:'เพิ่ม Road Link ไม่ได้ · ตำแหน่งใน chain กำกวม กรุณาจัด topology ให้ชัดเจนก่อน'};
+  return{project:unique[0].next,corridor:unique[0].candidate,error:null};
+}
+export function removeLinkFromParallelCorridor(project:NetworkProject,linkId:string):ParallelCorridorEditResult{
+  const membership=parallelCorridorForLink(project,linkId);
+  if(!membership)return{project,error:'Road Link นี้ไม่ได้อยู่ใน Parallel corridor'};
+  const corridor=membership.corridor;
+  let candidate:ParallelCorridor;
+  if(membership.role==='mainline'){
+    const mainlineLinkIds=corridor.mainlineLinkIds.filter(id=>id!==linkId);
+    if(!mainlineLinkIds.length)return{project,error:'ถอด Mainline สุดท้ายไม่ได้ · ใช้ Dissolve group หากต้องการยกเลิกกลุ่ม'};
+    if(!parallelCorridorChainContinuous(project,mainlineLinkIds))return{project,error:'ถอด Mainline ตรงกลางไม่ได้ เพราะจะทำให้ chain ขาด'};
+    candidate={...corridor,mainlineLinkIds};
+  }else{
+    const frontage=corridor.frontage.flatMap(chain=>{
+      if(chain.side!==membership.side)return[chain];
+      const linkIds=chain.linkIds.filter(id=>id!==linkId);
+      if(!linkIds.length)return[];
+      return[{...chain,linkIds}];
+    });
+    if(!frontage.length)return{project,error:'ถอด Frontage สุดท้ายไม่ได้ · ใช้ Dissolve group หากต้องการยกเลิกกลุ่ม'};
+    const changed=frontage.find(chain=>chain.side===membership.side);
+    if(changed&&!parallelCorridorChainContinuous(project,changed.linkIds))return{project,error:'ถอด Frontage ตรงกลางไม่ได้ เพราะจะทำให้ chain ขาด'};
+    candidate={...corridor,frontage};
+  }
+  const next=replaceParallelCorridor(project,candidate),error=validateNetworkProject(next);
+  return error?{project,error}:{project:next,corridor:candidate,error:null};
+}
 function cleanupParallelCorridors(project:NetworkProject):NetworkProject{
   const live=new Set(project.links.map(link=>link.id)),parallelCorridors:ParallelCorridor[]=[];
   for(const corridor of project.parallelCorridors){
