@@ -113,7 +113,7 @@ export function seedParallelFrontage(project:NetworkProject,input:AssistedFronta
     if(built.error||!built.generated)return{project,generated:[],error:built.error??'สร้าง frontage seed ไม่สำเร็จ'};
     working=built.project;generated.push(built.generated);
   }
-  const frontage=[...(existing?.frontage??[]),...generated.map(chain=>({side:chain.side,linkIds:chain.linkIds}))],
+  const frontage=[...(existing?.frontage??[]),...generated.map(chain=>({side:chain.side,linkIds:chain.linkIds,seedReviewJunctionIds:[...chain.junctionIds]}))],
     name=(input.name?.trim()||existing?.name||`Parallel Corridor ${project.parallelCorridors.length+1}`).slice(0,80),
     grouped=existing
       ?updateParallelCorridor(working,existing.id,{name,mainlineLinkIds:[...input.mainlineLinkIds],mainlineStartJunctionId:existing.mainlineStartJunctionId,frontage})

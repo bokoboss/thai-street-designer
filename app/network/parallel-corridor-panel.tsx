@@ -24,16 +24,18 @@ type Props={
   onRemoveMembership:()=>void;
   onDissolve:()=>void;
   onReverseReference:()=>void;
+  onMarkSeedReviewed:(side:ParallelCorridorSide)=>void;
   onSelectLink:(id:string)=>void;
 };
 
 export default function ParallelCorridorPanel({
-  project,selectedLink,draftMainlineId,targetCorridorId,seedOffset,onSeedOffset,onSeed,onStartDraft,onCancelDraft,onFinalizeDraft,onTargetCorridor,onAddToTarget,onRemoveMembership,onDissolve,onReverseReference,onSelectLink
+  project,selectedLink,draftMainlineId,targetCorridorId,seedOffset,onSeedOffset,onSeed,onStartDraft,onCancelDraft,onFinalizeDraft,onTargetCorridor,onAddToTarget,onRemoveMembership,onDissolve,onReverseReference,onMarkSeedReviewed,onSelectLink
 }:Props){
   const membership=parallelCorridorForLink(project,selectedLink.id),corridor=membership?.corridor,
     draftLink=draftMainlineId?project.links.find(v=>v.id===draftMainlineId):undefined,
     target=project.parallelCorridors.find(v=>v.id===targetCorridorId)??project.parallelCorridors[0],
     missingSides:ParallelCorridorSide[]=corridor?(['left','right'] as ParallelCorridorSide[]).filter(side=>!corridor.frontage.some(chain=>chain.side===side)):[],
+    seedReviewChains=corridor?.frontage.filter(chain=>(chain.seedReviewJunctionIds?.length??0)>0)??[],
     orientation=corridor?parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId):null,
     seedStart=orientation?.startJunctionId??selectedLink.from.junctionId,
     seedEnd=orientation?.endJunctionId??selectedLink.to.junctionId;
@@ -50,6 +52,7 @@ export default function ParallelCorridorPanel({
         <div><span>MAINLINE</span>{corridor.mainlineLinkIds.map(id=>memberButton(id,'mainline'))}</div>
         {corridor.frontage.map(chain=><div key={chain.side}><span>FRONTAGE · {chain.side.toUpperCase()}</span>{chain.linkIds.map(id=>memberButton(id,chain.side))}</div>)}
       </div>
+      {seedReviewChains.length>0&&<div className="network-parallel-seed-review" data-network-parallel-seed-review="true"><div className="network-parallel-seed-head"><span>SEED REVIEW POINTS</span><b>{seedReviewChains.reduce((sum,chain)=>sum+(chain.seedReviewJunctionIds?.length??0),0)} Junctions</b></div>{seedReviewChains.map(chain=><div key={chain.side} className="network-parallel-seed-review-row"><div><b>Frontage {chain.side.toUpperCase()}</b><span>{(chain.seedReviewJunctionIds??[]).map(junctionLabel).join(' · ')}</span></div><button data-network-parallel-mark-reviewed={chain.side} onClick={()=>onMarkSeedReviewed(chain.side)}>Mark {chain.side} reviewed</button></div>)}<p>Assisted seed เป็น geometry เริ่มต้นเท่านั้น · ตรวจ cross-street connection, controls และรายละเอียด geometry ก่อนกด reviewed.</p></div>}
       {seedControls(missingSides)}
       <div className="network-parallel-actions"><button data-network-parallel-action="remove-member" onClick={onRemoveMembership}>ถอด Road Link นี้ออกจากกลุ่ม</button><button className="danger" data-network-parallel-action="dissolve" onClick={onDissolve}>Dissolve group</button></div>
       <p className="network-note">การถอดสมาชิกไม่ลบ RoadLink. Link ตรงกลาง chain จะถูกปฏิเสธแทนการเรียง topology ใหม่แบบเงียบ ๆ; Dissolve ลบเฉพาะ relationship metadata.</p>

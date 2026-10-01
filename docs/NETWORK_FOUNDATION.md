@@ -1101,3 +1101,12 @@ The invariant is:
 Left/Right are interpreted while looking ahead along that direction. Mainline endpoint extension preserves the reference direction; removing the first Mainline Link advances the persisted start to the next chain Junction. Reversing the reference direction swaps frontage side labels without moving Junction/RoadLink geometry.
 
 Early schema-v4 files that predate the field are migrated deterministically during load. Scenario Comparison and Design Summary consume this same relationship state.
+
+
+## Phase 8A.2 review provenance
+
+One-shot assisted frontage generation now persists review provenance on the generated frontage chain instead of relying on a Junction name containing “seed”.
+
+`seedReviewJunctionIds[]` contains only generated Junctions that still require explicit concept review. Validation restricts those IDs to Junctions on the same frontage chain. Design Summary surfaces them as engineering warnings, Scenario Comparison observes the lifecycle, and the Inspector can clear a frontage side with **Mark reviewed** without altering road geometry.
+
+The provenance remains part of ParallelCorridor engineering state and follows the same Project JSON, Scenario and Undo/Redo ownership rules as the rest of the Network model.

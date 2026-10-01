@@ -17,13 +17,15 @@ Post-v1 work remains governed by the same architecture rule: new capabilities ex
 
 Design basis: `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md`.
 
-### 8A.2 Assisted parallel-road creation
+### 8A.2 Assisted parallel-road creation — implemented on working branch
 - seed frontage geometry from a selected mainline chain;
-- left/right/both workflow;
-- create ordinary Network objects as one transaction;
-- no hidden long-lived copied geometry.
+- left/right/both workflow with persisted looking-ahead reference direction;
+- create ordinary Junction/RoadLink objects as one transaction;
+- no hidden long-lived copied geometry or persistent offset constraint;
+- generated seed Junctions are neutralized for review;
+- persisted seed-review markers survive Save/Reload and can be explicitly cleared after review.
 
-This phase cannot start until endpoint/cross-street topology is specified.
+Automatic cross-street connections remain deliberately excluded. Mid-link mainline ↔ frontage ramps remain Phase 8B.
 
 ## Phase 8B — Mainline ↔ frontage transfer topology
 

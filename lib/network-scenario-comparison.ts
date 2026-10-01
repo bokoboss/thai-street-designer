@@ -100,7 +100,8 @@ const endSectionSignature=(project:NetworkProject,link:RoadLink)=>['from','to'].
 });
 const parallelMembershipSignature=(project:NetworkProject,linkId:string)=>{
   const membership=parallelCorridorForLink(project,linkId);if(!membership)return null;
-  return{corridorId:membership.corridor.id,role:membership.role,side:membership.side??null,referenceStart:membership.corridor.mainlineStartJunctionId};
+  const chain=membership.role==='frontage'?membership.corridor.frontage.find(v=>v.side===membership.side):undefined;
+  return{corridorId:membership.corridor.id,role:membership.role,side:membership.side??null,referenceStart:membership.corridor.mainlineStartJunctionId,seedReviewJunctionIds:chain?.seedReviewJunctionIds??[]};
 };
 function linkChanges(referenceProject:NetworkProject,reference:RoadLink,activeProject:NetworkProject,active:RoadLink){
   const changes:string[]=[];

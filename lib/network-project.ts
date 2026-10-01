@@ -35,7 +35,7 @@ export type RoadLink={
   components:LinkStationComponent[];
 };
 export type ParallelCorridorSide='left'|'right';
-export type ParallelFrontageChain={side:ParallelCorridorSide;linkIds:string[]};
+export type ParallelFrontageChain={side:ParallelCorridorSide;linkIds:string[];seedReviewJunctionIds?:string[]};
 export type ParallelCorridor={
   id:string;
   name:string;
@@ -509,6 +509,15 @@ export function parallelCorridorChainOrientation(project:NetworkProject,linkIds:
 export function parallelCorridorChainContinuous(project:NetworkProject,linkIds:string[]){
   return !!parallelCorridorChainOrientation(project,linkIds);
 }
+function frontageChainJunctionIds(project:NetworkProject,linkIds:string[]){
+  const ids=new Set<string>();
+  for(const id of linkIds){const link=project.links.find(v=>v.id===id);if(link){ids.add(link.from.junctionId);ids.add(link.to.junctionId);}}
+  return ids;
+}
+const filteredSeedReviewIds=(project:NetworkProject,chain:ParallelFrontageChain,linkIds=chain.linkIds)=>{
+  const allowed=frontageChainJunctionIds(project,linkIds);
+  return (chain.seedReviewJunctionIds??[]).filter(id=>allowed.has(id)&&project.junctions.some(j=>j.id===id));
+};
 export function parallelCorridorIssue(project:NetworkProject,corridor:ParallelCorridor){
   if(!corridor||typeof corridor!=='object'||!corridor.id||corridor.id.length>40||typeof corridor.name!=='string'||!corridor.name.trim()||corridor.name.length>80||typeof corridor.mainlineStartJunctionId!=='string'||!corridor.mainlineStartJunctionId)return'Parallel corridor metadata ไม่สมบูรณ์';
   if(!parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId))return'Parallel corridor mainline chain / reference direction ไม่ต่อเนื่องหรืออ้าง Road Link ที่ไม่มีอยู่';
@@ -518,6 +527,11 @@ export function parallelCorridorIssue(project:NetworkProject,corridor:ParallelCo
   const owned=new Set(corridor.mainlineLinkIds);
   for(const chain of corridor.frontage){
     if(!chain||!['left','right'].includes(chain.side)||!parallelCorridorChainContinuous(project,chain.linkIds))return'Frontage chain ไม่ต่อเนื่องหรืออ้าง Road Link ที่ไม่มีอยู่';
+    if(chain.seedReviewJunctionIds!==undefined){
+      if(!Array.isArray(chain.seedReviewJunctionIds)||chain.seedReviewJunctionIds.length>100||new Set(chain.seedReviewJunctionIds).size!==chain.seedReviewJunctionIds.length)return'Frontage seed review metadata ไม่สมบูรณ์';
+      const allowed=frontageChainJunctionIds(project,chain.linkIds);
+      if(chain.seedReviewJunctionIds.some(id=>!allowed.has(id)||!project.junctions.some(j=>j.id===id)))return'Frontage seed review อ้าง Junction ที่ไม่อยู่ใน frontage chain';
+    }
     for(const id of chain.linkIds){if(owned.has(id))return'Road Link เดียวกันเป็นทั้ง mainline/frontage หรือซ้ำหลายด้านไม่ได้';owned.add(id);}
   }
   return null;
@@ -533,7 +547,7 @@ const cloneParallelInput=(input:ParallelCorridorInput)=>({
   name:input.name.trim(),
   mainlineLinkIds:[...input.mainlineLinkIds],
   mainlineStartJunctionId:input.mainlineStartJunctionId,
-  frontage:input.frontage.map(chain=>({side:chain.side,linkIds:[...chain.linkIds]}))
+  frontage:input.frontage.map(chain=>({side:chain.side,linkIds:[...chain.linkIds],...(chain.seedReviewJunctionIds!==undefined?{seedReviewJunctionIds:[...chain.seedReviewJunctionIds]}:{})}))
 });
 export function addParallelCorridor(project:NetworkProject,input:ParallelCorridorInput):ParallelCorridorEditResult{
   const id=nextId('PC',[...project.parallelCorridors.map(v=>v.id),...project.links.map(v=>v.id)]),body=cloneParallelInput(input),corridor:ParallelCorridor={id,...body},
@@ -548,6 +562,13 @@ export function updateParallelCorridor(project:NetworkProject,id:string,input:Pa
 }
 export function removeParallelCorridor(project:NetworkProject,id:string):NetworkProject{
   return project.parallelCorridors.some(v=>v.id===id)?{...project,parallelCorridors:project.parallelCorridors.filter(v=>v.id!==id)}:project;
+}
+export function markParallelFrontageReviewed(project:NetworkProject,id:string,side?:ParallelCorridorSide):ParallelCorridorEditResult{
+  const corridor=project.parallelCorridors.find(v=>v.id===id);if(!corridor)return{project,error:'ไม่พบ Parallel corridor'};
+  if(side&&side!=='left'&&side!=='right')return{project,error:'Frontage side ไม่ถูกต้อง'};
+  const frontage=corridor.frontage.map(chain=>!side||chain.side===side?{...chain,seedReviewJunctionIds:[]}:chain),
+    candidate={...corridor,frontage},next={...project,parallelCorridors:project.parallelCorridors.map(v=>v.id===id?candidate:v)},error=validateNetworkProject(next);
+  return error?{project,error}:{project:next,corridor:candidate,error:null};
 }
 export function reverseParallelCorridorReference(project:NetworkProject,id:string):ParallelCorridorEditResult{
   const corridor=project.parallelCorridors.find(v=>v.id===id);if(!corridor)return{project,error:'ไม่พบ Parallel corridor'};
@@ -607,7 +628,8 @@ export function removeLinkFromParallelCorridor(project:NetworkProject,linkId:str
       if(chain.side!==membership.side)return[chain];
       const linkIds=chain.linkIds.filter(id=>id!==linkId);
       if(!linkIds.length)return[];
-      return[{...chain,linkIds}];
+      const seedReviewJunctionIds=filteredSeedReviewIds(project,chain,linkIds);
+      return[{...chain,linkIds,...(chain.seedReviewJunctionIds!==undefined?{seedReviewJunctionIds}:{})}];
     });
     if(!frontage.length)return{project,error:'ถอด Frontage สุดท้ายไม่ได้ · ใช้ Dissolve group หากต้องการยกเลิกกลุ่ม'};
     const changed=frontage.find(chain=>chain.side===membership.side);
@@ -631,8 +653,8 @@ function cleanupParallelCorridors(previous:NetworkProject,project:NetworkProject
     const frontage=corridor.frontage.flatMap(chain=>{
       const indices=chain.linkIds.map((id,index)=>live.has(id)?index:-1).filter(index=>index>=0);
       if(!contiguousIndices(indices))return[];
-      const linkIds=indices.map(index=>chain.linkIds[index]);
-      return linkIds.length&&parallelCorridorChainContinuous(project,linkIds)?[{side:chain.side,linkIds}]:[];
+      const linkIds=indices.map(index=>chain.linkIds[index]),seedReviewJunctionIds=filteredSeedReviewIds(project,chain,linkIds);
+      return linkIds.length&&parallelCorridorChainContinuous(project,linkIds)?[{side:chain.side,linkIds,...(chain.seedReviewJunctionIds!==undefined?{seedReviewJunctionIds}:{})}]:[];
     });
     if(!frontage.length)continue;
     parallelCorridors.push({...corridor,mainlineLinkIds,mainlineStartJunctionId,frontage});
@@ -803,7 +825,8 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const chain=raw as Record<string,unknown>;
         if(chain.side!=='left'&&chain.side!=='right')throw Error('Invalid parallel frontage side');
         if(!Array.isArray(chain.linkIds))throw Error('Invalid parallel frontage link list');
-        return{side:chain.side as ParallelCorridorSide,linkIds:chain.linkIds.map(String)};
+        if(chain.seedReviewJunctionIds!==undefined&&!Array.isArray(chain.seedReviewJunctionIds))throw Error('Invalid parallel frontage seed review list');
+        return{side:chain.side as ParallelCorridorSide,linkIds:chain.linkIds.map(String),...(chain.seedReviewJunctionIds!==undefined?{seedReviewJunctionIds:(chain.seedReviewJunctionIds as unknown[]).map(String)}:{})};
       })
     };
   }):[];

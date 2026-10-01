@@ -220,9 +220,10 @@ Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feat
 Phase 8A.1 status:
 - **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
 - **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
-- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right now uses a persisted looking-ahead Mainline reference direction and is visible in the Inspector.
+- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right uses a persisted looking-ahead Mainline reference direction. Generated seed Junction review points are persisted per frontage chain, surfaced in Design Summary/Scenario Comparison and can be explicitly Mark reviewed without changing geometry.
 - 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
-- Do not implement mid-link ramps inside 8A.2; transfer topology remains Phase 8B.
+- After 8A.2 hardening Quality passes, freeze PR #2 at the Parallel/Frontage foundation boundary.
+- Do not implement mid-link ramps inside PR #2; transfer topology remains Phase 8B and should start from a separate model/design milestone because current PortRef semantics are Junction-Arm specific.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.

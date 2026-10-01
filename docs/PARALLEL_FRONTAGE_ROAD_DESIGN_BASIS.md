@@ -1,6 +1,6 @@
 # Parallel / Frontage Road Design Basis
 
-Status: **Phase 8A.1 complete; Phase 8A.2 assisted one-shot frontage seeding implemented on the working branch**  
+Status: **Phase 8A.1 complete; Phase 8A.2 assisted one-shot frontage seeding + persisted seed-review lifecycle implemented on the working branch**  
 Updated: 2026-09-30  
 Working branch: `chatgpt/post-v1-parallel-corridor-foundation`
 
@@ -60,7 +60,7 @@ International references inform concept semantics only. They must not be encoded
 
 ## 4. Existing Network facts that constrain the design
 
-Current NetworkProject v3 owns:
+Current NetworkProject v4 owns:
 
 ```
 NetworkProject
@@ -398,3 +398,21 @@ Parallel Corridor relationship state is engineering Project state, not display-o
 - Engineering HTML output identifies Network schema v4.
 
 This keeps relationship semantics visible in the same compare/report paths as Junction and RoadLink geometry rather than creating a separate reporting engine.
+
+
+### 15.7 Persisted seed-review lifecycle
+
+Assisted frontage generation deliberately creates editable seed Junctions with copied lane/section semantics but neutralized controls and bounded stubs. Those Junctions must not silently become indistinguishable from fully reviewed design objects after Save/Reload.
+
+Each assisted frontage chain therefore persists optional `seedReviewJunctionIds[]` metadata:
+
+- the IDs must belong to Junction endpoints of that frontage chain;
+- manual frontage chains do not invent review markers;
+- Project JSON / Scenario duplication preserve the markers;
+- deletion and membership cleanup remove markers that no longer belong to the surviving chain;
+- Design Summary counts unreviewed seed points and emits an engineering warning for each marked Junction;
+- Scenario Comparison treats review-state changes as persisted Parallel Corridor state;
+- **Mark reviewed** clears only the marker for the selected frontage side and does not alter Junction/RoadLink geometry;
+- Undo/Redo restores the review lifecycle atomically.
+
+This marker is QA provenance, not a design-standard approval. Clearing it means the designer has explicitly reviewed the generated cross-street/control/geometry seed for the current concept state; it does not certify detailed-design compliance.
