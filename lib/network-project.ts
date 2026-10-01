@@ -743,7 +743,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       components
     };
   });
-  const parallelCorridors:ParallelCorridor[]=schemaVersion===4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map((value,index)=>{
+  const parallelCorridors:ParallelCorridor[]=schemaVersion===4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map(value=>{
     if(!value||typeof value!=='object')throw Error('Invalid parallel corridor');
     const item=value as Record<string,unknown>,frontageRaw=Array.isArray(item.frontage)?item.frontage:[];
     return{

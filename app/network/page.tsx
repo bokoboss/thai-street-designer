@@ -163,9 +163,8 @@ export default function NetworkWorkspace(){
     projectFileDirty=projectFileBaseline===null||projectFileBaseline!==projectFileSignature,
     suggestedProjectFileName=`${safeFilePart(scenarioWorkspace.scenarios.find(s=>s.kind==='existing')?.project.title??project.title??'street-project')}.tsd.json`;
   const designReport=buildNetworkDesignReport(project,currentScenario.name,comparisonScenario?{name:comparisonScenario.name,project:comparisonScenario.project}:undefined);
-  useEffect(()=>{if(parallelDraftMainlineId&&!project.links.some(link=>link.id===parallelDraftMainlineId))setParallelDraftMainlineId(null);},[project,parallelDraftMainlineId]);
-
   function setProjectNow(next:NetworkProject){
+    if(parallelDraftMainlineId&&!next.links.some(link=>link.id===parallelDraftMainlineId))setParallelDraftMainlineId(null);
     projectRef.current=next;setProject(next);
     const workspace=replaceActiveNetworkProject(scenarioWorkspaceRef.current,next);
     scenarioWorkspaceRef.current=workspace;setScenarioWorkspace(workspace);
