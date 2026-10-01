@@ -1,5 +1,5 @@
 import {pocketsFor,sectionFor,type Arm,type Direction} from '../app/junction/model';
-import {activeArmIds,linkEndSection,linkLength,linkPoints,portKey,portPoint,type JunctionInstance,type NetworkProject,type RoadLink} from './network-project';
+import {activeArmIds,linkEndSection,linkLength,linkPoints,parallelCorridorForLink,portKey,portPoint,type JunctionInstance,type NetworkProject,type RoadLink} from './network-project';
 
 export type ScenarioDeltaStatus='added'|'removed'|'changed';
 export type ScenarioDeltaKind='junction'|'roadlink';
@@ -10,7 +10,7 @@ export type ScenarioObjectDelta={
   status:ScenarioDeltaStatus;
   changes:string[];
 };
-export type ScenarioMetricKey='junctions'|'roadLinks'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
+export type ScenarioMetricKey='junctions'|'roadLinks'|'parallelCorridors'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
 export type ScenarioMetric={
   key:ScenarioMetricKey;
   label:string;
@@ -60,6 +60,7 @@ function projectMetrics(project:NetworkProject){
   return{
     junctions:project.junctions.length,
     roadLinks:project.links.length,
+    parallelCorridors:project.parallelCorridors.length,
     mainLanes,
     pocketLanes,
     receivingLanes,
@@ -97,6 +98,10 @@ const endSectionSignature=(project:NetworkProject,link:RoadLink)=>['from','to'].
     forwardBands:sectionValue.forwardBands.map(b=>[b.type,b.width]),backwardBands:sectionValue.backwardBands.map(b=>[b.type,b.width])
   };
 });
+const parallelMembershipSignature=(project:NetworkProject,linkId:string)=>{
+  const membership=parallelCorridorForLink(project,linkId);if(!membership)return null;
+  return{corridorId:membership.corridor.id,role:membership.role,side:membership.side??null,referenceStart:membership.corridor.mainlineStartJunctionId};
+};
 function linkChanges(referenceProject:NetworkProject,reference:RoadLink,activeProject:NetworkProject,active:RoadLink){
   const changes:string[]=[];
   if(json(reference.from)!==json(active.from)||json(reference.to)!==json(active.to))changes.push('endpoints');
@@ -104,6 +109,7 @@ function linkChanges(referenceProject:NetworkProject,reference:RoadLink,activePr
   if(json(endSectionSignature(referenceProject,reference))!==json(endSectionSignature(activeProject,active)))changes.push('endpoint section');
   if(json(reference.sectionProfile)!==json(active.sectionProfile))changes.push('section transition');
   if(json(reference.components)!==json(active.components))changes.push('station components');
+  if(json(parallelMembershipSignature(referenceProject,reference.id))!==json(parallelMembershipSignature(activeProject,active.id)))changes.push('parallel corridor membership');
   if(reference.name!==active.name)changes.push('name');
   if(json(reference)!==json(active)&&changes.length===0)changes.push('other RoadLink settings');
   return changes;
@@ -127,7 +133,7 @@ export function compareNetworkProjects(reference:NetworkProject,active:NetworkPr
   }
   const ref=projectMetrics(reference),act=projectMetrics(active),
     meta:{key:ScenarioMetricKey;label:string;unit?:string}[]=[
-      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'mainLanes',label:'Main lanes'},
+      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'parallelCorridors',label:'Parallel corridors'},{key:'mainLanes',label:'Main lanes'},
       {key:'pocketLanes',label:'Pocket lanes'},{key:'receivingLanes',label:'Receiving lanes'},
       {key:'medianArms',label:'Median arms'},{key:'medianWidth',label:'Σ median width',unit:'m'},
       {key:'stationComponents',label:'Station components'},{key:'roadLength',label:'RoadLink length',unit:'m'}
@@ -151,7 +157,7 @@ export function scenarioChangeCategories(delta:ScenarioObjectDelta):ScenarioChan
     if(['main lanes','cross-section','endpoint section'].includes(change))categories.add('lanes');
     if(change==='median')categories.add('median');
     if(change==='pocket / receiving')categories.add('auxiliary');
-    if(['section transition','station components','endpoint section'].includes(change))categories.add('corridor');
+    if(['section transition','station components','endpoint section','parallel corridor membership'].includes(change))categories.add('corridor');
     if(change==='controls')categories.add('controls');
   }
   return [...categories];

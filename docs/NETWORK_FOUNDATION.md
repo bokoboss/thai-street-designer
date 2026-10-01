@@ -1088,3 +1088,16 @@ The operation is intentionally one-shot:
 - the complete operation is one Undo/Redo transaction.
 
 Roundabout chains are rejected in assisted mode rather than approximated.
+
+
+## Phase 8A.2 hardening — persisted reference direction
+
+Parallel Corridor Left/Right semantics now have an explicit persisted stationing/reference direction through `mainlineStartJunctionId`.
+
+The invariant is:
+
+`mainlineStartJunctionId → ordered mainlineLinkIds[] → chain end`
+
+Left/Right are interpreted while looking ahead along that direction. Mainline endpoint extension preserves the reference direction; removing the first Mainline Link advances the persisted start to the next chain Junction. Reversing the reference direction swaps frontage side labels without moving Junction/RoadLink geometry.
+
+Early schema-v4 files that predate the field are migrated deterministically during load. Scenario Comparison and Design Summary consume this same relationship state.

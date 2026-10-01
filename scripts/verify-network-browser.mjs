@@ -459,6 +459,7 @@ try{
   await clickSelector('[data-network-link="L-2"]');await clickSelector('[data-network-parallel-action="finalize-left"]');
   await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return g?.mainlineLinkIds?.[0]==='L-1'&&g?.frontage?.find(v=>v.side==='left')?.linkIds?.[0]==='L-2';},'create parallel corridor from staged mainline + left frontage');
   assert(await evalValue(`!!document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor="PC-1"]')&&!!document.querySelector('[data-network-parallel-role="left"][data-network-parallel-corridor="PC-1"]')`),'selected group must highlight mainline and frontage members on canvas');
+  assert.equal(await evalValue(`document.querySelector('[data-network-parallel-reference]')?.getAttribute('data-network-parallel-reference')`),'J-1>J-2','Parallel Corridor Inspector must expose the persisted looking-ahead reference direction for Left/Right');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>!(await project())?.parallelCorridors?.length,'Undo removes corridor relationship atomically');
   await clickSelector('[data-network-action="redo"]');await waitFor(async()=>!!(await project())?.parallelCorridors?.length,'Redo restores corridor relationship atomically');
   await clickSelector('[data-network-link="L-3"]');await clickSelector('[data-network-parallel-action="add-right"]');
@@ -484,6 +485,7 @@ try{
   await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return p?.junctions?.length===8&&p?.links?.length===4&&right?.linkIds?.length===1;},'assisted right frontage seed commits generated Junction/RoadLink objects atomically');
   const seededProject=await project(),seededGroup=seededProject.parallelCorridors[0],seededRight=seededGroup.frontage.find(v=>v.side==='right'),seededLinkId=seededRight.linkIds[0],seededLink=seededProject.links.find(v=>v.id===seededLinkId),seededNodes=[seededLink.from.junctionId,seededLink.to.junctionId].map(id=>seededProject.junctions.find(j=>j.id===id));
   assert(seededNodes.every(j=>j&&Math.abs(j.y+45)<1e-6),'assisted right seed must apply the explicit centerline offset');
+  assert.equal(seededGroup.mainlineStartJunctionId,'J-1','assisted seed must preserve the Parallel Corridor reference direction');
   assert(seededNodes.every(j=>j.design.slips.length===0&&j.design.arms.every(a=>a.length<=60&&!a.signal&&!a.crossing&&!a.stop)),'assisted seed nodes must strip copied junction treatments');
   assert.equal(JSON.stringify({junctions:seededProject.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:seededProject.links.find(l=>l.id==='L-1')}),seedSourceSnapshot,'assisted seed must leave source mainline geometry untouched');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');

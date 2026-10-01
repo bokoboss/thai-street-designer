@@ -22,7 +22,7 @@ import NetworkSectionDock from './network-section-dock';
 import ParallelCorridorPanel from './parallel-corridor-panel';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,addLinkStationComponent,addLinkToParallelCorridor,addParallelCorridor,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,junctionConnectedLinkIds,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,linkWidthTargets,moveJunction,moveJunctionChecked,moveLinkVia,portKey,portPoint,portOccupied,
-  parallelCorridorForLink,projectBounds,reconnectLinkPort,removeJunction,removeLink,removeLinkFromParallelCorridor,removeLinkStationComponent,removeParallelCorridor,removeLinkVia,rotateJunction,rotateJunctionChecked,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type ParallelCorridorMemberRole,type ParallelCorridorSide,type PortRef,type WorldPoint
+  parallelCorridorForLink,projectBounds,reconnectLinkPort,removeJunction,removeLink,removeLinkFromParallelCorridor,removeLinkStationComponent,removeParallelCorridor,reverseParallelCorridorReference,removeLinkVia,rotateJunction,rotateJunctionChecked,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type ParallelCorridorMemberRole,type ParallelCorridorSide,type PortRef,type WorldPoint
 } from '@/lib/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
@@ -672,7 +672,8 @@ export default function NetworkWorkspace(){
     const before=projectRef.current;
     if(!before.links.some(v=>v.id===parallelDraftMainlineId)){setParallelDraftMainlineId(null);setNotice('Mainline draft ไม่อยู่ใน scenario นี้แล้ว');return;}
     if(parallelCorridorForLink(before,parallelDraftMainlineId)||parallelCorridorForLink(before,selectedLink.id)){setNotice('สร้างกลุ่มไม่ได้ · Mainline หรือ Frontage ถูกจัดกลุ่มไปแล้ว');return;}
-    const result=addParallelCorridor(before,{name:`Parallel Corridor ${before.parallelCorridors.length+1}`,mainlineLinkIds:[parallelDraftMainlineId],frontage:[{side,linkIds:[selectedLink.id]}]});
+    const draftLink=before.links.find(v=>v.id===parallelDraftMainlineId);if(!draftLink){setNotice('Mainline draft ไม่อยู่ใน scenario นี้แล้ว');setParallelDraftMainlineId(null);return;}
+    const result=addParallelCorridor(before,{name:`Parallel Corridor ${before.parallelCorridors.length+1}`,mainlineLinkIds:[parallelDraftMainlineId],mainlineStartJunctionId:draftLink.from.junctionId,frontage:[{side,linkIds:[selectedLink.id]}]});
     if(result.error||!result.corridor){setNotice(result.error??'สร้าง Parallel corridor ไม่สำเร็จ');return;}
     commit(result.project,before);setParallelDraftMainlineId(null);setParallelTargetCorridorId(result.corridor.id);setNotice(`สร้าง ${result.corridor.name} แล้ว · ${parallelDraftMainlineId} = Mainline · ${selectedLink.id} = Frontage ${side}`);
   }
@@ -690,6 +691,11 @@ export default function NetworkWorkspace(){
     if(!selectedLink)return;const before=projectRef.current,membership=parallelCorridorForLink(before,selectedLink.id);if(!membership)return;
     const next=removeParallelCorridor(before,membership.corridor.id);commit(next,before);setParallelTargetCorridorId('');setNotice(`Dissolve ${membership.corridor.name} แล้ว · ลบเฉพาะ relationship metadata ไม่ลบ RoadLinks`);
   }
+  function reverseSelectedParallelReference(){
+    if(!selectedLink)return;const before=projectRef.current,membership=parallelCorridorForLink(before,selectedLink.id);if(!membership)return;
+    const result=reverseParallelCorridorReference(before,membership.corridor.id);if(result.error){setNotice(result.error);return;}
+    commit(result.project,before);setNotice(`กลับทิศอ้างอิง ${membership.corridor.name} แล้ว · Left/Right ถูกสลับ label เพื่อคงด้านทางกายภาพเดิม`);
+  }
   function selectParallelMember(id:string){
     if(!projectRef.current.links.some(v=>v.id===id))return;choose('select');setSelection({kind:'link',id});setSelectedArm(null);setSelectedLinkVertex(null);setNotice(`เลือกสมาชิก Parallel corridor · ${id}`);
   }
@@ -697,7 +703,8 @@ export default function NetworkWorkspace(){
     if(!selectedLink)return;
     const before=projectRef.current,membership=parallelCorridorForLink(before,selectedLink.id),
       mainlineLinkIds=membership?.corridor.mainlineLinkIds??[selectedLink.id],
-      result=seedParallelFrontage(before,{mainlineLinkIds,side,offset:parallelSeedOffset,corridorId:membership?.corridor.id});
+      mainlineStartJunctionId=membership?.corridor.mainlineStartJunctionId??selectedLink.from.junctionId,
+      result=seedParallelFrontage(before,{mainlineLinkIds,mainlineStartJunctionId,side,offset:parallelSeedOffset,corridorId:membership?.corridor.id});
     if(result.error||!result.corridor){setNotice(result.error??'สร้าง Assisted frontage seed ไม่สำเร็จ');return;}
     commit(result.project,before);setParallelDraftMainlineId(null);setParallelTargetCorridorId(result.corridor.id);
     const firstGenerated=result.generated[0]?.linkIds[0];if(firstGenerated)setSelection({kind:'link',id:firstGenerated});
@@ -967,7 +974,7 @@ export default function NetworkWorkspace(){
         {selectedLink&&<section>
           <p className="network-object-type">Road Link · {selectedLink.id}</p>
           <div className="network-link-metrics"><span>Resolved alignment <b>{linkLength(project,selectedLink).toFixed(1)} m</b></span><span>PI / via points <b>{selectedLink.via.length}</b></span></div>
-          <ParallelCorridorPanel project={project} selectedLink={selectedLink} draftMainlineId={parallelDraftMainlineId} targetCorridorId={effectiveParallelTargetCorridorId} seedOffset={parallelSeedOffset} onSeedOffset={value=>Number.isFinite(value)&&setParallelSeedOffset(value)} onSeed={seedSelectedParallelFrontage} onStartDraft={beginParallelCorridorDraft} onCancelDraft={()=>{setParallelDraftMainlineId(null);setNotice('ยกเลิก Parallel corridor draft แล้ว');}} onFinalizeDraft={finalizeParallelCorridorDraft} onTargetCorridor={setParallelTargetCorridorId} onAddToTarget={addSelectedLinkToParallelTarget} onRemoveMembership={removeSelectedParallelMembership} onDissolve={dissolveSelectedParallelCorridor} onSelectLink={selectParallelMember}/>
+          <ParallelCorridorPanel project={project} selectedLink={selectedLink} draftMainlineId={parallelDraftMainlineId} targetCorridorId={effectiveParallelTargetCorridorId} seedOffset={parallelSeedOffset} onSeedOffset={value=>Number.isFinite(value)&&setParallelSeedOffset(value)} onSeed={seedSelectedParallelFrontage} onStartDraft={beginParallelCorridorDraft} onCancelDraft={()=>{setParallelDraftMainlineId(null);setNotice('ยกเลิก Parallel corridor draft แล้ว');}} onFinalizeDraft={finalizeParallelCorridorDraft} onTargetCorridor={setParallelTargetCorridorId} onAddToTarget={addSelectedLinkToParallelTarget} onRemoveMembership={removeSelectedParallelMembership} onDissolve={dissolveSelectedParallelCorridor} onReverseReference={reverseSelectedParallelReference} onSelectLink={selectParallelMember}/>
           <div className="network-inline-actions"><button data-network-link-action="add-pi" onClick={addSelectedLinkPi}>＋ PI / จุดแนว</button><button data-network-link-action="remove-pi" disabled={selectedLinkVertex===null} onClick={removeSelectedLinkPi}>ลบ PI</button></div>
           {selectedVia&&selectedLinkVertex!==null&&<div className="network-link-editor"><div className="network-arm-editor-head"><span>CURVE AT PI {selectedLinkVertex+1}</span><b>R {selectedVia.radius.toFixed(0)} m</b></div><div className="network-step-row"><span>รัศมีโค้ง</span><button disabled={selectedVia.radius<=0} onClick={()=>adjustSelectedViaRadius(-5)}>−</button><b>{selectedVia.radius.toFixed(0)} m</b><button disabled={selectedVia.radius>=200} onClick={()=>adjustSelectedViaRadius(5)}>＋</button></div><button className="network-map-reset" disabled={selectedVia.radius===0} onClick={()=>{const before=projectRef.current;commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,0),before);}}>ใช้มุม PI ตรง (R0)</button><p className="network-note">ระบบ clamp รัศมีตามระยะ tangent ที่มีจริง เพื่อไม่ให้โค้งล้ำ PI ข้างเคียง</p></div>}
           <div className="network-link-profile" data-network-endpoint-lifecycle="true"><div className="network-arm-editor-head"><span>JUNCTION ENDPOINT LIFECYCLE</span><b>{selectedLink.sectionProfile.mode==='linear'?(linearTransitionPossible?'Resolved lifecycle':'Needs topology'):'Review mismatch'}</b></div>

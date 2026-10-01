@@ -229,3 +229,9 @@
 .network-parallel-seed-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:6px}.network-parallel-seed-actions button{border:1px solid #d8c894;background:#fff;border-radius:6px;padding:6px 5px;color:#6e5720;font-size:9.5px;font-weight:700}
 .network-parallel-seed p{margin:7px 0 0;font-size:9.4px;line-height:1.5;color:#756b52}
 @media(max-width:900px){.network-parallel-seed-actions{grid-template-columns:1fr}}
+
+.network-parallel-reference{display:grid;gap:2px;margin:7px 0;padding:7px;border:1px solid #d8e4e2;border-radius:6px;background:#fff}
+.network-parallel-reference>span{font-size:8.3px;font-weight:800;letter-spacing:.08em;color:var(--ws-muted)}
+.network-parallel-reference>b{font-size:9.8px;line-height:1.35;color:var(--ws-ink)}
+.network-parallel-reference>small{font-size:8.7px;line-height:1.4;color:var(--ws-muted)}
+.network-parallel-reference>button{justify-self:start;margin-top:4px;border:1px solid var(--ws-border);border-radius:5px;background:#f7faf9;padding:4px 6px;color:#526b70;font-size:8.8px}

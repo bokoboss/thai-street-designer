@@ -116,6 +116,7 @@ type ParallelCorridor = {
   id: string;
   name: string;
   mainlineLinkIds: string[];
+  mainlineStartJunctionId: string;
   frontage: ParallelFrontageChain[];
 };
 
@@ -343,7 +344,19 @@ References used for this policy:
 - TxDOT Roadway Design Manual — Frontage Roads: https://www.txdot.gov/manuals/des/rdw/chapter-8--freeways--4r-/8-1-design-considerations/8-1-18-frontage-roads.html
 - TxDOT Roadway Design Manual — Four-Leg Interchanges / frontage-road separation: https://www.txdot.gov/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-3-types-of-interchanges/15-3-2-four-leg-interchanges.html
 
-### 15.3 Offset semantics
+### 15.3 Reference direction, Left/Right and offset semantics
+
+`ParallelCorridor.mainlineStartJunctionId` persists the looking-ahead direction of the Mainline chain. The ordered `mainlineLinkIds[]` are traversed from that Junction toward the opposite end of the chain.
+
+**Left / Right are always interpreted while looking ahead in this persisted reference direction.** This matches conventional station/offset practice: left/right offsets are defined relative to the positive/increasing direction of the reference alignment.
+
+For early schema-v4 files created before this field existed, loading infers the start deterministically from the first Mainline RoadLink (or the unshared endpoint of the first Link in a multi-Link chain) and then persists the explicit field on the next save.
+
+Reversing the reference direction does not move geometry. It changes the persisted start and swaps Left/Right frontage labels so the physical frontage chains remain on the same side of the corridor.
+
+References for the looking-ahead convention:
+- WSDOT Plans Preparation Manual — left/right referenced from the main line looking ahead on line: https://www.wsdot.wa.gov/publications/manuals/fulltext/M22-31/M22-31.07Revision.pdf
+- WSDOT BridgeLink common station/offset notation — left/right based on the observer looking in the positive direction of the reference line: https://www.wsdot.wa.gov/eesc/bridge/software/Documentation/BridgeLink/8.0/common_input_parameters.html
 
 The user supplies an initial centerline offset. It is used only to seed generated Junction centers and RoadLink via geometry.
 
@@ -373,3 +386,15 @@ Still deferred:
 - mainline ↔ frontage ramps or mid-link transfer nodes;
 - grade separation;
 - access-spacing warrants, capacity, weaving, LOS or simulation.
+
+
+### 15.6 Scenario/report integration
+
+Parallel Corridor relationship state is engineering Project state, not display-only metadata.
+
+- Scenario Comparison reports a RoadLink change when its Parallel Corridor membership, role, side or corridor reference direction changes.
+- Scenario metrics include the number of Parallel Corridors.
+- Design Summary reports Parallel Corridor and frontage-chain counts and the role of each RoadLink.
+- Engineering HTML output identifies Network schema v4.
+
+This keeps relationship semantics visible in the same compare/report paths as Junction and RoadLink geometry rather than creating a separate reporting engine.

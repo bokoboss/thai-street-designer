@@ -1,6 +1,6 @@
 'use client';
 import {
-  parallelCorridorForLink,
+  parallelCorridorChainOrientation,parallelCorridorForLink,
   type NetworkProject,
   type ParallelCorridorSide,
   type ParallelCorridorMemberRole,
@@ -23,23 +23,29 @@ type Props={
   onAddToTarget:(role:ParallelCorridorMemberRole,side?:ParallelCorridorSide)=>void;
   onRemoveMembership:()=>void;
   onDissolve:()=>void;
+  onReverseReference:()=>void;
   onSelectLink:(id:string)=>void;
 };
 
 export default function ParallelCorridorPanel({
-  project,selectedLink,draftMainlineId,targetCorridorId,seedOffset,onSeedOffset,onSeed,onStartDraft,onCancelDraft,onFinalizeDraft,onTargetCorridor,onAddToTarget,onRemoveMembership,onDissolve,onSelectLink
+  project,selectedLink,draftMainlineId,targetCorridorId,seedOffset,onSeedOffset,onSeed,onStartDraft,onCancelDraft,onFinalizeDraft,onTargetCorridor,onAddToTarget,onRemoveMembership,onDissolve,onReverseReference,onSelectLink
 }:Props){
   const membership=parallelCorridorForLink(project,selectedLink.id),corridor=membership?.corridor,
     draftLink=draftMainlineId?project.links.find(v=>v.id===draftMainlineId):undefined,
     target=project.parallelCorridors.find(v=>v.id===targetCorridorId)??project.parallelCorridors[0],
-    missingSides:ParallelCorridorSide[]=corridor?(['left','right'] as ParallelCorridorSide[]).filter(side=>!corridor.frontage.some(chain=>chain.side===side)):[];
+    missingSides:ParallelCorridorSide[]=corridor?(['left','right'] as ParallelCorridorSide[]).filter(side=>!corridor.frontage.some(chain=>chain.side===side)):[],
+    orientation=corridor?parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId):null,
+    seedStart=orientation?.startJunctionId??selectedLink.from.junctionId,
+    seedEnd=orientation?.endJunctionId??selectedLink.to.junctionId;
   const linkLabel=(id:string)=>{const link=project.links.find(v=>v.id===id);return link?link.name+' · '+id:id;};
+  const junctionLabel=(id:string)=>{const junction=project.junctions.find(v=>v.id===id);return junction?junction.name+' · '+id:id;};
   const memberButton=(id:string,role:string)=><button key={role+':'+id} type="button" data-network-parallel-member={id} data-network-parallel-member-role={role} onClick={()=>onSelectLink(id)}><span>{role}</span><b>{linkLabel(id)}</b></button>;
-  const seedControls=(modes:SeedMode[])=>modes.length?<div className="network-parallel-seed" data-network-parallel-seed="true"><div className="network-parallel-seed-head"><span>ASSISTED FRONTAGE SEED</span><b>one-shot geometry</b></div><label>Centerline seed offset (m)<input data-network-parallel-seed-offset type="number" min="20" max="200" step="5" value={seedOffset} onChange={e=>onSeedOffset(Number(e.target.value))}/></label><div className="network-parallel-seed-actions">{modes.map(mode=><button key={mode} data-network-parallel-seed-action={mode} onClick={()=>onSeed(mode)}>{mode==='both'?'Generate Both':`Generate ${mode==='left'?'Left':'Right'}`}</button>)}</div><p>สร้าง Junction/RoadLink จริงเป็นค่าเริ่มต้นเท่านั้น · ไม่ผูก offset ถาวร · ไม่สร้าง ramp หรือเชื่อม cross street อัตโนมัติ · generated controls ต้อง review ก่อนใช้แบบ.</p></div>:null;
+  const seedControls=(modes:SeedMode[])=>modes.length?<div className="network-parallel-seed" data-network-parallel-seed="true"><div className="network-parallel-seed-head"><span>ASSISTED FRONTAGE SEED</span><b>one-shot geometry</b></div><div className="network-parallel-reference" data-network-parallel-reference={seedStart+'>'+seedEnd}><span>LEFT / RIGHT REFERENCE</span><b>{junctionLabel(seedStart)} → {junctionLabel(seedEnd)}</b><small>มองไปตามทิศอ้างอิงนี้ (looking ahead on stationing)</small></div><label>Centerline seed offset (m)<input data-network-parallel-seed-offset type="number" min="20" max="200" step="5" value={seedOffset} onChange={e=>onSeedOffset(Number(e.target.value))}/></label><div className="network-parallel-seed-actions">{modes.map(mode=><button key={mode} data-network-parallel-seed-action={mode} onClick={()=>onSeed(mode)}>{mode==='both'?'Generate Both':`Generate ${mode==='left'?'Left':'Right'}`}</button>)}</div><p>สร้าง Junction/RoadLink จริงเป็นค่าเริ่มต้นเท่านั้น · Left/Right อ้างอิงทิศด้านบน · ไม่ผูก offset ถาวร · ไม่สร้าง ramp หรือเชื่อม cross street อัตโนมัติ · generated controls ต้อง review ก่อนใช้แบบ.</p></div>:null;
   return <div className="network-parallel-panel" data-network-parallel-panel={membership?'member':draftMainlineId?'draft':'available'} data-network-parallel-draft={draftMainlineId??undefined}>
     <div className="network-arm-editor-head"><span>PARALLEL / FRONTAGE CORRIDOR</span><b>{corridor?.name??(draftLink?'Draft relationship':'Post-v1')}</b></div>
     {membership&&corridor?<>
       <div className="network-parallel-role"><span>Selected role</span><b>{membership.role==='mainline'?'MAINLINE':'FRONTAGE · '+membership.side?.toUpperCase()}</b></div>
+      {orientation&&<div className="network-parallel-reference" data-network-parallel-reference={orientation.startJunctionId+'>'+orientation.endJunctionId}><span>REFERENCE DIRECTION</span><b>{junctionLabel(orientation.startJunctionId)} → {junctionLabel(orientation.endJunctionId)}</b><small>Left/Right = มองไปตามทิศนี้</small><button type="button" data-network-parallel-action="reverse-reference" onClick={onReverseReference}>กลับทิศอ้างอิง</button></div>}
       <div className="network-parallel-members">
         <div><span>MAINLINE</span>{corridor.mainlineLinkIds.map(id=>memberButton(id,'mainline'))}</div>
         {corridor.frontage.map(chain=><div key={chain.side}><span>FRONTAGE · {chain.side.toUpperCase()}</span>{chain.linkIds.map(id=>memberButton(id,chain.side))}</div>)}

@@ -116,16 +116,18 @@ If **5** is no, put it in the future backlog and continue the current v1 milesto
 
 The product is now **Network-first**, while preserving the schema-v6 Junction engine as the local intersection source of truth.
 
-Current Network schema is **v3**:
+Current Network schema is **v4**:
 
 - each `RoadLink` owns semantic endpoints, `LinkVia[]` control points and a radius per PI;
 - each `RoadLink` can persist station-based corridor components for lane and width lifecycles;
+- `parallelCorridors[]` groups ordinary RoadLinks as Mainline and Left/Right Frontage chains without owning duplicate geometry;
+- each Parallel Corridor persists `mainlineStartJunctionId` so Left/Right are interpreted looking ahead along one explicit reference direction;
 - `linkPoints()` resolves PI/radius controls into tangent–arc–tangent geometry;
 - `RoadLink.sectionProfile.mode` is explicit: `review` or `linear`;
 - linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
 - lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
-- Network schema v1/v2 imports migrate conservatively to v3; legacy via radii remain 0, older projects retain explicit review semantics, and v1/v2 links gain `components: []`;
-- plan rendering, link length and Fit consume the same resolved RoadLink alignment.
+- Network schema v1/v2/v3 imports migrate conservatively to v4; early v4 Parallel Corridor files without an explicit reference start infer it deterministically during load;
+- plan rendering, link length, Fit, Scenario Comparison and Design Summary consume the same canonical Network state.
 
 The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
 
@@ -218,7 +220,7 @@ Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feat
 Phase 8A.1 status:
 - **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
 - **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
-- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review.
+- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right now uses a persisted looking-ahead Mainline reference direction and is visible in the Inspector.
 - 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
 - Do not implement mid-link ramps inside 8A.2; transfer topology remains Phase 8B.
 

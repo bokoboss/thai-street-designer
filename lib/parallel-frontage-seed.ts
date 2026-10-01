@@ -1,7 +1,7 @@
 import {emptyPockets,markingsFor,type Design} from '../app/junction/model';
 import {profiledParallel} from './alignment';
 import {
-  addJunction,addParallelCorridor,connectPorts,junctionById,linkControlPoints,parallelCorridorChainContinuous,
+  addJunction,addParallelCorridor,connectPorts,junctionById,linkControlPoints,parallelCorridorChainContinuous,parallelCorridorChainOrientation,
   parallelCorridorForLink,rotateJunction,setLinkVia,updateParallelCorridor,validateNetworkProject,
   type JunctionInstance,type NetworkProject,type ParallelCorridor,type ParallelCorridorSide,type PortRef,type RoadLink
 } from './network-project';
@@ -9,6 +9,7 @@ import {
 export type AssistedFrontageSeedMode=ParallelCorridorSide|'both';
 export type AssistedFrontageSeedInput={
   mainlineLinkIds:string[];
+  mainlineStartJunctionId?:string;
   side:AssistedFrontageSeedMode;
   offset:number;
   corridorId?:string;
@@ -19,21 +20,16 @@ export type AssistedFrontageSeedResult={project:NetworkProject;corridor?:Paralle
 
 type OrientedLink={link:RoadLink;start:PortRef;end:PortRef;reversed:boolean};
 
-function orientChain(project:NetworkProject,linkIds:string[],reverseFirst:boolean):OrientedLink[]|null{
+function orientChain(project:NetworkProject,linkIds:string[],startJunctionId:string):OrientedLink[]|null{
   const links=linkIds.map(id=>project.links.find(link=>link.id===id));
   if(links.some(link=>!link))return null;
-  const first=links[0]!,oriented:OrientedLink[]=[reverseFirst?{link:first,start:first.to,end:first.from,reversed:true}:{link:first,start:first.from,end:first.to,reversed:false}];
-  let current=oriented[0].end.junctionId;
-  for(const link of links.slice(1) as RoadLink[]){
-    if(link.from.junctionId===current)oriented.push({link,start:link.from,end:link.to,reversed:false});
-    else if(link.to.junctionId===current)oriented.push({link,start:link.to,end:link.from,reversed:true});
+  let current=startJunctionId;const oriented:OrientedLink[]=[];
+  for(const link of links as RoadLink[]){
+    if(link.from.junctionId===current){oriented.push({link,start:link.from,end:link.to,reversed:false});current=link.to.junctionId;}
+    else if(link.to.junctionId===current){oriented.push({link,start:link.to,end:link.from,reversed:true});current=link.from.junctionId;}
     else return null;
-    current=oriented.at(-1)!.end.junctionId;
   }
   return oriented;
-}
-function orderedChain(project:NetworkProject,linkIds:string[]){
-  return orientChain(project,linkIds,false)??orientChain(project,linkIds,true);
 }
 function seedDesign(source:Design):Design{
   const design=structuredClone(source);
@@ -101,8 +97,12 @@ export function seedParallelFrontage(project:NetworkProject,input:AssistedFronta
   const offset=Number(input.offset),sides:ParallelCorridorSide[]=input.side==='both'?['left','right']:[input.side];
   if(!Number.isFinite(offset)||offset<20||offset>200)return{project,generated:[],error:'Seed offset ต้องอยู่ระหว่าง 20–200 m · เป็น geometric workspace guard ไม่ใช่มาตรฐานออกแบบ'};
   if(!parallelCorridorChainContinuous(project,input.mainlineLinkIds))return{project,generated:[],error:'Mainline chain ไม่ต่อเนื่อง'};
-  const oriented=orderedChain(project,input.mainlineLinkIds);if(!oriented)return{project,generated:[],error:'จัดทิศ mainline chain ไม่สำเร็จ'};
-  const existing=input.corridorId?project.parallelCorridors.find(v=>v.id===input.corridorId):undefined;
+  const existing=input.corridorId?project.parallelCorridors.find(v=>v.id===input.corridorId):undefined,
+    firstLink=project.links.find(link=>link.id===input.mainlineLinkIds[0]),
+    mainlineStartJunctionId=existing?.mainlineStartJunctionId||input.mainlineStartJunctionId||firstLink?.from.junctionId||'',
+    orientation=parallelCorridorChainOrientation(project,input.mainlineLinkIds,mainlineStartJunctionId),
+    oriented=orientation?orientChain(project,input.mainlineLinkIds,orientation.startJunctionId):null;
+  if(!orientation||!oriented)return{project,generated:[],error:'จัด reference direction ของ mainline chain ไม่สำเร็จ'};
   if(input.corridorId&&!existing)return{project,generated:[],error:'ไม่พบ Parallel corridor'};
   if(existing&&JSON.stringify(existing.mainlineLinkIds)!==JSON.stringify(input.mainlineLinkIds))return{project,generated:[],error:'Mainline chain ไม่ตรงกับ Parallel corridor ที่เลือก'};
   if(!existing&&input.mainlineLinkIds.some(id=>parallelCorridorForLink(project,id)))return{project,generated:[],error:'Mainline Road Link อยู่ใน Parallel corridor แล้ว'};
@@ -116,8 +116,8 @@ export function seedParallelFrontage(project:NetworkProject,input:AssistedFronta
   const frontage=[...(existing?.frontage??[]),...generated.map(chain=>({side:chain.side,linkIds:chain.linkIds}))],
     name=(input.name?.trim()||existing?.name||`Parallel Corridor ${project.parallelCorridors.length+1}`).slice(0,80),
     grouped=existing
-      ?updateParallelCorridor(working,existing.id,{name,mainlineLinkIds:[...input.mainlineLinkIds],frontage})
-      :addParallelCorridor(working,{name,mainlineLinkIds:[...input.mainlineLinkIds],frontage});
+      ?updateParallelCorridor(working,existing.id,{name,mainlineLinkIds:[...input.mainlineLinkIds],mainlineStartJunctionId:existing.mainlineStartJunctionId,frontage})
+      :addParallelCorridor(working,{name,mainlineLinkIds:[...input.mainlineLinkIds],mainlineStartJunctionId:orientation.startJunctionId,frontage});
   if(grouped.error||!grouped.corridor)return{project,generated:[],error:grouped.error??'บันทึก Parallel corridor ไม่สำเร็จ'};
   const error=validateNetworkProject(grouped.project);
   return error?{project,generated:[],error}:{project:grouped.project,corridor:grouped.corridor,generated,error:null};
