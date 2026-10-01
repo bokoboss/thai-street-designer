@@ -552,7 +552,8 @@ export function addLinkToParallelCorridor(project:NetworkProject,corridorId:stri
   const valid=candidates.map(candidate=>({candidate,next:replaceParallelCorridor(project,candidate)})).filter(item=>validateNetworkProject(item.next)===null),
     unique=valid.filter((item,index)=>valid.findIndex(other=>JSON.stringify(other.candidate)===JSON.stringify(item.candidate))===index);
   if(unique.length===0)return{project,error:'เพิ่ม Road Link ไม่ได้ · Link ต้องต่อที่ปลาย chain และต้องไม่ทำให้ Parallel corridor topology ขาด'};
-  if(unique.length>1)return{project,error:'เพิ่ม Road Link ไม่ได้ · ตำแหน่งใน chain กำกวม กรุณาจัด topology ให้ชัดเจนก่อน'};
+  // With a one-Link chain, prepend and append can both describe the same two-Link topology because chain travel orientation is not persisted.
+  // Keep the current chain first and use the first validated candidate deterministically; longer chains still admit only a valid endpoint extension.
   return{project:unique[0].next,corridor:unique[0].candidate,error:null};
 }
 export function removeLinkFromParallelCorridor(project:NetworkProject,linkId:string):ParallelCorridorEditResult{
