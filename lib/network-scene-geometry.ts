@@ -1,5 +1,6 @@
 import {profiledParallel} from './alignment';
 import {resolveLinkSectionGeometry} from './network-link-geometry';
+import {resolveTransferConnectorPavement} from './transfer-geometry';
 import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
@@ -97,6 +98,12 @@ export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkScen
   return out.filter(surface=>surface.points.length>=4&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
 }
 
+export function resolveTransferConnectorSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
+  return project.transferConnectors.flatMap(connector=>{
+    const g=resolveTransferConnectorPavement(project,connector);
+    return g&&g.polygon.length>=4?[{id:connector.id+':road',kind:'road' as const,points:g.polygon,z:.035}]:[];
+  }).filter(surface=>surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
 export function resolveNetworkSceneSurfaces(project:NetworkProject){
-  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project)];
+  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project),...resolveTransferConnectorSceneSurfaces(project)];
 }

@@ -4,9 +4,10 @@ import {path} from '../junction/geometry';
 import {profiledParallel,variableParallel} from '@/lib/alignment';
 import {
   activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
-  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
+  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,type TransferConnector
 } from '@/lib/network-project';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
+import {resolveTransferConnectorPavement} from '@/lib/transfer-geometry';
 
 export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
@@ -175,6 +176,17 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
   </g>;
 }
 
+export function TransferConnectorDrawing({project,connector}:{project:NetworkProject;connector:TransferConnector}){
+  const g=resolveTransferConnectorPavement(project,connector);if(!g)return null;
+  const surface=path([...g.left,...[...g.right].reverse()],true);
+  return <g data-network-transfer-connector={connector.id} pointerEvents="none">
+    <path d={surface} fill="#35424e" stroke="#9aa8ae" strokeWidth=".35" strokeLinejoin="round"/>
+    <path data-scene-detail="true" d={path(g.left)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
+    <path data-scene-detail="true" d={path(g.right)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
+    {g.laneLines.map((line,index)=><path key={index} data-scene-detail="true" data-network-transfer-lane-line={index} d={path(line)} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+  </g>;
+}
+
 export function NetworkDrawing({
   project,zoom,selection,comparisonFocus,parallelCorridorId,parallelDraftMainlineId,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
@@ -206,6 +218,7 @@ export function NetworkDrawing({
     };
   return <g>
     {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
+    {project.transferConnectors.map(connector=><TransferConnectorDrawing key={connector.id} project={project} connector={connector}/>)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

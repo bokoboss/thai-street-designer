@@ -65,12 +65,18 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - DIVERGE extends upstream / MERGE extends downstream in traffic coordinates;
 - safe repair/detach/delete semantics through the existing RoadLink lifecycle engine.
 
-### 8B.2c — connector pavement + gore
-After host-lane provenance regression passes:
-- resolve connector pavement from TransferConnector own one-way section;
-- physical/painted nose + neutral gore semantics;
+### 8B.2c1 — connector pavement surface — current
+- keep TransferPort datum stable by excluding transfer-terminal lane lifecycles from its own base-edge calculation;
+- offset TransferConnector centerline half its owned pavement width outward from each host datum;
+- resolve connector pavement + lane dividers from one shared geometry resolver;
+- consume the same resolver in 2D plan and Network 3D.
+
+### 8B.2c2 — painted / physical nose + neutral gore
+After pavement rendering passes:
+- persist explicit gore/nose treatment parameters rather than inventing standard dimensions;
+- painted nose, physical nose and neutral gore geometry;
 - terminal integrity review warnings;
-- plan/3D/export consumers must share the same connector resolver.
+- export/golden acceptance for the full transfer treatment.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

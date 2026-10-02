@@ -193,3 +193,27 @@ Lifecycle safety:
 - removing a connector/port/host cascades dependent transfer-terminal lane provenance;
 - reapplying treatment preserves per-lane component IDs where possible;
 - manual editing of a sourced lane continues to detach provenance through the existing station-component edit behavior.
+
+
+## 12. Phase 8B.2c1 connector pavement surface
+
+After the host speed-change lane lifecycle is stable, the connecting roadway can resolve its own pavement section.
+
+The connector control line is a **centerline**, not the host-road edge. At each terminal:
+1. the TransferPort resolves the stable base traveled-way edge with transfer-terminal lane lifecycles temporarily excluded from the datum calculation;
+2. the connector centerline starts one-half of its owned pavement width outward from that datum;
+3. the connector follows the host traffic tangent at DIVERGE and matches the receiving traffic tangent at MERGE;
+4. connector pavement is a symmetric strip from the same resolved centerline, with internal lane dividers derived from `lanes × laneWidth`.
+
+This prevents a self-referential failure where applying a host speed-change lane would move the TransferPort that created it.
+
+The same `resolveTransferConnectorPavement()` is consumed by:
+- 2D Network plan rendering;
+- Network 3D semantic road surfaces;
+- future export/review layers.
+
+The connector surface remains concept-level. Shoulder, superelevation, vertical profile, physical nose and neutral gore are not inferred in this step.
+
+TxDOT describes the ramp as a connecting road with a terminal at each leg, while Austroads Part 4C treats ramp alignment/cross-section and merge/diverge terminals as explicit interchange elements. That separation is retained here:
+- https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-7-ramps---direct-connectors-.html
+- https://austroads.gov.au/publications/road-design/agrd04c

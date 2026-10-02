@@ -231,8 +231,9 @@ Phase 8A.1 status:
 - **8B.1a station-port model gate — passed** — schema v5 station anchors passed Quality run `37026206062`; no visual-only ramp and no fake 3-arm Junction.
 - **8B.1b connector semantic ownership — passed** — persisted DIVERGE → MERGE connector state, own one-way section, dependency-safe lifecycle and Scenario/Design Summary metrics passed Quality run `37027183441`.
 - **8B.2a geometry datum — passed** — shared tangent primitive + host traveled-way-edge station anchor + connector tangent control line passed Quality run `37027973983`.
-- **8B.2b host speed-change lane lifecycle — current** — reuse RoadLink station lane components with transfer-terminal provenance and explicit full-width/taper lengths; still no connector pavement/gore.
-- **8B.2c connector pavement + gore** follows only after the host-lane provenance/cascade regression passes.
+- **8B.2b host speed-change lane lifecycle — passed** — RoadLink lifecycle reuse + transfer-terminal provenance passed Quality run `37031456049`.
+- **8B.2c1 connector pavement surface — current** — stable base traveled-way datum, connector-owned centerline/pavement and shared 2D/3D resolver; no physical nose/gore yet.
+- **8B.2c2 nose/gore** follows only after shared connector pavement rendering passes.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.

@@ -5,7 +5,7 @@ import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/lib/network-project';
 import {
-  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
+  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,resolveTransferConnectorSceneSurfaces,type NetworkSceneSurfaceKind
 } from '@/lib/network-scene-geometry';
 
 type Size={w:number;h:number};
@@ -26,7 +26,7 @@ export default function NetworkScene3D({
       if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
       return{
         junctionSurfaces:resolveJunctionSceneSurfaces(project),
-        linkSurfaces:resolveRoadLinkSceneSurfaces(project),
+        linkSurfaces:[...resolveRoadLinkSceneSurfaces(project),...resolveTransferConnectorSceneSurfaces(project)],
         furnitureFaces:resolveJunctionSceneFaces(project),
         bounds:projectBounds(project,45)
       };
@@ -179,7 +179,7 @@ export default function NetworkScene3D({
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
       onAuxClick={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Geometry = Junction + Slip + RoadLink semantic surfaces</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
+    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Geometry = Junction + Slip + RoadLink + TransferConnector semantic surfaces</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>
