@@ -51,12 +51,20 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - Scenario Comparison and Design Summary expose transfer-port / connector counts;
 - still no ramp renderer: 8B.2 must refactor/reuse existing alignment + section geometry primitives rather than introduce a parallel engine.
 
-### 8B.2 — terminal treatment geometry
-Only after topology is durable:
+### 8B.2a — connector geometry datum — current
+- resolve station port against the host RoadLink alignment + resolved cross-section;
+- anchor at the selected traveled-way edge, with explicit traffic/outward headings;
+- refactor RoadLink endpoint tangent construction into shared `tangentAlignmentControls()`;
+- resolve a TransferConnector tangent control line through the same alignment primitive;
+- no pavement/gore renderer yet.
+
+### 8B.2b — terminal treatment geometry
+After datum regression passes:
 - acceleration/deceleration lane lifecycle;
+- connector pavement cross-section;
 - painted/physical nose and gore semantics;
-- tangent continuity between host and connector;
-- terminal review warnings.
+- terminal review warnings;
+- plan/3D/export consumers must share the same connector resolver.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

@@ -125,3 +125,29 @@ Foundation constraints:
 - lane-count/width limits are workspace guards, not Thai design standards;
 - deletion of a port/host cascades dependent connector topology atomically;
 - changing a connected port role is rejected when it would invalidate the connector.
+
+
+## 10. Phase 8B.2a geometry datum foundation
+
+The first geometry step does not draw ramp pavement. It resolves durable terminal datums from the existing host-road engines.
+
+A `TransferPort` resolves from:
+1. the host RoadLink resolved alignment at its absolute station;
+2. the resolved host cross-section at the same station;
+3. the selected travel direction and curb/median side.
+
+The resulting terminal anchor is the **edge of traveled way** for that direction/side, not an arbitrary screen point and not the outside edge of a shoulder/sidewalk band. This is deliberate: speed-change lane, shoulder displacement, nose and gore are terminal treatments that will be added explicitly rather than hidden inside the topology anchor.
+
+Traffic heading is derived from RoadLink storage heading:
+- forward = storage heading;
+- backward = storage heading + 180°.
+
+For left-hand traffic, curb side is the left side of the travel heading and median side is the right side. The connector control line is tangent to the source traffic heading at DIVERGE and to the receiving traffic heading at MERGE.
+
+The endpoint tangent construction has been extracted into a shared `tangentAlignmentControls()` primitive in `lib/alignment.ts`, so RoadLink and TransferConnector do not own competing tangent algorithms.
+
+Current references supporting this separation:
+- Austroads Guide to Road Design Part 4C: Interchanges (2023), which treats ramp cross-section, ramp alignment, and merge/diverge terminals as explicit interchange elements: https://austroads.gov.au/publications/road-design/agrd04c
+- TxDOT Roadway Design Manual, which defines speed-change/auxiliary lanes as roadway adjoining through lanes for entering/exiting and speed-change movements, and separates ramps/terminals from frontage-road design: https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-8--freeways--4r-/8-1-design-considerations.html
+
+No TxDOT/Austroads numeric dimension is encoded as a Thai mandatory default in this phase.

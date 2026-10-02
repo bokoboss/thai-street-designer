@@ -229,8 +229,9 @@ Phase 8A.1 status:
 - 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
 - **8A.2 accepted / merged** — assisted-frontage golden evidence, Thai-readable visual QA and one-shot/review UX passed Quality run `36850268921`; PR #2 merged as `cc4994c9331dad12353e9dd13f88902d9dd9b74c`.
 - **8B.1a station-port model gate — passed** — schema v5 station anchors passed Quality run `37026206062`; no visual-only ramp and no fake 3-arm Junction.
-- **8B.1b connector semantic ownership — current** — persisted DIVERGE → MERGE connector state, own one-way section, dependency-safe lifecycle, Scenario/Design Summary metrics; still no renderer.
-- **8B.2 geometry** must refactor/reuse existing alignment/section primitives for connector plan/3D rendering rather than create a parallel geometry engine.
+- **8B.1b connector semantic ownership — passed** — persisted DIVERGE → MERGE connector state, own one-way section, dependency-safe lifecycle and Scenario/Design Summary metrics passed Quality run `37027183441`.
+- **8B.2a geometry datum — current** — shared tangent primitive + host traveled-way-edge station anchor + connector tangent control line; still no pavement/gore renderer.
+- **8B.2b terminal geometry** will add speed-change-lane / connector pavement / nose-gore semantics only after the datum regression passes.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
