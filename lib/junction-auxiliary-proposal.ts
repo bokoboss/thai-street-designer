@@ -251,7 +251,7 @@ export function continueJunctionAuxiliaryToCorridor(project:NetworkProject,linkI
 export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
   const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
   const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id),
-    sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===id),
+    sourced=link.components.filter((component):component is LinkStationLaneComponent&{source:JunctionAuxiliarySource}=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===id),
     fallbackSource=sourced[0]?.source;
   if(!proposal&&!fallbackSource)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal หรือ provenance สำหรับ handoff นี้'};
   let edited=project;

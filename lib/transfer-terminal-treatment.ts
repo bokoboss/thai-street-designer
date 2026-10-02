@@ -39,7 +39,7 @@ export function applyTransferTerminalLaneTreatment(
   const range=transferTerminalLaneRange(linkLength(project,host),port.station,port.direction,port.terminal,fullWidthLength,taperLength);
   if(!range)return{project,componentIds:[],removed:[],error:'ช่วง speed-change lane / taper เกินระยะ host Road Link ที่มีอยู่'};
   const existing=host.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&sourceMatches(component,port.id,connector.id)),
-    existingByLane=new Map(existing.map(component=>[component.source!.kind==='transfer-terminal'?component.source.lane:-1,component])),
+    existingByLane=new Map(existing.map(component=>{const source=component.source;return[source?.kind==='transfer-terminal'?source.lane:-1,component] as const;})),
     keep=host.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&component.source.transferPortId===port.id)),
     capacity=keep.length+connector.lanes;
   if(capacity>24)return{project,componentIds:[],removed:[],error:'จำนวน station components จะเกินขอบเขต 24 รายการของ Road Link'};
