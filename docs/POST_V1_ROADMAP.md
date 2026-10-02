@@ -43,12 +43,13 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - Deleting the host RoadLink removes its currently unconnected transfer ports atomically.
 - No ramp geometry or renderer is introduced in 8B.1a.
 
-### 8B.1b — connector ownership
-After 8B.1a passes:
-- extend connector/RoadLink endpoint ownership to reference transfer ports deliberately;
-- connector owns its own one-way section rather than inheriting the full host-road cross section;
+### 8B.1b — connector semantic ownership — current
+- add persisted `TransferConnector[]` between DIVERGE → MERGE station ports;
+- connector owns explicit one-way lane count / lane width instead of inheriting the host-road cross section;
 - preserve host RoadLink/mainline/frontage chain IDs rather than splitting them merely to attach a ramp;
-- add Scenario / report / Undo / reconnect semantics.
+- dependency-safe port/host delete and connected-role update semantics;
+- Scenario Comparison and Design Summary expose transfer-port / connector counts;
+- still no ramp renderer: 8B.2 must refactor/reuse existing alignment + section geometry primitives rather than introduce a parallel engine.
 
 ### 8B.2 — terminal treatment geometry
 Only after topology is durable:

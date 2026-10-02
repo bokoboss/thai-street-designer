@@ -7,7 +7,7 @@ Current post-v1 working branch: `chatgpt/post-v1-transfer-topology`
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
 Product v1 pull request: **#1 — merged 2026-09-30**  
 Phase 8A pull request: **#2 — merged 2026-10-02**  
-Current Phase 8B pull request: **not opened yet — model gate in progress**  
+Current Phase 8B pull request: **#3 — Draft · Mainline ↔ Frontage Transfer Topology**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
@@ -128,7 +128,8 @@ Current Network schema is **v5**:
 - linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
 - lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
 - Network schema v1/v2/v3/v4 imports migrate conservatively to v5; v4 adds no transfer ports on migration, and early v4 Parallel Corridor files without an explicit reference start still infer it deterministically during load;
-- `transferPorts[]` is the Phase 8B.1a semantic foundation for mid-link merge/diverge anchors: each port owns host RoadLink ID, station, travel direction, carriageway side and merge/diverge role; it does not yet render or create a connector;
+- `transferPorts[]` is the Phase 8B.1a semantic foundation for mid-link merge/diverge anchors: each port owns host RoadLink ID, station, travel direction, carriageway side and merge/diverge role;
+- `transferConnectors[]` is the Phase 8B.1b topology/section layer joining DIVERGE → MERGE ports with explicit one-way lanes/width; it deliberately has no independent renderer yet;
 - plan rendering, link length, Fit, Scenario Comparison and Design Summary consume the same canonical Network state.
 
 The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
@@ -227,8 +228,9 @@ Phase 8A.1 status:
 - **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right uses a persisted looking-ahead Mainline reference direction. Generated seed Junction review points are persisted per frontage chain, surfaced in Design Summary/Scenario Comparison and can be explicitly Mark reviewed without changing geometry.
 - 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
 - **8A.2 accepted / merged** — assisted-frontage golden evidence, Thai-readable visual QA and one-shot/review UX passed Quality run `36850268921`; PR #2 merged as `cc4994c9331dad12353e9dd13f88902d9dd9b74c`.
-- **8B.1a station-port model gate** — add persisted RoadLink station anchors first; no visual-only ramp and no fake 3-arm Junction. See `docs/TRANSFER_TOPOLOGY_DESIGN_BASIS.md`.
-- **8B.1b connector topology** follows only after schema-v5 station-port migration/validation/delete semantics pass.
+- **8B.1a station-port model gate — passed** — schema v5 station anchors passed Quality run `37026206062`; no visual-only ramp and no fake 3-arm Junction.
+- **8B.1b connector semantic ownership — current** — persisted DIVERGE → MERGE connector state, own one-way section, dependency-safe lifecycle, Scenario/Design Summary metrics; still no renderer.
+- **8B.2 geometry** must refactor/reuse existing alignment/section primitives for connector plan/3D rendering rather than create a parallel geometry engine.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.

@@ -92,3 +92,36 @@ Deleting a host RoadLink may remove unconnected station ports. Once connectors r
 ## 8. Non-goals
 
 Phase 8B does not add grade separation/elevation design, traffic assignment, weaving/LOS/capacity analysis, automatic ramp-spacing warrants, certified detailed-design compliance, or automatic Thai design dimensions without an applicable authority basis.
+
+
+## 9. Phase 8B.1b connector semantic ownership
+
+After the schema-v5 station-port gate passed, connector ownership is represented by a distinct `TransferConnector` semantic object rather than overloading the existing Junction-to-Junction `RoadLink` invariant.
+
+```ts
+TransferConnector {
+  id
+  name
+  fromTransferPortId   // must reference DIVERGE
+  toTransferPortId     // must reference MERGE
+  via[]                // future shared alignment controls
+  lanes
+  laneWidth
+}
+```
+
+The object is intentionally topology/section state only in 8B.1b. It does not create an SVG or 3D ramp renderer.
+
+Why not change `RoadLink.from/to` to a union now:
+- RoadLink endpoint ownership is deeply coupled to Junction Arm continuity, ParallelCorridor chain traversal, handoff provenance and existing reconnect behavior.
+- A union conversion would expand the regression surface before connector terminal semantics are stable.
+- TransferConnector is a distinct connecting facility, but Phase 8B.2 must **reuse/refactor the existing alignment + section geometry primitives**, not introduce a second drawing engine.
+
+Foundation constraints:
+- traffic flows from a DIVERGE station port to a MERGE station port;
+- the two terminals must belong to different host RoadLinks;
+- a transfer port may belong to only one connector in this foundation;
+- connector section is explicit and one-way (`lanes`, `laneWidth`);
+- lane-count/width limits are workspace guards, not Thai design standards;
+- deletion of a port/host cascades dependent connector topology atomically;
+- changing a connected port role is rejected when it would invalidate the connector.

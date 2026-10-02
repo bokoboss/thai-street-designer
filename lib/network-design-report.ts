@@ -15,7 +15,7 @@ export type DesignReportFinding={
   message:string;
 };
 export type NetworkDesignMetrics={
-  junctions:number;roadLinks:number;parallelCorridors:number;frontageChains:number;seedReviewPoints:number;enabledArms:number;roundabouts:number;slips:number;
+  junctions:number;roadLinks:number;parallelCorridors:number;frontageChains:number;seedReviewPoints:number;transferPorts:number;transferConnectors:number;enabledArms:number;roundabouts:number;slips:number;
   mainLanes:number;pocketLanes:number;receivingLanes:number;medianArms:number;
   signalArms:number;crossingArms:number;stopArms:number;stationComponents:number;
   roadLength:number;
@@ -51,7 +51,7 @@ export function networkDesignMetrics(project:NetworkProject):NetworkDesignMetric
     }
   }
   return{
-    junctions:project.junctions.length,roadLinks:project.links.length,parallelCorridors:project.parallelCorridors.length,frontageChains:project.parallelCorridors.reduce((sum,corridor)=>sum+corridor.frontage.length,0),seedReviewPoints:project.parallelCorridors.reduce((sum,corridor)=>sum+corridor.frontage.reduce((inner,chain)=>inner+(chain.seedReviewJunctionIds?.length??0),0),0),enabledArms,roundabouts,slips,mainLanes,pocketLanes,receivingLanes,medianArms,
+    junctions:project.junctions.length,roadLinks:project.links.length,parallelCorridors:project.parallelCorridors.length,frontageChains:project.parallelCorridors.reduce((sum,corridor)=>sum+corridor.frontage.length,0),seedReviewPoints:project.parallelCorridors.reduce((sum,corridor)=>sum+corridor.frontage.reduce((inner,chain)=>inner+(chain.seedReviewJunctionIds?.length??0),0),0),transferPorts:project.transferPorts.length,transferConnectors:project.transferConnectors.length,enabledArms,roundabouts,slips,mainLanes,pocketLanes,receivingLanes,medianArms,
     signalArms,crossingArms,stopArms,stationComponents:project.links.reduce((sum,link)=>sum+link.components.length,0),
     roadLength:rounded(project.links.reduce((sum,link)=>sum+linkLength(project,link),0),1)
   };
@@ -113,7 +113,7 @@ export function networkDesignReportHtml(report:NetworkDesignReport){
   body{font:14px/1.55 Arial,"Noto Sans Thai",sans-serif;color:#263b44;max-width:1180px;margin:0 auto;padding:36px;background:#fff}h1{margin:0;font-size:26px}h2{font-size:17px;margin:28px 0 10px;border-bottom:1px solid #ccd9d7;padding-bottom:6px}p{margin:5px 0}.muted{color:#687b7f}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#eef6f4;color:#176f69;font-weight:700;font-size:12px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.metric{padding:9px;border:1px solid #d7e2e0;border-radius:7px}.metric span{display:block;font-size:11px;color:#687b7f}.metric b{font-size:15px}table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:12px}th,td{border:1px solid #dbe3e2;padding:6px 7px;text-align:left;vertical-align:top}th{background:#f4f8f7}.error td:first-child{color:#a33b3b;font-weight:700}.warning td:first-child{color:#9a681f;font-weight:700}.note td:first-child{color:#526d7d;font-weight:700}.scope{margin-top:28px;padding:12px;border:1px solid #ead6ae;background:#fff9ec;border-radius:7px}.footer{margin-top:28px;color:#738286;font-size:11px}@media print{body{max-width:none;padding:18mm}.metrics{grid-template-columns:repeat(4,1fr)}.scope{break-inside:avoid}section{break-inside:auto}tr{break-inside:avoid}}
   </style></head><body><header><span class="badge">THAI STREET DESIGNER · CONCEPT DESIGN</span><h1>${escapeHtml(report.projectTitle)}</h1><p>Scenario: <b>${escapeHtml(report.scenarioName)}</b></p><p class="muted">Design summary generated from persisted engineering state. No traffic capacity, LOS, demand forecasting or simulation is included.</p></header>
   <section><h2>Engineering Summary</h2><div class="metrics">${[
-    metricCard('Junctions',String(m.junctions)),metricCard('RoadLinks',String(m.roadLinks)),metricCard('Parallel corridors',String(m.parallelCorridors)),metricCard('Frontage chains',String(m.frontageChains)),metricCard('Seed review points',String(m.seedReviewPoints)),metricCard('RoadLink length',m.roadLength.toFixed(1)+' m'),metricCard('Enabled arms',String(m.enabledArms)),
+    metricCard('Junctions',String(m.junctions)),metricCard('RoadLinks',String(m.roadLinks)),metricCard('Parallel corridors',String(m.parallelCorridors)),metricCard('Frontage chains',String(m.frontageChains)),metricCard('Seed review points',String(m.seedReviewPoints)),metricCard('Transfer ports',String(m.transferPorts)),metricCard('Transfer connectors',String(m.transferConnectors)),metricCard('RoadLink length',m.roadLength.toFixed(1)+' m'),metricCard('Enabled arms',String(m.enabledArms)),
     metricCard('Main lanes',String(m.mainLanes)),metricCard('Pocket lanes',String(m.pocketLanes)),metricCard('Receiving lanes',String(m.receivingLanes)),metricCard('Station components',String(m.stationComponents)),
     metricCard('Roundabouts',String(m.roundabouts)),metricCard('Slip lanes',String(m.slips)),metricCard('Signal / Crossing / Stop',`${m.signalArms} / ${m.crossingArms} / ${m.stopArms}`),metricCard('Review findings',`${report.counts.error} error · ${report.counts.warning} warning · ${report.counts.note} note`)
   ].join('')}</div></section>

@@ -10,7 +10,7 @@ export type ScenarioObjectDelta={
   status:ScenarioDeltaStatus;
   changes:string[];
 };
-export type ScenarioMetricKey='junctions'|'roadLinks'|'parallelCorridors'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
+export type ScenarioMetricKey='junctions'|'roadLinks'|'parallelCorridors'|'transferPorts'|'transferConnectors'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
 export type ScenarioMetric={
   key:ScenarioMetricKey;
   label:string;
@@ -61,6 +61,8 @@ function projectMetrics(project:NetworkProject){
     junctions:project.junctions.length,
     roadLinks:project.links.length,
     parallelCorridors:project.parallelCorridors.length,
+    transferPorts:project.transferPorts.length,
+    transferConnectors:project.transferConnectors.length,
     mainLanes,
     pocketLanes,
     receivingLanes,
@@ -134,7 +136,7 @@ export function compareNetworkProjects(reference:NetworkProject,active:NetworkPr
   }
   const ref=projectMetrics(reference),act=projectMetrics(active),
     meta:{key:ScenarioMetricKey;label:string;unit?:string}[]=[
-      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'parallelCorridors',label:'Parallel corridors'},{key:'mainLanes',label:'Main lanes'},
+      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'parallelCorridors',label:'Parallel corridors'},{key:'transferPorts',label:'Transfer ports'},{key:'transferConnectors',label:'Transfer connectors'},{key:'mainLanes',label:'Main lanes'},
       {key:'pocketLanes',label:'Pocket lanes'},{key:'receivingLanes',label:'Receiving lanes'},
       {key:'medianArms',label:'Median arms'},{key:'medianWidth',label:'Σ median width',unit:'m'},
       {key:'stationComponents',label:'Station components'},{key:'roadLength',label:'RoadLink length',unit:'m'}
