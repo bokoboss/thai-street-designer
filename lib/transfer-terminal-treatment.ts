@@ -43,7 +43,7 @@ export function applyTransferTerminalLaneTreatment(
     keep=host.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&component.source.transferPortId===port.id)),
     capacity=keep.length+connector.lanes;
   if(capacity>24)return{project,componentIds:[],removed:[],error:'จำนวน station components จะเกินขอบเขต 24 รายการของ Road Link'};
-  let nextLink:RoadLink={...host,components:[...keep]},componentIds:string[]=[];
+  let nextLink:RoadLink={...host,components:[...keep]};const componentIds:string[]=[];
   for(let lane=0;lane<connector.lanes;lane++){
     const prior=existingByLane.get(lane),id=prior?.id??nextComponentId(nextLink),component:LinkStationLaneComponent={
       id,kind:'lane',direction:port.direction,side:port.side,start:range.start,end:range.end,taperIn:range.taperIn,taperOut:range.taperOut,
