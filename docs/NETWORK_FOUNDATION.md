@@ -1110,3 +1110,31 @@ One-shot assisted frontage generation now persists review provenance on the gene
 `seedReviewJunctionIds[]` contains only generated Junctions that still require explicit concept review. Validation restricts those IDs to Junctions on the same frontage chain. Design Summary surfaces them as engineering warnings, Scenario Comparison observes the lifecycle, and the Inspector can clear a frontage side with **Mark reviewed** without altering road geometry.
 
 The provenance remains part of ParallelCorridor engineering state and follows the same Project JSON, Scenario and Undo/Redo ownership rules as the rest of the Network model.
+
+
+## Phase 8B.1a — RoadLink station-port transfer foundation
+
+Post-v1 Network schema v5 introduces `transferPorts[]` without changing existing RoadLink/Junction geometry.
+
+A transfer port is a semantic reference into an existing RoadLink:
+
+```
+TransferPort
+├─ id / name
+├─ hostLinkId
+├─ station          // metres from RoadLink FROM along resolved alignment
+├─ direction        // forward | backward
+├─ side             // curb | median
+└─ terminal         // diverge | merge
+```
+
+The model deliberately does **not** create a JunctionInstance at the ramp terminal. Merge/diverge terminals do not use Junction v6 mouth geometry.
+
+The first gate owns only persistence and topology reference semantics:
+- v1–v4 import to schema v5 with no transfer ports;
+- station must remain strictly inside the resolved host RoadLink length;
+- the host RoadLink must exist;
+- direction / side / terminal role are explicit;
+- deleting a host RoadLink cleans its currently unconnected transfer ports in the same project transaction.
+
+8B.1a does not draw a ramp. 8B.1b will decide connector RoadLink endpoint ownership and connector-owned one-way section semantics. Terminal acceleration/deceleration/gore geometry remains 8B.2.

@@ -25,7 +25,7 @@ Design basis: `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md`.
 - generated seed Junctions are neutralized for review;
 - persisted seed-review markers survive Save/Reload and can be explicitly cleared after review.
 
-Acceptance / freeze gate before PR #2 merge:
+Acceptance / freeze gate before PR #2 merge — **passed; PR #2 merged 2026-10-02:**
 - dedicated browser golden evidence must show the generated frontage geometry, corridor highlighting and persisted review points together;
 - Thai labels in visual QA must render with a Thai-capable font rather than missing-glyph boxes;
 - one-side generation must remain legible in the narrow Inspector and clearly state that the offset is a one-shot seed, not a persistent constraint;
@@ -35,14 +35,29 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 
 ## Phase 8B — Mainline ↔ frontage transfer topology
 
-Research and model:
-- merge/diverge/transfer nodes;
-- RoadLink station ports versus explicit Link splitting;
-- connector/ramp ownership;
-- safe reconnect/delete/Undo;
-- interaction with frontage directionality and access management.
+### 8B.1a — RoadLink station-port semantic foundation — current
+- Network schema v5 adds `transferPorts[]`.
+- A transfer port is a semantic mid-link anchor: host RoadLink + absolute station + travel direction + curb/median side + merge/diverge role.
+- v1/v2/v3/v4 migrate to v5 with `transferPorts: []`.
+- Missing host, invalid station and malformed role metadata are rejected.
+- Deleting the host RoadLink removes its currently unconnected transfer ports atomically.
+- No ramp geometry or renderer is introduced in 8B.1a.
 
-Do not implement visual-only ramps.
+### 8B.1b — connector ownership
+After 8B.1a passes:
+- extend connector/RoadLink endpoint ownership to reference transfer ports deliberately;
+- connector owns its own one-way section rather than inheriting the full host-road cross section;
+- preserve host RoadLink/mainline/frontage chain IDs rather than splitting them merely to attach a ramp;
+- add Scenario / report / Undo / reconnect semantics.
+
+### 8B.2 — terminal treatment geometry
+Only after topology is durable:
+- acceleration/deceleration lane lifecycle;
+- painted/physical nose and gore semantics;
+- tangent continuity between host and connector;
+- terminal review warnings.
+
+Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 
 ## Phase 8C — Parallel corridor engineering review
 
