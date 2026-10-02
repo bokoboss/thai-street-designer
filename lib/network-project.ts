@@ -40,7 +40,9 @@ export type LinkLaneTransition={side:'curb'|'median';center:number;length:number
 export type LinkSectionProfile={mode:'review'|'linear';forwardLaneTransition?:LinkLaneTransition;backwardLaneTransition?:LinkLaneTransition};
 export type LinkWidthTarget='walk'|Band['type'];
 export type JunctionAuxiliarySource={kind:'junction-auxiliary';handoffId:string;junctionId:string;armId:number;direction:Direction;side:'left'|'right';lane:number};
-export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number;source?:JunctionAuxiliarySource};
+export type TransferTerminalLaneSource={kind:'transfer-terminal';transferPortId:string;connectorId:string;terminal:TransferTerminalKind;lane:number};
+export type LinkStationLaneSource=JunctionAuxiliarySource|TransferTerminalLaneSource;
+export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number;source?:LinkStationLaneSource};
 export type LinkStationWidthComponent={id:string;kind:'width';direction:LinkDirection;target:LinkWidthTarget;start:number;end:number;taperIn:number;taperOut:number;delta:number};
 export type LinkStationComponent=LinkStationLaneComponent|LinkStationWidthComponent;
 export type LinkStationComponentPatch={direction?:LinkDirection;side?:'curb'|'median';target?:LinkWidthTarget;start?:number;end?:number;taperIn?:number;taperOut?:number;delta?:number};
@@ -205,18 +207,37 @@ export function addTransferConnector(project:NetworkProject,fromTransferPortId:s
     error=transferConnectorIssue(project,connector);
   return error?{project,error}:{project:{...project,transferConnectors:[...project.transferConnectors,connector]},connector,error:null};
 }
+const transferTreatmentComponents=(project:NetworkProject,predicate:(source:TransferTerminalLaneSource)=>boolean)=>
+  project.links.flatMap(link=>link.components.filter((component):component is LinkStationLaneComponent&{source:TransferTerminalLaneSource}=>
+    component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&predicate(component.source)));
 export function updateTransferConnector(project:NetworkProject,id:string,patch:Partial<Omit<TransferConnector,'id'>>):TransferConnectorEditResult{
   const current=project.transferConnectors.find(connector=>connector.id===id);if(!current)return{project,error:'ไม่พบ Transfer connector'};
+  const ownsTreatment=transferTreatmentComponents(project,source=>source.connectorId===id).length>0,
+    topologyChange=(patch.fromTransferPortId!==undefined&&patch.fromTransferPortId!==current.fromTransferPortId)
+      ||(patch.toTransferPortId!==undefined&&patch.toTransferPortId!==current.toTransferPortId)
+      ||(patch.lanes!==undefined&&Math.round(Number(patch.lanes))!==current.lanes);
+  if(ownsTreatment&&topologyChange)return{project,error:'แก้ endpoint / lane count ของ Transfer connector ไม่ได้ขณะที่มี terminal lane treatment · ลบ treatment ก่อน'};
   const connector:TransferConnector={...current,...patch,lanes:Math.round(Number(patch.lanes??current.lanes)),laneWidth:+Number(patch.laneWidth??current.laneWidth).toFixed(2),
     via:(patch.via??current.via).map(v=>({x:Number(v.x),y:Number(v.y),radius:linkRadius(v.radius)}))},
     error=transferConnectorIssue(project,connector);
   return error?{project,error}:{project:{...project,transferConnectors:project.transferConnectors.map(item=>item.id===id?connector:item)},connector,error:null};
 }
 export function removeTransferConnector(project:NetworkProject,id:string):NetworkProject{
-  return project.transferConnectors.some(connector=>connector.id===id)?{...project,transferConnectors:project.transferConnectors.filter(connector=>connector.id!==id)}:project;
+  if(!project.transferConnectors.some(connector=>connector.id===id))return project;
+  return{...project,
+    transferConnectors:project.transferConnectors.filter(connector=>connector.id!==id),
+    links:project.links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&component.source.connectorId===id))}))
+  };
 }
 export function updateTransferPort(project:NetworkProject,id:string,patch:Partial<Omit<TransferPort,'id'>>):TransferPortEditResult{
   const current=project.transferPorts.find(port=>port.id===id);if(!current)return{project,error:'ไม่พบ Transfer port'};
+  const ownsTreatment=transferTreatmentComponents(project,source=>source.transferPortId===id).length>0,
+    geometryChange=(patch.hostLinkId!==undefined&&patch.hostLinkId!==current.hostLinkId)
+      ||(patch.station!==undefined&&Math.abs(Number(patch.station)-current.station)>.005)
+      ||(patch.direction!==undefined&&patch.direction!==current.direction)
+      ||(patch.side!==undefined&&patch.side!==current.side)
+      ||(patch.terminal!==undefined&&patch.terminal!==current.terminal);
+  if(ownsTreatment&&geometryChange)return{project,error:'แก้ host/station/direction/side/terminal ไม่ได้ขณะที่มี terminal lane treatment · ลบ treatment ก่อน'};
   const port:TransferPort={...current,...patch,station:+Number(patch.station??current.station).toFixed(2)},error=transferPortIssue(project,port);
   if(error)return{project,error};
   const candidate={...project,transferPorts:project.transferPorts.map(item=>item.id===id?port:item)},
@@ -225,7 +246,12 @@ export function updateTransferPort(project:NetworkProject,id:string,patch:Partia
 }
 export function removeTransferPort(project:NetworkProject,id:string):NetworkProject{
   if(!project.transferPorts.some(port=>port.id===id))return project;
-  return{...project,transferPorts:project.transferPorts.filter(port=>port.id!==id),transferConnectors:project.transferConnectors.filter(connector=>connector.fromTransferPortId!==id&&connector.toTransferPortId!==id)};
+  const removedConnectorIds=new Set(project.transferConnectors.filter(connector=>connector.fromTransferPortId===id||connector.toTransferPortId===id).map(connector=>connector.id));
+  return{...project,
+    transferPorts:project.transferPorts.filter(port=>port.id!==id),
+    transferConnectors:project.transferConnectors.filter(connector=>!removedConnectorIds.has(connector.id)),
+    links:project.links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&(component.source.transferPortId===id||removedConnectorIds.has(component.source.connectorId))))}))
+  };
 }
 const clampNumber=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 const stationRange=(total:number,start:number,end:number,taperIn:number,taperOut:number)=>{
@@ -451,7 +477,7 @@ export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'t
   if(!armForPort(project,ref))return{project,error:'ไม่พบ arm/port ปลายทางที่เลือก'};
   if(ref.junctionId===other.junctionId)return{project,error:'Road Link ต้องเชื่อมคนละ Junction'};
   if(portOccupied(project,ref,id))return{project,error:'port นี้มี Road Link อื่นเชื่อมอยู่แล้ว'};
-  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
+  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
   if(ownsHandoff)return{project,error:`เปลี่ยน ${end.toUpperCase()} port ไม่ได้ขณะที่มี Junction handoff ผูกกับปลายนี้ · Detach as manual หรือ Back to Junction only ก่อน`};
   const candidate:RoadLink={...link,[end]:ref},candidateProject={...project,links:project.links.map(item=>item.id===id?candidate:item)},
     facing=assessPortConnection(candidateProject,candidate.from,candidate.to);
@@ -718,16 +744,19 @@ function cleanupParallelCorridors(previous:NetworkProject,project:NetworkProject
 }
 function cleanupTransferTopology(project:NetworkProject,links:RoadLink[]){
   const liveLinks=new Set(links.map(link=>link.id)),transferPorts=project.transferPorts.filter(port=>liveLinks.has(port.hostLinkId)),
-    livePorts=new Set(transferPorts.map(port=>port.id)),transferConnectors=project.transferConnectors.filter(connector=>livePorts.has(connector.fromTransferPortId)&&livePorts.has(connector.toTransferPortId));
-  return{transferPorts,transferConnectors};
+    livePorts=new Set(transferPorts.map(port=>port.id)),transferConnectors=project.transferConnectors.filter(connector=>livePorts.has(connector.fromTransferPortId)&&livePorts.has(connector.toTransferPortId)),
+    liveConnectors=new Set(transferConnectors.map(connector=>connector.id)),
+    cleanedLinks=links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'
+      &&(!livePorts.has(component.source.transferPortId)||!liveConnectors.has(component.source.connectorId))))}));
+  return{links:cleanedLinks,transferPorts,transferConnectors};
 }
 export function removeJunction(project:NetworkProject,id:string):NetworkProject{
-  const links=project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id),transfer=cleanupTransferTopology(project,links);
-  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),links,...transfer});
+  const rawLinks=project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id),transfer=cleanupTransferTopology(project,rawLinks);
+  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),...transfer});
 }
 export function removeLink(project:NetworkProject,id:string):NetworkProject{
-  const links=project.links.filter(l=>l.id!==id),transfer=cleanupTransferTopology(project,links);
-  return cleanupParallelCorridors(project,{...project,links,...transfer});
+  const rawLinks=project.links.filter(l=>l.id!==id),transfer=cleanupTransferTopology(project,rawLinks);
+  return cleanupParallelCorridors(project,{...project,...transfer});
 }
 export function projectBounds(project:NetworkProject,padding=35){
   const points:WorldPoint[]=[];
@@ -775,8 +804,9 @@ export function validateNetworkProject(project:NetworkProject){
     const validTransition=(t:LinkLaneTransition|undefined)=>!t||(['curb','median'].includes(t.side)&&Number.isFinite(t.center)&&t.center>=0&&Number.isFinite(t.length)&&t.length>=3&&t.length<=1000),
       validSource=(input:unknown)=>{
         if(input===undefined)return true;if(!input||typeof input!=='object')return false;
-        const source=input as JunctionAuxiliarySource;
-        return source.kind==='junction-auxiliary'&&typeof source.handoffId==='string'&&source.handoffId.length>0&&source.handoffId.length<=160&&typeof source.junctionId==='string'&&source.junctionId.length>0&&source.junctionId.length<=40&&Number.isInteger(source.armId)&&source.armId>=0&&source.armId<4&&['incoming','outgoing'].includes(source.direction)&&['left','right'].includes(source.side)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
+        const source=input as LinkStationLaneSource;
+        if(source.kind==='junction-auxiliary')return typeof source.handoffId==='string'&&source.handoffId.length>0&&source.handoffId.length<=160&&typeof source.junctionId==='string'&&source.junctionId.length>0&&source.junctionId.length<=40&&Number.isInteger(source.armId)&&source.armId>=0&&source.armId<4&&['incoming','outgoing'].includes(source.direction)&&['left','right'].includes(source.side)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
+        return source.kind==='transfer-terminal'&&typeof source.transferPortId==='string'&&source.transferPortId.length>0&&source.transferPortId.length<=40&&typeof source.connectorId==='string'&&source.connectorId.length>0&&source.connectorId.length<=40&&['merge','diverge'].includes(source.terminal)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
       },
       validComponent=(input:unknown)=>{
         if(!input||typeof input!=='object')return false;
@@ -785,6 +815,13 @@ export function validateNetworkProject(project:NetworkProject){
       },
       componentList=Array.isArray(l.components)?l.components:[];
     if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
+    const transferSourceIssue=componentList.find(component=>{
+      if(component.kind!=='lane'||component.source?.kind!=='transfer-terminal')return false;
+      const source=component.source,port=project.transferPorts.find(item=>item.id===source.transferPortId),connector=project.transferConnectors.find(item=>item.id===source.connectorId);
+      return !port||!connector||port.hostLinkId!==l.id||port.direction!==component.direction||port.side!==component.side||port.terminal!==source.terminal
+        ||(connector.fromTransferPortId!==port.id&&connector.toTransferPortId!==port.id)||source.lane>=connector.lanes;
+    });
+    if(transferSourceIssue)return'Transfer terminal lane provenance ไม่สอดคล้องกับ host/port/connector';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
@@ -851,11 +888,16 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const component=value as Record<string,unknown>,id=String(component.id??`C-${index+1}`),direction:LinkDirection=component.direction==='backward'?'backward':'forward',
           start=Number(component.start),end=Number(component.end),taperIn=Number(component.taperIn),taperOut=Number(component.taperOut);
         if(component.kind==='lane'){
-          const side=component.side==='median'?'median':'curb',rawSource=component.source&&typeof component.source==='object'?component.source as Record<string,unknown>:null,
-            sourceValue:JunctionAuxiliarySource|undefined=rawSource?.kind==='junction-auxiliary'?{
-              kind:'junction-auxiliary',handoffId:String(rawSource.handoffId??''),junctionId:String(rawSource.junctionId??''),armId:Number(rawSource.armId),
-              direction:rawSource.direction==='outgoing'?'outgoing':'incoming',side:rawSource.side==='right'?'right':'left',lane:Number(rawSource.lane)
-            }:undefined;
+          const side=component.side==='median'?'median':'curb',rawSource=component.source&&typeof component.source==='object'?component.source as Record<string,unknown>:null;
+          let sourceValue:LinkStationLaneSource|undefined;
+          if(rawSource?.kind==='junction-auxiliary')sourceValue={
+            kind:'junction-auxiliary',handoffId:String(rawSource.handoffId??''),junctionId:String(rawSource.junctionId??''),armId:Number(rawSource.armId),
+            direction:rawSource.direction==='outgoing'?'outgoing':'incoming',side:rawSource.side==='right'?'right':'left',lane:Number(rawSource.lane)
+          };
+          else if(rawSource?.kind==='transfer-terminal')sourceValue={
+            kind:'transfer-terminal',transferPortId:String(rawSource.transferPortId??''),connectorId:String(rawSource.connectorId??''),
+            terminal:rawSource.terminal==='merge'?'merge':'diverge',lane:Number(rawSource.lane)
+          };
           out.push({id,kind:'lane',direction,side,start,end,taperIn,taperOut,...(sourceValue?{source:sourceValue}:{})});
         }else if(component.kind==='width'){
           const targetRaw=String(component.target??'walk'),target:LinkWidthTarget=['shoulder','bike','motorcycle','buffer'].includes(targetRaw)?targetRaw as Band['type']:'walk';

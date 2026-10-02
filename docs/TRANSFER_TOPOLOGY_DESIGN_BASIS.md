@@ -151,3 +151,45 @@ Current references supporting this separation:
 - TxDOT Roadway Design Manual, which defines speed-change/auxiliary lanes as roadway adjoining through lanes for entering/exiting and speed-change movements, and separates ramps/terminals from frontage-road design: https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-8--freeways--4r-/8-1-design-considerations.html
 
 No TxDOT/Austroads numeric dimension is encoded as a Thai mandatory default in this phase.
+
+
+## 11. Phase 8B.2b host speed-change lane lifecycle
+
+The first terminal treatment reuses the existing RoadLink lane lifecycle engine.
+
+A transfer-created host lane is persisted as a normal `LinkStationLaneComponent` with provenance:
+
+```ts
+{
+  kind: 'transfer-terminal',
+  transferPortId,
+  connectorId,
+  terminal: 'diverge' | 'merge',
+  lane
+}
+```
+
+This is deliberate. TxDOT defines speed-change lanes as acceleration/deceleration lanes and describes freeway ramp entrance/exit terminals using those facilities. Ramp pavement and gore remain separate terminal elements. The host speed-change lane therefore belongs to the host RoadLink cross-section rather than the connector centerline. See:
+- TxDOT Roadway Design Manual 4.10.2 Speed Change Lanes: https://www.txdot.gov/manuals/des/rdw/chapter-4--basic-design-criteria/4-10-cross-sectional-elements/4-10-2-speed-change-lanes.html
+- TxDOT Roadway Design Manual 15.7 Ramps & Direct Connectors: https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-7-ramps---direct-connectors-.html
+- Austroads Guide to Road Design Part 4C: Interchanges (2023): https://austroads.gov.au/publications/road-design/agrd04c
+
+Treatment parameters are explicit concept inputs:
+- `fullWidthLength`: full auxiliary-lane length next to through traffic;
+- `taperLength`: taper at the remote end of the speed-change lane.
+
+No TxDOT/Austroads length is copied as a mandatory Thai default.
+
+Station semantics are traffic-direction aware:
+- DIVERGE: the lane extends upstream from the terminal and is full width at the terminal;
+- MERGE: the lane extends downstream from the terminal and is full width at the terminal;
+- backward traffic reverses the station direction but not the driver-facing meaning.
+
+The host RoadLink must already be in Resolved geometric transition. The treatment does not silently resolve endpoint section mismatches.
+
+Lifecycle safety:
+- changing a treated port's host/station/direction/side/role is blocked until treatment is removed;
+- changing a treated connector's endpoint/lane count is blocked;
+- removing a connector/port/host cascades dependent transfer-terminal lane provenance;
+- reapplying treatment preserves per-lane component IDs where possible;
+- manual editing of a sourced lane continues to detach provenance through the existing station-component edit behavior.

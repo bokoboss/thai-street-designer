@@ -58,12 +58,18 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - resolve a TransferConnector tangent control line through the same alignment primitive;
 - no pavement/gore renderer yet.
 
-### 8B.2b — terminal treatment geometry
-After datum regression passes:
-- acceleration/deceleration lane lifecycle;
-- connector pavement cross-section;
-- painted/physical nose and gore semantics;
-- terminal review warnings;
+### 8B.2b — host speed-change lane lifecycle — current
+- reuse `LinkStationLaneComponent` for acceleration/deceleration lanes on the host RoadLink;
+- persist `transfer-terminal` provenance back to TransferPort + TransferConnector;
+- explicit full-width and taper lengths; no imported foreign-standard numeric defaults;
+- DIVERGE extends upstream / MERGE extends downstream in traffic coordinates;
+- safe repair/detach/delete semantics through the existing RoadLink lifecycle engine.
+
+### 8B.2c — connector pavement + gore
+After host-lane provenance regression passes:
+- resolve connector pavement from TransferConnector own one-way section;
+- physical/painted nose + neutral gore semantics;
+- terminal integrity review warnings;
 - plan/3D/export consumers must share the same connector resolver.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.

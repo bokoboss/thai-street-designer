@@ -114,7 +114,7 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
           },
           probe={...base,status:'ready' as const,message:'',existing:0,linked:0,canContinue:false},
           existing=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&equivalentLane(component,probe)).length,
-          linked=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===base.id).length,
+          linked=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===base.id).length,
           explicitRemaining=Math.max(.5,remaining),capacityOk=link.components.length-linked+pocket.lanes<=24,
           topologyOk=linkLinearTransitionPossible(project,link),fits=explicitRemaining<=total+.05,
           canContinue=continuation==='local'&&topologyOk&&fits&&capacityOk;
@@ -150,10 +150,11 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
 
 export function junctionAuxiliaryHandoffIssues(project:NetworkProject,link:RoadLink):JunctionAuxiliaryHandoffIssue[]{
   const proposals=junctionAuxiliaryProposals(project,link),proposalMap=new Map(proposals.map(proposal=>[proposal.id,proposal])),
-    groups=new Map<string,LinkStationLaneComponent[]>();
+    groups=new Map<string,(LinkStationLaneComponent&{source:JunctionAuxiliarySource})[]>();
   for(const component of link.components){
-    if(component.kind!=='lane'||!component.source)continue;
-    const list=groups.get(component.source.handoffId)??[];list.push(component);groups.set(component.source.handoffId,list);
+    if(component.kind!=='lane'||component.source?.kind!=='junction-auxiliary')continue;
+    const owned=component as LinkStationLaneComponent&{source:JunctionAuxiliarySource},list=groups.get(owned.source.handoffId)??[];
+    list.push(owned);groups.set(owned.source.handoffId,list);
   }
   const total=Math.max(0,linkLength(project,link)),out:JunctionAuxiliaryHandoffIssue[]=[];
   for(const [handoffId,components] of groups){
@@ -196,10 +197,10 @@ export function repairJunctionAuxiliaryHandoff(project:NetworkProject,linkId:str
 
 export function detachJunctionAuxiliaryHandoff(project:NetworkProject,linkId:string,handoffId:string):JunctionAuxiliaryApplyResult{
   const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
-  const detached=link.components.filter(component=>component.kind==='lane'&&component.source?.handoffId===handoffId).map(component=>component.id);
+  const detached=link.components.filter(component=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===handoffId).map(component=>component.id);
   if(!detached.length)return{project,created:[],error:'ไม่พบ handoff-owned lane components'};
   const next={...project,links:project.links.map(item=>item.id!==linkId?item:{...item,components:item.components.map(component=>{
-    if(component.kind!=='lane'||component.source?.handoffId!==handoffId)return component;
+    if(component.kind!=='lane'||component.source?.kind!=='junction-auxiliary'||component.source.handoffId!==handoffId)return component;
     const {source:_source,...manual}=component;return manual;
   })})},error=validateNetworkProject(next);
   return error?{project,created:[],error}:{project:next,created:[],detached,error:null};
@@ -211,9 +212,9 @@ export function applyJunctionAuxiliaryProposal(project:NetworkProject,linkId:str
   if(!proposal)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal'};
   if(proposal.continuation!=='corridor')return{project,created:[],error:'เลือก Continue into Corridor ก่อนสร้าง cross-boundary handoff'};
   if(proposal.status==='blocked')return{project,created:[],error:proposal.message};
-  const sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===proposal.id),
+  const sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===proposal.id),
     unsourcedMatches=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&!component.source&&equivalentLane(component,proposal)),
-    keep=link.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===proposal.id)),
+    keep=link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===proposal.id)),
     adopted=unsourcedMatches.slice(0,proposal.lanes),adoptIds=new Set(adopted.map(component=>component.id)),
     baseComponents=keep.map(component=>{
       if(component.kind!=='lane'||!adoptIds.has(component.id))return component;
@@ -250,7 +251,7 @@ export function continueJunctionAuxiliaryToCorridor(project:NetworkProject,linkI
 export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:string,id:string):JunctionAuxiliaryApplyResult{
   const link=project.links.find(item=>item.id===linkId);if(!link)return{project,created:[],error:'ไม่พบ Road Link'};
   const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id),
-    sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===id),
+    sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===id),
     fallbackSource=sourced[0]?.source;
   if(!proposal&&!fallbackSource)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal หรือ provenance สำหรับ handoff นี้'};
   let edited=project;
@@ -264,7 +265,7 @@ export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:str
     return{project,created:[],error:'Source Pocket/Receiving lane ไม่มีอยู่แล้ว · ใช้ Detach เพื่อเก็บ corridor geometry เป็น manual state'};
   }
   const removed=sourced.map(component=>component.id),
-    next={...edited,links:edited.links.map(item=>item.id===linkId?{...item,components:item.components.filter(component=>!(component.kind==='lane'&&component.source?.handoffId===id))}:item)},
+    next={...edited,links:edited.links.map(item=>item.id===linkId?{...item,components:item.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.handoffId===id))}:item)},
     error=validateNetworkProject(next);
   return error?{project,created:[],error}:{project:next,created:[],removed,error:null};
 }
