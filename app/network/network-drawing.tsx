@@ -31,8 +31,8 @@ function profiledLinePaths(ps:{x:number;y:number}[],offsets:(number|null)[]){
 }
 
 export function RoadLinkDrawing({
-  project,link,selected,comparisonFocused,selectedVertex,onSelect,onInsertVertex,onVertexMoveStart,onVertexSelect
-}:{project:NetworkProject;link:RoadLink;selected:boolean;comparisonFocused:boolean;selectedVertex:number|null;onSelect:()=>void;onInsertVertex:(e:React.MouseEvent<SVGGElement>)=>void;onVertexMoveStart:(index:number,e:React.PointerEvent<SVGCircleElement>)=>void;onVertexSelect:(index:number)=>void}){
+  project,link,selected,comparisonFocused,parallelRole,parallelCorridorId,selectedVertex,onSelect,onInsertVertex,onVertexMoveStart,onVertexSelect
+}:{project:NetworkProject;link:RoadLink;selected:boolean;comparisonFocused:boolean;parallelRole?:'mainline'|'left'|'right'|'draft-mainline';parallelCorridorId?:string;selectedVertex:number|null;onSelect:()=>void;onInsertVertex:(e:React.MouseEvent<SVGGElement>)=>void;onVertexMoveStart:(index:number,e:React.PointerEvent<SVGCircleElement>)=>void;onVertexSelect:(index:number)=>void}){
   const ps=linkPoints(project,link);
   if(ps.length<2)return null;
   const from=linkEndSection(project,link,'from'),to=linkEndSection(project,link,'to'),a=sectionHalf(from),b=sectionHalf(to),resolved=resolveLinkSectionGeometry(project,link),
@@ -72,6 +72,7 @@ export function RoadLinkDrawing({
     <path data-scene-detail="true" d={leftEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path data-scene-detail="true" d={rightEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     {linear&&resolved?resolved.laneLines.flatMap(line=>profiledLinePaths(renderPoints,line.offsets).map((d,index)=><path key={line.id+'-'+index} data-scene-detail="true" data-network-link-lane-transition={line.id} d={d} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)):laneLines.map(line=><path key={line.key} data-scene-detail="true" data-network-link-lane-line="true" d={path(variableParallel(ps,line.start,line.end))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+    {parallelRole&&<path className="network-parallel-link-focus" data-network-parallel-role={parallelRole} data-network-parallel-corridor={parallelCorridorId} d={center} fill="none" pointerEvents="none" vectorEffect="non-scaling-stroke"/>}
     {!compatible&&<g transform={`translate(${midpoint.x} ${midpoint.y})`} pointerEvents="none"><circle data-network-link-warning="true" r="3.2" fill="#c3914c" stroke="white" strokeWidth=".6"/><text y=".9" textAnchor="middle" fontSize="2.6" fill="white" fontWeight="700">!</text></g>}
     {comparisonFocused&&<path data-network-comparison-active-focus-path="true" d={center} stroke="#0e9f99" strokeWidth="2.2" strokeDasharray="7 3" fill="none" pointerEvents="none" vectorEffect="non-scaling-stroke"/>}
     <path d={center} stroke="transparent" strokeWidth={Math.max(14,roadWidth+8)} fill="none"/>
@@ -175,12 +176,14 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
 }
 
 export function NetworkDrawing({
-  project,zoom,selection,comparisonFocus,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
+  project,zoom,selection,comparisonFocus,parallelCorridorId,parallelDraftMainlineId,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
   project:NetworkProject;
   zoom:number;
   selection:NetworkSelection;
   comparisonFocus:NetworkComparisonFocus;
+  parallelCorridorId:string|null;
+  parallelDraftMainlineId:string|null;
   selectedArm:number|null;
   linkMode:boolean;
   pendingPort:PortRef|null;
@@ -194,9 +197,15 @@ export function NetworkDrawing({
   onLinkVertexSelect:(index:number)=>void;
   onPort:(ref:PortRef)=>void;
 }){
-  const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`]));
+  const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`])),
+    parallelCorridor=parallelCorridorId?project.parallelCorridors.find(v=>v.id===parallelCorridorId):undefined,
+    parallelRole=(id:string):'mainline'|'left'|'right'|'draft-mainline'|undefined=>{
+      if(parallelCorridor?.mainlineLinkIds.includes(id))return'mainline';
+      for(const chain of parallelCorridor?.frontage??[])if(chain.linkIds.includes(id))return chain.side;
+      return id===parallelDraftMainlineId?'draft-mainline':undefined;
+    };
   return <g>
-    {project.links.map(link=><RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>)}
+    {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

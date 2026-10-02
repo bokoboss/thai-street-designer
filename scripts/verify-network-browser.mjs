@@ -123,7 +123,13 @@ try{
     await send('Input.dispatchMouseEvent',{type:'mousePressed',x:p.x,y:p.y,button:'left',clickCount:count});
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:p.x,y:p.y,button:'left',clickCount:count});
   }
-  async function clickSelector(selector,index=0){const p=await waitFor(()=>rectBySelector(selector,index),selector);await clickAt(p);}
+  async function clickSelector(selector,index=0){
+    await waitFor(()=>evalValue(`(()=>{const e=document.querySelectorAll(${JSON.stringify(selector)})[${index}];if(!e)return false;e.scrollIntoView({block:'center',inline:'nearest'});return true;})()`),selector);
+    await sleep(60);
+    const p=await waitFor(()=>rectBySelector(selector,index),selector);
+    assert(p.y>=0&&p.y<=1000&&p.x>=0&&p.x<=1440,'Click target must be inside the emulated viewport after scroll: '+selector+' '+JSON.stringify(p));
+    await clickAt(p);
+  }
   async function keyPress(key,code=key,modifiers=0){
     await send('Input.dispatchKeyEvent',{type:'keyDown',key,code,modifiers});
     await send('Input.dispatchKeyEvent',{type:'keyUp',key,code,modifiers});
@@ -188,6 +194,8 @@ try{
 
   mark('workspace-load');
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'Network workspace load');
+  const thaiFontReady=await evalValue(`document.fonts.check('12px "Noto Sans Thai"','ภาษาไทย')||document.fonts.check('12px Tahoma','ภาษาไทย')`);
+  assert(thaiFontReady,'Visual acceptance requires a Thai-capable font so golden screenshots do not hide labels as missing glyphs');
   await evalValue(`localStorage.clear();location.reload();true`);
   await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'clean reload');
   await waitFor(async()=>{const p=await project();return p?.junctions?.length===2&&p?.links?.length===1;},'default project persistence');
@@ -439,6 +447,65 @@ try{
   assert.equal(await evalValue(`document.querySelector('[data-network-file-status="true"]')?.getAttribute('data-network-file-dirty')`),'true','new unsaved Project must be marked dirty');
   assert.equal(await evalValue(`localStorage.getItem('thai-street-network-project-file-session-v1')`),null,'New Project must clear prior file association metadata');
 
+  mark('parallel-corridor-inspector');
+  await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project,clone=(source,id,name,x,y)=>{const j=structuredClone(source);j.id=id;j.name=name;j.x=x;j.y=y;return j},a=p.junctions[0],b=p.junctions[1],j3=clone(a,'J-3','Frontage A',a.x,a.y+120),j4=clone(b,'J-4','Frontage B',b.x,b.y+120),j5=clone(a,'J-5','Frontage C',a.x,a.y-120),j6=clone(b,'J-6','Frontage D',b.x,b.y-120);p.junctions.push(j3,j4,j5,j6);p.links.push({id:'L-2',name:'Frontage Left Candidate',from:{junctionId:'J-3',armId:0},to:{junctionId:'J-4',armId:2},via:[],sectionProfile:{mode:'review'},components:[]},{id:'L-3',name:'Frontage Right Candidate',from:{junctionId:'J-5',armId:0},to:{junctionId:'J-6',armId:2},via:[],sectionProfile:{mode:'review'},components:[]});p.parallelCorridors=[];localStorage.setItem(key,JSON.stringify(w));return true;})()`);
+  await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload parallel-corridor fixture');
+  await waitFor(async()=>{const p=await project();return p?.schemaVersion===4&&p?.links?.length===3&&p?.parallelCorridors?.length===0;},'parallel-corridor fixture v4');
+  await clickSelector('[data-network-link="L-1"]');await clickSelector('[data-network-parallel-action="start"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'&&!!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'stage mainline without engineering-state mutation');
+  assert.equal((await project()).parallelCorridors.length,0,'staging a mainline must remain UI-only until a frontage Link is chosen');
+  await focusWorkspace();await keyPress('Escape','Escape');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')===null&&!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'Escape cancels UI-only parallel-corridor draft');
+  assert.equal((await project()).parallelCorridors.length,0,'cancelling a draft must not mutate engineering state');
+  await clickSelector('[data-network-parallel-action="start"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'`),'restage mainline after Escape');
+  await clickSelector('[data-network-link="L-2"]');await clickSelector('[data-network-parallel-action="finalize-left"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return g?.mainlineLinkIds?.[0]==='L-1'&&g?.frontage?.find(v=>v.side==='left')?.linkIds?.[0]==='L-2';},'create parallel corridor from staged mainline + left frontage');
+  assert(await evalValue(`!!document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor="PC-1"]')&&!!document.querySelector('[data-network-parallel-role="left"][data-network-parallel-corridor="PC-1"]')`),'selected group must highlight mainline and frontage members on canvas');
+  assert.equal(await evalValue(`document.querySelector('[data-network-parallel-reference]')?.getAttribute('data-network-parallel-reference')`),'J-1>J-2','Parallel Corridor Inspector must expose the persisted looking-ahead reference direction for Left/Right');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>!(await project())?.parallelCorridors?.length,'Undo removes corridor relationship atomically');
+  await clickSelector('[data-network-action="redo"]');await waitFor(async()=>!!(await project())?.parallelCorridors?.length,'Redo restores corridor relationship atomically');
+  await clickSelector('[data-network-link="L-3"]');await clickSelector('[data-network-parallel-action="add-right"]');
+  await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0];return g?.frontage?.some(v=>v.side==='left'&&v.linkIds.includes('L-2'))&&g?.frontage?.some(v=>v.side==='right'&&v.linkIds.includes('L-3'));},'add ungrouped RoadLink to existing corridor as right frontage');
+  await clickSelector('[data-network-link="L-2"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-panel')==='member'&&document.querySelectorAll('[data-network-parallel-member]').length===3`),'group member Inspector list');
+  await clickSelector('[data-network-parallel-action="remove-member"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.links?.some(v=>v.id==='L-2')&&g?.frontage?.length===1&&g.frontage[0].side==='right';},'remove frontage membership without deleting RoadLink geometry');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0];return g?.frontage?.length===2;},'Undo restores removed corridor membership');
+  await clickSelector('[data-network-link="L-2"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-panel')==='member'`),'reselect restored corridor member after Undo clears selection');
+  await clickSelector('[data-network-parallel-action="dissolve"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===0&&p?.links?.length===3;},'Dissolve removes only relationship metadata');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.parallelCorridors?.length===1&&p?.links?.length===3;},'Undo restores dissolved group');
+
+  mark('parallel-corridor-assisted-seed');
+  await clickSelector('[data-network-link="L-3"]');await clickSelector('[data-network-parallel-action="remove-member"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'prepare existing corridor with missing right frontage');
+  const seedSourceSnapshot=JSON.stringify(await evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-network-project-v1')),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;return{junctions:p.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:p.links.find(l=>l.id==='L-1')}})()`));
+  await clickSelector('[data-network-link="L-1"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-parallel-seed-action="right"]')&&!!document.querySelector('[data-network-parallel-seed-offset]')`),'missing-side assisted seed controls');
+  const seedActionLayout=await evalValue(`(()=>{const group=document.querySelector('.network-parallel-seed-actions'),button=group?.querySelector('button');if(!group||!button)return null;const g=group.getBoundingClientRect(),b=button.getBoundingClientRect();return{count:group.getAttribute('data-network-parallel-seed-count'),container:+g.width.toFixed(1),button:+b.width.toFixed(1)}})()`);
+  assert.equal(seedActionLayout?.count,'1','missing-side assisted seed should expose one action');
+  assert(seedActionLayout?.button>=seedActionLayout?.container*.9,'single assisted-seed action should use the available Inspector width');
+  await clickSelector('[data-network-parallel-seed-offset]');
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-parallel-seed-offset]');if(!input)return false;input.focus();input.select();return document.activeElement===input;})()`);
+  await send('Input.insertText',{text:'45'});
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-seed-offset]')?.value==='45'`),'controlled assisted seed offset input');
+  await clickSelector('[data-network-parallel-seed-action="right"]');
+  await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return p?.junctions?.length===8&&p?.links?.length===4&&right?.linkIds?.length===1;},'assisted right frontage seed commits generated Junction/RoadLink objects atomically');
+  const seededProject=await project(),seededGroup=seededProject.parallelCorridors[0],seededRight=seededGroup.frontage.find(v=>v.side==='right'),seededLinkId=seededRight.linkIds[0],seededLink=seededProject.links.find(v=>v.id===seededLinkId),seededNodes=[seededLink.from.junctionId,seededLink.to.junctionId].map(id=>seededProject.junctions.find(j=>j.id===id));
+  assert(seededNodes.every(j=>j&&Math.abs(j.y+45)<1e-6),'assisted right seed must apply the explicit centerline offset');
+  assert.equal(seededGroup.mainlineStartJunctionId,'J-1','assisted seed must preserve the Parallel Corridor reference direction');
+  assert.deepEqual(seededRight.seedReviewJunctionIds,[seededLink.from.junctionId,seededLink.to.junctionId],'assisted seed must persist generated Junctions as explicit review points');
+  assert(seededNodes.every(j=>j.design.slips.length===0&&j.design.arms.every(a=>a.length<=60&&!a.signal&&!a.crossing&&!a.stop)),'assisted seed nodes must strip copied junction treatments');
+  assert.equal(JSON.stringify({junctions:seededProject.junctions.filter(j=>j.id==='J-1'||j.id==='J-2'),link:seededProject.links.find(l=>l.id==='L-1')}),seedSourceSnapshot,'assisted seed must leave source mainline geometry untouched');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-seed-review="true"]')?.textContent?.includes('2 Junctions')===true&&!!document.querySelector('[data-network-parallel-mark-reviewed="right"]')`),'Inspector exposes persisted assisted seed review points');
+  await clickSelector('[data-network-action="fit"]');await sleep(180);
+  const assistedSeedGoldenContract=await evalValue(`(()=>{const review=document.querySelector('[data-network-parallel-seed-review="true"]'),mainline=document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor]'),right=document.querySelector('[data-network-parallel-role="right"][data-network-parallel-corridor]'),generated=document.querySelector('[data-network-link="${seededLinkId}"]');return{ok:!!review&&!!mainline&&!!right&&!!generated,review:!!review,mainlineHighlight:!!mainline,rightHighlight:!!right,generatedLink:!!generated}})()`);
+  assert(assistedSeedGoldenContract?.ok,'Assisted frontage seed golden contract failed');
+  await goldenScreenshot('parallel-frontage-assisted-seed',assistedSeedGoldenContract);
+  await clickSelector('[data-network-parallel-mark-reviewed="right"]');
+  await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return Array.isArray(right?.seedReviewJunctionIds)&&right.seedReviewJunctionIds.length===0;},'Mark reviewed clears only persisted seed-review metadata');
+  const reviewedSeed=await project();assert.equal(JSON.stringify(reviewedSeed.junctions),JSON.stringify(seededProject.junctions),'Mark reviewed must not alter seeded Junction geometry');assert.equal(JSON.stringify(reviewedSeed.links),JSON.stringify(seededProject.links),'Mark reviewed must not alter RoadLink geometry');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return right?.seedReviewJunctionIds?.length===2;},'Undo restores assisted seed review lifecycle');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');
+  await clickSelector('[data-network-action="redo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===8&&p?.links?.length===4&&g?.frontage?.some(v=>v.side==='right');},'Redo restores assisted frontage seed atomically');
+
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
     `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
@@ -465,7 +532,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

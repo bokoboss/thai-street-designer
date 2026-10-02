@@ -1,23 +1,24 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-09-30  
+Updated: 2026-10-01  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
+Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
-Pull request: **#1 — merged 2026-09-30**  
+Product v1 pull request: **#1 — merged 2026-09-30**  
+Current post-v1 pull request: **#2 — Draft · Phase 8A Parallel / Frontage Corridor Foundation**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
 ## Start here
 
-1. Checkout/read `chatgpt/full-engineering-ui-audit`. **Do not start from `main`.**
-2. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
-3. Read this file completely for the current work/status.
-4. Read `docs/ARCHITECTURE.md`.
-5. Read `docs/SLIP_LANE_DESIGN_BASIS.md`.
-6. Inspect PR #1 and the latest branch commit/status before modifying anything.
-7. Run the full quality gates before accepting a code change.
+1. For current Phase 8A work, checkout/read `chatgpt/post-v1-parallel-corridor-foundation` and inspect PR #2 before modifying anything.
+2. Treat `main` as the released Product v1 baseline. `chatgpt/full-engineering-ui-audit` is historical audit evidence only; do not resume feature work there.
+3. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
+4. Read this file completely, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md`, `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` and `docs/POST_V1_ROADMAP.md`.
+5. If PR #2 has already been merged, start the next milestone from current `main` on a new review branch rather than continuing the historical Phase 8A branch.
+6. Run the full quality gates before accepting a code change.
 
 ## Product v1 mission and guardrails
 
@@ -115,16 +116,18 @@ If **5** is no, put it in the future backlog and continue the current v1 milesto
 
 The product is now **Network-first**, while preserving the schema-v6 Junction engine as the local intersection source of truth.
 
-Current Network schema is **v3**:
+Current Network schema is **v4**:
 
 - each `RoadLink` owns semantic endpoints, `LinkVia[]` control points and a radius per PI;
 - each `RoadLink` can persist station-based corridor components for lane and width lifecycles;
+- `parallelCorridors[]` groups ordinary RoadLinks as Mainline and Left/Right Frontage chains without owning duplicate geometry;
+- each Parallel Corridor persists `mainlineStartJunctionId` so Left/Right are interpreted looking ahead along one explicit reference direction;
 - `linkPoints()` resolves PI/radius controls into tangent–arc–tangent geometry;
 - `RoadLink.sectionProfile.mode` is explicit: `review` or `linear`;
 - linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
 - lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
-- Network schema v1/v2 imports migrate conservatively to v3; legacy via radii remain 0, older projects retain explicit review semantics, and v1/v2 links gain `components: []`;
-- plan rendering, link length and Fit consume the same resolved RoadLink alignment.
+- Network schema v1/v2/v3 imports migrate conservatively to v4; early v4 Parallel Corridor files without an explicit reference start infer it deterministically during load;
+- plan rendering, link length, Fit, Scenario Comparison and Design Summary consume the same canonical Network state.
 
 The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
 
@@ -186,6 +189,8 @@ Do **not** reintroduce old runtime fields such as `Arm.slip`, `slipReceivingMode
 
 ## Latest verification
 
+Post-v1 Phase 8A.2 baseline `69e9904066c5a97ce9013abf35aabf90c5db1fdf` passed GitHub Quality run `36822921692`, including schema-v4 regressions, TypeScript, lint, both production builds, browser acceptance and Vercel Preview.
+
 Functional release-candidate baseline `24171c685de4ed93bf254e618ea3e48a9558e81d` passed GitHub Quality run `36702892172`:
 
 - Geometry/workspace regressions ✅
@@ -209,6 +214,19 @@ Product v1 was explicitly accepted by the user and PR #1 was merged to `main` as
 ## Immediate next work
 
 Product v1 hardening is complete and the audited release has been merged to `main`.
+
+Post-v1 work has started with **Phase 8A — Parallel / Frontage Corridor Foundation** on `chatgpt/post-v1-parallel-corridor-foundation`.
+
+Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feature family. The first step is a Network semantic relationship over existing RoadLinks, not a second geometry engine and not an Arm-level frontage flag.
+
+Phase 8A.1 status:
+- **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
+- **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
+- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right uses a persisted looking-ahead Mainline reference direction. Generated seed Junction review points are persisted per frontage chain, surfaced in Design Summary/Scenario Comparison and can be explicitly Mark reviewed without changing geometry.
+- 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
+- 8A.2 acceptance hardening now focuses on dedicated assisted-frontage golden evidence, Thai-readable visual QA and clearer one-shot/review UX; once those gates pass, freeze PR #2 at the Parallel/Frontage foundation boundary.
+- Do not implement mid-link ramps inside PR #2; transfer topology remains Phase 8B and should start from a separate model/design milestone because current PortRef semantics are Junction-Arm specific.
+
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
 

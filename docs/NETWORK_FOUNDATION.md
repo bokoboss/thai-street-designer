@@ -1041,3 +1041,72 @@ The HTML output is self-contained and print-friendly. It contains Engineering Su
 User-controlled project/object text is HTML-escaped before output.
 
 The report explicitly states that it is a concept-design summary and does **not** perform traffic capacity, LOS, demand forecasting or simulation. It should therefore be used as a review/reporting artifact, not as a detailed-design certification.
+
+
+## Phase 8A.1a — Parallel / Frontage relationship model
+
+Post-v1 Network schema v4 adds `parallelCorridors[]` as relationship metadata over existing RoadLinks.
+
+The relationship owns only:
+- group id/name;
+- ordered mainline RoadLink IDs;
+- ordered left/right frontage RoadLink IDs.
+
+It does **not** own centerline coordinates, section geometry or rendering geometry.
+
+Validation requires each ordered chain to be a simple traversable sequence through Junctions, prevents the same RoadLink from holding multiple corridor roles/groups, and rejects missing/discontinuous chains.
+
+Network v1/v2/v3 projects migrate to v4 with `parallelCorridors: []`. RoadLink station components from v3 remain intact.
+
+RoadLink/Junction deletion cleans relationship metadata in the same NetworkProject transaction. A frontage chain made discontinuous by deletion is removed rather than reordered; the whole group disappears if its mainline is invalid or it has no valid frontage side remaining.
+
+
+## Phase 8A.1b — Parallel / Frontage Inspector workflow
+
+The first post-v1 UI deliberately exposes relationship editing before automatic geometry generation.
+
+A RoadLink can be staged as a prospective Mainline in UI-only state. Selecting a second ungrouped RoadLink and choosing Frontage Left/Right commits the complete ParallelCorridor in one normal NetworkProject transaction; no invalid half-group is persisted.
+
+For existing groups, an ungrouped RoadLink can be added as Mainline, Frontage Left or Frontage Right only when it extends a valid chain endpoint. Membership removal preserves the RoadLink itself and rejects operations that would disconnect a chain. Dissolve removes relationship metadata only.
+
+Selecting any member highlights the group's Mainline and Frontage chains in plan. The highlight is editing UI and does not create a second geometry representation.
+
+Phase 8A.1b also updates Network workspace status text to schema v4. Assisted offset generation remains Phase 8A.2.
+
+
+## Phase 8A.2 — assisted frontage seed
+
+The Network Inspector can now create a missing frontage chain from an ungrouped selected RoadLink or from an existing ParallelCorridor mainline chain.
+
+The operation is intentionally one-shot:
+- Left / Right is relative to the deterministic mainline-chain traversal;
+- the entered centerline offset seeds new Junction centers and RoadLink via points;
+- source Junction/RoadLink objects remain unchanged;
+- generated seed Junctions remove copied Slip/control/pocket treatment that would otherwise imply an engineered cross-street design;
+- no cross-street RoadLink, ramp or transfer connector is generated;
+- the created geometry is ordinary editable Network state and the offset is not persisted as a constraint;
+- the complete operation is one Undo/Redo transaction.
+
+Roundabout chains are rejected in assisted mode rather than approximated.
+
+
+## Phase 8A.2 hardening — persisted reference direction
+
+Parallel Corridor Left/Right semantics now have an explicit persisted stationing/reference direction through `mainlineStartJunctionId`.
+
+The invariant is:
+
+`mainlineStartJunctionId → ordered mainlineLinkIds[] → chain end`
+
+Left/Right are interpreted while looking ahead along that direction. Mainline endpoint extension preserves the reference direction; removing the first Mainline Link advances the persisted start to the next chain Junction. Reversing the reference direction swaps frontage side labels without moving Junction/RoadLink geometry.
+
+Early schema-v4 files that predate the field are migrated deterministically during load. Scenario Comparison and Design Summary consume this same relationship state.
+
+
+## Phase 8A.2 review provenance
+
+One-shot assisted frontage generation now persists review provenance on the generated frontage chain instead of relying on a Junction name containing “seed”.
+
+`seedReviewJunctionIds[]` contains only generated Junctions that still require explicit concept review. Validation restricts those IDs to Junctions on the same frontage chain. Design Summary surfaces them as engineering warnings, Scenario Comparison observes the lifecycle, and the Inspector can clear a frontage side with **Mark reviewed** without altering road geometry.
+
+The provenance remains part of ParallelCorridor engineering state and follows the same Project JSON, Scenario and Undo/Redo ownership rules as the rest of the Network model.
