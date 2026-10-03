@@ -509,13 +509,15 @@ try{
   mark('transfer-editing-workflow');
   await clickSelector('[data-network-link="L-1"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'RoadLink transfer station-port editor');
-  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]');if(!station||!role)return false;station.value='55';station.dispatchEvent(new Event('input',{bubbles:true}));role.value='diverge';role.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]');if(!station||!role)return false;station.focus();station.select();role.value='diverge';role.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
+  await send('Input.insertText',{text:'55'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-new-station]')?.value==='55'`),'type DIVERGE station');
   await clickSelector('[data-network-transfer-create-port]');
   await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1&&p.transferPorts[0].terminal==='diverge'&&Math.abs(p.transferPorts[0].station-55)<.01;},'create DIVERGE station port from selected RoadLink');
   const workflowFrom=(await project()).transferPorts[0].id;
   await clickSelector('[data-network-link="L-2"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'frontage Transfer editor');
-  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]'),side=document.querySelector('[data-network-transfer-new-side]');if(!station||!role||!side)return false;station.value='85';station.dispatchEvent(new Event('input',{bubbles:true}));role.value='merge';role.dispatchEvent(new Event('change',{bubbles:true}));side.value='median';side.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]'),side=document.querySelector('[data-network-transfer-new-side]');if(!station||!role||!side)return false;station.focus();station.select();role.value='merge';role.dispatchEvent(new Event('change',{bubbles:true}));side.value='median';side.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
+  await send('Input.insertText',{text:'85'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-new-station]')?.value==='85'`),'type MERGE station');
   await clickSelector('[data-network-transfer-create-port]');
   await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===2&&p.transferPorts.some(v=>v.terminal==='merge');},'create MERGE station port from frontage RoadLink');
   const workflowPorts=(await project()).transferPorts,workflowTo=workflowPorts.find(v=>v.terminal==='merge').id;
@@ -528,7 +530,8 @@ try{
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-apply="from"]')`),'select TransferConnector directly from canvas');
   await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='painted';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')`),'painted gore explicit input appears');
-  await evalValue(`(()=>{const n=document.querySelector('[data-network-transfer-gore-neutral="from"]');n.value='12';n.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);
+  await evalValue(`(()=>{const n=document.querySelector('[data-network-transfer-gore-neutral="from"]');if(!n)return false;n.focus();n.select();return document.activeElement===n;})()`);
+  await send('Input.insertText',{text:'12'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-gore-neutral="from"]')?.value==='12'`),'type explicit neutral-gore length');
   await clickSelector('[data-network-transfer-gore-apply="from"]');
   await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.terminalTreatment?.from?.level==='painted'&&p.transferConnectors[0].terminalTreatment.from.neutralLength===12;},'edit connector gore through Inspector');
   await clickSelector('[data-network-delete="true"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'arm treated TransferConnector delete confirmation');
