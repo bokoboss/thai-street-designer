@@ -509,7 +509,7 @@ try{
   mark('transfer-connector-gore');
   await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;p.transferPorts=[
     {id:'T-browser-from',name:'Mainline diverge',hostLinkId:'L-1',station:55,direction:'forward',side:'curb',terminal:'diverge'},
-    {id:'T-browser-to',name:'Frontage merge',hostLinkId:'L-2',station:135,direction:'forward',side:'median',terminal:'merge'}
+    {id:'T-browser-to',name:'Frontage merge',hostLinkId:'L-2',station:85,direction:'forward',side:'median',terminal:'merge'}
   ];p.transferConnectors=[{id:'TC-browser',name:'Mainline to Frontage',fromTransferPortId:'T-browser-from',toTransferPortId:'T-browser-to',via:[],lanes:1,laneWidth:3.5,terminalTreatment:{
     from:{level:'physical',neutralLength:20,physicalNoseLength:2,physicalNoseWidth:1},
     to:{level:'painted',neutralLength:15,physicalNoseLength:0,physicalNoseWidth:0}
