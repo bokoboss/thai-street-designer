@@ -521,7 +521,9 @@ try{
   await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===2&&p?.transferConnectors?.[0]?.terminalTreatment?.from?.level==='physical'&&p?.transferConnectors?.[0]?.terminalTreatment?.to?.level==='painted';},'persist transfer gore semantics');
   if(await evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='open'`))await clickSelector('[data-network-action="toggle-inspector"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'close Inspector for transfer visual acceptance');
-  await clickSelector('[data-network-action="fit"]');await sleep(220);
+  await clickSelector('[data-network-action="fit"]');
+  for(let i=0;i<4;i++)await clickSelector('[data-network-zoom-action="in"]');
+  await sleep(240);
   const transferGoldenContract=await evalValue(`(()=>{const connector=document.querySelector('[data-network-transfer-connector="TC-browser"]'),fromGore=document.querySelector('[data-network-transfer-neutral-gore="from"]'),toGore=document.querySelector('[data-network-transfer-neutral-gore="to"]'),fromPaint=document.querySelector('[data-network-transfer-painted-nose="from"]'),toPaint=document.querySelector('[data-network-transfer-painted-nose="to"]'),physical=document.querySelector('[data-network-transfer-physical-nose="from"]'),error=document.querySelector('[data-network-transfer-gore-error]');return{ok:!!connector&&!!fromGore&&!!toGore&&!!fromPaint&&!!toPaint&&!!physical&&!error,connector:!!connector,fromGore:!!fromGore,toGore:!!toGore,paintedNoses:!!fromPaint&&!!toPaint,physicalNose:!!physical,error:error?.getAttribute('data-network-transfer-gore-error')??null};})()`);
   assert(transferGoldenContract?.ok,'Transfer connector gore golden contract failed: '+JSON.stringify(transferGoldenContract));
   await goldenScreenshot('transfer-connector-gore-2d',transferGoldenContract);
@@ -529,7 +531,7 @@ try{
   await waitFor(()=>evalValue(`Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-scene-transfer-surfaces')||0)>=4`),'3D transfer connector pavement + gore surfaces');
   await clickSelector('[data-network-camera-control="top"]');
   await waitFor(()=>evalValue(`Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-pitch')||0)>77`),'transfer golden Top view');
-  await clickSelector('[data-network-camera-control="fit"]');await clickSelector('[data-network-camera-control="zoom-in"]');await clickSelector('[data-network-camera-control="zoom-in"]');await sleep(260);
+  await clickSelector('[data-network-camera-control="fit"]');for(let i=0;i<4;i++)await clickSelector('[data-network-camera-control="zoom-in"]');await sleep(280);
   const transfer3dContract=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]'),count=Number(c?.getAttribute('data-network-scene-transfer-surfaces')||0);return{ok:!!c&&count>=4,transferSurfaces:count,detail:c?.getAttribute('data-network-scene-detail-texture')};})()`);
   assert(transfer3dContract?.ok,'Transfer connector 3D golden contract failed');
   await goldenScreenshot('transfer-connector-gore-3d',transfer3dContract);
