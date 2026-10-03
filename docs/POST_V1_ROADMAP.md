@@ -87,18 +87,19 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - delete confirmation covers connected TransferPort and treated TransferConnector cascade; all mutations use existing Undo/Redo;
 - dedicated browser acceptance must create ports + connector + gore through UI, confirm delete, then Undo the complete workflow.
 
-### 8B.3b — direct connector alignment editing — current
+### 8B.3b — direct connector alignment editing — passed
 - add/select/move connector PI controls using the shared alignment primitive;
 - double-click connector or use contextual ＋ PI, then drag the same persisted `via[]` controls;
 - edit PI radius and Delete PI with RoadLink-style context actions;
-- every PI mutation must still resolve through `resolveTransferConnectorAlignment()`; invalid edits are rejected rather than persisted;
-- Undo/Redo uses the existing Network history and terminal/gore review remains derived from the edited connector.
+- every PI mutation still resolves through `resolveTransferConnectorAlignment()`; invalid edits are rejected rather than persisted;
+- Undo/Redo uses the existing Network history and terminal/gore review remains derived from the edited connector;
+- full Quality gate passed on `5d12ee2` / run `37139164316`.
 
-### 8B.3c — transfer workflow acceptance / PR freeze
-After direct alignment editing passes:
-- focused visual QA of selected TransferPort / TransferConnector / PI handles;
-- verify Design Summary warnings after intentionally problematic connector edits;
-- refresh PR #3 scope and handoff;
+### 8B.3c — transfer workflow acceptance / PR freeze — current
+- golden visual contract for selected TransferConnector + selected PI handle + context bar + Inspector;
+- deliberately impossible physical-nose width must increase Design Summary warning count and remain visible in terminal Inspector without silent geometry clamping;
+- cascade delete + Undo must preserve the explicit problematic treatment exactly;
+- refresh PR #3 scope after this acceptance passes;
 - freeze Phase 8B boundary before any 8C engineering-review expansion.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.

@@ -235,8 +235,9 @@ Phase 8A.1 status:
 - **8B.2c1 connector pavement surface — passed** — shared connector pavement + stable datum passed Quality run `37032098310`.
 - **8B.2c2 painted/physical nose + neutral gore — passed** — dedicated gore regression + focused 2D/3D golden acceptance passed Quality run `37132540363`.
 - **8B.3a transfer selection + Inspector workflow — passed** — direct UI create/select/connect/gore/cascade-delete/Undo workflow passed Quality run `37135645697`.
-- **8B.3b direct connector alignment editing — current** — shared-resolver PI insert/select/drag/radius/delete with RoadLink-style context controls; no separate transfer geometry engine.
-- **8B.3c acceptance / PR freeze** follows only after PI browser acceptance passes.
+- **8B.3b direct connector alignment editing — passed** — shared-resolver PI insert/select/drag/radius/delete + complete Undo sequence passed Quality run `37139164316`.
+- **8B.3c acceptance / PR freeze — current** — focused golden state for selected Connector/PI plus explicit impossible-gore Design Summary warning; no geometry-engine expansion.
+- **Phase 8C remains frozen** until 8B.3c passes and PR #3 is reviewed.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
