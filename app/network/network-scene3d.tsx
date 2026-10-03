@@ -5,7 +5,7 @@ import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/lib/network-project';
 import {
-  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
+  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,resolveTransferConnectorSceneSurfaces,type NetworkSceneSurfaceKind
 } from '@/lib/network-scene-geometry';
 
 type Size={w:number;h:number};
@@ -23,16 +23,17 @@ export default function NetworkScene3D({
   useEffect(()=>{camera.current={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
 
   const scene=useMemo(()=>{
-      if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
+      if(!active)return{junctionSurfaces:[],linkSurfaces:[],transferSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
       return{
         junctionSurfaces:resolveJunctionSceneSurfaces(project),
         linkSurfaces:resolveRoadLinkSceneSurfaces(project),
+        transferSurfaces:resolveTransferConnectorSceneSurfaces(project),
         furnitureFaces:resolveJunctionSceneFaces(project),
         bounds:projectBounds(project,45)
       };
     },[active,project]),
-    {junctionSurfaces,linkSurfaces,furnitureFaces,bounds}=scene,
-    junctionSurfaceCount=junctionSurfaces.length,linkSurfaceCount=linkSurfaces.length,furnitureFaceCount=furnitureFaces.length,
+    {junctionSurfaces,linkSurfaces,transferSurfaces,furnitureFaces,bounds}=scene,
+    junctionSurfaceCount=junctionSurfaces.length,linkSurfaceCount=linkSurfaces.length,transferSurfaceCount=transferSurfaces.length,furnitureFaceCount=furnitureFaces.length,
     center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
     mapKey=[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng,mapReference.zoom,mapReference.offsetX,mapReference.offsetY,extent.toFixed(2),center.x.toFixed(2),center.y.toFixed(2)].join(':');
 
@@ -98,7 +99,7 @@ export default function NetworkScene3D({
   useEffect(()=>{
     if(!active)return;
     const c=canvas.current,ctx=c?.getContext('2d');if(!c||!ctx)return;
-    const sceneSurfaces=[...junctionSurfaces,...linkSurfaces],
+    const sceneSurfaces=[...junctionSurfaces,...linkSurfaces,...transferSurfaces],
       ratio=Math.min(window.devicePixelRatio||1,2);c.width=size.w*ratio;c.height=size.h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);
     const w=size.w,h=size.h,a=yaw*Math.PI/180,p=pitch*Math.PI/180,scale=Math.min(w,h)/(extent*2)*zoom;
     const projectPoint=(x:number,y:number,z=0)=>{
@@ -132,7 +133,7 @@ export default function NetworkScene3D({
     for(const face of [...furnitureFaces].sort((u,v)=>depth(u)-depth(v))){
       const ps=face.points.map(q=>projectPoint(q.x,q.y,q.z));ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=face.color;ctx.fill();
     }
-  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces]);
+  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,transferSurfaces,furnitureFaces]);
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'
@@ -174,12 +175,12 @@ export default function NetworkScene3D({
   return <div className="network-scene3d">
     <canvas ref={canvas} tabIndex={0} aria-label="Network 3D overview" data-network-scene-mode="resolved"
       data-network-scene-junction-surfaces={junctionSurfaceCount} data-network-scene-link-surfaces={linkSurfaceCount}
-      data-network-scene-detail-texture={detailImage?'true':'false'} data-network-scene-furniture-faces={furnitureFaceCount}
+      data-network-scene-transfer-surfaces={transferSurfaceCount} data-network-scene-detail-texture={detailImage?'true':'false'} data-network-scene-furniture-faces={furnitureFaceCount}
       data-network-camera-mode={mode} data-network-camera-yaw={yaw.toFixed(3)} data-network-camera-pitch={pitch.toFixed(3)}
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
       onAuxClick={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Geometry = Junction + Slip + RoadLink semantic surfaces</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
+    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Geometry = Junction + Slip + RoadLink + TransferConnector semantic surfaces</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>

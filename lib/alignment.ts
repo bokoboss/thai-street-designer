@@ -28,6 +28,34 @@ const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const unit=(x:number,y:number)=>{const l=Math.hypot(x,y)||1;return{x:x/l,y:y/l};};
 const signedTurn=(a:P,b:P,c:P)=>(b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x);
 
+const pointDistance=(a:P,b:P)=>Math.hypot(a.x-b.x,a.y-b.y);
+function tangentStub(port:P,target:P,heading:number){
+ const available=pointDistance(port,target);if(available<12)return null;
+ const length=Math.min(18,Math.max(5,available*.22)),angle=heading*Math.PI/180;
+ return{x:port.x+Math.cos(angle)*length,y:port.y+Math.sin(angle)*length,radius:Math.min(35,Math.max(12,length*2))};
+}
+/**
+ * Shared endpoint-tangency primitive for any Network linear facility.
+ * fromHeading/toHeading point from each endpoint toward the first/last interior control.
+ */
+export function tangentAlignmentControls(from:P,to:P,via:RadiusPoint[],fromHeading:number,toHeading:number):RadiusPoint[]{
+ const raw:RadiusPoint[]=[{...from},...via.map(v=>({...v})),{...to}];
+ if(raw.length<2)return raw;
+ const fromTarget=via[0]??to,toTarget=via.at(-1)??from,
+   fromStub=tangentStub(from,fromTarget,fromHeading),toStub=tangentStub(to,toTarget,toHeading);
+ const build=(useFrom:boolean,useTo:boolean,curved:boolean)=>{
+   const out:RadiusPoint[]=[{...from}];
+   if(useFrom&&fromStub)out.push({...fromStub,radius:curved?fromStub.radius:0});
+   out.push(...via.map(v=>({...v})));
+   if(useTo&&toStub)out.push({...toStub,radius:curved?toStub.radius:0});
+   out.push({...to});return out;
+ };
+ for(const candidate of [build(true,true,true),build(true,true,false),build(true,false,true),build(false,true,true)]){
+   if(candidate.length>=2&&validAlignment(candidate))return candidate;
+ }
+ return raw;
+}
+
 export function smoothAlignment(vertices:RadiusPoint[],curveSamples=14):P[]{
  if(vertices.length<3)return vertices.map(({x,y})=>({x,y}));
  const out:P[]=[{x:vertices[0].x,y:vertices[0].y}];

@@ -450,7 +450,7 @@ try{
   mark('parallel-corridor-inspector');
   await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project,clone=(source,id,name,x,y)=>{const j=structuredClone(source);j.id=id;j.name=name;j.x=x;j.y=y;return j},a=p.junctions[0],b=p.junctions[1],j3=clone(a,'J-3','Frontage A',a.x,a.y+120),j4=clone(b,'J-4','Frontage B',b.x,b.y+120),j5=clone(a,'J-5','Frontage C',a.x,a.y-120),j6=clone(b,'J-6','Frontage D',b.x,b.y-120);p.junctions.push(j3,j4,j5,j6);p.links.push({id:'L-2',name:'Frontage Left Candidate',from:{junctionId:'J-3',armId:0},to:{junctionId:'J-4',armId:2},via:[],sectionProfile:{mode:'review'},components:[]},{id:'L-3',name:'Frontage Right Candidate',from:{junctionId:'J-5',armId:0},to:{junctionId:'J-6',armId:2},via:[],sectionProfile:{mode:'review'},components:[]});p.parallelCorridors=[];localStorage.setItem(key,JSON.stringify(w));return true;})()`);
   await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload parallel-corridor fixture');
-  await waitFor(async()=>{const p=await project();return p?.schemaVersion===4&&p?.links?.length===3&&p?.parallelCorridors?.length===0;},'parallel-corridor fixture v4');
+  await waitFor(async()=>{const p=await project();return p?.schemaVersion===5&&p?.links?.length===3&&p?.parallelCorridors?.length===0;},'parallel-corridor fixture v4');
   await clickSelector('[data-network-link="L-1"]');await clickSelector('[data-network-parallel-action="start"]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'&&!!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'stage mainline without engineering-state mutation');
   assert.equal((await project()).parallelCorridors.length,0,'staging a mainline must remain UI-only until a frontage Link is chosen');
@@ -506,6 +506,101 @@ try{
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');
   await clickSelector('[data-network-action="redo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===8&&p?.links?.length===4&&g?.frontage?.some(v=>v.side==='right');},'Redo restores assisted frontage seed atomically');
 
+  mark('transfer-editing-workflow');
+  await clickSelector('[data-network-link="L-1"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'RoadLink transfer station-port editor');
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]');if(!station||!role)return false;station.focus();station.select();role.value='diverge';role.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
+  await send('Input.insertText',{text:'55'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-new-station]')?.value==='55'`),'type DIVERGE station');
+  await clickSelector('[data-network-transfer-create-port]');
+  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1&&p.transferPorts[0].terminal==='diverge'&&Math.abs(p.transferPorts[0].station-55)<.01;},'create DIVERGE station port from selected RoadLink');
+  const workflowFrom=(await project()).transferPorts[0].id;
+  await clickSelector('[data-network-link="L-2"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'frontage Transfer editor');
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]'),side=document.querySelector('[data-network-transfer-new-side]');if(!station||!role||!side)return false;station.focus();station.select();role.value='merge';role.dispatchEvent(new Event('change',{bubbles:true}));side.value='median';side.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
+  await send('Input.insertText',{text:'85'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-new-station]')?.value==='85'`),'type MERGE station');
+  await clickSelector('[data-network-transfer-create-port]');
+  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===2&&p.transferPorts.some(v=>v.terminal==='merge');},'create MERGE station port from frontage RoadLink');
+  const workflowPorts=(await project()).transferPorts,workflowTo=workflowPorts.find(v=>v.terminal==='merge').id;
+  await clickSelector(`[data-network-transfer-port="${workflowFrom}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-port-editor]')&&!!document.querySelector('[data-network-transfer-create-connector]')`),'select TransferPort directly from canvas');
+  await clickSelector('[data-network-transfer-create-connector]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].fromTransferPortId===workflowFrom&&p.transferConnectors[0].toTransferPortId===workflowTo;},'create DIVERGE to MERGE connector from Inspector');
+  const workflowConnector=(await project()).transferConnectors[0].id;
+  await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-apply="from"]')`),'select TransferConnector directly from canvas');
+  await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='transfer-connector'&&!!document.querySelector('[data-network-context-action="add-transfer-pi"]')`),'Transfer connector context bar');
+  await clickSelector('[data-network-context-action="add-transfer-pi"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'add Transfer connector PI');
+  const transferViaBefore=(await project()).transferConnectors[0].via[0];
+  await smoothDragSelector('[data-transfer-via="0"]',18,-12,10);
+  const transferViaAfter=await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&Math.hypot(v.x-transferViaBefore.x,v.y-transferViaBefore.y)>.1?v:null;},'drag Transfer connector PI');
+  assert(transferViaAfter,'Transfer connector PI drag must persist semantic via coordinates');
+  const transferRadiusBefore=transferViaAfter.radius;
+  await clickSelector('[data-network-context-action="transfer-radius-inc"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.[0]?.radius===Math.min(200,transferRadiusBefore+5);},'edit Transfer connector PI radius');
+  await clickSelector('[data-network-zoom-action="fit"]');for(let i=0;i<4;i++)await clickSelector('[data-network-zoom-action="in"]');await sleep(220);
+  const transferEditingContract=await evalValue(`(()=>{const connector=document.querySelector('[data-network-transfer-connector="${workflowConnector}"]'),via=document.querySelector('[data-transfer-via="0"]'),context=document.querySelector('.network-context-bar'),editor=document.querySelector('[data-network-transfer-connector-editor]'),ports=document.querySelectorAll('[data-network-transfer-port]'),remove=document.querySelector('[data-network-context-action="remove-transfer-pi"]');return{ok:connector?.getAttribute('data-network-transfer-selected')==='true'&&!!via&&context?.getAttribute('data-network-context-kind')==='transfer-connector'&&!!editor&&ports.length===2&&!!remove,selected:connector?.getAttribute('data-network-transfer-selected'),pi:!!via,context:context?.getAttribute('data-network-context-kind'),inspector:!!editor,ports:ports.length,removePi:!!remove};})()`);
+  assert(transferEditingContract?.ok,'Transfer connector editing golden contract failed: '+JSON.stringify(transferEditingContract));
+  await goldenScreenshot('transfer-connector-editing-2d',transferEditingContract);
+  await clickSelector('[data-network-context-action="remove-transfer-pi"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'remove Transfer connector PI');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'Undo restores removed Transfer connector PI');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&v.radius===transferRadiusBefore;},'Undo Transfer connector PI radius edit');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&Math.hypot(v.x-transferViaBefore.x,v.y-transferViaBefore.y)<1e-7;},'Undo Transfer connector PI drag');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].via.length===0;},'Undo Transfer connector PI insertion before terminal treatment');
+  await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-level-input="from"]')`),'reselect connector after PI Undo sequence');
+  const transferWarningsBefore=Number(await evalValue(`document.querySelector('.network-design-readiness')?.getAttribute('data-network-design-warnings')||0`));
+  await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='physical';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')&&!!document.querySelector('[data-network-transfer-gore-nose-length="from"]')&&!!document.querySelector('[data-network-transfer-gore-nose-width="from"]')`),'physical gore explicit inputs appear');
+  for(const [selector,value] of [['[data-network-transfer-gore-neutral="from"]','2'],['[data-network-transfer-gore-nose-length="from"]','1'],['[data-network-transfer-gore-nose-width="from"]','20']]){
+    await clickSelector(selector);await evalValue(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;n.focus();n.select();return document.activeElement===n;})()`);await send('Input.insertText',{text:value});
+    await waitFor(()=>evalValue(`document.querySelector(${JSON.stringify(selector)})?.value===${JSON.stringify(value)}`),'type explicit physical-gore dimension '+selector);
+  }
+  await clickSelector('[data-network-transfer-gore-apply="from"]');
+  await waitFor(async()=>{const p=await project(),t=p?.transferConnectors?.[0]?.terminalTreatment?.from;return t?.level==='physical'&&t.neutralLength===2&&t.physicalNoseLength===1&&t.physicalNoseWidth===20;},'edit physical connector gore through Inspector');
+  const transferReviewContract=await waitFor(async()=>{const state=await evalValue(`(()=>{const terminal=document.querySelector('[data-network-transfer-terminal="from"]'),readiness=document.querySelector('.network-design-readiness'),connector=document.querySelector('[data-network-transfer-connector="${workflowConnector}"]'),warningCount=Number(readiness?.getAttribute('data-network-design-warnings')||0),issue=terminal?.textContent?.includes('Physical nose width')??false;return{ok:issue&&warningCount>${transferWarningsBefore}&&connector?.getAttribute('data-network-transfer-selected')==='true',issue,warningCount,warningBefore:${transferWarningsBefore},selected:connector?.getAttribute('data-network-transfer-selected')};})()`);return state?.ok?state:null;},'Design Summary + Inspector surface impossible physical-nose fit');
+  assert(transferReviewContract?.ok,'Transfer terminal review golden contract failed: '+JSON.stringify(transferReviewContract));
+  await goldenScreenshot('transfer-connector-review-warning',transferReviewContract);
+  await clickSelector('[data-network-delete="true"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'arm treated TransferConnector delete confirmation');
+  await clickSelector('[data-network-delete="true"]');await waitFor(async()=>!(await project())?.transferConnectors?.length,'confirm treated TransferConnector cascade delete');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),t=p?.transferConnectors?.[0]?.terminalTreatment?.from;return p?.transferConnectors?.length===1&&t?.level==='physical'&&t.physicalNoseWidth===20;},'Undo restores TransferConnector + terminal review treatment after confirmed delete');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].terminalTreatment.from.level==='none';},'Undo gore edit preserves connector');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return !p?.transferConnectors?.length&&p?.transferPorts?.length===2;},'Undo connector creation while preserving station ports');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1;},'Undo MERGE station port creation');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===0;},'Undo DIVERGE station port creation');
+
+  mark('transfer-connector-gore');
+  await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;
+    const keepLinks=new Set(['L-1','L-2']),keepJunctions=new Set(p.links.filter(l=>keepLinks.has(l.id)).flatMap(l=>[l.from.junctionId,l.to.junctionId]));
+    p.links=p.links.filter(l=>keepLinks.has(l.id));p.junctions=p.junctions.filter(j=>keepJunctions.has(j.id));p.parallelCorridors=[];
+    p.transferPorts=[
+      {id:'T-browser-from',name:'Mainline diverge',hostLinkId:'L-1',station:55,direction:'forward',side:'curb',terminal:'diverge'},
+      {id:'T-browser-to',name:'Frontage merge',hostLinkId:'L-2',station:85,direction:'forward',side:'median',terminal:'merge'}
+    ];p.transferConnectors=[{id:'TC-browser',name:'Mainline to Frontage',fromTransferPortId:'T-browser-from',toTransferPortId:'T-browser-to',via:[],lanes:1,laneWidth:3.5,terminalTreatment:{
+      from:{level:'physical',neutralLength:20,physicalNoseLength:2,physicalNoseWidth:1},
+      to:{level:'painted',neutralLength:15,physicalNoseLength:0,physicalNoseWidth:0}
+    }}];localStorage.setItem(key,JSON.stringify(w));return true;})()`);
+  await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload transfer connector fixture');
+  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===2&&p?.transferConnectors?.[0]?.terminalTreatment?.from?.level==='physical'&&p?.transferConnectors?.[0]?.terminalTreatment?.to?.level==='painted';},'persist transfer gore semantics');
+  if(await evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='open'`))await clickSelector('[data-network-action="toggle-inspector"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-body')?.getAttribute('data-network-inspector')==='closed'`),'close Inspector for transfer visual acceptance');
+  await clickSelector('[data-network-action="fit"]');
+  for(let i=0;i<4;i++)await clickSelector('[data-network-zoom-action="in"]');
+  await sleep(240);
+  const transferGoldenContract=await evalValue(`(()=>{const connector=document.querySelector('[data-network-transfer-connector="TC-browser"]'),fromGore=document.querySelector('[data-network-transfer-neutral-gore="from"]'),toGore=document.querySelector('[data-network-transfer-neutral-gore="to"]'),fromPaint=document.querySelector('[data-network-transfer-painted-nose="from"]'),toPaint=document.querySelector('[data-network-transfer-painted-nose="to"]'),physical=document.querySelector('[data-network-transfer-physical-nose="from"]'),error=document.querySelector('[data-network-transfer-gore-error]');return{ok:!!connector&&!!fromGore&&!!toGore&&!!fromPaint&&!!toPaint&&!!physical&&!error,connector:!!connector,fromGore:!!fromGore,toGore:!!toGore,paintedNoses:!!fromPaint&&!!toPaint,physicalNose:!!physical,error:error?.getAttribute('data-network-transfer-gore-error')??null};})()`);
+  assert(transferGoldenContract?.ok,'Transfer connector gore golden contract failed: '+JSON.stringify(transferGoldenContract));
+  await goldenScreenshot('transfer-connector-gore-2d',transferGoldenContract);
+  await clickSelector('[data-network-view="3d"]');
+  await waitFor(()=>evalValue(`Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-scene-transfer-surfaces')||0)>=4`),'3D transfer connector pavement + gore surfaces');
+  await clickSelector('[data-network-camera-control="top"]');
+  await waitFor(()=>evalValue(`Number(document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-camera-pitch')||0)>77`),'transfer golden Top view');
+  await clickSelector('[data-network-camera-control="fit"]');for(let i=0;i<4;i++)await clickSelector('[data-network-camera-control="zoom-in"]');await sleep(280);
+  const transfer3dContract=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]'),count=Number(c?.getAttribute('data-network-scene-transfer-surfaces')||0);return{ok:!!c&&count>=4,transferSurfaces:count,detail:c?.getAttribute('data-network-scene-detail-texture')};})()`);
+  assert(transfer3dContract?.ok,'Transfer connector 3D golden contract failed');
+  await goldenScreenshot('transfer-connector-gore-3d',transfer3dContract);
+  await clickSelector('[data-network-view="2d"]');await waitFor(()=>evalValue(`!!document.querySelector('svg[data-network-plan="true"]')`),'return to 2D after transfer 3D acceptance');
+
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
     `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
@@ -532,7 +627,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: selected TransferConnector/PI editing + terminal Design Summary warning + direct TransferConnector PI add/drag/radius/delete/Undo + direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
