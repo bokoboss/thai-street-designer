@@ -528,6 +528,20 @@ try{
   const workflowConnector=(await project()).transferConnectors[0].id;
   await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-apply="from"]')`),'select TransferConnector directly from canvas');
+  await waitFor(()=>evalValue(`document.querySelector('.network-context-bar')?.getAttribute('data-network-context-kind')==='transfer-connector'&&!!document.querySelector('[data-network-context-action="add-transfer-pi"]')`),'Transfer connector context bar');
+  await clickSelector('[data-network-context-action="add-transfer-pi"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'add Transfer connector PI');
+  const transferViaBefore=(await project()).transferConnectors[0].via[0];
+  await smoothDragSelector('[data-transfer-via="0"]',18,-12,10);
+  const transferViaAfter=await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&Math.hypot(v.x-transferViaBefore.x,v.y-transferViaBefore.y)>.1?v:null;},'drag Transfer connector PI');
+  assert(transferViaAfter,'Transfer connector PI drag must persist semantic via coordinates');
+  const transferRadiusBefore=transferViaAfter.radius;
+  await clickSelector('[data-network-context-action="transfer-radius-inc"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.[0]?.radius===Math.min(200,transferRadiusBefore+5);},'edit Transfer connector PI radius');
+  await clickSelector('[data-network-context-action="remove-transfer-pi"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'remove Transfer connector PI');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'Undo restores removed Transfer connector PI');
+  await clickSelector('[data-network-context-action="remove-transfer-pi"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'return connector to no-PI state before terminal treatment');
   await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='painted';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')`),'painted gore explicit input appears');
   await evalValue(`(()=>{const n=document.querySelector('[data-network-transfer-gore-neutral="from"]');if(!n)return false;n.focus();n.select();return document.activeElement===n;})()`);
@@ -599,7 +613,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: direct TransferConnector PI add/drag/radius/delete/Undo + direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

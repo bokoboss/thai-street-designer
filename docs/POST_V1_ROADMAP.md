@@ -79,7 +79,7 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - 2D / 3D / SVG-PNG export share the same semantic resolver;
 - dedicated browser golden cases cover 2D and resolved Network 3D.
 
-### 8B.3a — transfer selection + Inspector workflow — current
+### 8B.3a — transfer selection + Inspector workflow — passed
 - RoadLink Inspector creates explicit TransferPort at a user-entered station/direction/side/role;
 - TransferPort is directly selectable on canvas and can connect to one compatible opposite-role port;
 - TransferConnector is directly selectable on canvas and exposes own lane count/width + explicit per-terminal gore treatment;
@@ -87,12 +87,19 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - delete confirmation covers connected TransferPort and treated TransferConnector cascade; all mutations use existing Undo/Redo;
 - dedicated browser acceptance must create ports + connector + gore through UI, confirm delete, then Undo the complete workflow.
 
-### 8B.3b — direct connector alignment editing
-After 8B.3a acceptance:
+### 8B.3b — direct connector alignment editing — current
 - add/select/move connector PI controls using the shared alignment primitive;
-- edit PI radius with the same direct interaction conventions as RoadLink;
-- contextual terminal review status on canvas;
-- finish Transfer workflow visual polish before PR #3 freeze.
+- double-click connector or use contextual ＋ PI, then drag the same persisted `via[]` controls;
+- edit PI radius and Delete PI with RoadLink-style context actions;
+- every PI mutation must still resolve through `resolveTransferConnectorAlignment()`; invalid edits are rejected rather than persisted;
+- Undo/Redo uses the existing Network history and terminal/gore review remains derived from the edited connector.
+
+### 8B.3c — transfer workflow acceptance / PR freeze
+After direct alignment editing passes:
+- focused visual QA of selected TransferPort / TransferConnector / PI handles;
+- verify Design Summary warnings after intentionally problematic connector edits;
+- refresh PR #3 scope and handoff;
+- freeze Phase 8B boundary before any 8C engineering-review expansion.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

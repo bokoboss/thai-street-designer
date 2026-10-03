@@ -15,6 +15,7 @@ import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/lib/network
 import {NETWORK_PROJECT_FILE_SESSION_STORAGE,createNetworkProjectFileSession,networkProjectWorkspaceSignature,restoreNetworkProjectFileSession,serializeNetworkProjectFileSession} from '@/lib/network-project-file-session';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/lib/network-design-report';
 import {seedParallelFrontage} from '@/lib/parallel-frontage-seed';
+import {insertTransferConnectorVia,moveTransferConnectorVia,removeTransferConnectorVia,transferConnectorControlPoints,updateTransferConnectorViaRadius} from '@/lib/transfer-edit';
 import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
 import type {Selection} from '../junction/selection';
 import NetworkScene3D from './network-scene3d';
@@ -35,6 +36,7 @@ type Drag=
   |{kind:'local-image';start:WorldPoint;center:WorldPoint}
   |ArmDragState
   |{kind:'link-via';id:string;index:number;before:NetworkProject}
+  |{kind:'transfer-via';id:string;index:number;before:NetworkProject}
   |null;
 type ArmMovePending={drag:ArmDragState;point:WorldPoint;shiftKey:boolean};
 type ArmGuideHint={kind:'angle'|'parallel'|'snap';worldAngle:number;label:string};
@@ -78,7 +80,7 @@ const tools:[Tool,string,typeof MousePointer2][]=[
 export default function NetworkWorkspace(){
   const [scenarioWorkspace,setScenarioWorkspace]=useState<NetworkScenarioWorkspace>(createNetworkScenarioWorkspace),
     [project,setProject]=useState<NetworkProject>(()=>activeNetworkProject(scenarioWorkspace)),[selection,setSelection]=useState<NetworkSelection>({kind:'junction',id:'J-1'}),
-    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedArm,setSelectedArm]=useState<number|null>(null),[selectedDirection,setSelectedDirection]=useState<Direction>('incoming'),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),[deleteArmed,setDeleteArmed]=useState<NetworkSelection>(null),
+    [tool,setTool]=useState<Tool>('select'),[pendingPort,setPendingPort]=useState<PortRef|null>(null),[selectedArm,setSelectedArm]=useState<number|null>(null),[selectedDirection,setSelectedDirection]=useState<Direction>('incoming'),[selectedLinkVertex,setSelectedLinkVertex]=useState<number|null>(null),[selectedTransferVertex,setSelectedTransferVertex]=useState<number|null>(null),[deleteArmed,setDeleteArmed]=useState<NetworkSelection>(null),
     [zoom,setZoom]=useState(1),[pan,setPan]=useState({x:0,y:0}),[notice,setNotice]=useState('เลือกทางแยกแล้วลากจุดกลางเพื่อย้ายทั้งทางแยก'),
     [past,setPast]=useState<NetworkProject[]>([]),[future,setFuture]=useState<NetworkProject[]>([]),
     [mapReference,setMapReference]=useState<MapReference>(mapReferenceDefaults),[mapCredentials,setMapCredentials]=useState<MapProviderCredentials>(mapProviderCredentialsDefaults),[view,setView]=useState<'2d'|'3d'>('2d'),
@@ -158,6 +160,7 @@ export default function NetworkWorkspace(){
     selectedPockets=selectedArmData?pocketsFor(selectedArmData,selectedDirection):undefined,
     selectedIssues=selectedLink?linkIssues(project,selectedLink):[],
     selectedVia=selectedLink&&selectedLinkVertex!==null?selectedLink.via[selectedLinkVertex]:undefined,
+    selectedTransferVia=selectedTransferConnector&&selectedTransferVertex!==null?selectedTransferConnector.via[selectedTransferVertex]:undefined,
     linearTransitionPossible=selectedLink?linkLinearTransitionPossible(project,selectedLink):false,
     selectedAuxiliaryProposals=selectedLink?junctionAuxiliaryProposals(project,selectedLink):[],
     selectedHandoffIssues=selectedLink?junctionAuxiliaryHandoffIssues(project,selectedLink):[],
@@ -192,13 +195,13 @@ export default function NetworkWorkspace(){
     const history=pastRef.current,previous=history.at(-1);if(!previous)return;
     const nextPast=history.slice(0,-1),nextFuture=[projectRef.current,...futureRef.current.slice(0,39)];
     pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);scenarioHistoryRef.current.set(scenarioWorkspaceRef.current.activeScenarioId,{past:nextPast,future:nextFuture});setProjectNow(previous);
-    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setDeleteArmed(null);
+    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setSelectedTransferVertex(null);setDeleteArmed(null);
   }
   function redo(){
     const next=futureRef.current[0];if(!next)return;
     const nextPast=[...pastRef.current.slice(-39),projectRef.current],nextFuture=futureRef.current.slice(1);
     pastRef.current=nextPast;futureRef.current=nextFuture;setPast(nextPast);setFuture(nextFuture);scenarioHistoryRef.current.set(scenarioWorkspaceRef.current.activeScenarioId,{past:nextPast,future:nextFuture});setProjectNow(next);
-    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setDeleteArmed(null);
+    setSelection(null);setPendingPort(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setSelectedTransferVertex(null);setDeleteArmed(null);
   }
   function installScenarioWorkspace(next:NetworkScenarioWorkspace,message:string,saveCurrentHistory=true){
     const currentId=scenarioWorkspaceRef.current.activeScenarioId;
@@ -206,7 +209,7 @@ export default function NetworkWorkspace(){
     scenarioWorkspaceRef.current=next;setScenarioWorkspace(next);
     const nextProject=activeNetworkProject(next),history=scenarioHistoryRef.current.get(next.activeScenarioId)??{past:[],future:[]};
     projectRef.current=nextProject;setProject(nextProject);pastRef.current=history.past;futureRef.current=history.future;setPast(history.past);setFuture(history.future);
-    setSelection(null);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setDeleteArmed(null);setArmGuide(null);setParallelDraftMainlineId(null);setParallelTargetCorridorId('');setNotice(message);
+    setSelection(null);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setSelectedTransferVertex(null);setDeleteArmed(null);setArmGuide(null);setParallelDraftMainlineId(null);setParallelTargetCorridorId('');setNotice(message);
   }
   function selectScenario(id:string){
     if(id===scenarioWorkspaceRef.current.activeScenarioId)return;
@@ -509,6 +512,11 @@ export default function NetworkWorkspace(){
       if(next===projectRef.current){setNotice('จุดแนวนี้ทำให้ Link หักกลับ/ตัดตัวเองหรือมีท่อนสั้นเกินไป');return;}
       setProjectNow(next);return;
     }
+    if(current.kind==='transfer-via'){
+      const result=moveTransferConnectorVia(projectRef.current,current.id,current.index,p);
+      if(result.error){setNotice(result.error);return;}
+      setProjectNow(result.project);return;
+    }
     if(current.kind==='arm'){
       if(!current.active){
         if(Math.hypot(e.clientX-current.startClient.x,e.clientY-current.startClient.y)<5)return;
@@ -549,11 +557,11 @@ export default function NetworkWorkspace(){
       if(validated.project!==current.before){remember(current.before);persistProjectSnapshot(validated.project);setNotice('ย้ายทั้งทางแยกแล้ว · Road Link ปรับปลายตาม port และยังผ่าน facing guardrail');}
       return;
     }
-    if(current?.kind==='link-via'||current?.kind==='network-align'){
+    if(current?.kind==='link-via'||current?.kind==='transfer-via'||current?.kind==='network-align'){
       const after=projectRef.current;
       if(after!==current.before){
         remember(current.before);persistProjectSnapshot(after);
-        setNotice(current.kind==='network-align'?'ย้าย Network ทั้งชุดแล้ว · Junction Design v6 ไม่ถูกแก้ และ RoadLink via points เคลื่อนแบบ rigid transform':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
+        setNotice(current.kind==='network-align'?'ย้าย Network ทั้งชุดแล้ว · Junction Design v6 ไม่ถูกแก้ และ RoadLink / TransferConnector via points เคลื่อนแบบ rigid transform':current.kind==='transfer-via'?'ปรับแนว Transfer connector แล้ว · station ports / terminal semantics ยังผูกเดิม':'ปรับแนว Road Link แล้ว · endpoints ยังคงผูกกับ Junction ports');
       }
     }
   }
@@ -664,6 +672,27 @@ export default function NetworkWorkspace(){
     if(!selectedLink||selectedLinkVertex===null||!selectedVia)return;
     const before=projectRef.current,nextRadius=Math.max(0,Math.min(200,selectedVia.radius+delta));
     commit(updateLinkViaRadius(before,selectedLink.id,selectedLinkVertex,nextRadius),before);
+  }
+
+  function addSelectedTransferPi(){
+    if(!selectedTransferConnector)return;
+    const before=projectRef.current,connector=before.transferConnectors.find(item=>item.id===selectedTransferConnector.id);if(!connector)return;
+    const controls=transferConnectorControlPoints(before,connector.id);if(controls.length<2){setNotice('ยัง resolve แนว Transfer connector ไม่ได้');return;}
+    let best=0,bestLen=-1;
+    for(let i=0;i<controls.length-1;i++){const len=Math.hypot(controls[i+1].x-controls[i].x,controls[i+1].y-controls[i].y);if(len>bestLen){best=i;bestLen=len;}}
+    const p={x:(controls[best].x+controls[best+1].x)/2,y:(controls[best].y+controls[best+1].y)/2},
+      result=insertTransferConnectorVia(before,connector.id,best,p);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setSelectedTransferVertex(best);setNotice('เพิ่ม Transfer PI แล้ว · ลากจุดบนแผนเพื่อปรับแนว');
+  }
+  function removeSelectedTransferPi(){
+    if(!selectedTransferConnector||selectedTransferVertex===null)return;
+    const before=projectRef.current,result=removeTransferConnectorVia(before,selectedTransferConnector.id,selectedTransferVertex);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);setSelectedTransferVertex(null);setNotice('ลบ Transfer PI แล้ว');
+  }
+  function adjustSelectedTransferViaRadius(delta:number){
+    if(!selectedTransferConnector||selectedTransferVertex===null||!selectedTransferVia)return;
+    const before=projectRef.current,result=updateTransferConnectorViaRadius(before,selectedTransferConnector.id,selectedTransferVertex,selectedTransferVia.radius+delta);
+    if(result.error){setNotice(result.error);return;}commit(result.project,before);
   }
   function beginParallelCorridorDraft(){
     if(!selectedLink)return;
@@ -807,6 +836,23 @@ export default function NetworkWorkspace(){
   function startLinkVertexMove(id:string,index:number,e:React.PointerEvent<SVGCircleElement>){
     if(tool!=='select')return;setSelection({kind:'link',id});setSelectedLinkVertex(index);drag.current={kind:'link-via',id,index,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
   }
+
+  function insertTransferVertexAt(id:string,e:React.MouseEvent<SVGGElement>){
+    if(tool!=='select')return;
+    const before=projectRef.current,connector=before.transferConnectors.find(item=>item.id===id);if(!connector)return;
+    const cursor=point(e),controls=transferConnectorControlPoints(before,id);let bestIndex=0,bestDistance=Infinity,bestPoint=cursor;
+    for(let i=0;i<controls.length-1;i++){
+      const a=controls[i],b=controls[i+1],vx=b.x-a.x,vy=b.y-a.y,len2=vx*vx+vy*vy,t=len2?Math.max(0,Math.min(1,((cursor.x-a.x)*vx+(cursor.y-a.y)*vy)/len2)):0,
+        q={x:a.x+vx*t,y:a.y+vy*t},distance=Math.hypot(cursor.x-q.x,cursor.y-q.y);
+      if(distance<bestDistance){bestDistance=distance;bestIndex=i;bestPoint=q;}
+    }
+    const result=insertTransferConnectorVia(before,id,bestIndex,bestPoint);
+    if(result.error){setNotice(result.error);return;}
+    commit(result.project,before);setSelection({kind:'transfer-connector',id});setSelectedArm(null);setSelectedLinkVertex(null);setSelectedTransferVertex(bestIndex);setNotice('เพิ่ม Transfer PI แล้ว · ลากวงกลมเพื่อปรับแนว connector');
+  }
+  function startTransferVertexMove(id:string,index:number,e:React.PointerEvent<SVGCircleElement>){
+    if(tool!=='select')return;setSelection({kind:'transfer-connector',id});setSelectedLinkVertex(null);setSelectedTransferVertex(index);drag.current={kind:'transfer-via',id,index,before:projectRef.current};svg.current?.setPointerCapture(e.pointerId);
+  }
   function requestDelete(target:NetworkSelection){
     if(!target)return;
     const before=projectRef.current,connected=target.kind==='junction'?junctionConnectedLinkIds(before,target.id):[],
@@ -829,8 +875,9 @@ export default function NetworkWorkspace(){
     if(!next)return;
     if(tool==='delete'){requestDelete(next);return;}
     setDeleteArmed(null);
-    const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id);
-    setSelection(next);setSelectedArm(null);setSelectedDirection('incoming');if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);
+    const changedLink=next.kind==='link'&&!(selection?.kind==='link'&&selection.id===next.id),
+      changedTransfer=next.kind==='transfer-connector'&&!(selection?.kind==='transfer-connector'&&selection.id===next.id);
+    setSelection(next);setSelectedArm(null);setSelectedDirection('incoming');if(next.kind!=='link'||changedLink)setSelectedLinkVertex(null);if(next.kind!=='transfer-connector'||changedTransfer)setSelectedTransferVertex(null);
     if(next.kind==='transfer-port')setNotice('เลือก Transfer Port แล้ว · ตรวจ station / role / speed-change treatment ใน Inspector');
     if(next.kind==='transfer-connector')setNotice('เลือก Transfer Connector แล้ว · ตรวจ one-way section และ terminal gore treatment ใน Inspector');
   }
@@ -848,10 +895,14 @@ export default function NetworkWorkspace(){
       if(next!==before){commit(next,before);setSelectedLinkVertex(null);setNotice('ลบจุดแนวแล้ว');}
       return;
     }
+    if(selection?.kind==='transfer-connector'&&selectedTransferVertex!==null){
+      const before=projectRef.current,result=removeTransferConnectorVia(before,selection.id,selectedTransferVertex);
+      if(result.error){setNotice(result.error);return;}commit(result.project,before);setSelectedTransferVertex(null);setNotice('ลบ Transfer PI แล้ว');return;
+    }
     requestDelete(selection);
   }
   function deleteSelection(){requestDelete(selection);}
-  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setParallelDraftMainlineId(null);setParallelTargetCorridorId('');setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
+  function reset(){const before=projectRef.current,next=createNetworkProject();commit(next,before);setSelection({kind:'junction',id:'J-1'});setPan({x:0,y:0});setZoom(1);setPendingPort(null);setLinkCursor(null);setSelectedArm(null);setSelectedDirection('incoming');setSelectedLinkVertex(null);setSelectedTransferVertex(null);setParallelDraftMainlineId(null);setParallelTargetCorridorId('');setNotice(`คืนค่า demo เฉพาะ ${currentScenario.name} แล้ว · scenario อื่นไม่เปลี่ยน`);}
 
   return <main className="network-workspace" tabIndex={-1} onKeyDown={e=>{if((e.target as HTMLElement).matches('input,select,button'))return;if(e.key==='Delete')deleteContext();if(e.key==='Escape'){setDeleteArmed(null);setFileReplaceArmed(null);setSaveAsDraft(null);setPendingPort(null);setLinkCursor(null);setParallelDraftMainlineId(null);choose('select');}if(e.key.toLowerCase()==='i'&&!e.ctrlKey&&!e.metaKey){setInspectorOpen(v=>!v);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}}}>
     <header className="network-header">
@@ -890,7 +941,7 @@ export default function NetworkWorkspace(){
             <rect data-network-background="true" x="-5000" y="-5000" width="10000" height="10000" fill={mapReference.enabled||(localReference.enabled&&!!localImageUrl)?'transparent':'#edf2f4'}/>
             <rect data-network-grid="true" x="-5000" y="-5000" width="10000" height="10000" fill="url(#network-grid)" opacity={mapReference.enabled||(localReference.enabled&&!!localImageUrl)?0.42:1}/>
             {view==='2d'&&compareGhostVisible&&comparisonScenario&&<NetworkComparisonGhost project={comparisonScenario.project} focus={focusedComparisonObject?{kind:focusedComparisonObject.kind,id:focusedComparisonObject.id}:null}/>}
-            <g data-network-map-align-layer={tool==='map-align'?'disabled':'interactive'} data-network-reference-tool={tool} pointerEvents={['map-align','image-align','image-calibrate'].includes(tool)?'none':'auto'}><NetworkDrawing project={project} zoom={zoom} selection={selection} comparisonFocus={focusedComparisonObject?{kind:focusedComparisonObject.kind,id:focusedComparisonObject.id}:null} parallelCorridorId={selectedParallelCorridorId} parallelDraftMainlineId={parallelDraftMainlineId} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onPort={selectPort}/></g>
+            <g data-network-map-align-layer={tool==='map-align'?'disabled':'interactive'} data-network-reference-tool={tool} pointerEvents={['map-align','image-align','image-calibrate'].includes(tool)?'none':'auto'}><NetworkDrawing project={project} zoom={zoom} selection={selection} comparisonFocus={focusedComparisonObject?{kind:focusedComparisonObject.kind,id:focusedComparisonObject.id}:null} parallelCorridorId={selectedParallelCorridorId} parallelDraftMainlineId={parallelDraftMainlineId} selectedArm={selectedArm} linkMode={tool==='link'} pendingPort={pendingPort} selectedLinkVertex={selectedLinkVertex} selectedTransferVertex={selectedTransferVertex} onSelect={selectObject} onArmSelect={selectArm} onJunctionMoveStart={startJunctionMove} onArmMoveStart={startArmMove} onLinkInsertVertex={insertLinkVertexAt} onLinkVertexMoveStart={startLinkVertexMove} onLinkVertexSelect={setSelectedLinkVertex} onTransferInsertVertex={insertTransferVertexAt} onTransferVertexMoveStart={startTransferVertexMove} onTransferVertexSelect={setSelectedTransferVertex} onPort={selectPort}/></g>
             {view==='2d'&&tool==='image-calibrate'&&calibrationPoints.length>0&&(()=>{const markerScale=1/Math.max(.35,zoom),a=calibrationPoints[0],b=calibrationPoints[1];return <g data-local-reference-calibration="true" pointerEvents="none">{calibrationPoints.map((p,index)=><g key={index}><circle cx={p.x} cy={p.y} r={4*markerScale} fill={index===0?'#0f7d77':'#d18a24'} stroke="white" strokeWidth="1" vectorEffect="non-scaling-stroke"/><text x={p.x+6*markerScale} y={p.y-6*markerScale} fontSize={8*markerScale} fontWeight="800" fill="#263b44" stroke="white" strokeWidth={2.5*markerScale} paintOrder="stroke">{index===0?'A':'B'}</text></g>)}{b&&<><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d18a24" strokeWidth="1" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/><text x={(a.x+b.x)/2} y={(a.y+b.y)/2-7*markerScale} textAnchor="middle" fontSize={7*markerScale} fontWeight="700" fill="#7b5a23" stroke="white" strokeWidth={2.2*markerScale} paintOrder="stroke">{calibrationMeasured?.toFixed(2)} m current</text></>}</g>;})()}
             {armGuide&&(()=>{const junction=junctionById(project,armGuide.junctionId);if(!junction)return null;const a=armGuide.worldAngle*Math.PI/180,reach=Math.max(140,armGuide.length+70),end={x:junction.x+Math.cos(a)*armGuide.length,y:junction.y+Math.sin(a)*armGuide.length},hint=armGuide.hint,hintA=(hint?.worldAngle??armGuide.worldAngle)*Math.PI/180;return <g data-network-arm-guide={armGuide.junctionId+':'+armGuide.armId} data-network-arm-snap={armGuide.snapped?'true':'false'} data-network-arm-guide-kind={hint?.kind??'free'} pointerEvents="none">
               {hint&&<line x1={hint.kind==='parallel'?junction.x-Math.cos(hintA)*reach:junction.x} y1={hint.kind==='parallel'?junction.y-Math.sin(hintA)*reach:junction.y} x2={junction.x+Math.cos(hintA)*reach} y2={junction.y+Math.sin(hintA)*reach} stroke={hint.kind==='snap'?'#d18a24':hint.kind==='parallel'?'#567f9c':'#7e98a6'} strokeWidth=".65" strokeDasharray="5 3" vectorEffect="non-scaling-stroke"/>}
@@ -901,7 +952,7 @@ export default function NetworkWorkspace(){
             {pendingPort&&(()=>{const j=junctionById(project,pendingPort.junctionId);if(!j)return null;const angle=(j.rotation+j.design.rotation+j.design.arms[pendingPort.armId].angle)*Math.PI/180,d=j.design.arms[pendingPort.armId].length,source={x:j.x+Math.cos(angle)*d,y:j.y+Math.sin(angle)*d};return <g data-network-link-preview="true" pointerEvents="none"><circle cx={source.x} cy={source.y} r="4" fill="none" stroke="#e3a33d" strokeWidth=".8"/>{linkCursor&&<path d={`M${source.x} ${source.y}L${linkCursor.x} ${linkCursor.y}`} fill="none" stroke="#e3a33d" strokeWidth=".8" strokeDasharray="3 2"/>}</g>;})()}
           </svg>
           <NetworkScene3D project={project} mapReference={mapReference} mapCredentials={mapCredentials} active={view==='3d'}/>
-          {view==='2d'&&tool==='select'&&(selectedArmData||selectedLink||selectedJunction)&&<div className="network-context-bar" data-network-context-kind={selectedArmData?'arm':selectedLink?'link':'junction'}>
+          {view==='2d'&&tool==='select'&&(selectedArmData||selectedLink||selectedJunction||selectedTransferPort||selectedTransferConnector)&&<div className="network-context-bar" data-network-context-kind={selectedArmData?'arm':selectedLink?'link':selectedJunction?'junction':selectedTransferPort?'transfer-port':'transfer-connector'}>
             {selectedArmData&&selectedJunction&&selectedArm!==null&&<>
               <div className="network-context-title"><span>ARM</span><b>{selectedArmData.name}</b></div>
               <div className="network-context-segment">
@@ -929,7 +980,11 @@ export default function NetworkWorkspace(){
               {!selectedVia&&<span className="network-context-hint">Double-click Link = เพิ่ม PI</span>}
             </>}
             {selectedTransferPort&&<><div className="network-context-title"><span>TRANSFER PORT</span><b>{selectedTransferPort.name}</b><em>Sta. {selectedTransferPort.station.toFixed(1)} m</em></div><span className="network-context-hint">{selectedTransferPort.terminal.toUpperCase()} · {selectedTransferPort.direction} · {selectedTransferPort.side}</span></>}
-            {selectedTransferConnector&&<><div className="network-context-title"><span>TRANSFER CONNECTOR</span><b>{selectedTransferConnector.name}</b><em>{selectedTransferConnector.lanes} × {selectedTransferConnector.laneWidth.toFixed(2)} m</em></div><span className="network-context-hint">DIVERGE → MERGE · one-way section</span></>}
+            {selectedTransferConnector&&<><div className="network-context-title"><span>TRANSFER CONNECTOR</span><b>{selectedTransferConnector.name}</b><em>{selectedTransferConnector.lanes} × {selectedTransferConnector.laneWidth.toFixed(2)} m</em></div>
+              <button data-network-context-action="add-transfer-pi" onClick={addSelectedTransferPi}>＋ PI</button>
+              {selectedTransferVia&&selectedTransferVertex!==null&&<><div className="network-context-step wide"><span>R</span><button data-network-context-action="transfer-radius-dec" disabled={selectedTransferVia.radius<=0} onClick={()=>adjustSelectedTransferViaRadius(-5)}>−</button><b>{selectedTransferVia.radius.toFixed(0)} m</b><button data-network-context-action="transfer-radius-inc" disabled={selectedTransferVia.radius>=200} onClick={()=>adjustSelectedTransferViaRadius(5)}>＋</button></div><button className="danger" data-network-context-action="remove-transfer-pi" onClick={removeSelectedTransferPi}>ลบ PI</button></>}
+              {!selectedTransferVia&&<span className="network-context-hint">Double-click Connector = เพิ่ม PI</span>}
+            </>}
           </div>}
           {view==='2d'&&<div className="network-scale" data-network-scale-meters={scaleMeters} style={{width:`${scaleWidthPercent}%`}}><span>{scaleMeters>=1000?(scaleMeters/1000)+' km':scaleMeters+' m'}</span><div className="network-scale-bar"/></div>}
           <div className="network-zoom" hidden={view==='3d'} data-network-zoom-value={zoom.toFixed(4)}>
