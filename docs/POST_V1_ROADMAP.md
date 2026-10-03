@@ -71,12 +71,21 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - resolve connector pavement + lane dividers from one shared geometry resolver;
 - consume the same resolver in 2D plan and Network 3D.
 
-### 8B.2c2 — painted / physical nose + neutral gore
-After pavement rendering passes:
-- persist explicit gore/nose treatment parameters rather than inventing standard dimensions;
-- painted nose, physical nose and neutral gore geometry;
-- terminal integrity review warnings;
-- export/golden acceptance for the full transfer treatment.
+### 8B.2c2 — painted / physical nose + neutral gore — current
+- TransferPort is the painted-nose datum;
+- persist per-terminal `none | painted | physical` treatment with explicit neutral-area / physical-nose dimensions;
+- resolve neutral area between stable host traveled-way edge and connector inner edge in traffic coordinates;
+- reject no geometry silently: physical-nose fit failures remain persisted and surface as Design Summary warnings;
+- 2D / 3D / SVG-PNG export share the same semantic resolver;
+- dedicated browser golden cases cover 2D and resolved Network 3D.
+
+### 8B.3 — transfer editing workflow
+After 8B.2c2 acceptance:
+- select/create TransferPort from a host RoadLink station;
+- create DIVERGE → MERGE connector from the workspace;
+- edit connector PI/radius, lanes/width, speed-change treatment and gore treatment contextually;
+- direct selection, Undo/Redo and deletion confirmation;
+- keep engineering review visible while editing.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

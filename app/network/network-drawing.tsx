@@ -7,7 +7,7 @@ import {
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,type TransferConnector
 } from '@/lib/network-project';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
-import {resolveTransferConnectorPavement} from '@/lib/transfer-geometry';
+import {resolveTransferConnectorGores,resolveTransferConnectorPavement} from '@/lib/transfer-geometry';
 
 export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
@@ -178,12 +178,17 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
 
 export function TransferConnectorDrawing({project,connector}:{project:NetworkProject;connector:TransferConnector}){
   const g=resolveTransferConnectorPavement(project,connector);if(!g)return null;
-  const surface=path([...g.left,...[...g.right].reverse()],true);
+  const surface=path([...g.left,...[...g.right].reverse()],true),gores=resolveTransferConnectorGores(project,connector);
   return <g data-network-transfer-connector={connector.id} pointerEvents="none">
     <path d={surface} fill="#35424e" stroke="#9aa8ae" strokeWidth=".35" strokeLinejoin="round"/>
     <path data-scene-detail="true" d={path(g.left)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path data-scene-detail="true" d={path(g.right)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     {g.laneLines.map((line,index)=><path key={index} data-scene-detail="true" data-network-transfer-lane-line={index} d={path(line)} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+    {gores.map(result=>result.gore?<g key={result.terminal} data-network-transfer-gore={result.terminal} data-network-transfer-gore-level={result.treatment.level}>
+      <path data-network-transfer-neutral-gore={result.terminal} d={path(result.gore.neutralPolygon,true)} fill="#d8cfaa" fillOpacity=".48" stroke="#f3e9be" strokeWidth=".18" strokeDasharray="1.2 1.1"/>
+      <circle data-scene-detail="true" data-network-transfer-painted-nose={result.terminal} cx={result.gore.paintedNose.x} cy={result.gore.paintedNose.y} r=".65" fill="#f5f2dc" stroke="#8d8154" strokeWidth=".18"/>
+      {result.gore.physicalNose&&<path data-network-transfer-physical-nose={result.terminal} d={path(result.gore.physicalNose.polygon,true)} fill="#83957a" stroke="#65725f" strokeWidth=".18"/>}
+    </g>:<g key={result.terminal} data-network-transfer-gore={result.terminal} data-network-transfer-gore-level={result.treatment.level} data-network-transfer-gore-error={result.issue??'unresolved'}/>)}
   </g>;
 }
 

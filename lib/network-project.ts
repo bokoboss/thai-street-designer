@@ -18,6 +18,14 @@ export type JunctionInstance={
 export type LinkVia=WorldPoint&{radius:number};
 export type LinkDirection='forward'|'backward';
 export type TransferTerminalKind='merge'|'diverge';
+export type TransferGoreLevel='none'|'painted'|'physical';
+export type TransferTerminalGoreTreatment={
+  level:TransferGoreLevel;
+  neutralLength:number;
+  physicalNoseLength:number;
+  physicalNoseWidth:number;
+};
+export type TransferConnectorTerminalTreatment={from:TransferTerminalGoreTreatment;to:TransferTerminalGoreTreatment};
 export type TransferPort={
   id:string;
   name:string;
@@ -35,6 +43,7 @@ export type TransferConnector={
   via:LinkVia[];
   lanes:number;
   laneWidth:number;
+  terminalTreatment:TransferConnectorTerminalTreatment;
 };
 export type LinkLaneTransition={side:'curb'|'median';center:number;length:number};
 export type LinkSectionProfile={mode:'review'|'linear';forwardLaneTransition?:LinkLaneTransition;backwardLaneTransition?:LinkLaneTransition};
@@ -104,6 +113,26 @@ const linkRadius=(value:unknown)=>Math.max(0,Math.min(200,Number.isFinite(Number
 const copyDesign=(d:Design):Design=>structuredClone(d);
 const displayDesignCache=new WeakMap<Design,Design>();
 const nextId=(prefix:string,ids:string[])=>{let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;};
+export const emptyTransferGoreTreatment=():TransferTerminalGoreTreatment=>({level:'none',neutralLength:0,physicalNoseLength:0,physicalNoseWidth:0});
+function normalizeTransferGoreTreatment(input:unknown):TransferTerminalGoreTreatment{
+  if(!input||typeof input!=='object')return emptyTransferGoreTreatment();
+  const value=input as Record<string,unknown>,level:TransferGoreLevel=value.level==='physical'?'physical':value.level==='painted'?'painted':'none';
+  return{
+    level,
+    neutralLength:Number.isFinite(Number(value.neutralLength))?+Number(value.neutralLength).toFixed(2):0,
+    physicalNoseLength:Number.isFinite(Number(value.physicalNoseLength))?+Number(value.physicalNoseLength).toFixed(2):0,
+    physicalNoseWidth:Number.isFinite(Number(value.physicalNoseWidth))?+Number(value.physicalNoseWidth).toFixed(2):0
+  };
+}
+export function transferGoreTreatmentIssue(treatment:TransferTerminalGoreTreatment){
+  if(!treatment||!['none','painted','physical'].includes(treatment.level))return'Transfer gore treatment ไม่ถูกต้อง';
+  const values=[treatment.neutralLength,treatment.physicalNoseLength,treatment.physicalNoseWidth];
+  if(!values.every(Number.isFinite)||treatment.neutralLength<0||treatment.neutralLength>500||treatment.physicalNoseLength<0||treatment.physicalNoseLength>50||treatment.physicalNoseWidth<0||treatment.physicalNoseWidth>50)return'Transfer gore treatment เกินขอบเขต workspace';
+  if(treatment.level==='none'&&(treatment.neutralLength>0||treatment.physicalNoseLength>0||treatment.physicalNoseWidth>0))return'Transfer gore NONE ต้องไม่มีมิติ treatment ค้างอยู่';
+  if(treatment.level==='painted'&&(treatment.neutralLength<=0||treatment.physicalNoseLength>0||treatment.physicalNoseWidth>0))return'Painted gore ต้องมี neutral length และไม่มี physical-nose dimensions';
+  if(treatment.level==='physical'&&(treatment.neutralLength<=0||treatment.physicalNoseLength<=0||treatment.physicalNoseWidth<=0||treatment.physicalNoseLength>treatment.neutralLength))return'Physical gore ต้องมี neutral length / nose size ที่เป็นบวก และ nose length ต้องไม่ยาวกว่า neutral area';
+  return null;
+}
 export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)=>enabled?i:-1).filter(i=>i>=0);
 
 export function portDistance(j:JunctionInstance,armId:number){
@@ -197,13 +226,14 @@ export function transferConnectorIssue(project:NetworkProject,connector:Transfer
   if(from.id===to.id||from.hostLinkId===to.hostLinkId)return'Transfer connector ต้องเชื่อม Transfer port บนคนละ host Road Link';
   if(from.terminal!=='diverge'||to.terminal!=='merge')return'Transfer connector ต้องเรียงจาก DIVERGE → MERGE ตามทิศการเดินทาง';
   if(!Number.isInteger(connector.lanes)||connector.lanes<1||connector.lanes>4||!Number.isFinite(connector.laneWidth)||connector.laneWidth<2||connector.laneWidth>6)return'Transfer connector section ไม่ถูกต้อง';
+  if(!connector.terminalTreatment||transferGoreTreatmentIssue(connector.terminalTreatment.from)||transferGoreTreatmentIssue(connector.terminalTreatment.to))return'Transfer connector terminal treatment ไม่ถูกต้อง';
   if(!Array.isArray(connector.via)||connector.via.length>64||connector.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200))return'Transfer connector alignment controls ไม่ถูกต้อง';
   if(project.transferConnectors.some(other=>other.id!==connector.id&&[other.fromTransferPortId,other.toTransferPortId].some(id=>id===from.id||id===to.id)))return'Transfer port หนึ่งจุดใช้กับ Transfer connector ได้เพียงหนึ่งเส้นใน foundation นี้';
   return null;
 }
 export function addTransferConnector(project:NetworkProject,fromTransferPortId:string,toTransferPortId:string,lanes=1,laneWidth=3.5):TransferConnectorEditResult{
   const id=nextId('TC',[...project.links.map(link=>link.id),...project.transferConnectors.map(connector=>connector.id)]),
-    connector:TransferConnector={id,name:`Transfer Connector ${project.transferConnectors.length+1}`,fromTransferPortId,toTransferPortId,via:[],lanes:Math.round(lanes),laneWidth:+Number(laneWidth).toFixed(2)},
+    connector:TransferConnector={id,name:`Transfer Connector ${project.transferConnectors.length+1}`,fromTransferPortId,toTransferPortId,via:[],lanes:Math.round(lanes),laneWidth:+Number(laneWidth).toFixed(2),terminalTreatment:{from:emptyTransferGoreTreatment(),to:emptyTransferGoreTreatment()}},
     error=transferConnectorIssue(project,connector);
   return error?{project,error}:{project:{...project,transferConnectors:[...project.transferConnectors,connector]},connector,error:null};
 }
@@ -213,13 +243,28 @@ const transferTreatmentComponents=(project:NetworkProject,predicate:(source:Tran
 export function updateTransferConnector(project:NetworkProject,id:string,patch:Partial<Omit<TransferConnector,'id'>>):TransferConnectorEditResult{
   const current=project.transferConnectors.find(connector=>connector.id===id);if(!current)return{project,error:'ไม่พบ Transfer connector'};
   const ownsTreatment=transferTreatmentComponents(project,source=>source.connectorId===id).length>0,
+    ownsGore=current.terminalTreatment.from.level!=='none'||current.terminalTreatment.to.level!=='none',
     topologyChange=(patch.fromTransferPortId!==undefined&&patch.fromTransferPortId!==current.fromTransferPortId)
       ||(patch.toTransferPortId!==undefined&&patch.toTransferPortId!==current.toTransferPortId)
-      ||(patch.lanes!==undefined&&Math.round(Number(patch.lanes))!==current.lanes);
-  if(ownsTreatment&&topologyChange)return{project,error:'แก้ endpoint / lane count ของ Transfer connector ไม่ได้ขณะที่มี terminal lane treatment · ลบ treatment ก่อน'};
-  const connector:TransferConnector={...current,...patch,lanes:Math.round(Number(patch.lanes??current.lanes)),laneWidth:+Number(patch.laneWidth??current.laneWidth).toFixed(2),
+      ||(patch.lanes!==undefined&&Math.round(Number(patch.lanes))!==current.lanes)
+      ||(patch.laneWidth!==undefined&&Math.abs(Number(patch.laneWidth)-current.laneWidth)>.005);
+  if((ownsTreatment||ownsGore)&&topologyChange)return{project,error:'แก้ endpoint / lane section ของ Transfer connector ไม่ได้ขณะที่มี terminal treatment · ลบ treatment ก่อน'};
+  const terminalTreatment=patch.terminalTreatment?{
+      from:normalizeTransferGoreTreatment(patch.terminalTreatment.from),
+      to:normalizeTransferGoreTreatment(patch.terminalTreatment.to)
+    }:current.terminalTreatment,
+    connector:TransferConnector={...current,...patch,terminalTreatment,lanes:Math.round(Number(patch.lanes??current.lanes)),laneWidth:+Number(patch.laneWidth??current.laneWidth).toFixed(2),
     via:(patch.via??current.via).map(v=>({x:Number(v.x),y:Number(v.y),radius:linkRadius(v.radius)}))},
     error=transferConnectorIssue(project,connector);
+  return error?{project,error}:{project:{...project,transferConnectors:project.transferConnectors.map(item=>item.id===id?connector:item)},connector,error:null};
+}
+export function updateTransferConnectorTerminalTreatment(project:NetworkProject,id:string,end:'from'|'to',patch:Partial<TransferTerminalGoreTreatment>):TransferConnectorEditResult{
+  const current=project.transferConnectors.find(connector=>connector.id===id);if(!current)return{project,error:'ไม่พบ Transfer connector'};
+  const treatment=normalizeTransferGoreTreatment({...current.terminalTreatment[end],...patch});
+  if(treatment.level==='none'){treatment.neutralLength=0;treatment.physicalNoseLength=0;treatment.physicalNoseWidth=0;}
+  if(treatment.level==='painted'){treatment.physicalNoseLength=0;treatment.physicalNoseWidth=0;}
+  const issue=transferGoreTreatmentIssue(treatment);if(issue)return{project,error:issue};
+  const connector:TransferConnector={...current,terminalTreatment:{...current.terminalTreatment,[end]:treatment}},error=transferConnectorIssue(project,connector);
   return error?{project,error}:{project:{...project,transferConnectors:project.transferConnectors.map(item=>item.id===id?connector:item)},connector,error:null};
 }
 export function removeTransferConnector(project:NetworkProject,id:string):NetworkProject{
@@ -232,12 +277,14 @@ export function removeTransferConnector(project:NetworkProject,id:string):Networ
 export function updateTransferPort(project:NetworkProject,id:string,patch:Partial<Omit<TransferPort,'id'>>):TransferPortEditResult{
   const current=project.transferPorts.find(port=>port.id===id);if(!current)return{project,error:'ไม่พบ Transfer port'};
   const ownsTreatment=transferTreatmentComponents(project,source=>source.transferPortId===id).length>0,
+    connected=project.transferConnectors.find(connector=>connector.fromTransferPortId===id||connector.toTransferPortId===id),
+    ownsGore=!!connected&&((connected.fromTransferPortId===id?connected.terminalTreatment.from:connected.terminalTreatment.to).level!=='none'),
     geometryChange=(patch.hostLinkId!==undefined&&patch.hostLinkId!==current.hostLinkId)
       ||(patch.station!==undefined&&Math.abs(Number(patch.station)-current.station)>.005)
       ||(patch.direction!==undefined&&patch.direction!==current.direction)
       ||(patch.side!==undefined&&patch.side!==current.side)
       ||(patch.terminal!==undefined&&patch.terminal!==current.terminal);
-  if(ownsTreatment&&geometryChange)return{project,error:'แก้ host/station/direction/side/terminal ไม่ได้ขณะที่มี terminal lane treatment · ลบ treatment ก่อน'};
+  if((ownsTreatment||ownsGore)&&geometryChange)return{project,error:'แก้ host/station/direction/side/terminal ไม่ได้ขณะที่มี terminal treatment · ลบ treatment ก่อน'};
   const port:TransferPort={...current,...patch,station:+Number(patch.station??current.station).toFixed(2)},error=transferPortIssue(project,port);
   if(error)return{project,error};
   const candidate={...project,transferPorts:project.transferPorts.map(item=>item.id===id?port:item)},
@@ -949,8 +996,10 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
   }):[];
   const transferConnectors:TransferConnector[]=schemaVersion===5&&Array.isArray(source.transferConnectors)?source.transferConnectors.map(value=>{
     if(!value||typeof value!=='object')throw Error('Invalid transfer connector');
-    const item=value as Record<string,unknown>,via=Array.isArray(item.via)?item.via.map(point=>{const p=point&&typeof point==='object'?point as Record<string,unknown>:{};return{x:Number(p.x),y:Number(p.y),radius:linkRadius(p.radius)};}):[];
-    return{id:String(item.id??''),name:String(item.name??''),fromTransferPortId:String(item.fromTransferPortId??''),toTransferPortId:String(item.toTransferPortId??''),via,lanes:Number(item.lanes),laneWidth:Number(item.laneWidth)};
+    const item=value as Record<string,unknown>,via=Array.isArray(item.via)?item.via.map(point=>{const p=point&&typeof point==='object'?point as Record<string,unknown>:{};return{x:Number(p.x),y:Number(p.y),radius:linkRadius(p.radius)};}):[],
+      terminalRaw=item.terminalTreatment&&typeof item.terminalTreatment==='object'?item.terminalTreatment as Record<string,unknown>:{};
+    return{id:String(item.id??''),name:String(item.name??''),fromTransferPortId:String(item.fromTransferPortId??''),toTransferPortId:String(item.toTransferPortId??''),via,lanes:Number(item.lanes),laneWidth:Number(item.laneWidth),
+      terminalTreatment:{from:normalizeTransferGoreTreatment(terminalRaw.from),to:normalizeTransferGoreTreatment(terminalRaw.to)}};
   }):[];
   const project:NetworkProject={schemaVersion:5,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors,transferPorts,transferConnectors};
   const error=validateNetworkProject(project);if(error)throw Error(error);

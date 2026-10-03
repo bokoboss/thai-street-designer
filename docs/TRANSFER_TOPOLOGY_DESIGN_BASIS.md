@@ -217,3 +217,47 @@ The connector surface remains concept-level. Shoulder, superelevation, vertical 
 TxDOT describes the ramp as a connecting road with a terminal at each leg, while Austroads Part 4C treats ramp alignment/cross-section and merge/diverge terminals as explicit interchange elements. That separation is retained here:
 - https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-7-ramps---direct-connectors-.html
 - https://austroads.gov.au/publications/road-design/agrd04c
+
+
+## 13. Phase 8B.2c2 — painted nose / physical nose / neutral gore
+
+The terminal model now separates three concepts:
+
+- **Painted nose** — the zero-width decision point where the host and connector traveled ways intersect. The persisted TransferPort is the painted-nose datum.
+- **Neutral area** — the explicit concept polygon between the painted nose and the selected downstream/upstream physical-nose station.
+- **Physical nose** — optional dimensional separator geometry after enough separation exists between the host edge and connector inner edge.
+
+Persisted treatment per connector end:
+
+```ts
+TransferTerminalGoreTreatment {
+  level: 'none' | 'painted' | 'physical'
+  neutralLength
+  physicalNoseLength
+  physicalNoseWidth
+}
+```
+
+`none` stores zero dimensions. `painted` requires only `neutralLength`. `physical` additionally requires positive physical-nose length/width. The numeric values are explicit project inputs; no TxDOT, Austroads or other foreign dimension is silently installed as a Thailand default.
+
+Geometry rules:
+- DIVERGE neutral area runs downstream from the painted nose in the host traffic direction.
+- MERGE neutral area runs upstream from the painted nose, opposite the receiving host traffic direction.
+- Host-side boundary samples the stable pre-transfer traveled-way edge.
+- Connector-side boundary samples the connector edge adjacent to the host.
+- A requested physical-nose width must fit within the actual geometric separation at the neutral-area end; otherwise the treatment remains persisted but is surfaced as a Design Summary warning rather than silently clamped.
+- physical-nose plan geometry uses the explicit nose length/width only after that fit check.
+
+The same resolver owns 2D and 3D:
+- 2D: connector pavement, painted-nose marker, neutral-area polygon and optional physical-nose polygon.
+- 3D: connector pavement + neutral area + physical nose surfaces through `resolveTransferConnectorSceneSurfaces()`.
+- SVG/PNG export inherits the same semantic 2D layers.
+
+TxDOT defines an exit-ramp painted nose as the zero-width point where traveled ways intersect, the physical nose as a downstream point with dimensional separation, and the neutral area as the triangular area between them. TxDOT also notes that physical-nose width should reflect local maintenance preferences rather than one universal number. Austroads Part 4C treats ramp alignment/cross-section and merge/diverge terminals as explicit interchange elements.
+
+References:
+- TxDOT Roadway Design Manual 15.7.3 Ramps & Direct Connectors: https://www.txdot.gov/content/txdotoms/us/en/manuals/des/rdw/chapter-15-grade-separations-and-interchanges-/15-7-ramps---direct-connectors-.html
+- TxDOT Roadway Design Manual Figure 15-22 / Typical Gore Area Characteristics
+- Austroads Guide to Road Design Part 4C: Interchanges (2023): https://austroads.gov.au/publications/road-design/agrd04c
+
+Workspace numeric upper bounds are software guards only; they are not geometric design criteria.
