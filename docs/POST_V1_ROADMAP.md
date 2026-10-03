@@ -79,13 +79,20 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - 2D / 3D / SVG-PNG export share the same semantic resolver;
 - dedicated browser golden cases cover 2D and resolved Network 3D.
 
-### 8B.3 — transfer editing workflow
-After 8B.2c2 acceptance:
-- select/create TransferPort from a host RoadLink station;
-- create DIVERGE → MERGE connector from the workspace;
-- edit connector PI/radius, lanes/width, speed-change treatment and gore treatment contextually;
-- direct selection, Undo/Redo and deletion confirmation;
-- keep engineering review visible while editing.
+### 8B.3a — transfer selection + Inspector workflow — current
+- RoadLink Inspector creates explicit TransferPort at a user-entered station/direction/side/role;
+- TransferPort is directly selectable on canvas and can connect to one compatible opposite-role port;
+- TransferConnector is directly selectable on canvas and exposes own lane count/width + explicit per-terminal gore treatment;
+- TransferPort Inspector exposes explicit host speed-change lane full-width/taper inputs through the existing lifecycle engine;
+- delete confirmation covers connected TransferPort and treated TransferConnector cascade; all mutations use existing Undo/Redo;
+- dedicated browser acceptance must create ports + connector + gore through UI, confirm delete, then Undo the complete workflow.
+
+### 8B.3b — direct connector alignment editing
+After 8B.3a acceptance:
+- add/select/move connector PI controls using the shared alignment primitive;
+- edit PI radius with the same direct interaction conventions as RoadLink;
+- contextual terminal review status on canvas;
+- finish Transfer workflow visual polish before PR #3 freeze.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

@@ -7,9 +7,9 @@ import {
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,type TransferConnector
 } from '@/lib/network-project';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
-import {resolveTransferConnectorGores,resolveTransferConnectorPavement} from '@/lib/transfer-geometry';
+import {resolveTransferConnectorGores,resolveTransferConnectorPavement,resolveTransferPortGeometry} from '@/lib/transfer-geometry';
 
-export type NetworkSelection={kind:'junction'|'link';id:string}|null;
+export type NetworkSelection={kind:'junction'|'link'|'transfer-port'|'transfer-connector';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
 
 const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
@@ -176,19 +176,28 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
   </g>;
 }
 
-export function TransferConnectorDrawing({project,connector}:{project:NetworkProject;connector:TransferConnector}){
+export function TransferConnectorDrawing({project,connector,selected,onSelect}:{project:NetworkProject;connector:TransferConnector;selected:boolean;onSelect:()=>void}){
   const g=resolveTransferConnectorPavement(project,connector);if(!g)return null;
-  const surface=path([...g.left,...[...g.right].reverse()],true),gores=resolveTransferConnectorGores(project,connector);
-  return <g data-network-transfer-connector={connector.id} pointerEvents="none">
-    <path d={surface} fill="#35424e" stroke="#9aa8ae" strokeWidth=".35" strokeLinejoin="round"/>
+  const surface=path([...g.left,...[...g.right].reverse()],true),gores=resolveTransferConnectorGores(project,connector),center=path(g.alignment.points);
+  return <g data-network-transfer-connector={connector.id} data-network-transfer-selected={selected?'true':undefined} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
+    <path d={surface} fill="#35424e" stroke={selected?'#1c7974':'#9aa8ae'} strokeWidth={selected?'1.1':'.35'} strokeLinejoin="round"/>
     <path data-scene-detail="true" d={path(g.left)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path data-scene-detail="true" d={path(g.right)} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     {g.laneLines.map((line,index)=><path key={index} data-scene-detail="true" data-network-transfer-lane-line={index} d={path(line)} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
+    <path d={center} stroke="transparent" strokeWidth={Math.max(12,g.width+7)} fill="none"/>
     {gores.map(result=>result.gore?<g key={result.terminal} data-network-transfer-gore={result.terminal} data-network-transfer-gore-level={result.treatment.level}>
       <path data-network-transfer-neutral-gore={result.terminal} d={path(result.gore.neutralPolygon,true)} fill="#d8cfaa" fillOpacity=".48" stroke="#f3e9be" strokeWidth=".18" strokeDasharray="1.2 1.1"/>
       <circle data-scene-detail="true" data-network-transfer-painted-nose={result.terminal} cx={result.gore.paintedNose.x} cy={result.gore.paintedNose.y} r=".65" fill="#f5f2dc" stroke="#8d8154" strokeWidth=".18"/>
       {result.gore.physicalNose&&<path data-network-transfer-physical-nose={result.terminal} d={path(result.gore.physicalNose.polygon,true)} fill="#83957a" stroke="#65725f" strokeWidth=".18"/>}
     </g>:<g key={result.terminal} data-network-transfer-gore={result.terminal} data-network-transfer-gore-level={result.treatment.level} data-network-transfer-gore-error={result.issue??'unresolved'}/>)}
+  </g>;
+}
+export function TransferPortDrawing({project,portId,selected,onSelect}:{project:NetworkProject;portId:string;selected:boolean;onSelect:()=>void}){
+  const g=resolveTransferPortGeometry(project,portId);if(!g)return null;
+  const r=selected?2.8:2.1,fill=g.port.terminal==='diverge'?'#d9873f':'#4b8f87';
+  return <g data-network-transfer-port={g.port.id} data-network-transfer-port-role={g.port.terminal} data-network-transfer-selected={selected?'true':undefined} onPointerDown={e=>{e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
+    <circle cx={g.point.x} cy={g.point.y} r={r} fill={fill} stroke={selected?'#153e3b':'white'} strokeWidth={selected?'.8':'.45'}/>
+    <circle cx={g.point.x} cy={g.point.y} r="7" fill="transparent"/>
   </g>;
 }
 
@@ -223,7 +232,8 @@ export function NetworkDrawing({
     };
   return <g>
     {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
-    {project.transferConnectors.map(connector=><TransferConnectorDrawing key={connector.id} project={project} connector={connector}/>)}
+    {project.transferConnectors.map(connector=><TransferConnectorDrawing key={connector.id} project={project} connector={connector} selected={selection?.kind==='transfer-connector'&&selection.id===connector.id} onSelect={()=>onSelect({kind:'transfer-connector',id:connector.id})}/>)}
+    {project.transferPorts.map(port=><TransferPortDrawing key={port.id} project={project} portId={port.id} selected={selection?.kind==='transfer-port'&&selection.id===port.id} onSelect={()=>onSelect({kind:'transfer-port',id:port.id})}/>)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

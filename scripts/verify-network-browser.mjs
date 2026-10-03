@@ -506,6 +506,39 @@ try{
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');
   await clickSelector('[data-network-action="redo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===8&&p?.links?.length===4&&g?.frontage?.some(v=>v.side==='right');},'Redo restores assisted frontage seed atomically');
 
+  mark('transfer-editing-workflow');
+  await clickSelector('[data-network-link="L-1"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'RoadLink transfer station-port editor');
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]');if(!station||!role)return false;station.value='55';station.dispatchEvent(new Event('input',{bubbles:true}));role.value='diverge';role.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await clickSelector('[data-network-transfer-create-port]');
+  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1&&p.transferPorts[0].terminal==='diverge'&&Math.abs(p.transferPorts[0].station-55)<.01;},'create DIVERGE station port from selected RoadLink');
+  const workflowFrom=(await project()).transferPorts[0].id;
+  await clickSelector('[data-network-link="L-2"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'frontage Transfer editor');
+  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]'),side=document.querySelector('[data-network-transfer-new-side]');if(!station||!role||!side)return false;station.value='85';station.dispatchEvent(new Event('input',{bubbles:true}));role.value='merge';role.dispatchEvent(new Event('change',{bubbles:true}));side.value='median';side.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await clickSelector('[data-network-transfer-create-port]');
+  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===2&&p.transferPorts.some(v=>v.terminal==='merge');},'create MERGE station port from frontage RoadLink');
+  const workflowPorts=(await project()).transferPorts,workflowTo=workflowPorts.find(v=>v.terminal==='merge').id;
+  await clickSelector(`[data-network-transfer-port="${workflowFrom}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-port-editor]')&&!!document.querySelector('[data-network-transfer-create-connector]')`),'select TransferPort directly from canvas');
+  await clickSelector('[data-network-transfer-create-connector]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].fromTransferPortId===workflowFrom&&p.transferConnectors[0].toTransferPortId===workflowTo;},'create DIVERGE to MERGE connector from Inspector');
+  const workflowConnector=(await project()).transferConnectors[0].id;
+  await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-apply="from"]')`),'select TransferConnector directly from canvas');
+  await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='painted';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')`),'painted gore explicit input appears');
+  await evalValue(`(()=>{const n=document.querySelector('[data-network-transfer-gore-neutral="from"]');n.value='12';n.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);
+  await clickSelector('[data-network-transfer-gore-apply="from"]');
+  await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.terminalTreatment?.from?.level==='painted'&&p.transferConnectors[0].terminalTreatment.from.neutralLength===12;},'edit connector gore through Inspector');
+  await clickSelector('[data-network-delete="true"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'arm treated TransferConnector delete confirmation');
+  await clickSelector('[data-network-delete="true"]');await waitFor(async()=>!(await project())?.transferConnectors?.length,'confirm treated TransferConnector cascade delete');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].terminalTreatment.from.level==='painted';},'Undo restores TransferConnector + treatment after confirmed delete');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].terminalTreatment.from.level==='none';},'Undo gore edit preserves connector');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return !p?.transferConnectors?.length&&p?.transferPorts?.length===2;},'Undo connector creation while preserving station ports');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1;},'Undo MERGE station port creation');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===0;},'Undo DIVERGE station port creation');
+
   mark('transfer-connector-gore');
   await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project;
     const keepLinks=new Set(['L-1','L-2']),keepJunctions=new Set(p.links.filter(l=>keepLinks.has(l.id)).flatMap(l=>[l.from.junctionId,l.to.junctionId]));
@@ -563,7 +596,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

@@ -233,8 +233,9 @@ Phase 8A.1 status:
 - **8B.2a geometry datum — passed** — shared tangent primitive + host traveled-way-edge station anchor + connector tangent control line passed Quality run `37027973983`.
 - **8B.2b host speed-change lane lifecycle — passed** — RoadLink lifecycle reuse + transfer-terminal provenance passed Quality run `37031456049`.
 - **8B.2c1 connector pavement surface — passed** — shared connector pavement + stable datum passed Quality run `37032098310`.
-- **8B.2c2 painted/physical nose + neutral gore — current** — TransferPort = painted-nose datum; explicit per-terminal neutral/physical treatment; shared 2D/3D/export geometry and Design Summary fit warnings.
-- **8B.3 transfer editing workflow** follows only after dedicated 2D/3D gore golden acceptance passes.
+- **8B.2c2 painted/physical nose + neutral gore — passed** — dedicated gore regression + focused 2D/3D golden acceptance passed Quality run `37132540363`.
+- **8B.3a transfer selection + Inspector workflow — current** — create station ports from selected RoadLink, connect DIVERGE→MERGE, directly select TransferPort/Connector, edit connector section/gore and host speed-change treatment, with confirmed cascade delete + Undo/Redo.
+- **8B.3b direct connector alignment editing** follows only after the Inspector workflow browser acceptance passes.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
