@@ -541,6 +541,10 @@ try{
   await clickSelector('[data-network-context-action="remove-transfer-pi"]');
   await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'remove Transfer connector PI');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'Undo restores removed Transfer connector PI');
+  await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-transfer-via="0"]')`),'reselect connector after Undo clears editing selection');
+  await clickSelector('[data-transfer-via="0"]');
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-context-action="remove-transfer-pi"]')`),'reselect restored Transfer connector PI');
   await clickSelector('[data-network-context-action="remove-transfer-pi"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'return connector to no-PI state before terminal treatment');
   await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='painted';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')`),'painted gore explicit input appears');
