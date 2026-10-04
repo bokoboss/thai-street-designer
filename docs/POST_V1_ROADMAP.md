@@ -115,15 +115,18 @@ This is a presentation / interaction hardening pass over the accepted Phase 8B m
 - Inspector widened modestly and Parallel/Transfer actions moved toward Thai-first wording;
 - full Quality + visual browser acceptance passed on `0aecb70` / run `37194262135`.
 
-#### 8B.4c — interaction coherence — current
-- remove the persistent Delete toolbar mode; destructive editing remains Select → Inspector / Delete key with cascade confirmation;
-- preserve semantic object selection through Undo/Redo whenever that object still exists after the history step;
-- rename/reset placement to **คืนค่า Demo** inside Scenario controls with two-click confirmation and Esc cancel;
-- visually distinguish destructive confirmation and warning status from ordinary guidance.
+#### 8B.4c — interaction coherence — passed
+- persistent Delete toolbar mode removed; destructive editing is Select → Inspector / Delete key with existing cascade confirmation;
+- Undo/Redo preserves semantic selection and valid PI/Arm sub-selection when the object survives;
+- Scenario reset is explicitly **คืนค่า Demo**, two-click confirmed and Esc-cancellable;
+- transient status distinguishes destructive confirmation / warning / ordinary guidance;
+- full Quality + browser interaction acceptance passed on `0a666b7` / run `37194695108`.
 
-#### 8B.4d — 3D review + transfer direct manipulation
-- selected-object feedback in 3D or explicitly review-only Inspector;
-- reduce form-first Transfer placement by introducing canvas-first station/terminal actions without creating a second model.
+#### 8B.4d — 3D review + transfer direct manipulation — current
+- 3D is explicitly **3D Review**: entering it opens Review, disables Object editing and provides an explicit return-to-2D action;
+- canvas-first TransferPort placement uses `projectAlignment(linkPoints(...), click)` and the existing `addTransferPort()` station model — no arbitrary XY endpoint and no alternate geometry engine;
+- Direction / Side / Role remain explicit Inspector inputs; canvas click resolves only the station on the selected host RoadLink;
+- transient host highlight and Esc/cancel state are UI-only and never enter project JSON.
 
 #### 8B.4e — full journey / compact-view acceptance
 - Network → Junction → Network;

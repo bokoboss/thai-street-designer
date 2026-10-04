@@ -242,3 +242,10 @@
 
 @media(max-width:1180px){.network-brand-copy span{display:none}.network-workspace .workspace-switch a,.network-workspace .workspace-switch span{padding:4px 6px;font-size:10.5px}}
 @media(max-width:900px){.network-brand-copy{display:none}.network-workspace .workspace-switch{margin-left:0}}
+
+/* Phase 8B.4d — explicit 3D review + canvas TransferPort placement */
+.network-inspector-tabs button:disabled{opacity:.42;cursor:not-allowed;background:transparent;box-shadow:none}
+.network-3d-review-banner{margin:4px 0 10px;padding:10px;border:1px solid #b9d2cf;border-radius:7px;background:#f1f8f7}.network-3d-review-banner>div{display:flex;flex-direction:column;gap:2px}.network-3d-review-banner b{font-size:11px;color:#236d67}.network-3d-review-banner span,.network-3d-review-banner p{font-size:10px;line-height:1.5;color:var(--ws-muted)}.network-3d-review-banner p{margin:6px 0}.network-3d-review-banner button{width:100%;border:1px solid #9fc7c2;border-radius:6px;background:#fff;padding:7px;color:#126f69;font-weight:700}
+.network-transfer-placement-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}.network-transfer-placement-actions button{border:1px solid #aecbc7;border-radius:6px;background:#fff;padding:7px 6px;color:#176d67;font-size:10.5px;font-weight:650}.network-transfer-placement-actions button.active{border-color:#d1a257;background:#fff7e7;color:#835a18;box-shadow:inset 0 0 0 1px #d1a25733}
+[data-network-transfer-placement-host="true"]{cursor:crosshair!important}
+@media(max-width:900px){.network-transfer-placement-actions{grid-template-columns:1fr}}

@@ -180,7 +180,7 @@ export default function NetworkScene3D({
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
       onAuxClick={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>Resolved Network 3D</b><span>Geometry = Junction + Slip + RoadLink + TransferConnector semantic surfaces</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
+    <div className="network-scene-note"><b>Resolved Network 3D · Review mode</b><span>Geometry = Junction + Slip + RoadLink + TransferConnector semantic surfaces · object editing remains in 2D</span><span>Markings = detail-only semantic overlay · Signals / trees / lights = shared 3D furniture resolver</span><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'Map reference บนพื้น 3D':'กำลังเตรียม map texture…'}</span>}</div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>

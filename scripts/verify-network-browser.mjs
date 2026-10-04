@@ -400,6 +400,9 @@ try{
   mark('resolved-3d');
   await clickSelector('[data-network-view="3d"]');
   await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
+  const review3dContract=await waitFor(()=>evalValue(`(()=>{const aside=document.querySelector('.network-inspector'),objectTab=document.querySelector('[data-network-inspector-tab-button="object"]'),banner=document.querySelector('[data-network-3d-review-only="true"]'),back=document.querySelector('[data-network-3d-back-2d]');return aside?.getAttribute('data-network-inspector-tab')==='review'&&objectTab?.disabled&&!!banner&&!!back?{ok:true,tab:aside.getAttribute('data-network-inspector-tab'),objectDisabled:objectTab.disabled,banner:!!banner}:null;})()`),'3D opens explicit read-only Review Inspector');
+  assert(review3dContract?.ok,'3D Review contract failed: '+JSON.stringify(review3dContract));
+  await goldenScreenshot('network-3d-review',review3dContract);
   await waitFor(()=>evalValue(`document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-scene-detail-texture')==='true'`),'3D semantic marking detail overlay');
   const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0),detail:c?.getAttribute('data-network-scene-detail-texture')==='true',furniture:Number(c?.getAttribute('data-network-scene-furniture-faces')||0)};})()`);
   assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');assert.equal(sceneCounts.detail,true,'Resolved 3D must restore exact semantic markings through the detail-only overlay');
@@ -420,6 +423,8 @@ try{
   await sleep(600);
   const shot3d=await screenshot('network-browser-3d.png');
   const finalProject=await project();
+  await clickSelector('[data-network-3d-back-2d]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-view="2d"]')?.classList.contains('active')===true&&!document.querySelector('[data-network-inspector-tab-button="object"]')?.disabled`),'return from 3D Review to editable 2D');
 
   mark('design-summary');
   assert(await evalValue(`!!document.querySelector('[data-network-design-summary="true"]')&&Number(document.querySelector('[data-network-design-summary="true"]')?.getAttribute('data-network-design-finding-count'))>=0`),'Inspector must expose canonical Design Summary from active engineering state');
@@ -536,12 +541,16 @@ try{
 
   mark('transfer-editing-workflow');
   await clickSelector('[data-network-link="L-1"]');
-  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'RoadLink transfer station-port editor');
-  await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]');if(!station||!role)return false;station.focus();station.select();role.value='diverge';role.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
-  await send('Input.insertText',{text:'55'});await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-new-station]')?.value==='55'`),'type DIVERGE station');
-  await clickSelector('[data-network-transfer-create-port]');
-  await waitFor(async()=>{const p=await project();return p?.transferPorts?.length===1&&p.transferPorts[0].terminal==='diverge'&&Math.abs(p.transferPorts[0].station-55)<.01;},'create DIVERGE station port from selected RoadLink');
-  const workflowFrom=(await project()).transferPorts[0].id;
+  await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-place-port]')`),'RoadLink Transfer placement editor');
+  await clickSelector('[data-network-transfer-place-port]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-link="L-1"]')?.getAttribute('data-network-transfer-placement-host')==='true'&&document.querySelector('[data-network-transfer-place-port]')?.getAttribute('data-network-transfer-place-active')==='true'`),'arm canvas-first DIVERGE placement on selected RoadLink');
+  const transferPlacementPoint=await evalValue(`(()=>{const g=document.querySelector('[data-network-link="L-1"]'),p=[...g.querySelectorAll('path')].reverse().find(v=>v.getAttribute('stroke')==='transparent');if(!p)return null;const q=p.getPointAtLength(p.getTotalLength()*.46),m=p.getScreenCTM(),screen=new DOMPoint(q.x,q.y).matrixTransform(m);return{x:screen.x,y:screen.y};})()`);
+  assert(transferPlacementPoint&&Number.isFinite(transferPlacementPoint.x)&&Number.isFinite(transferPlacementPoint.y),'canvas Transfer placement needs a resolvable RoadLink hit path');
+  await clickAt(transferPlacementPoint);
+  const placedDiverge=await waitFor(async()=>{const p=await project(),port=p?.transferPorts?.[0];return p?.transferPorts?.length===1&&port?.terminal==='diverge'&&port.station>0?port:null;},'place DIVERGE port by projecting canvas click to RoadLink station');
+  assert.equal(placedDiverge.hostLinkId,'L-1');assert.equal(placedDiverge.direction,'forward');assert.equal(placedDiverge.side,'curb');
+  assert.equal(await evalValue(`document.querySelector('[data-network-link="L-1"]')?.getAttribute('data-network-transfer-placement-host')`),null,'successful placement must clear transient host highlight');
+  const workflowFrom=placedDiverge.id;
   await clickSelector('[data-network-link="L-2"]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-editor="link"] [data-network-transfer-create-port]')`),'frontage Transfer editor');
   await evalValue(`(()=>{const station=document.querySelector('[data-network-transfer-new-station]'),role=document.querySelector('[data-network-transfer-new-terminal]'),side=document.querySelector('[data-network-transfer-new-side]');if(!station||!role||!side)return false;station.focus();station.select();role.value='merge';role.dispatchEvent(new Event('change',{bubbles:true}));side.value='median';side.dispatchEvent(new Event('change',{bubbles:true}));return document.activeElement===station;})()`);
@@ -664,7 +673,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: selected TransferConnector/PI editing + terminal Design Summary warning + direct TransferConnector PI add/drag/radius/delete/Undo + direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: canvas-first TransferPort station placement + explicit read-only 3D Review + selected TransferConnector/PI editing + terminal Design Summary warning + direct TransferConnector PI add/drag/radius/delete/Undo + direct TransferPort/TransferConnector Inspector workflow + confirmed cascade delete/Undo + transfer connector painted/physical nose + neutral gore + shared 2D/3D surfaces + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){

@@ -14,6 +14,9 @@ type Props={
   onCommit:(next:NetworkProject,message:string,nextSelection?:NetworkSelection)=>void;
   onSelect:(selection:NetworkSelection)=>void;
   onNotice:(message:string)=>void;
+  placementActive:boolean;
+  onStartPlacement:(draft:{direction:LinkDirection;side:'curb'|'median';terminal:TransferTerminalKind})=>void;
+  onCancelPlacement:()=>void;
 };
 type GoreDraft={level:TransferGoreLevel;neutralLength:string;physicalNoseLength:string;physicalNoseWidth:string};
 const goreDraft=(value:TransferTerminalGoreTreatment):GoreDraft=>({
@@ -24,7 +27,7 @@ const goreDraft=(value:TransferTerminalGoreTreatment):GoreDraft=>({
 });
 const num=(value:string)=>value.trim()===''?0:Number(value);
 
-export default function TransferEditorPanel({project,selection,onCommit,onSelect,onNotice}:Props){
+export default function TransferEditorPanel({project,selection,onCommit,onSelect,onNotice,placementActive,onStartPlacement,onCancelPlacement}:Props){
   const selectedLink=selection?.kind==='link'?project.links.find(link=>link.id===selection.id):undefined,
     selectedPort=selection?.kind==='transfer-port'?project.transferPorts.find(port=>port.id===selection.id):undefined,
     selectedConnector=selection?.kind==='transfer-connector'?project.transferConnectors.find(connector=>connector.id===selection.id):undefined,
@@ -102,7 +105,11 @@ export default function TransferEditorPanel({project,selection,onCommit,onSelect
       <label>Side<select data-network-transfer-new-side value={side} onChange={e=>setSide(e.target.value as 'curb'|'median')}><option value="curb">Curb</option><option value="median">Median</option></select></label>
       <label>Role<select data-network-transfer-new-terminal value={terminal} onChange={e=>setTerminal(e.target.value as TransferTerminalKind)}><option value="diverge">DIVERGE</option><option value="merge">MERGE</option></select></label>
     </div>
-    <button data-network-transfer-create-port onClick={createPort}>＋ สร้าง Station Port</button>
+    <div className="network-transfer-placement-actions">
+      <button data-network-transfer-place-port data-network-transfer-place-active={placementActive?'true':'false'} className={placementActive?'active':''} onClick={()=>placementActive?onCancelPlacement():onStartPlacement({direction,side,terminal})}>{placementActive?'ยกเลิกการวางบนแผน':'⌖ วางตำแหน่งบนแผน'}</button>
+      <button data-network-transfer-create-port onClick={createPort}>สร้างจาก Station ที่ระบุ</button>
+    </div>
+    <p className="network-note">{placementActive?'คลิกตำแหน่งบน RoadLink ที่ไฮไลต์เพื่อบันทึก station จาก geometry จริง · Esc = ยกเลิก':'เลือก Direction / Side / Role แล้ววางด้วยการคลิกบนแผน หรือระบุ Station แบบตัวเลขเพื่อความละเอียด'}</p>
     {!!linkPorts.length&&<div className="network-station-component-list">{linkPorts.map(port=><button key={port.id} data-network-transfer-port-list={port.id} onClick={()=>onSelect({kind:'transfer-port',id:port.id})}>{port.terminal.toUpperCase()} · {port.direction} · {port.side} · Sta. {port.station.toFixed(1)} m</button>)}</div>}
   </section>;
 
