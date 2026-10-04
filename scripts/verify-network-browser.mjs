@@ -206,6 +206,8 @@ try{
   assert.equal(inspectorShell.active,'object','Object must be the default Inspector concern');
   assert.deepEqual(inspectorShell.tabs.map(v=>v.id),['object','review','reference'],'Inspector must expose Object / Review / Reference in a stable order');
   assert.deepEqual(inspectorShell.nav,['Network','ทางแยก','Road Lab'],'Network shell must use the shared workspace navigation');
+  const baseReadability=await evalValue(`(()=>{const px=s=>{const e=document.querySelector(s);return e?parseFloat(getComputedStyle(e).fontSize):0},ins=document.querySelector('.network-inspector')?.getBoundingClientRect();return{scenarioBadge:px('.network-scenario-tabs>button span'),tool:px('.network-tools button'),tab:px('.network-inspector-tabs button'),note:px('.network-note'),inspectorWidth:ins?.width??0};})()`);
+  assert(baseReadability.scenarioBadge>=9.4&&baseReadability.tool>=10&&baseReadability.tab>=10&&baseReadability.note>=10&&baseReadability.inspectorWidth>=345,'Network critical text / Inspector width must meet the 8B.4b readability floor: '+JSON.stringify(baseReadability));
   await clickSelector('[data-network-inspector-tab-button="review"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='review'&&!document.querySelector('[data-network-design-summary="true"]')?.hidden&&document.querySelector('[data-network-delete="true"]')?.hidden===true`),'Review tab isolates engineering review from object controls');
   await clickSelector('[data-network-inspector-tab-button="reference"]');
@@ -237,6 +239,8 @@ try{
   await waitFor(()=>evalValue(`document.querySelectorAll('[data-network-comparison-junction]').length===2&&!!document.querySelector('[data-network-comparison-ghost="true"]')`),'inspection auto-enables the read-only Existing ghost');
   const comparisonGoldenContract=await evalValue(`(()=>{const active=document.querySelector('[data-network-junction="J-1"][data-network-comparison-active-focus="true"]'),reference=document.querySelector('[data-network-comparison-junction="J-1"][data-network-comparison-reference-focus="true"]'),summary=document.querySelector('[data-network-comparison-presentation-summary="true"]');return{ok:!!active&&!!reference&&!!summary&&!!document.querySelector('[data-network-comparison-ghost="true"]'),activeFocus:!!active,referenceFocus:!!reference,summary:!!summary};})()`);
   assert(comparisonGoldenContract?.ok,'Scenario comparison golden contract failed');
+  const comparisonReadability=await evalValue(`(()=>{const px=s=>{const e=document.querySelector(s);return e?parseFloat(getComputedStyle(e).fontSize):0};return{summary:px('.network-comparison-presentation-summary>p'),filter:px('.network-comparison-filters button'),object:px('.network-comparison-object-list>button p'),detail:px('.network-comparison-inspection>[data-network-comparison-detail]')};})()`);
+  assert(Object.values(comparisonReadability).every(v=>v>=9.4),'Scenario comparison critical text must stay readable: '+JSON.stringify(comparisonReadability));
   await goldenScreenshot('scenario-comparison',comparisonGoldenContract);
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-select-active]')`),'changed active object must expose a direct Select Active action');
   await clickSelector('[data-network-comparison-select-active]');
@@ -512,6 +516,8 @@ try{
   await clickSelector('[data-network-action="fit"]');await sleep(180);
   const assistedSeedGoldenContract=await evalValue(`(()=>{const review=document.querySelector('[data-network-parallel-seed-review="true"]'),mainline=document.querySelector('[data-network-parallel-role="mainline"][data-network-parallel-corridor]'),right=document.querySelector('[data-network-parallel-role="right"][data-network-parallel-corridor]'),generated=document.querySelector('[data-network-link="${seededLinkId}"]');return{ok:!!review&&!!mainline&&!!right&&!!generated,review:!!review,mainlineHighlight:!!mainline,rightHighlight:!!right,generatedLink:!!generated}})()`);
   assert(assistedSeedGoldenContract?.ok,'Assisted frontage seed golden contract failed');
+  const parallelReadability=await evalValue(`(()=>{const px=s=>{const e=document.querySelector(s);return e?parseFloat(getComputedStyle(e).fontSize):0};return{seedHead:px('.network-parallel-seed-head span'),reference:px('.network-parallel-reference>small'),review:px('.network-parallel-seed-review-row span')};})()`);
+  assert(Object.values(parallelReadability).every(v=>v>=9.4),'Parallel/frontage metadata must stay above the readability floor: '+JSON.stringify(parallelReadability));
   await goldenScreenshot('parallel-frontage-assisted-seed',assistedSeedGoldenContract);
   await clickSelector('[data-network-parallel-mark-reviewed="right"]');
   await waitFor(async()=>{const g=(await project())?.parallelCorridors?.[0],right=g?.frontage?.find(v=>v.side==='right');return Array.isArray(right?.seedReviewJunctionIds)&&right.seedReviewJunctionIds.length===0;},'Mark reviewed clears only persisted seed-review metadata');

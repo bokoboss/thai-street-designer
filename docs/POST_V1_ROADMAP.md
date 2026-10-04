@@ -102,18 +102,19 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 ### 8B.4 — workspace UX hardening — current before PR #3 review
 This is a presentation / interaction hardening pass over the accepted Phase 8B model. Do not change transfer engineering semantics unless a UX regression proves the canonical model itself is wrong.
 
-#### 8B.4a — information architecture + shared workspace shell — current
+#### 8B.4a — information architecture + shared workspace shell — passed
 - one shared workspace-switch order and naming: Network / ทางแยก / Road Lab;
 - Network Inspector separates **Object / Review / Reference** instead of stacking object editing, Design Summary, comparison, maps and local images into one scroll;
 - object selection returns to Object editing; comparison inspection stays in Review; Select Active intentionally returns to Object;
 - map and local-image tools live only in Reference presentation;
-- existing canonical components and state remain single-source; tabs are presentation only.
+- canonical state remains single-source; tabs are presentation only;
+- full Quality + browser acceptance passed on `a36bec6` / run `37193864391`.
 
-#### 8B.4b — typography + visual hierarchy
-After 8B.4a acceptance:
+#### 8B.4b — typography + visual hierarchy — current
 - raise Network typography baseline toward Junction workspace readability;
-- normalize labels, button density and Thai-first engineering terminology;
-- preserve canvas area while removing 7.5–9 px critical text.
+- remove 7.5–9 px critical UI text and enforce browser readability floors on base workspace, Scenario Compare and Parallel/Frontage review;
+- widen Inspector modestly so larger text does not regress into excessive wrapping;
+- move Parallel/Transfer action copy toward Thai-first wording while preserving engineering terms and selectors.
 
 #### 8B.4c — interaction coherence
 - remove/rework destructive mode ambiguity;

@@ -237,7 +237,8 @@ Phase 8A.1 status:
 - **8B.3a transfer selection + Inspector workflow — passed** — direct UI create/select/connect/gore/cascade-delete/Undo workflow passed Quality run `37135645697`.
 - **8B.3b direct connector alignment editing — passed** — shared-resolver PI insert/select/drag/radius/delete + complete Undo sequence passed Quality run `37139164316`.
 - **8B.3c acceptance / Phase 8B engineering freeze — passed** — focused connector/PI + impossible-gore acceptance passed Quality run `37139617777`.
-- **8B.4 workspace UX hardening — current before PR #3 review** — no new engineering model. 8B.4a separates Network Inspector into Object / Review / Reference and aligns the Network / ทางแยก / Road Lab application shell.
+- **8B.4a Information Architecture — passed** — Object / Review / Reference Inspector split + shared Network / ทางแยก / Road Lab shell passed Quality run `37193864391`.
+- **8B.4b Typography + Visual Hierarchy — current** — raise Network readability floor, modestly widen Inspector and normalize Parallel/Transfer copy without touching engineering semantics.
 - **Phase 8C remains frozen** until the UX hardening pass and PR #3 are reviewed.
 
 
