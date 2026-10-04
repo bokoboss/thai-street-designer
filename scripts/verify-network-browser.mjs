@@ -213,6 +213,14 @@ try{
   await clickSelector('[data-network-inspector-tab-button="reference"]');
   await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='reference'&&!document.querySelector('.network-map-panel')?.hidden&&!document.querySelector('[data-local-reference-panel="true"]')?.hidden`),'Reference tab isolates map and local-image tools');
   await clickSelector('[data-network-inspector-tab-button="object"]');
+  assert.equal(await evalValue(`!!document.querySelector('[data-network-tool="delete"]')`),false,'Delete must not remain as a persistent toolbar mode');
+  assert.equal(await evalValue(`!!document.querySelector('[data-network-delete="true"]')`),true,'Selected-object deletion must remain available in Object Inspector');
+  const resetBefore=JSON.stringify(await project());
+  await clickSelector('[data-network-scenario-reset]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-scenario-reset]')?.getAttribute('data-network-scenario-reset-armed')==='true'&&document.querySelector('.network-status')?.getAttribute('data-network-status-tone')==='danger'`),'Scenario Demo reset first click only arms destructive confirmation');
+  assert.equal(JSON.stringify(await project()),resetBefore,'First Demo-reset click must not mutate engineering state');
+  await focusWorkspace();await keyPress('Escape','Escape');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-scenario-reset]')?.getAttribute('data-network-scenario-reset-armed')==='false'&&document.querySelector('.network-status')?.getAttribute('data-network-status-tone')==='info'`),'Escape cancels armed Demo reset');
   const initialScenarioWorkspace=await scenarioWorkspace();assert.equal(initialScenarioWorkspace?.workspaceVersion,1,'Network storage must use the scenario workspace wrapper');assert.equal(initialScenarioWorkspace?.activeScenarioId,'existing');assert.equal(initialScenarioWorkspace?.scenarios?.length,1);assert.equal(initialScenarioWorkspace.scenarios[0].name,'Existing');
   mark('scenario-isolation');
   await clickSelector('[data-network-scenario-add]');
@@ -565,6 +573,7 @@ try{
   await clickSelector('[data-network-context-action="remove-transfer-pi"]');
   await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===0;},'remove Transfer connector PI');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.[0]?.via?.length===1;},'Undo restores removed Transfer connector PI');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-connector="${workflowConnector}"]')?.getAttribute('data-network-transfer-selected')==='true'&&!!document.querySelector('[data-network-transfer-connector-editor]')`),'Undo preserves selected TransferConnector when that semantic object survives');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&v.radius===transferRadiusBefore;},'Undo Transfer connector PI radius edit');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),v=p?.transferConnectors?.[0]?.via?.[0];return v&&Math.hypot(v.x-transferViaBefore.x,v.y-transferViaBefore.y)<1e-7;},'Undo Transfer connector PI drag');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferConnectors?.length===1&&p.transferConnectors[0].via.length===0;},'Undo Transfer connector PI insertion before terminal treatment');

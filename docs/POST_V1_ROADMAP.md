@@ -110,16 +110,16 @@ This is a presentation / interaction hardening pass over the accepted Phase 8B m
 - canonical state remains single-source; tabs are presentation only;
 - full Quality + browser acceptance passed on `a36bec6` / run `37193864391`.
 
-#### 8B.4b — typography + visual hierarchy — current
-- raise Network typography baseline toward Junction workspace readability;
-- remove 7.5–9 px critical UI text and enforce browser readability floors on base workspace, Scenario Compare and Parallel/Frontage review;
-- widen Inspector modestly so larger text does not regress into excessive wrapping;
-- move Parallel/Transfer action copy toward Thai-first wording while preserving engineering terms and selectors.
+#### 8B.4b — typography + visual hierarchy — passed
+- Network critical text floor raised to 9.5 px minimum in the workspace stylesheet, with browser readability checks on base UI, Scenario Compare and Parallel/Frontage;
+- Inspector widened modestly and Parallel/Transfer actions moved toward Thai-first wording;
+- full Quality + visual browser acceptance passed on `0aecb70` / run `37194262135`.
 
-#### 8B.4c — interaction coherence
-- remove/rework destructive mode ambiguity;
-- preserve semantic selection through Undo/Redo when the object survives;
-- clarify Reset scenario and transient status severity.
+#### 8B.4c — interaction coherence — current
+- remove the persistent Delete toolbar mode; destructive editing remains Select → Inspector / Delete key with cascade confirmation;
+- preserve semantic object selection through Undo/Redo whenever that object still exists after the history step;
+- rename/reset placement to **คืนค่า Demo** inside Scenario controls with two-click confirmation and Esc cancel;
+- visually distinguish destructive confirmation and warning status from ordinary guidance.
 
 #### 8B.4d — 3D review + transfer direct manipulation
 - selected-object feedback in 3D or explicitly review-only Inspector;

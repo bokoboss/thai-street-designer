@@ -238,7 +238,8 @@ Phase 8A.1 status:
 - **8B.3b direct connector alignment editing — passed** — shared-resolver PI insert/select/drag/radius/delete + complete Undo sequence passed Quality run `37139164316`.
 - **8B.3c acceptance / Phase 8B engineering freeze — passed** — focused connector/PI + impossible-gore acceptance passed Quality run `37139617777`.
 - **8B.4a Information Architecture — passed** — Object / Review / Reference Inspector split + shared Network / ทางแยก / Road Lab shell passed Quality run `37193864391`.
-- **8B.4b Typography + Visual Hierarchy — current** — raise Network readability floor, modestly widen Inspector and normalize Parallel/Transfer copy without touching engineering semantics.
+- **8B.4b Typography + Visual Hierarchy — passed** — readability floor + wider Inspector + Thai-first Parallel/Transfer copy passed Quality run `37194262135`.
+- **8B.4c Interaction Coherence — current** — remove Delete mode ambiguity, preserve surviving selection through Undo/Redo, and make Scenario Demo reset explicitly destructive/two-step.
 - **Phase 8C remains frozen** until the UX hardening pass and PR #3 are reviewed.
 
 
