@@ -1,5 +1,6 @@
 import {profiledParallel} from './alignment';
 import {resolveLinkSectionGeometry} from './network-link-geometry';
+import {resolveTransferConnectorGores,resolveTransferConnectorPavement} from './transfer-geometry';
 import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
@@ -97,6 +98,18 @@ export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkScen
   return out.filter(surface=>surface.points.length>=4&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
 }
 
+export function resolveTransferConnectorSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
+  return project.transferConnectors.flatMap(connector=>{
+    const g=resolveTransferConnectorPavement(project,connector);if(!g||g.polygon.length<4)return[];
+    const out:NetworkSceneSurface[]=[{id:connector.id+':road',kind:'road',points:g.polygon,z:.035}];
+    for(const result of resolveTransferConnectorGores(project,connector)){
+      if(!result.gore)continue;
+      out.push({id:`${connector.id}:gore:${result.terminal}`,kind:'buffer',points:result.gore.neutralPolygon,z:.06});
+      if(result.gore.physicalNose)out.push({id:`${connector.id}:physical-nose:${result.terminal}`,kind:'median',points:result.gore.physicalNose.polygon,z:.18});
+    }
+    return out;
+  }).filter(surface=>surface.points.length>=3&&surface.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+}
 export function resolveNetworkSceneSurfaces(project:NetworkProject){
-  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project)];
+  return [...resolveJunctionSceneSurfaces(project),...resolveRoadLinkSceneSurfaces(project),...resolveTransferConnectorSceneSurfaces(project)];
 }

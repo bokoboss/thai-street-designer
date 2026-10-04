@@ -3,7 +3,7 @@ import {normalizeArrowOverrides} from '../app/junction/arrow-layout';
 import {cachedEdges} from '../app/junction/geometry';
 import {slipGeometries} from '../app/junction/slip-geometry';
 import {designError} from '../app/junction/design-validation';
-import {lengthOf,smoothAlignment,validAlignment} from './alignment';
+import {lengthOf,smoothAlignment,tangentAlignmentControls,validAlignment} from './alignment';
 
 export type WorldPoint={x:number;y:number};
 export type PortRef={junctionId:string;armId:number};
@@ -17,11 +17,41 @@ export type JunctionInstance={
 };
 export type LinkVia=WorldPoint&{radius:number};
 export type LinkDirection='forward'|'backward';
+export type TransferTerminalKind='merge'|'diverge';
+export type TransferGoreLevel='none'|'painted'|'physical';
+export type TransferTerminalGoreTreatment={
+  level:TransferGoreLevel;
+  neutralLength:number;
+  physicalNoseLength:number;
+  physicalNoseWidth:number;
+};
+export type TransferConnectorTerminalTreatment={from:TransferTerminalGoreTreatment;to:TransferTerminalGoreTreatment};
+export type TransferPort={
+  id:string;
+  name:string;
+  hostLinkId:string;
+  station:number;
+  direction:LinkDirection;
+  side:'curb'|'median';
+  terminal:TransferTerminalKind;
+};
+export type TransferConnector={
+  id:string;
+  name:string;
+  fromTransferPortId:string;
+  toTransferPortId:string;
+  via:LinkVia[];
+  lanes:number;
+  laneWidth:number;
+  terminalTreatment:TransferConnectorTerminalTreatment;
+};
 export type LinkLaneTransition={side:'curb'|'median';center:number;length:number};
 export type LinkSectionProfile={mode:'review'|'linear';forwardLaneTransition?:LinkLaneTransition;backwardLaneTransition?:LinkLaneTransition};
 export type LinkWidthTarget='walk'|Band['type'];
 export type JunctionAuxiliarySource={kind:'junction-auxiliary';handoffId:string;junctionId:string;armId:number;direction:Direction;side:'left'|'right';lane:number};
-export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number;source?:JunctionAuxiliarySource};
+export type TransferTerminalLaneSource={kind:'transfer-terminal';transferPortId:string;connectorId:string;terminal:TransferTerminalKind;lane:number};
+export type LinkStationLaneSource=JunctionAuxiliarySource|TransferTerminalLaneSource;
+export type LinkStationLaneComponent={id:string;kind:'lane';direction:LinkDirection;side:'curb'|'median';start:number;end:number;taperIn:number;taperOut:number;source?:LinkStationLaneSource};
 export type LinkStationWidthComponent={id:string;kind:'width';direction:LinkDirection;target:LinkWidthTarget;start:number;end:number;taperIn:number;taperOut:number;delta:number};
 export type LinkStationComponent=LinkStationLaneComponent|LinkStationWidthComponent;
 export type LinkStationComponentPatch={direction?:LinkDirection;side?:'curb'|'median';target?:LinkWidthTarget;start?:number;end?:number;taperIn?:number;taperOut?:number;delta?:number};
@@ -46,13 +76,17 @@ export type ParallelCorridor={
 export type ParallelCorridorInput=Pick<ParallelCorridor,'name'|'mainlineLinkIds'|'mainlineStartJunctionId'|'frontage'>;
 export type ParallelCorridorOrientation={startJunctionId:string;endJunctionId:string;junctionIds:string[]};
 export type ParallelCorridorEditResult={project:NetworkProject;corridor?:ParallelCorridor;error:string|null};
+export type TransferPortEditResult={project:NetworkProject;port?:TransferPort;error:string|null};
+export type TransferConnectorEditResult={project:NetworkProject;connector?:TransferConnector;error:string|null};
 export type ParallelCorridorLinkRole={corridor:ParallelCorridor;role:'mainline'|'frontage';side?:ParallelCorridorSide};
 export type NetworkProject={
-  schemaVersion:4;
+  schemaVersion:5;
   title:string;
   junctions:JunctionInstance[];
   links:RoadLink[];
   parallelCorridors:ParallelCorridor[];
+  transferPorts:TransferPort[];
+  transferConnectors:TransferConnector[];
 };
 export type LinkEndSection={
   forwardLanes:number;
@@ -79,6 +113,26 @@ const linkRadius=(value:unknown)=>Math.max(0,Math.min(200,Number.isFinite(Number
 const copyDesign=(d:Design):Design=>structuredClone(d);
 const displayDesignCache=new WeakMap<Design,Design>();
 const nextId=(prefix:string,ids:string[])=>{let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;};
+export const emptyTransferGoreTreatment=():TransferTerminalGoreTreatment=>({level:'none',neutralLength:0,physicalNoseLength:0,physicalNoseWidth:0});
+function normalizeTransferGoreTreatment(input:unknown):TransferTerminalGoreTreatment{
+  if(!input||typeof input!=='object')return emptyTransferGoreTreatment();
+  const value=input as Record<string,unknown>,level:TransferGoreLevel=value.level==='physical'?'physical':value.level==='painted'?'painted':'none';
+  return{
+    level,
+    neutralLength:Number.isFinite(Number(value.neutralLength))?+Number(value.neutralLength).toFixed(2):0,
+    physicalNoseLength:Number.isFinite(Number(value.physicalNoseLength))?+Number(value.physicalNoseLength).toFixed(2):0,
+    physicalNoseWidth:Number.isFinite(Number(value.physicalNoseWidth))?+Number(value.physicalNoseWidth).toFixed(2):0
+  };
+}
+export function transferGoreTreatmentIssue(treatment:TransferTerminalGoreTreatment){
+  if(!treatment||!['none','painted','physical'].includes(treatment.level))return'Transfer gore treatment ไม่ถูกต้อง';
+  const values=[treatment.neutralLength,treatment.physicalNoseLength,treatment.physicalNoseWidth];
+  if(!values.every(Number.isFinite)||treatment.neutralLength<0||treatment.neutralLength>500||treatment.physicalNoseLength<0||treatment.physicalNoseLength>50||treatment.physicalNoseWidth<0||treatment.physicalNoseWidth>50)return'Transfer gore treatment เกินขอบเขต workspace';
+  if(treatment.level==='none'&&(treatment.neutralLength>0||treatment.physicalNoseLength>0||treatment.physicalNoseWidth>0))return'Transfer gore NONE ต้องไม่มีมิติ treatment ค้างอยู่';
+  if(treatment.level==='painted'&&(treatment.neutralLength<=0||treatment.physicalNoseLength>0||treatment.physicalNoseWidth>0))return'Painted gore ต้องมี neutral length และไม่มี physical-nose dimensions';
+  if(treatment.level==='physical'&&(treatment.neutralLength<=0||treatment.physicalNoseLength<=0||treatment.physicalNoseWidth<=0||treatment.physicalNoseLength>treatment.neutralLength))return'Physical gore ต้องมี neutral length / nose size ที่เป็นบวก และ nose length ต้องไม่ยาวกว่า neutral area';
+  return null;
+}
 export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)=>enabled?i:-1).filter(i=>i>=0);
 
 export function portDistance(j:JunctionInstance,armId:number){
@@ -120,7 +174,8 @@ export function transformNetworkProject(project:NetworkProject,transform:Network
   return{
     ...project,
     junctions:project.junctions.map(j=>{const p=move(j);return{...j,x:p.x,y:p.y,rotation:normalizedRotation(j.rotation+rotation)};}),
-    links:project.links.map(link=>({...link,via:link.via.map(v=>({...move(v),radius:v.radius}))}))
+    links:project.links.map(link=>({...link,via:link.via.map(v=>({...move(v),radius:v.radius}))})),
+    transferConnectors:project.transferConnectors.map(connector=>({...connector,via:connector.via.map(v=>({...move(v),radius:v.radius}))}))
   };
 }
 export function junctionById(project:NetworkProject,id:string){
@@ -138,32 +193,11 @@ export function linkControlPoints(project:NetworkProject,link:RoadLink){
   const from=worldPort(project,link.from),to=worldPort(project,link.to);
   return from&&to?[from,...link.via.map(v=>({x:v.x,y:v.y,radius:v.radius})),to]:[];
 }
-const pointDistance=(a:WorldPoint,b:WorldPoint)=>Math.hypot(a.x-b.x,a.y-b.y);
-const tangentStub=(port:WorldPoint,target:WorldPoint,heading:number)=>{
-  const available=pointDistance(port,target);
-  if(available<12)return null;
-  const length=Math.min(18,Math.max(5,available*.22)),a=rad(heading);
-  return{x:port.x+Math.cos(a)*length,y:port.y+Math.sin(a)*length,radius:Math.min(35,Math.max(12,length*2))};
-};
 /** Derived controls keep Link endpoint tangency aligned to semantic Arm headings. */
 export function linkAlignmentControls(project:NetworkProject,link:RoadLink){
   const raw=linkControlPoints(project,link),fromJ=junctionById(project,link.from.junctionId),toJ=junctionById(project,link.to.junctionId);
   if(raw.length<2||!fromJ||!toJ)return raw;
-  const from=raw[0],to=raw.at(-1)!,fromTarget=link.via[0]??to,toTarget=link.via.at(-1)??from,
-    fromStub=tangentStub(from,fromTarget,portHeading(fromJ,link.from.armId)),
-    toStub=tangentStub(to,toTarget,portHeading(toJ,link.to.armId));
-  const build=(useFrom:boolean,useTo:boolean,curved:boolean)=>{
-    const out:(WorldPoint&{radius?:number})[]=[from];
-    if(useFrom&&fromStub)out.push({...fromStub,radius:curved?fromStub.radius:0});
-    out.push(...link.via.map(v=>({x:v.x,y:v.y,radius:v.radius})));
-    if(useTo&&toStub)out.push({...toStub,radius:curved?toStub.radius:0});
-    out.push(to);
-    return out;
-  };
-  for(const candidate of [build(true,true,true),build(true,true,false),build(true,false,true),build(false,true,true)]){
-    if(candidate.length>=2&&validAlignment(candidate))return candidate;
-  }
-  return raw;
+  return tangentAlignmentControls(raw[0],raw.at(-1)!,link.via,portHeading(fromJ,link.from.armId),portHeading(toJ,link.to.armId));
 }
 export function linkPoints(project:NetworkProject,link:RoadLink){
   const controls=linkAlignmentControls(project,link);
@@ -171,6 +205,100 @@ export function linkPoints(project:NetworkProject,link:RoadLink){
 }
 export function linkLength(project:NetworkProject,link:RoadLink){
   const points=linkPoints(project,link);return points.length>=2?lengthOf(points):0;
+}
+export function transferPortIssue(project:NetworkProject,port:TransferPort){
+  if(!port||typeof port!=='object'||!port.id||port.id.length>40||typeof port.name!=='string'||!port.name.trim()||port.name.length>80)return'Transfer port metadata ไม่สมบูรณ์';
+  const host=project.links.find(link=>link.id===port.hostLinkId);if(!host)return'Transfer port อ้าง Road Link ที่ไม่มีอยู่';
+  if(!['forward','backward'].includes(port.direction)||!['curb','median'].includes(port.side)||!['merge','diverge'].includes(port.terminal))return'Transfer port semantics ไม่ถูกต้อง';
+  const total=linkLength(project,host);
+  if(!Number.isFinite(port.station)||port.station<=0||port.station>=total)return'Transfer port station ต้องอยู่ภายในช่วง Road Link';
+  return null;
+}
+export function addTransferPort(project:NetworkProject,hostLinkId:string,station:number,direction:LinkDirection,side:'curb'|'median',terminal:TransferTerminalKind):TransferPortEditResult{
+  const id=nextId('T',project.transferPorts.map(port=>port.id)),port:TransferPort={id,name:`Transfer Port ${project.transferPorts.length+1}`,hostLinkId,station:+Number(station).toFixed(2),direction,side,terminal},
+    error=transferPortIssue(project,port);
+  return error?{project,error}:{project:{...project,transferPorts:[...project.transferPorts,port]},port,error:null};
+}
+export function transferConnectorIssue(project:NetworkProject,connector:TransferConnector){
+  if(!connector||typeof connector!=='object'||!connector.id||connector.id.length>40||typeof connector.name!=='string'||!connector.name.trim()||connector.name.length>80)return'Transfer connector metadata ไม่สมบูรณ์';
+  const from=project.transferPorts.find(port=>port.id===connector.fromTransferPortId),to=project.transferPorts.find(port=>port.id===connector.toTransferPortId);
+  if(!from||!to)return'Transfer connector อ้าง Transfer port ที่ไม่มีอยู่';
+  if(from.id===to.id||from.hostLinkId===to.hostLinkId)return'Transfer connector ต้องเชื่อม Transfer port บนคนละ host Road Link';
+  if(from.terminal!=='diverge'||to.terminal!=='merge')return'Transfer connector ต้องเรียงจาก DIVERGE → MERGE ตามทิศการเดินทาง';
+  if(!Number.isInteger(connector.lanes)||connector.lanes<1||connector.lanes>4||!Number.isFinite(connector.laneWidth)||connector.laneWidth<2||connector.laneWidth>6)return'Transfer connector section ไม่ถูกต้อง';
+  if(!connector.terminalTreatment||transferGoreTreatmentIssue(connector.terminalTreatment.from)||transferGoreTreatmentIssue(connector.terminalTreatment.to))return'Transfer connector terminal treatment ไม่ถูกต้อง';
+  if(!Array.isArray(connector.via)||connector.via.length>64||connector.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200))return'Transfer connector alignment controls ไม่ถูกต้อง';
+  if(project.transferConnectors.some(other=>other.id!==connector.id&&[other.fromTransferPortId,other.toTransferPortId].some(id=>id===from.id||id===to.id)))return'Transfer port หนึ่งจุดใช้กับ Transfer connector ได้เพียงหนึ่งเส้นใน foundation นี้';
+  return null;
+}
+export function addTransferConnector(project:NetworkProject,fromTransferPortId:string,toTransferPortId:string,lanes=1,laneWidth=3.5):TransferConnectorEditResult{
+  const id=nextId('TC',[...project.links.map(link=>link.id),...project.transferConnectors.map(connector=>connector.id)]),
+    connector:TransferConnector={id,name:`Transfer Connector ${project.transferConnectors.length+1}`,fromTransferPortId,toTransferPortId,via:[],lanes:Math.round(lanes),laneWidth:+Number(laneWidth).toFixed(2),terminalTreatment:{from:emptyTransferGoreTreatment(),to:emptyTransferGoreTreatment()}},
+    error=transferConnectorIssue(project,connector);
+  return error?{project,error}:{project:{...project,transferConnectors:[...project.transferConnectors,connector]},connector,error:null};
+}
+const transferTreatmentComponents=(project:NetworkProject,predicate:(source:TransferTerminalLaneSource)=>boolean)=>
+  project.links.flatMap(link=>link.components.filter((component):component is LinkStationLaneComponent&{source:TransferTerminalLaneSource}=>
+    component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&predicate(component.source)));
+export function updateTransferConnector(project:NetworkProject,id:string,patch:Partial<Omit<TransferConnector,'id'>>):TransferConnectorEditResult{
+  const current=project.transferConnectors.find(connector=>connector.id===id);if(!current)return{project,error:'ไม่พบ Transfer connector'};
+  const ownsTreatment=transferTreatmentComponents(project,source=>source.connectorId===id).length>0,
+    ownsGore=current.terminalTreatment.from.level!=='none'||current.terminalTreatment.to.level!=='none',
+    topologyChange=(patch.fromTransferPortId!==undefined&&patch.fromTransferPortId!==current.fromTransferPortId)
+      ||(patch.toTransferPortId!==undefined&&patch.toTransferPortId!==current.toTransferPortId)
+      ||(patch.lanes!==undefined&&Math.round(Number(patch.lanes))!==current.lanes)
+      ||(patch.laneWidth!==undefined&&Math.abs(Number(patch.laneWidth)-current.laneWidth)>.005);
+  if((ownsTreatment||ownsGore)&&topologyChange)return{project,error:'แก้ endpoint / lane section ของ Transfer connector ไม่ได้ขณะที่มี terminal treatment · ลบ treatment ก่อน'};
+  const terminalTreatment=patch.terminalTreatment?{
+      from:normalizeTransferGoreTreatment(patch.terminalTreatment.from),
+      to:normalizeTransferGoreTreatment(patch.terminalTreatment.to)
+    }:current.terminalTreatment,
+    connector:TransferConnector={...current,...patch,terminalTreatment,lanes:Math.round(Number(patch.lanes??current.lanes)),laneWidth:+Number(patch.laneWidth??current.laneWidth).toFixed(2),
+    via:(patch.via??current.via).map(v=>({x:Number(v.x),y:Number(v.y),radius:linkRadius(v.radius)}))},
+    error=transferConnectorIssue(project,connector);
+  return error?{project,error}:{project:{...project,transferConnectors:project.transferConnectors.map(item=>item.id===id?connector:item)},connector,error:null};
+}
+export function updateTransferConnectorTerminalTreatment(project:NetworkProject,id:string,end:'from'|'to',patch:Partial<TransferTerminalGoreTreatment>):TransferConnectorEditResult{
+  const current=project.transferConnectors.find(connector=>connector.id===id);if(!current)return{project,error:'ไม่พบ Transfer connector'};
+  const treatment=normalizeTransferGoreTreatment({...current.terminalTreatment[end],...patch});
+  if(treatment.level==='none'){treatment.neutralLength=0;treatment.physicalNoseLength=0;treatment.physicalNoseWidth=0;}
+  if(treatment.level==='painted'){treatment.physicalNoseLength=0;treatment.physicalNoseWidth=0;}
+  const issue=transferGoreTreatmentIssue(treatment);if(issue)return{project,error:issue};
+  const connector:TransferConnector={...current,terminalTreatment:{...current.terminalTreatment,[end]:treatment}},error=transferConnectorIssue(project,connector);
+  return error?{project,error}:{project:{...project,transferConnectors:project.transferConnectors.map(item=>item.id===id?connector:item)},connector,error:null};
+}
+export function removeTransferConnector(project:NetworkProject,id:string):NetworkProject{
+  if(!project.transferConnectors.some(connector=>connector.id===id))return project;
+  return{...project,
+    transferConnectors:project.transferConnectors.filter(connector=>connector.id!==id),
+    links:project.links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&component.source.connectorId===id))}))
+  };
+}
+export function updateTransferPort(project:NetworkProject,id:string,patch:Partial<Omit<TransferPort,'id'>>):TransferPortEditResult{
+  const current=project.transferPorts.find(port=>port.id===id);if(!current)return{project,error:'ไม่พบ Transfer port'};
+  const ownsTreatment=transferTreatmentComponents(project,source=>source.transferPortId===id).length>0,
+    connected=project.transferConnectors.find(connector=>connector.fromTransferPortId===id||connector.toTransferPortId===id),
+    ownsGore=!!connected&&((connected.fromTransferPortId===id?connected.terminalTreatment.from:connected.terminalTreatment.to).level!=='none'),
+    geometryChange=(patch.hostLinkId!==undefined&&patch.hostLinkId!==current.hostLinkId)
+      ||(patch.station!==undefined&&Math.abs(Number(patch.station)-current.station)>.005)
+      ||(patch.direction!==undefined&&patch.direction!==current.direction)
+      ||(patch.side!==undefined&&patch.side!==current.side)
+      ||(patch.terminal!==undefined&&patch.terminal!==current.terminal);
+  if((ownsTreatment||ownsGore)&&geometryChange)return{project,error:'แก้ host/station/direction/side/terminal ไม่ได้ขณะที่มี terminal treatment · ลบ treatment ก่อน'};
+  const port:TransferPort={...current,...patch,station:+Number(patch.station??current.station).toFixed(2)},error=transferPortIssue(project,port);
+  if(error)return{project,error};
+  const candidate={...project,transferPorts:project.transferPorts.map(item=>item.id===id?port:item)},
+    connectorError=candidate.transferConnectors.filter(connector=>connector.fromTransferPortId===id||connector.toTransferPortId===id).map(connector=>transferConnectorIssue(candidate,connector)).find(Boolean);
+  return connectorError?{project,error:connectorError}:{project:candidate,port,error:null};
+}
+export function removeTransferPort(project:NetworkProject,id:string):NetworkProject{
+  if(!project.transferPorts.some(port=>port.id===id))return project;
+  const removedConnectorIds=new Set(project.transferConnectors.filter(connector=>connector.fromTransferPortId===id||connector.toTransferPortId===id).map(connector=>connector.id));
+  return{...project,
+    transferPorts:project.transferPorts.filter(port=>port.id!==id),
+    transferConnectors:project.transferConnectors.filter(connector=>!removedConnectorIds.has(connector.id)),
+    links:project.links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'&&(component.source.transferPortId===id||removedConnectorIds.has(component.source.connectorId))))}))
+  };
 }
 const clampNumber=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 const stationRange=(total:number,start:number,end:number,taperIn:number,taperOut:number)=>{
@@ -396,7 +524,7 @@ export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'t
   if(!armForPort(project,ref))return{project,error:'ไม่พบ arm/port ปลายทางที่เลือก'};
   if(ref.junctionId===other.junctionId)return{project,error:'Road Link ต้องเชื่อมคนละ Junction'};
   if(portOccupied(project,ref,id))return{project,error:'port นี้มี Road Link อื่นเชื่อมอยู่แล้ว'};
-  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
+  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source?.kind==='junction-auxiliary'&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
   if(ownsHandoff)return{project,error:`เปลี่ยน ${end.toUpperCase()} port ไม่ได้ขณะที่มี Junction handoff ผูกกับปลายนี้ · Detach as manual หรือ Back to Junction only ก่อน`};
   const candidate:RoadLink={...link,[end]:ref},candidateProject={...project,links:project.links.map(item=>item.id===id?candidate:item)},
     facing=assessPortConnection(candidateProject,candidate.from,candidate.to);
@@ -661,11 +789,21 @@ function cleanupParallelCorridors(previous:NetworkProject,project:NetworkProject
   }
   return{...project,parallelCorridors};
 }
+function cleanupTransferTopology(project:NetworkProject,links:RoadLink[]){
+  const liveLinks=new Set(links.map(link=>link.id)),transferPorts=project.transferPorts.filter(port=>liveLinks.has(port.hostLinkId)),
+    livePorts=new Set(transferPorts.map(port=>port.id)),transferConnectors=project.transferConnectors.filter(connector=>livePorts.has(connector.fromTransferPortId)&&livePorts.has(connector.toTransferPortId)),
+    liveConnectors=new Set(transferConnectors.map(connector=>connector.id)),
+    cleanedLinks=links.map(link=>({...link,components:link.components.filter(component=>!(component.kind==='lane'&&component.source?.kind==='transfer-terminal'
+      &&(!livePorts.has(component.source.transferPortId)||!liveConnectors.has(component.source.connectorId))))}));
+  return{links:cleanedLinks,transferPorts,transferConnectors};
+}
 export function removeJunction(project:NetworkProject,id:string):NetworkProject{
-  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),links:project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id)});
+  const rawLinks=project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id),transfer=cleanupTransferTopology(project,rawLinks);
+  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),...transfer});
 }
 export function removeLink(project:NetworkProject,id:string):NetworkProject{
-  return cleanupParallelCorridors(project,{...project,links:project.links.filter(l=>l.id!==id)});
+  const rawLinks=project.links.filter(l=>l.id!==id),transfer=cleanupTransferTopology(project,rawLinks);
+  return cleanupParallelCorridors(project,{...project,...transfer});
 }
 export function projectBounds(project:NetworkProject,padding=35){
   const points:WorldPoint[]=[];
@@ -697,12 +835,14 @@ export function projectBounds(project:NetworkProject,padding=35){
   return{x:minX,y:minY,w:Math.max(100,maxX-minX),h:Math.max(100,maxY-minY)};
 }
 export function validateNetworkProject(project:NetworkProject){
-  if(project.schemaVersion!==4||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors))return'Network schema ไม่รองรับ';
+  if(project.schemaVersion!==5||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors)||!Array.isArray(project.transferPorts)||!Array.isArray(project.transferConnectors))return'Network schema ไม่รองรับ';
   if(typeof project.title!=='string'||project.title.length>120)return'ชื่อ Network ไม่ถูกต้อง';
-  if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
+  if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100||project.transferPorts.length>500||project.transferConnectors.length>250)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
   if(new Set(project.junctions.map(j=>j.id)).size!==project.junctions.length)return'Junction ID ซ้ำ';
   if(new Set(project.links.map(l=>l.id)).size!==project.links.length)return'Road Link ID ซ้ำ';
   if(new Set(project.parallelCorridors.map(v=>v.id)).size!==project.parallelCorridors.length)return'Parallel corridor ID ซ้ำ';
+  if(new Set(project.transferPorts.map(v=>v.id)).size!==project.transferPorts.length)return'Transfer port ID ซ้ำ';
+  if(new Set(project.transferConnectors.map(v=>v.id)).size!==project.transferConnectors.length)return'Transfer connector ID ซ้ำ';
   for(const j of project.junctions){
     if(!j.id||j.id.length>40||typeof j.name!=='string'||j.name.length>80||!Number.isFinite(j.x)||!Number.isFinite(j.y)||!Number.isFinite(j.rotation)||j.rotation<0||j.rotation>=360||!valid(j.design))return'Junction instance ไม่สมบูรณ์';
   }
@@ -711,8 +851,9 @@ export function validateNetworkProject(project:NetworkProject){
     const validTransition=(t:LinkLaneTransition|undefined)=>!t||(['curb','median'].includes(t.side)&&Number.isFinite(t.center)&&t.center>=0&&Number.isFinite(t.length)&&t.length>=3&&t.length<=1000),
       validSource=(input:unknown)=>{
         if(input===undefined)return true;if(!input||typeof input!=='object')return false;
-        const source=input as JunctionAuxiliarySource;
-        return source.kind==='junction-auxiliary'&&typeof source.handoffId==='string'&&source.handoffId.length>0&&source.handoffId.length<=160&&typeof source.junctionId==='string'&&source.junctionId.length>0&&source.junctionId.length<=40&&Number.isInteger(source.armId)&&source.armId>=0&&source.armId<4&&['incoming','outgoing'].includes(source.direction)&&['left','right'].includes(source.side)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
+        const source=input as LinkStationLaneSource;
+        if(source.kind==='junction-auxiliary')return typeof source.handoffId==='string'&&source.handoffId.length>0&&source.handoffId.length<=160&&typeof source.junctionId==='string'&&source.junctionId.length>0&&source.junctionId.length<=40&&Number.isInteger(source.armId)&&source.armId>=0&&source.armId<4&&['incoming','outgoing'].includes(source.direction)&&['left','right'].includes(source.side)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
+        return source.kind==='transfer-terminal'&&typeof source.transferPortId==='string'&&source.transferPortId.length>0&&source.transferPortId.length<=40&&typeof source.connectorId==='string'&&source.connectorId.length>0&&source.connectorId.length<=40&&['merge','diverge'].includes(source.terminal)&&Number.isInteger(source.lane)&&source.lane>=0&&source.lane<4;
       },
       validComponent=(input:unknown)=>{
         if(!input||typeof input!=='object')return false;
@@ -721,10 +862,19 @@ export function validateNetworkProject(project:NetworkProject){
       },
       componentList=Array.isArray(l.components)?l.components:[];
     if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
+    const transferSourceIssue=componentList.find(component=>{
+      if(component.kind!=='lane'||component.source?.kind!=='transfer-terminal')return false;
+      const source=component.source,port=project.transferPorts.find(item=>item.id===source.transferPortId),connector=project.transferConnectors.find(item=>item.id===source.connectorId);
+      return !port||!connector||port.hostLinkId!==l.id||port.direction!==component.direction||port.side!==component.side||port.terminal!==source.terminal
+        ||(connector.fromTransferPortId!==port.id&&connector.toTransferPortId!==port.id)||source.lane>=connector.lanes;
+    });
+    if(transferSourceIssue)return'Transfer terminal lane provenance ไม่สอดคล้องกับ host/port/connector';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
   }
+  for(const port of project.transferPorts){const error=transferPortIssue(project,port);if(error)return error;}
+  for(const connector of project.transferConnectors){const error=transferConnectorIssue(project,connector);if(error)return error;}
   const groupedLinks=new Set<string>();
   for(const corridor of project.parallelCorridors){
     const error=parallelCorridorIssue(project,corridor);if(error)return error;
@@ -735,7 +885,7 @@ export function validateNetworkProject(project:NetworkProject){
   return null;
 }
 export function createNetworkProject():NetworkProject{
-  let project:NetworkProject={schemaVersion:4,title:'Thai Street Network Concept',junctions:[],links:[],parallelCorridors:[]};
+  let project:NetworkProject={schemaVersion:5,title:'Thai Street Network Concept',junctions:[],links:[],parallelCorridors:[],transferPorts:[],transferConnectors:[]};
   const first=addJunction(project,{x:-150,y:0}),a=first.junction;
   project=first.project;
   const second=addJunction(project,{x:150,y:0}),b=second.junction;
@@ -747,10 +897,12 @@ export function createNetworkProject():NetworkProject{
 
 export function normalizeNetworkProject(raw:unknown):NetworkProject{
   if(!raw||typeof raw!=='object')throw Error('Invalid network project');
-  const source=raw as {schemaVersion?:number;title?:unknown;junctions?:unknown[];links?:unknown[];parallelCorridors?:unknown};
+  const source=raw as {schemaVersion?:number;title?:unknown;junctions?:unknown[];links?:unknown[];parallelCorridors?:unknown;transferPorts?:unknown;transferConnectors?:unknown};
   const schemaVersion=Number(source.schemaVersion);
-  if(![1,2,3,4].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('Unsupported network schema');
-  if(schemaVersion===4&&source.parallelCorridors!==undefined&&!Array.isArray(source.parallelCorridors))throw Error('Invalid parallel corridor list');
+  if(![1,2,3,4,5].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('Unsupported network schema');
+  if(schemaVersion>=4&&source.parallelCorridors!==undefined&&!Array.isArray(source.parallelCorridors))throw Error('Invalid parallel corridor list');
+  if(schemaVersion===5&&source.transferPorts!==undefined&&!Array.isArray(source.transferPorts))throw Error('Invalid transfer port list');
+  if(schemaVersion===5&&source.transferConnectors!==undefined&&!Array.isArray(source.transferConnectors))throw Error('Invalid transfer connector list');
   const junctions=source.junctions.map(input=>{
     if(!input||typeof input!=='object')throw Error('Invalid junction instance');
     const item=input as Record<string,unknown>,rotation=((Number(item.rotation)%360)+360)%360;
@@ -783,11 +935,16 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
         const component=value as Record<string,unknown>,id=String(component.id??`C-${index+1}`),direction:LinkDirection=component.direction==='backward'?'backward':'forward',
           start=Number(component.start),end=Number(component.end),taperIn=Number(component.taperIn),taperOut=Number(component.taperOut);
         if(component.kind==='lane'){
-          const side=component.side==='median'?'median':'curb',rawSource=component.source&&typeof component.source==='object'?component.source as Record<string,unknown>:null,
-            sourceValue:JunctionAuxiliarySource|undefined=rawSource?.kind==='junction-auxiliary'?{
-              kind:'junction-auxiliary',handoffId:String(rawSource.handoffId??''),junctionId:String(rawSource.junctionId??''),armId:Number(rawSource.armId),
-              direction:rawSource.direction==='outgoing'?'outgoing':'incoming',side:rawSource.side==='right'?'right':'left',lane:Number(rawSource.lane)
-            }:undefined;
+          const side=component.side==='median'?'median':'curb',rawSource=component.source&&typeof component.source==='object'?component.source as Record<string,unknown>:null;
+          let sourceValue:LinkStationLaneSource|undefined;
+          if(rawSource?.kind==='junction-auxiliary')sourceValue={
+            kind:'junction-auxiliary',handoffId:String(rawSource.handoffId??''),junctionId:String(rawSource.junctionId??''),armId:Number(rawSource.armId),
+            direction:rawSource.direction==='outgoing'?'outgoing':'incoming',side:rawSource.side==='right'?'right':'left',lane:Number(rawSource.lane)
+          };
+          else if(rawSource?.kind==='transfer-terminal')sourceValue={
+            kind:'transfer-terminal',transferPortId:String(rawSource.transferPortId??''),connectorId:String(rawSource.connectorId??''),
+            terminal:rawSource.terminal==='merge'?'merge':'diverge',lane:Number(rawSource.lane)
+          };
           out.push({id,kind:'lane',direction,side,start,end,taperIn,taperOut,...(sourceValue?{source:sourceValue}:{})});
         }else if(component.kind==='width'){
           const targetRaw=String(component.target??'walk'),target:LinkWidthTarget=['shoulder','bike','motorcycle','buffer'].includes(targetRaw)?targetRaw as Band['type']:'walk';
@@ -809,7 +966,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       components
     };
   });
-  const parallelCorridors:ParallelCorridor[]=schemaVersion===4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map(value=>{
+  const parallelCorridors:ParallelCorridor[]=schemaVersion>=4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map(value=>{
     if(!value||typeof value!=='object')throw Error('Invalid parallel corridor');
     const item=value as Record<string,unknown>,frontageRaw=Array.isArray(item.frontage)?item.frontage:[],
       mainlineLinkIds=Array.isArray(item.mainlineLinkIds)?item.mainlineLinkIds.map(String):[],
@@ -830,7 +987,21 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       })
     };
   }):[];
-  const project:NetworkProject={schemaVersion:4,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors};
+  const transferPorts:TransferPort[]=schemaVersion===5&&Array.isArray(source.transferPorts)?source.transferPorts.map(value=>{
+    if(!value||typeof value!=='object')throw Error('Invalid transfer port');
+    const item=value as Record<string,unknown>,direction=String(item.direction??''),side=String(item.side??''),terminal=String(item.terminal??'');
+    if(!['forward','backward'].includes(direction)||!['curb','median'].includes(side)||!['merge','diverge'].includes(terminal))throw Error('Invalid transfer port semantics');
+    return{id:String(item.id??''),name:String(item.name??''),hostLinkId:String(item.hostLinkId??''),station:Number(item.station),
+      direction:direction as LinkDirection,side:side as 'curb'|'median',terminal:terminal as TransferTerminalKind};
+  }):[];
+  const transferConnectors:TransferConnector[]=schemaVersion===5&&Array.isArray(source.transferConnectors)?source.transferConnectors.map(value=>{
+    if(!value||typeof value!=='object')throw Error('Invalid transfer connector');
+    const item=value as Record<string,unknown>,via=Array.isArray(item.via)?item.via.map(point=>{const p=point&&typeof point==='object'?point as Record<string,unknown>:{};return{x:Number(p.x),y:Number(p.y),radius:linkRadius(p.radius)};}):[],
+      terminalRaw=item.terminalTreatment&&typeof item.terminalTreatment==='object'?item.terminalTreatment as Record<string,unknown>:{};
+    return{id:String(item.id??''),name:String(item.name??''),fromTransferPortId:String(item.fromTransferPortId??''),toTransferPortId:String(item.toTransferPortId??''),via,lanes:Number(item.lanes),laneWidth:Number(item.laneWidth),
+      terminalTreatment:{from:normalizeTransferGoreTreatment(terminalRaw.from),to:normalizeTransferGoreTreatment(terminalRaw.to)}};
+  }):[];
+  const project:NetworkProject={schemaVersion:5,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors,transferPorts,transferConnectors};
   const error=validateNetworkProject(project);if(error)throw Error(error);
   return project;
 }
