@@ -95,12 +95,42 @@ Automatic cross-street connections remain deliberately excluded. Mid-link mainli
 - Undo/Redo uses the existing Network history and terminal/gore review remains derived from the edited connector;
 - full Quality gate passed on `5d12ee2` / run `37139164316`.
 
-### 8B.3c — transfer workflow acceptance / PR freeze — current
-- golden visual contract for selected TransferConnector + selected PI handle + context bar + Inspector;
-- deliberately impossible physical-nose width must increase Design Summary warning count and remain visible in terminal Inspector without silent geometry clamping;
-- cascade delete + Undo must preserve the explicit problematic treatment exactly;
-- refresh PR #3 scope after this acceptance passes;
-- freeze Phase 8B boundary before any 8C engineering-review expansion.
+### 8B.3c — transfer workflow acceptance / PR freeze — passed
+- selected TransferConnector + PI editing golden, explicit impossible-gore review and cascade-delete/Undo passed Quality run `37139617777`;
+- Phase 8B engineering/model boundary remains frozen.
+
+### 8B.4 — workspace UX hardening — current before PR #3 review
+This is a presentation / interaction hardening pass over the accepted Phase 8B model. Do not change transfer engineering semantics unless a UX regression proves the canonical model itself is wrong.
+
+#### 8B.4a — information architecture + shared workspace shell — current
+- one shared workspace-switch order and naming: Network / ทางแยก / Road Lab;
+- Network Inspector separates **Object / Review / Reference** instead of stacking object editing, Design Summary, comparison, maps and local images into one scroll;
+- object selection returns to Object editing; comparison inspection stays in Review; Select Active intentionally returns to Object;
+- map and local-image tools live only in Reference presentation;
+- existing canonical components and state remain single-source; tabs are presentation only.
+
+#### 8B.4b — typography + visual hierarchy
+After 8B.4a acceptance:
+- raise Network typography baseline toward Junction workspace readability;
+- normalize labels, button density and Thai-first engineering terminology;
+- preserve canvas area while removing 7.5–9 px critical text.
+
+#### 8B.4c — interaction coherence
+- remove/rework destructive mode ambiguity;
+- preserve semantic selection through Undo/Redo when the object survives;
+- clarify Reset scenario and transient status severity.
+
+#### 8B.4d — 3D review + transfer direct manipulation
+- selected-object feedback in 3D or explicitly review-only Inspector;
+- reduce form-first Transfer placement by introducing canvas-first station/terminal actions without creating a second model.
+
+#### 8B.4e — full journey / compact-view acceptance
+- Network → Junction → Network;
+- parallel/frontage → transfer → review;
+- project file / scenario / export;
+- desktop primary + compact/tablet review acceptance.
+
+Phase 8C remains frozen until 8B.4 is accepted.
 
 Do not implement visual-only ramps, arbitrary XY endpoints or fake Junction v6 objects for merge/diverge terminals.
 

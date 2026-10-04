@@ -202,6 +202,15 @@ try{
   const initial2d=await evalValue(`(()=>{const svg=document.querySelector('svg[data-network-plan="true"]'),z=document.querySelector('.network-zoom'),body=document.querySelector('.network-body');return {span:Number(svg?.getAttribute('data-network-view-span')||0),zoom:Number(z?.getAttribute('data-network-zoom-value')||0),viewWidth:svg?.viewBox?.baseVal?.width||0,inspector:body?.getAttribute('data-network-inspector')};})()`);
   assert(initial2d.span>=590&&Math.abs(initial2d.zoom-1)<1e-8&&initial2d.viewWidth>=590,'2D 100% must start with the wider Network-scale view');
   assert.equal(initial2d.inspector,'open','Inspector should open by default');
+  const inspectorShell=await evalValue(`(()=>{const aside=document.querySelector('.network-inspector'),tabs=[...document.querySelectorAll('[data-network-inspector-tab-button]')],nav=[...document.querySelectorAll('.network-brand .workspace-switch>*')].map(v=>v.textContent?.trim());return{active:aside?.getAttribute('data-network-inspector-tab'),tabs:tabs.map(v=>({id:v.getAttribute('data-network-inspector-tab-button'),selected:v.getAttribute('aria-selected')})),nav};})()`);
+  assert.equal(inspectorShell.active,'object','Object must be the default Inspector concern');
+  assert.deepEqual(inspectorShell.tabs.map(v=>v.id),['object','review','reference'],'Inspector must expose Object / Review / Reference in a stable order');
+  assert.deepEqual(inspectorShell.nav,['Network','ทางแยก','Road Lab'],'Network shell must use the shared workspace navigation');
+  await clickSelector('[data-network-inspector-tab-button="review"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='review'&&!document.querySelector('[data-network-design-summary="true"]')?.hidden&&document.querySelector('[data-network-delete="true"]')?.hidden===true`),'Review tab isolates engineering review from object controls');
+  await clickSelector('[data-network-inspector-tab-button="reference"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='reference'&&!document.querySelector('.network-map-panel')?.hidden&&!document.querySelector('[data-local-reference-panel="true"]')?.hidden`),'Reference tab isolates map and local-image tools');
+  await clickSelector('[data-network-inspector-tab-button="object"]');
   const initialScenarioWorkspace=await scenarioWorkspace();assert.equal(initialScenarioWorkspace?.workspaceVersion,1,'Network storage must use the scenario workspace wrapper');assert.equal(initialScenarioWorkspace?.activeScenarioId,'existing');assert.equal(initialScenarioWorkspace?.scenarios?.length,1);assert.equal(initialScenarioWorkspace.scenarios[0].name,'Existing');
   mark('scenario-isolation');
   await clickSelector('[data-network-scenario-add]');
@@ -212,6 +221,8 @@ try{
   const scenarioLaneBefore=(await project()).junctions.find(j=>j.id==='J-1').design.arms[laneArm].incoming;
   await clickSelector('[data-network-tool="select"]');await clickSelector(`[data-network-junction-hit="J-1:${laneArm}"]`);await clickSelector('[data-network-context-action="incoming-inc"]');
   await waitFor(async()=>{const p=await project();return p?.junctions?.find(j=>j.id==='J-1')?.design?.arms?.[laneArm]?.incoming===scenarioLaneBefore+1;},'edit existing Junction lane only in Alt A');
+  await clickSelector('[data-network-inspector-tab-button="review"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='review'&&!document.querySelector('.network-comparison-panel')?.hidden`),'open Review tab for scenario comparison');
   await waitFor(()=>evalValue(`(()=>{const bar=document.querySelector('[data-network-comparison="true"]'),junctions=document.querySelector('[data-network-comparison-metric="junctions"]'),lanes=document.querySelector('[data-network-comparison-metric="mainLanes"]');return bar?.getAttribute('data-network-comparison-active')==='alt-1'&&bar?.getAttribute('data-network-comparison-reference')==='existing'&&Number(junctions?.getAttribute('data-network-comparison-delta'))===1&&Number(lanes?.getAttribute('data-network-comparison-delta'))>0;})()`),'Alt A semantic comparison against Existing');
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-object="added"]')`),'comparison summary must identify the added Alt A junction');
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-presentation-summary="true"]')&&!!document.querySelector('.network-comparison-legend .active')&&!!document.querySelector('.network-comparison-legend .reference')`),'comparison presentation summary and Active/Reference legend must be visible');
@@ -230,6 +241,9 @@ try{
   assert(await evalValue(`!!document.querySelector('[data-network-comparison-select-active]')`),'changed active object must expose a direct Select Active action');
   await clickSelector('[data-network-comparison-select-active]');
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-junction="J-1"] [data-network-instance-selection="true"]')`),'comparison review can select the focused Active object for editing without touching Reference');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='object'`),'Select Active returns to Object editing');
+  await clickSelector('[data-network-inspector-tab-button="review"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='review'`),'return to Review after editing selection');
   await clickSelector('[data-network-comparison-filter="all"]');
   await clickSelector('[data-network-comparison-next]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-comparison-focused="true"]')?.getAttribute('data-network-comparison-inspect')!=='junction:J-1'`),'comparison review advances to the next filtered change');
@@ -551,6 +565,7 @@ try{
   await clickSelector(`[data-network-transfer-connector="${workflowConnector}"]`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-connector-editor]')&&!!document.querySelector('[data-network-transfer-gore-level-input="from"]')`),'reselect connector after PI Undo sequence');
   const transferWarningsBefore=Number(await evalValue(`document.querySelector('.network-design-readiness')?.getAttribute('data-network-design-warnings')||0`));
+  assert.equal(await evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')`),'object','direct Transfer selection must keep Object editing active');
   await evalValue(`(()=>{const level=document.querySelector('[data-network-transfer-gore-level-input="from"]');if(!level)return false;level.value='physical';level.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
   await waitFor(()=>evalValue(`!!document.querySelector('[data-network-transfer-gore-neutral="from"]')&&!!document.querySelector('[data-network-transfer-gore-nose-length="from"]')&&!!document.querySelector('[data-network-transfer-gore-nose-width="from"]')`),'physical gore explicit inputs appear');
   for(const [selector,value] of [['[data-network-transfer-gore-neutral="from"]','2'],['[data-network-transfer-gore-nose-length="from"]','1'],['[data-network-transfer-gore-nose-width="from"]','20']]){
@@ -559,9 +574,16 @@ try{
   }
   await clickSelector('[data-network-transfer-gore-apply="from"]');
   await waitFor(async()=>{const p=await project(),t=p?.transferConnectors?.[0]?.terminalTreatment?.from;return t?.level==='physical'&&t.neutralLength===2&&t.physicalNoseLength===1&&t.physicalNoseWidth===20;},'edit physical connector gore through Inspector');
-  const transferReviewContract=await waitFor(async()=>{const state=await evalValue(`(()=>{const terminal=document.querySelector('[data-network-transfer-terminal="from"]'),readiness=document.querySelector('.network-design-readiness'),connector=document.querySelector('[data-network-transfer-connector="${workflowConnector}"]'),warningCount=Number(readiness?.getAttribute('data-network-design-warnings')||0),issue=terminal?.textContent?.includes('Physical nose width')??false;return{ok:issue&&warningCount>${transferWarningsBefore}&&connector?.getAttribute('data-network-transfer-selected')==='true',issue,warningCount,warningBefore:${transferWarningsBefore},selected:connector?.getAttribute('data-network-transfer-selected')};})()`);return state?.ok?state:null;},'Design Summary + Inspector surface impossible physical-nose fit');
+  const transferObjectIssue=await waitFor(async()=>{const state=await evalValue(`(()=>{const terminal=document.querySelector('[data-network-transfer-terminal="from"]'),connector=document.querySelector('[data-network-transfer-connector="${workflowConnector}"]');return{ok:(terminal?.textContent?.includes('Physical nose width')??false)&&connector?.getAttribute('data-network-transfer-selected')==='true',issue:terminal?.textContent??'',selected:connector?.getAttribute('data-network-transfer-selected')};})()`);return state?.ok?state:null;},'Object Inspector surfaces impossible physical-nose fit');
+  assert(transferObjectIssue?.ok,'Transfer terminal Object review contract failed: '+JSON.stringify(transferObjectIssue));
+  await goldenScreenshot('transfer-connector-object-warning',transferObjectIssue);
+  await clickSelector('[data-network-inspector-tab-button="review"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='review'&&!document.querySelector('[data-network-design-summary="true"]')?.hidden`),'switch to Review for canonical Design Summary warning');
+  const transferReviewContract=await waitFor(async()=>{const state=await evalValue(`(()=>{const terminal=document.querySelector('[data-network-transfer-terminal="from"]'),readiness=document.querySelector('.network-design-readiness'),connector=document.querySelector('[data-network-transfer-connector="${workflowConnector}"]'),warningCount=Number(readiness?.getAttribute('data-network-design-warnings')||0),issue=terminal?.textContent?.includes('Physical nose width')??false;return{ok:issue&&warningCount>${transferWarningsBefore}&&connector?.getAttribute('data-network-transfer-selected')==='true',issue,warningCount,warningBefore:${transferWarningsBefore},selected:connector?.getAttribute('data-network-transfer-selected')};})()`);return state?.ok?state:null;},'Review tab surfaces impossible physical-nose warning from canonical Design Summary');
   assert(transferReviewContract?.ok,'Transfer terminal review golden contract failed: '+JSON.stringify(transferReviewContract));
   await goldenScreenshot('transfer-connector-review-warning',transferReviewContract);
+  await clickSelector('[data-network-inspector-tab-button="object"]');
+  await waitFor(()=>evalValue(`document.querySelector('.network-inspector')?.getAttribute('data-network-inspector-tab')==='object'`),'return to Object before destructive connector action');
   await clickSelector('[data-network-delete="true"]');await waitFor(()=>evalValue(`document.querySelector('[data-network-delete="true"]')?.getAttribute('data-network-delete-armed')==='true'`),'arm treated TransferConnector delete confirmation');
   await clickSelector('[data-network-delete="true"]');await waitFor(async()=>!(await project())?.transferConnectors?.length,'confirm treated TransferConnector cascade delete');
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),t=p?.transferConnectors?.[0]?.terminalTreatment?.from;return p?.transferConnectors?.length===1&&t?.level==='physical'&&t.physicalNoseWidth===20;},'Undo restores TransferConnector + terminal review treatment after confirmed delete');
