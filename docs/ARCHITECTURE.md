@@ -320,3 +320,15 @@ Important invariants:
 The root application is the primary Network editing workspace. The existing `/junction/` route remains useful as a standalone/advanced Junction editor and `/roads/` remains a migration laboratory, but neither owns an alternate geometry model.
 
 See `docs/NETWORK_FOUNDATION.md` for the ownership model, frontage-road boundary and roadmap.
+
+### 13.1 Post-v1 transfer-topology boundary
+
+Phase 8B must keep ramp/transfer topology semantic.
+
+A transfer location is modeled as a first-class terminal attached to a host RoadLink position. Its world position/tangent are derived from the host RoadLink alignment; it does not persist an independent XY copy.
+
+The initial transfer model deliberately does not split the host RoadLink. With the current `via + radius` and station-component ownership, a physical split inside a curved RoadLink would require reconstructing valid alignment and lifecycle state merely to add a connection.
+
+Future ramp pavement remains a normal RoadLink. Endpoint resolution may be extended from Junction `PortRef` to a semantic Transfer Terminal reference, but a separate RampGeometry renderer/source of truth is prohibited.
+
+See `docs/TRANSFER_TOPOLOGY_DESIGN_BASIS.md` before implementing Phase 8B.
