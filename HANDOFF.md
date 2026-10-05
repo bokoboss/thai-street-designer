@@ -1,23 +1,23 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-10-01  
+Updated: 2026-10-05  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
-Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
+Current post-v1 working branch: `chatgpt/post-v1-transfer-topology-foundation`  
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
 Product v1 pull request: **#1 — merged 2026-09-30**  
-Current post-v1 pull request: **#2 — Draft · Phase 8A Parallel / Frontage Corridor Foundation**  
+Current post-v1 pull request: **#4 — Draft · Phase 8B Mainline ↔ Frontage Transfer Topology**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
 ## Start here
 
-1. For current Phase 8A work, checkout/read `chatgpt/post-v1-parallel-corridor-foundation` and inspect PR #2 before modifying anything.
+1. For current Phase 8B work, checkout/read `chatgpt/post-v1-transfer-topology-foundation` and inspect Draft PR #4 before modifying anything.
 2. Treat `main` as the released Product v1 baseline. `chatgpt/full-engineering-ui-audit` is historical audit evidence only; do not resume feature work there.
 3. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
 4. Read this file completely, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md`, `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` and `docs/POST_V1_ROADMAP.md`.
-5. If PR #2 has already been merged, start the next milestone from current `main` on a new review branch rather than continuing the historical Phase 8A branch.
+5. Treat Phase 8A / PR #2 as merged history. Continue transfer-topology work only on the Phase 8B branch until PR #4 is explicitly accepted/merged.
 6. Run the full quality gates before accepting a code change.
 
 ## Product v1 mission and guardrails
@@ -189,7 +189,7 @@ Do **not** reintroduce old runtime fields such as `Arm.slip`, `slipReceivingMode
 
 ## Latest verification
 
-Post-v1 Phase 8A.2 baseline `69e9904066c5a97ce9013abf35aabf90c5db1fdf` passed GitHub Quality run `36822921692`, including schema-v4 regressions, TypeScript, lint, both production builds, browser acceptance and Vercel Preview.
+Post-v1 Phase 8A merged baseline `cc4994c9331dad12353e9dd13f88902d9dd9b74c` passed main Quality run `37024769974`; Vercel status is success. PR #2 is merged.
 
 Functional release-candidate baseline `24171c685de4ed93bf254e618ea3e48a9558e81d` passed GitHub Quality run `36702892172`:
 
@@ -215,17 +215,26 @@ Product v1 was explicitly accepted by the user and PR #1 was merged to `main` as
 
 Product v1 hardening is complete and the audited release has been merged to `main`.
 
-Post-v1 work has started with **Phase 8A — Parallel / Frontage Corridor Foundation** on `chatgpt/post-v1-parallel-corridor-foundation`.
+Phase 8A — Parallel / Frontage Corridor Foundation was merged to `main` through PR #2 on 2026-10-02 (merge commit `cc4994c9331dad12353e9dd13f88902d9dd9b74c`). Main Quality run `37024769974` and Vercel both passed.
+
+Post-v1 work now continues with **Phase 8B — Mainline ↔ Frontage Transfer Topology** on `chatgpt/post-v1-transfer-topology-foundation`.
 
 Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feature family. The first step is a Network semantic relationship over existing RoadLinks, not a second geometry engine and not an Arm-level frontage flag.
 
-Phase 8A.1 status:
-- **8A.1a model foundation** — Network schema v4, migration, validation, deletion/reconnect hardening and regression coverage complete.
-- **8A.1b Inspector workflow** — staged mainline + frontage creation, existing-group membership editing, canvas member highlighting, safe membership removal/dissolve and Undo/Redo acceptance implemented.
-- **8A.2 assisted creation** — one-shot Left/Right/Both frontage seeding over ordinary Junction/RoadLink objects is implemented on the working branch. Seed offset is not persisted as a constraint; generated treatments are deliberately neutralized for review. Left/Right uses a persisted looking-ahead Mainline reference direction. Generated seed Junction review points are persisted per frontage chain, surfaced in Design Summary/Scenario Comparison and can be explicitly Mark reviewed without changing geometry.
-- 8A.2 does not auto-connect cross streets and rejects roundabout mainline chains.
-- 8A.2 acceptance hardening now focuses on dedicated assisted-frontage golden evidence, Thai-readable visual QA and clearer one-shot/review UX; once those gates pass, freeze PR #2 at the Parallel/Frontage foundation boundary.
-- Do not implement mid-link ramps inside PR #2; transfer topology remains Phase 8B and should start from a separate model/design milestone because current PortRef semantics are Junction-Arm specific.
+Phase 8A status:
+- **8A.1 relationship foundation + Inspector workflow** — complete and merged.
+- **8A.2 assisted creation** — Left/Right/Both one-shot frontage seeding, persisted looking-ahead reference direction, seed-review lifecycle, Design Summary/Scenario Comparison integration and dedicated browser/golden acceptance complete and merged.
+- Phase 8A is frozen at the Parallel/Frontage boundary.
+
+Phase 8B design decision:
+- read `docs/TRANSFER_TOPOLOGY_DESIGN_BASIS.md` before coding;
+- use a first-class **Transfer Terminal attached to a host RoadLink position** rather than a visual connector;
+- do **not** physically split host RoadLinks in the first implementation because a split would require reconstructing valid tangent–arc–tangent and station-component state;
+- future ramp connectors should remain ordinary RoadLinks whose endpoint resolver is extended to Transfer Terminals;
+- **8B.1a Transfer Terminal model** is complete on the working branch: Network schema v5, migration, terminal CRUD/validation, derived host placement, corridor/link cleanup and regression coverage.
+- 8B.1a passed Quality run `37271487345`; Vercel status is success.
+- **8B.1b Terminal editing workflow** is implemented on the working branch and pending its Quality gate: selectable 2D terminal marker, host-Link add/list workflow, explicit side/direction/edge/position editing, station display, safe remove/Delete/Undo/Redo, corrupt-file recovery, Scenario Comparison host-Link delta and Design Summary counts.
+- Do **not** start 8B.2 connector RoadLink until 8B.1b Quality/browser/golden acceptance passes.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.
@@ -322,6 +331,9 @@ Read `VERCEL.md`.
 - `docs/PROJECT_CONTEXT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SLIP_LANE_DESIGN_BASIS.md`
+- `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md`
+- `docs/TRANSFER_TOPOLOGY_DESIGN_BASIS.md`
+- `docs/POST_V1_ROADMAP.md`
 - `app/junction/model.ts`
 - `app/junction/geometry.ts`
 - `app/junction/slip-model.ts`

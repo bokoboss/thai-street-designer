@@ -128,7 +128,7 @@ assert(networkSource.includes('pastRef=useRef<NetworkProject[]>([])')&&networkSo
 assert(networkSource.includes('updateLinkViaRadius')&&networkSource.includes('CURVE AT PI'),'RoadLink PI radius must be directly editable in the root Network workspace');
 assert(networkSource.includes('updateLinkSectionProfile')&&networkSource.includes('Resolved geometric transition'),'RoadLink section continuity mode must be explicit and user-controlled');
 assert(networkSource.includes('linkControlPoints')&&networkSource.includes('R0 = polyline เดิม'),'PI insertion/editing must operate on control geometry while rendering uses the resolved alignment');
-assert(networkSource.includes('Network schema v4'),'root workspace must expose the persisted Network schema v4 state');
+assert(networkSource.includes('Network schema v5'),'root workspace must expose the persisted Network schema v5 state');
 assert(networkDrawingSource.includes('variableParallel')&&networkDrawingSource.includes('data-network-link-median'),'RoadLink renderer must consume variable-width resolved geometry instead of a constant max-width stroke');
 assert(networkSource.includes('NetworkSectionDock'),'root Network workspace must expose the contextual section/profile dock');
 const networkSectionSource=fs.readFileSync('app/network/network-section-dock.tsx','utf8'),stationProfileSource=fs.readFileSync('lib/station-profile.ts','utf8'),lifecycleMathSource=fs.readFileSync('lib/lifecycle-math.ts','utf8'),allocationSource=fs.readFileSync('app/junction/allocation.ts','utf8'),alignmentSource=fs.readFileSync('lib/alignment.ts','utf8');

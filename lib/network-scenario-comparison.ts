@@ -10,7 +10,7 @@ export type ScenarioObjectDelta={
   status:ScenarioDeltaStatus;
   changes:string[];
 };
-export type ScenarioMetricKey='junctions'|'roadLinks'|'parallelCorridors'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
+export type ScenarioMetricKey='junctions'|'roadLinks'|'parallelCorridors'|'transferTerminals'|'mainLanes'|'pocketLanes'|'receivingLanes'|'medianArms'|'medianWidth'|'stationComponents'|'roadLength';
 export type ScenarioMetric={
   key:ScenarioMetricKey;
   label:string;
@@ -61,6 +61,7 @@ function projectMetrics(project:NetworkProject){
     junctions:project.junctions.length,
     roadLinks:project.links.length,
     parallelCorridors:project.parallelCorridors.length,
+    transferTerminals:project.transferTerminals.length,
     mainLanes,
     pocketLanes,
     receivingLanes,
@@ -103,6 +104,7 @@ const parallelMembershipSignature=(project:NetworkProject,linkId:string)=>{
   const chain=membership.role==='frontage'?membership.corridor.frontage.find(v=>v.side===membership.side):undefined;
   return{corridorId:membership.corridor.id,role:membership.role,side:membership.side??null,referenceStart:membership.corridor.mainlineStartJunctionId,seedReviewJunctionIds:chain?.seedReviewJunctionIds??[]};
 };
+const transferTerminalSignature=(project:NetworkProject,linkId:string)=>project.transferTerminals.filter(v=>v.hostLinkId===linkId).map(v=>({id:v.id,name:v.name,corridorId:v.corridorId,side:v.side,direction:v.direction,edge:v.edge,position:rounded(v.position,6)})).sort((a,b)=>a.id.localeCompare(b.id));
 function linkChanges(referenceProject:NetworkProject,reference:RoadLink,activeProject:NetworkProject,active:RoadLink){
   const changes:string[]=[];
   if(json(reference.from)!==json(active.from)||json(reference.to)!==json(active.to))changes.push('endpoints');
@@ -111,6 +113,7 @@ function linkChanges(referenceProject:NetworkProject,reference:RoadLink,activePr
   if(json(reference.sectionProfile)!==json(active.sectionProfile))changes.push('section transition');
   if(json(reference.components)!==json(active.components))changes.push('station components');
   if(json(parallelMembershipSignature(referenceProject,reference.id))!==json(parallelMembershipSignature(activeProject,active.id)))changes.push('parallel corridor membership');
+  if(json(transferTerminalSignature(referenceProject,reference.id))!==json(transferTerminalSignature(activeProject,active.id)))changes.push('transfer terminals');
   if(reference.name!==active.name)changes.push('name');
   if(json(reference)!==json(active)&&changes.length===0)changes.push('other RoadLink settings');
   return changes;
@@ -134,7 +137,7 @@ export function compareNetworkProjects(reference:NetworkProject,active:NetworkPr
   }
   const ref=projectMetrics(reference),act=projectMetrics(active),
     meta:{key:ScenarioMetricKey;label:string;unit?:string}[]=[
-      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'parallelCorridors',label:'Parallel corridors'},{key:'mainLanes',label:'Main lanes'},
+      {key:'junctions',label:'Junctions'},{key:'roadLinks',label:'Road links'},{key:'parallelCorridors',label:'Parallel corridors'},{key:'transferTerminals',label:'Transfer terminals'},{key:'mainLanes',label:'Main lanes'},
       {key:'pocketLanes',label:'Pocket lanes'},{key:'receivingLanes',label:'Receiving lanes'},
       {key:'medianArms',label:'Median arms'},{key:'medianWidth',label:'Σ median width',unit:'m'},
       {key:'stationComponents',label:'Station components'},{key:'roadLength',label:'RoadLink length',unit:'m'}
@@ -158,7 +161,7 @@ export function scenarioChangeCategories(delta:ScenarioObjectDelta):ScenarioChan
     if(['main lanes','cross-section','endpoint section'].includes(change))categories.add('lanes');
     if(change==='median')categories.add('median');
     if(change==='pocket / receiving')categories.add('auxiliary');
-    if(['section transition','station components','endpoint section','parallel corridor membership'].includes(change))categories.add('corridor');
+    if(['section transition','station components','endpoint section','parallel corridor membership','transfer terminals'].includes(change))categories.add('corridor');
     if(change==='controls')categories.add('controls');
   }
   return [...categories];
@@ -198,7 +201,8 @@ function roadLinkInspectionRows(project:NetworkProject|undefined,link:RoadLink|u
     ['PI / via points',String(link.via.length)],
     ['Section mode',link.sectionProfile.mode],
     ['End lanes F/B',laneText],
-    ['Station components',String(link.components.length)]
+    ['Station components',String(link.components.length)],
+    ['Transfer terminals',String(project.transferTerminals.filter(v=>v.hostLinkId===link.id).length)]
   ]);
 }
 export function scenarioObjectInspection(reference:NetworkProject,active:NetworkProject,delta:ScenarioObjectDelta):ScenarioObjectInspection{

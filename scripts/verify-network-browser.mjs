@@ -450,7 +450,7 @@ try{
   mark('parallel-corridor-inspector');
   await evalValue(`(()=>{const key='thai-street-network-project-v1',w=JSON.parse(localStorage.getItem(key)),p=w.scenarios.find(s=>s.id===w.activeScenarioId).project,clone=(source,id,name,x,y)=>{const j=structuredClone(source);j.id=id;j.name=name;j.x=x;j.y=y;return j},a=p.junctions[0],b=p.junctions[1],j3=clone(a,'J-3','Frontage A',a.x,a.y+120),j4=clone(b,'J-4','Frontage B',b.x,b.y+120),j5=clone(a,'J-5','Frontage C',a.x,a.y-120),j6=clone(b,'J-6','Frontage D',b.x,b.y-120);p.junctions.push(j3,j4,j5,j6);p.links.push({id:'L-2',name:'Frontage Left Candidate',from:{junctionId:'J-3',armId:0},to:{junctionId:'J-4',armId:2},via:[],sectionProfile:{mode:'review'},components:[]},{id:'L-3',name:'Frontage Right Candidate',from:{junctionId:'J-5',armId:0},to:{junctionId:'J-6',armId:2},via:[],sectionProfile:{mode:'review'},components:[]});p.parallelCorridors=[];localStorage.setItem(key,JSON.stringify(w));return true;})()`);
   await send('Page.reload',{ignoreCache:true});await waitFor(()=>evalValue(`document.readyState==='complete'&&!!document.querySelector('.network-workspace')`),'reload parallel-corridor fixture');
-  await waitFor(async()=>{const p=await project();return p?.schemaVersion===4&&p?.links?.length===3&&p?.parallelCorridors?.length===0;},'parallel-corridor fixture v4');
+  await waitFor(async()=>{const p=await project();return p?.schemaVersion===5&&p?.links?.length===3&&p?.parallelCorridors?.length===0&&p?.transferTerminals?.length===0;},'parallel-corridor fixture v5');
   await clickSelector('[data-network-link="L-1"]');await clickSelector('[data-network-parallel-action="start"]');
   await waitFor(()=>evalValue(`document.querySelector('[data-network-parallel-panel]')?.getAttribute('data-network-parallel-draft')==='L-1'&&!!document.querySelector('[data-network-parallel-role="draft-mainline"]')`),'stage mainline without engineering-state mutation');
   assert.equal((await project()).parallelCorridors.length,0,'staging a mainline must remain UI-only until a frontage Link is chosen');
@@ -506,6 +506,42 @@ try{
   await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===6&&p?.links?.length===3&&g?.frontage?.length===1&&g.frontage[0].side==='left';},'Undo removes assisted seed Junctions, RoadLink and membership in one transaction');
   await clickSelector('[data-network-action="redo"]');await waitFor(async()=>{const p=await project(),g=p?.parallelCorridors?.[0];return p?.junctions?.length===8&&p?.links?.length===4&&g?.frontage?.some(v=>v.side==='right');},'Redo restores assisted frontage seed atomically');
 
+  mark('transfer-terminal-editor');
+  await clickSelector('[data-network-link="L-1"]');
+  await waitFor(()=>evalValue(`document.querySelector('[data-network-transfer-panel]')?.getAttribute('data-network-transfer-panel')==='link'&&!!document.querySelector('[data-network-transfer-add]')`),'Transfer Terminal host panel on grouped RoadLink');
+  await clickSelector('[data-network-transfer-add]');
+  await waitFor(async()=>{const p=await project();return p?.transferTerminals?.length===1&&p.transferTerminals[0].hostLinkId==='L-1'&&Math.abs(p.transferTerminals[0].position-.5)<1e-9;},'add Transfer Terminal at deterministic host midpoint');
+  const transferId=(await project()).transferTerminals[0].id;
+  assert(await evalValue(`document.querySelector('[data-network-transfer-terminal="${transferId}"]')?.getAttribute('data-network-transfer-terminal-selected')==='true'&&document.querySelector('[data-network-transfer-panel]')?.getAttribute('data-network-transfer-panel')==='terminal'`),'new terminal must become a selectable semantic marker');
+  await clickSelector('[data-network-transfer-position]');
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-transfer-position]');if(!input)return false;input.focus();input.select();return document.activeElement===input;})()`);
+  await send('Input.insertText',{text:'65'});await keyPress('Tab','Tab');
+  await waitFor(async()=>Math.abs((await project())?.transferTerminals?.[0]?.position-.65)<1e-9,'move Transfer Terminal along host by normalized position');
+  const station65=Number(await evalValue(`document.querySelector('[data-network-transfer-station]')?.getAttribute('data-network-transfer-station')||0`));assert(station65>0,'Terminal Inspector must expose resolved station metres from canonical RoadLink geometry');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>Math.abs((await project())?.transferTerminals?.[0]?.position-.5)<1e-9,'Undo restores terminal position');
+  await clickSelector(`[data-network-transfer-terminal="${transferId}"]`);
+  await clickSelector('[data-network-action="redo"]');await waitFor(async()=>Math.abs((await project())?.transferTerminals?.[0]?.position-.65)<1e-9,'Redo restores terminal position');
+  await clickSelector(`[data-network-transfer-terminal="${transferId}"]`);
+  await evalValue(`(()=>{const side=document.querySelector('[data-network-transfer-side]');if(!side)return false;const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')?.set;if(!setter)return false;setter.call(side,'right');side.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(async()=>((await project())?.transferTerminals?.[0]?.side)==='right','edit mainline terminal side explicitly');
+  await evalValue(`(()=>{const edge=document.querySelector('[data-network-transfer-edge]');if(!edge)return false;const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')?.set;if(!setter)return false;setter.call(edge,'median');edge.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(async()=>((await project())?.transferTerminals?.[0]?.edge)==='median','edit terminal road edge explicitly');
+  const transferGoldenContract=await evalValue(`(()=>{const marker=document.querySelector('[data-network-transfer-terminal="${transferId}"]'),panel=document.querySelector('[data-network-transfer-panel="terminal"]'),station=document.querySelector('[data-network-transfer-station]');return{ok:!!marker&&!!panel&&!!station,selected:marker?.getAttribute('data-network-transfer-terminal-selected'),side:marker?.getAttribute('data-network-transfer-side'),direction:marker?.getAttribute('data-network-transfer-direction'),station:station?.getAttribute('data-network-transfer-station')}})()`);
+  assert(transferGoldenContract?.ok&&transferGoldenContract?.selected==='true'&&transferGoldenContract?.side==='right','Transfer Terminal golden contract failed');
+  await goldenScreenshot('transfer-terminal-editor',transferGoldenContract);
+  const validTransferWorkspace=await scenarioWorkspace(),corruptTransferWorkspace=structuredClone(validTransferWorkspace),corruptTransferProject=corruptTransferWorkspace.scenarios.find(s=>s.id===corruptTransferWorkspace.activeScenarioId).project;corruptTransferProject.transferTerminals[0].edge='center';
+  const corruptTransferEnvelope=JSON.stringify({format:'thai-street-designer-network',fileVersion:1,workspace:corruptTransferWorkspace}),transferWorkspaceBeforeReject=JSON.stringify(validTransferWorkspace);
+  await evalValue(`(()=>{const input=document.querySelector('[data-network-file-input="true"]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(corruptTransferEnvelope)}],'corrupt-transfer.tsd.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+  await waitFor(()=>evalValue(`document.querySelector('.network-status')?.textContent?.includes('Invalid transfer terminal edge')===true`),'corrupt Transfer Terminal project reports Open failure');
+  assert.equal(JSON.stringify(await scenarioWorkspace()),transferWorkspaceBeforeReject,'corrupt Transfer Terminal file must leave current workspace untouched');
+  await clickSelector('[data-network-transfer-remove]');
+  await waitFor(async()=>{const p=await project();return p?.transferTerminals?.length===0&&p?.links?.some(v=>v.id==='L-1');},'remove Transfer Terminal without deleting host RoadLink');
+  await clickSelector('[data-network-action="undo"]');await waitFor(async()=>{const p=await project();return p?.transferTerminals?.length===1&&p?.links?.some(v=>v.id==='L-1');},'Undo restores removed Transfer Terminal atomically');
+  await clickSelector(`[data-network-transfer-terminal="${transferId}"]`);
+  await focusWorkspace();await keyPress('Delete','Delete');
+  await waitFor(async()=>{const p=await project();return p?.transferTerminals?.length===0&&p?.links?.some(v=>v.id==='L-1');},'keyboard Delete removes selected Transfer Terminal only');
+  await keyPress('z','KeyZ',2);await waitFor(async()=>((await project())?.transferTerminals?.length)===1,'Ctrl+Z restores Transfer Terminal after keyboard delete');
+
   mark('golden-junction-suite');
   await loadJunctionGolden('no-median-crosswalk',
     `const a=d.arms[0];a.median=0;a.medianOffset=0;a.crossing=true;a.stop=true;a.signal=false;a.crossOffset=4;a.laneMarkings=undefined`,
@@ -532,7 +568,7 @@ try{
   assert.equal(runtimeErrors.length,0,'Browser runtime errors: '+runtimeErrors.join(' | '));
   report.status='pass';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   writeReport({durationMs:Date.now()-started,screenshots:{planBytes:shot2d,scene3dBytes:shot3d},goldenArtifacts,sceneCounts,finalProject:projectSummary(finalProject)});
-  console.log('PASS browser acceptance + golden visual suite: assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
+  console.log('PASS browser acceptance + golden visual suite: Transfer Terminal edit/recovery + assisted frontage seed review lifecycle + assisted frontage seed + parallel/frontage Inspector relationship workflow + keyboard release sweep + rejected-file recovery + persistent project-file dirty baseline + Design Summary/report + unified Current/Full Network export + project file open/new + linked-Junction facing guard + safe cascade delete/undo + safe reconnect controls + scenario comparison + no-median crosswalk + asymmetric auxiliary + Slip acceleration + Slip crossing + roundabout → endpoint-only Arm drag + corridor continuity + resolved 3D');
 }catch(error){
   report.status='fail';report.runtimeErrors=runtimeErrors;report.finishedAt=new Date().toISOString();
   if(ws&&ws.readyState===WebSocket.OPEN){
