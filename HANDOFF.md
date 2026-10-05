@@ -1,23 +1,23 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-10-01  
+Updated: 2026-10-05  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
-Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
+Current post-v1 working branch: `chatgpt/post-v1-transfer-topology-foundation`  
 Historical audit branch: `chatgpt/full-engineering-ui-audit`  
 Product v1 pull request: **#1 — merged 2026-09-30**  
-Current post-v1 pull request: **#2 — Draft · Phase 8A Parallel / Frontage Corridor Foundation**  
+Current post-v1 pull request: **#4 — Draft · Phase 8B Mainline ↔ Frontage Transfer Topology**  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
 ## Start here
 
-1. For current Phase 8A work, checkout/read `chatgpt/post-v1-parallel-corridor-foundation` and inspect PR #2 before modifying anything.
+1. For current Phase 8B work, checkout/read `chatgpt/post-v1-transfer-topology-foundation` and inspect Draft PR #4 before modifying anything.
 2. Treat `main` as the released Product v1 baseline. `chatgpt/full-engineering-ui-audit` is historical audit evidence only; do not resume feature work there.
 3. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
 4. Read this file completely, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md`, `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` and `docs/POST_V1_ROADMAP.md`.
-5. If PR #2 has already been merged, start the next milestone from current `main` on a new review branch rather than continuing the historical Phase 8A branch.
+5. Treat Phase 8A / PR #2 as merged history. Continue transfer-topology work only on the Phase 8B branch until PR #4 is explicitly accepted/merged.
 6. Run the full quality gates before accepting a code change.
 
 ## Product v1 mission and guardrails
@@ -231,8 +231,10 @@ Phase 8B design decision:
 - use a first-class **Transfer Terminal attached to a host RoadLink position** rather than a visual connector;
 - do **not** physically split host RoadLinks in the first implementation because a split would require reconstructing valid tangent–arc–tangent and station-component state;
 - future ramp connectors should remain ordinary RoadLinks whose endpoint resolver is extended to Transfer Terminals;
-- **8B.1a Transfer Terminal model** is implemented on the working branch: Network schema v5, migration, terminal CRUD/validation, derived host placement, corridor/link cleanup and regression coverage.
-- Next gate: Quality on the schema-v5 model. Only after it passes, continue to 8B.1b terminal editing/marker workflow; do not jump directly to ramp drawing.
+- **8B.1a Transfer Terminal model** is complete on the working branch: Network schema v5, migration, terminal CRUD/validation, derived host placement, corridor/link cleanup and regression coverage.
+- 8B.1a passed Quality run `37271487345`; Vercel status is success.
+- **8B.1b Terminal editing workflow** is implemented on the working branch and pending its Quality gate: selectable 2D terminal marker, host-Link add/list workflow, explicit side/direction/edge/position editing, station display, safe remove/Delete/Undo/Redo, corrupt-file recovery, Scenario Comparison host-Link delta and Design Summary counts.
+- Do **not** start 8B.2 connector RoadLink until 8B.1b Quality/browser/golden acceptance passes.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.

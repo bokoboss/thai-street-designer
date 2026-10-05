@@ -1,6 +1,6 @@
 # Mainline ↔ Frontage Transfer Topology Design Basis
 
-Status: **Phase 8B.1a Transfer Terminal model implemented on working branch — pending Quality gate**  
+Status: **Phase 8B.1a model Quality-passed; Phase 8B.1b terminal editing implemented on Draft PR #4 — pending Quality gate**  
 Updated: 2026-10-05  
 Working branch: `chatgpt/post-v1-transfer-topology-foundation`
 
@@ -354,13 +354,17 @@ Do not build separate comparison/report logic inside the Inspector.
 
 ### 8B.1b — Terminal editing workflow
 
-- select host RoadLink;
-- add terminal by click/station position;
-- explicit side / direction / edge;
-- terminal marker + Inspector;
-- move terminal along host alignment;
-- Undo/Redo;
-- still no connector pavement.
+Implemented behavior:
+- select a Parallel Corridor host RoadLink and add a terminal at a deterministic 50% seed position;
+- select the terminal marker or host-Link terminal list;
+- explicit side / direction / curb-or-median edge controls;
+- edit normalized host position and display resolved station metres from canonical RoadLink geometry;
+- direction-aware 2D marker with no connector pavement;
+- remove / Delete / Undo / Redo through the existing NetworkProject transaction path;
+- corrupt v5 terminal metadata must be rejected without replacing the current workspace;
+- terminal state participates in Scenario Comparison through the host RoadLink and in Design Summary counts.
+
+This workflow intentionally edits topology metadata only. It does not imply that an Entrance/Exit ramp connector, gore, taper, acceleration/deceleration lane or merge/diverge treatment exists.
 
 ### 8B.2 — Transfer connector RoadLink
 

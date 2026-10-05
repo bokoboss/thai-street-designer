@@ -3,12 +3,12 @@ import Drawing from '../junction/drawing';
 import {path} from '../junction/geometry';
 import {profiledParallel,variableParallel} from '@/lib/alignment';
 import {
-  activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
-  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
+  activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,transferTerminalPlacement,worldJunctionRotation,
+  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,type TransferTerminal
 } from '@/lib/network-project';
 import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
 
-export type NetworkSelection={kind:'junction'|'link';id:string}|null;
+export type NetworkSelection={kind:'junction'|'link'|'terminal';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
 
 const sectionHalf=(section:ReturnType<typeof linkEndSection>)=>{
@@ -175,6 +175,16 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
   </g>;
 }
 
+function TransferTerminalDrawing({project,terminal,zoom,selected,onSelect}:{project:NetworkProject;terminal:TransferTerminal;zoom:number;selected:boolean;onSelect:()=>void}){
+  const placement=transferTerminalPlacement(project,terminal);if(!placement)return null;
+  const scale=1/Math.max(.2,zoom),travelAngle=placement.angle+(terminal.direction==='backward'?180:0),fill=terminal.side==='left'?'#4e8a78':'#b07842';
+  return <g data-network-transfer-terminal={terminal.id} data-network-transfer-terminal-selected={selected?'true':'false'} data-network-transfer-host={terminal.hostLinkId} data-network-transfer-side={terminal.side} data-network-transfer-direction={terminal.direction} transform={`translate(${placement.x} ${placement.y}) rotate(${travelAngle})`} onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelect();}} style={{cursor:'pointer'}}>
+    <circle r={selected?6.2*scale:5.2*scale} fill="#ffffffdd" stroke={selected?'#0f7d77':fill} strokeWidth={selected?1.8:1.2} vectorEffect="non-scaling-stroke"/>
+    <path d={`M${-3.2*scale} ${-2.5*scale}L${3.4*scale} 0L${-3.2*scale} ${2.5*scale}Z`} fill={fill} stroke="white" strokeWidth={.55} vectorEffect="non-scaling-stroke"/>
+    <circle data-network-transfer-hit="true" r={9*scale} fill="transparent" stroke="transparent"><title>{`${terminal.name} · ${terminal.side} · ${terminal.direction} · ${terminal.edge} · ${(terminal.position*100).toFixed(1)}%`}</title></circle>
+  </g>;
+}
+
 export function NetworkDrawing({
   project,zoom,selection,comparisonFocus,parallelCorridorId,parallelDraftMainlineId,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
@@ -207,5 +217,6 @@ export function NetworkDrawing({
   return <g>
     {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
+    {project.transferTerminals.map(terminal=><TransferTerminalDrawing key={terminal.id} project={project} terminal={terminal} zoom={zoom} selected={selection?.kind==='terminal'&&selection.id===terminal.id} onSelect={()=>onSelect({kind:'terminal',id:terminal.id})}/>)}
   </g>;
 }

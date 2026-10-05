@@ -40,7 +40,7 @@ Architecture decision:
 - do not physically split host RoadLinks in the first implementation;
 - a future ramp connector remains an ordinary RoadLink using an extended semantic endpoint reference.
 
-### 8B.1a Transfer Terminal model
+### 8B.1a Transfer Terminal model — complete
 - NetworkProject v5 + v4 migration;
 - terminal CRUD and deterministic validation;
 - normalized host position + derived station metres;
@@ -48,12 +48,18 @@ Architecture decision:
 - host-link / corridor delete cleanup;
 - Scenario/File round-trip;
 - no ramp rendering.
+- Quality run `37271487345` and Vercel passed.
 
-### 8B.1b Terminal editing
-- add/select/move/remove terminal on a RoadLink;
-- Inspector controls;
-- terminal marker;
-- Undo/Redo and corrupt-file recovery.
+### 8B.1b Terminal editing — implemented on Draft PR #4, pending Quality
+- add/select/remove terminal on a Parallel Corridor RoadLink;
+- move terminal by normalized host position while displaying resolved station metres;
+- explicit side / traffic direction / curb-or-median edge Inspector controls;
+- selectable direction-aware terminal marker;
+- safe Delete / Undo / Redo;
+- corrupt v5 terminal-file recovery;
+- Scenario Comparison reuses host-RoadLink object deltas + Transfer Terminal metric;
+- Design Summary / RoadLink register expose terminal counts;
+- still no connector pavement.
 
 ### 8B.2 Transfer connector RoadLink
 - extend RoadLink endpoint resolution to Transfer Terminal refs;

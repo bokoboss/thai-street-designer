@@ -1121,3 +1121,19 @@ A terminal persists corridor/link identity, left/right side, traffic direction, 
 TransferTerminal creation/removal does not modify Junction, RoadLink or ParallelCorridor geometry. Deleting a host RoadLink or dissolving its ParallelCorridor removes dependent terminals in the same NetworkProject transaction. Reversing the persisted ParallelCorridor reference direction swaps dependent terminal side semantics atomically.
 
 Phase 8B.1a intentionally does not render ramp pavement and does not extend RoadLink endpoint types yet. Those belong to 8B.1b/8B.2 after the model gate passes.
+
+
+## Phase 8B.1b — Transfer Terminal editing
+
+Transfer Terminals are now editable as first-class Network selection objects without creating a second geometry source.
+
+- A terminal marker is resolved from `transferTerminalPlacement()` on every render.
+- Marker world position/tangent therefore follows the current host RoadLink alignment and persisted normalized position; no copied XY is stored.
+- A grouped RoadLink exposes an Add Terminal action. The initial position is 50% (with deterministic alternate seeds only if an exact duplicate exists), after which the terminal is selected for explicit editing.
+- Inspector controls edit side, traffic direction, curb/median edge and normalized host position. Resolved station metres are display-only derived geometry.
+- Transfer Terminal Delete/Undo/Redo reuse the ordinary NetworkProject transaction history.
+- Corrupt terminal metadata remains a Project-file rejection condition and must not replace the current autosaved workspace.
+- Scenario Comparison records terminal changes against the host RoadLink under the existing Corridor filter and exposes a Transfer Terminal metric.
+- Design Summary counts Transfer Terminals globally and per RoadLink.
+
+Phase 8B.1b still does not create connector pavement or merge/diverge roadway treatments. Those remain Phase 8B.2+ after this editing workflow passes Quality/browser/golden acceptance.
