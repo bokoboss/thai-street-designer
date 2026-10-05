@@ -726,7 +726,7 @@ export default function NetworkWorkspace(){
     if(!link||!membership){setNotice('เพิ่ม Transfer Terminal ได้เมื่อ RoadLink เป็นสมาชิก Parallel Corridor แล้ว');return;}
     const side=membership.role==='frontage'?membership.side:membership.corridor.frontage[0]?.side;
     if(!side){setNotice('เพิ่ม Transfer Terminal ไม่ได้ · Parallel Corridor ยังไม่มี Frontage side');return;}
-    const directions=(['forward','backward'] as LinkDirection[]).filter(direction=>{const lanes=linkLaneCounts(before,link,direction);return lanes.from>0&&lanes.to>0;});
+    const directions=(['forward','backward'] as LinkDirection[]).filter(direction=>{const lanes=linkLaneCounts(before,link,direction);return !!lanes&&lanes.from>0&&lanes.to>0;});
     if(!directions.length){setNotice('เพิ่ม Transfer Terminal ไม่ได้ · RoadLink ไม่มีทิศจราจรต่อเนื่อง');return;}
     const positions=[.5,.4,.6,.3,.7],direction=directions[0];
     let result:ReturnType<typeof addTransferTerminal>|null=null;
