@@ -231,7 +231,8 @@ Phase 8B design decision:
 - use a first-class **Transfer Terminal attached to a host RoadLink position** rather than a visual connector;
 - do **not** physically split host RoadLinks in the first implementation because a split would require reconstructing valid tangent–arc–tangent and station-component state;
 - future ramp connectors should remain ordinary RoadLinks whose endpoint resolver is extended to Transfer Terminals;
-- begin with 8B.1a model/migration/validation only; do not jump directly to ramp drawing.
+- **8B.1a Transfer Terminal model** is implemented on the working branch: Network schema v5, migration, terminal CRUD/validation, derived host placement, corridor/link cleanup and regression coverage.
+- Next gate: Quality on the schema-v5 model. Only after it passes, continue to 8B.1b terminal editing/marker workflow; do not jump directly to ramp drawing.
 
 
 Completed foundations include RoadLink tangent–arc–tangent geometry, explicit lane-count transitions, station-based corridor lifecycles, Network section dock, Junction-to-corridor handoff, scenario comparison/export, deterministic browser golden cases, and Slip/Roundabout engineering-review audit.

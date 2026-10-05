@@ -1,6 +1,6 @@
 # Mainline ↔ Frontage Transfer Topology Design Basis
 
-Status: **Phase 8B architecture decision complete — model implementation not yet started**  
+Status: **Phase 8B.1a Transfer Terminal model implemented on working branch — pending Quality gate**  
 Updated: 2026-10-05  
 Working branch: `chatgpt/post-v1-transfer-topology-foundation`
 
@@ -407,3 +407,20 @@ Before Phase 8B.2 is accepted:
 - connector must render through the normal RoadLink path;
 - delete/reconnect/Undo semantics must be pinned;
 - imported corrupt terminal/connector metadata must be rejected without destroying the current workspace.
+
+
+## 16. Phase 8B.1a implementation note
+
+The working branch now implements the model-only foundation described above:
+
+- NetworkProject schema v5;
+- v1/v2/v3/v4 migration to v5;
+- persisted `transferTerminals[]`;
+- canonical host-role validation against ParallelCorridor membership;
+- normalized host position with derived RoadLink point/tangent/station;
+- add/update/remove APIs;
+- dependent cleanup when a host Link or ParallelCorridor is removed;
+- side swap when the persisted ParallelCorridor reference direction is reversed;
+- Scenario / JSON round-trip and geometry-invariance regressions.
+
+No terminal marker, connector/ramp geometry or RoadLink endpoint-union change is included in 8B.1a.

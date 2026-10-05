@@ -1110,3 +1110,14 @@ One-shot assisted frontage generation now persists review provenance on the gene
 `seedReviewJunctionIds[]` contains only generated Junctions that still require explicit concept review. Validation restricts those IDs to Junctions on the same frontage chain. Design Summary surfaces them as engineering warnings, Scenario Comparison observes the lifecycle, and the Inspector can clear a frontage side with **Mark reviewed** without altering road geometry.
 
 The provenance remains part of ParallelCorridor engineering state and follows the same Project JSON, Scenario and Undo/Redo ownership rules as the rest of the Network model.
+
+
+## Phase 8B.1a — Transfer Terminal model foundation
+
+Network schema v5 adds `transferTerminals[]` as first-class topology metadata attached to existing RoadLinks.
+
+A terminal persists corridor/link identity, left/right side, traffic direction, curb/median edge and a normalized host position. World point, tangent and station metres are derived from the canonical RoadLink alignment; no XY copy is persisted.
+
+TransferTerminal creation/removal does not modify Junction, RoadLink or ParallelCorridor geometry. Deleting a host RoadLink or dissolving its ParallelCorridor removes dependent terminals in the same NetworkProject transaction. Reversing the persisted ParallelCorridor reference direction swaps dependent terminal side semantics atomically.
+
+Phase 8B.1a intentionally does not render ramp pavement and does not extend RoadLink endpoint types yet. Those belong to 8B.1b/8B.2 after the model gate passes.
