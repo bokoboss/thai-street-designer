@@ -253,13 +253,14 @@ Phase 8B.1a should validate at minimum:
 5. if host is frontage, its persisted side matches terminal side;
 6. `position` is finite and strictly inside the host Link, not at its Junction endpoint;
 7. direction is `forward` or `backward`;
-8. edge is `curb` or `median`;
-9. exact duplicate terminal semantics on the same host position/direction/edge/side are rejected;
-10. deleting a host RoadLink removes dependent terminals in the same NetworkProject transaction;
-11. dissolving a ParallelCorridor removes its dependent terminals;
-12. Scenario duplication / Project JSON round-trip preserve terminals;
-13. v4 → v5 migration introduces `transferTerminals: []`;
-14. adding/removing a terminal does not alter Junction or RoadLink geometry.
+8. the selected direction has positive lane count at both host RoadLink ends; a one-way host cannot accept a terminal in its non-travel direction;
+9. edge is `curb` or `median`;
+10. exact duplicate terminal semantics on the same host position/direction/edge/side are rejected;
+11. deleting a host RoadLink removes dependent terminals in the same NetworkProject transaction;
+12. dissolving a ParallelCorridor removes its dependent terminals;
+13. Scenario duplication / Project JSON round-trip preserve terminals;
+14. v4 → v5 migration introduces `transferTerminals: []`;
+15. adding/removing a terminal does not alter Junction or RoadLink geometry.
 
 The model must not encode minimum ramp spacing as a validation rule in this phase.
 

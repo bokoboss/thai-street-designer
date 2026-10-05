@@ -577,6 +577,8 @@ export function transferTerminalIssue(project:NetworkProject,terminal:TransferTe
   if(!['left','right'].includes(terminal.side)||!['forward','backward'].includes(terminal.direction)||!['curb','median'].includes(terminal.edge))return'Transfer terminal direction / side / edge ไม่ถูกต้อง';
   if(!Number.isFinite(terminal.position)||terminal.position<=0||terminal.position>=1)return'Transfer terminal ต้องอยู่ภายใน Road Link ไม่ใช่ที่ endpoint';
   if(!transferTerminalHostRole(project,terminal))return'Transfer terminal ต้องอ้าง Road Link ที่เป็นสมาชิก Parallel corridor ด้านเดียวกัน';
+  const host=project.links.find(v=>v.id===terminal.hostLinkId),counts=host?linkLaneCounts(project,host,terminal.direction):null;
+  if(!counts||counts.from<=0||counts.to<=0)return'Transfer terminal direction ต้องอ้างทิศที่มีช่องจราจรต่อเนื่องบน Road Link';
   if(!transferTerminalPlacement(project,terminal))return'Transfer terminal resolve ตำแหน่งบน Road Link ไม่ได้';
   return null;
 }
@@ -630,7 +632,7 @@ export function reverseParallelCorridorReference(project:NetworkProject,id:strin
   const orientation=parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId);
   if(!orientation)return{project,error:'กลับทิศอ้างอิงไม่ได้ · mainline chain ไม่สมบูรณ์'};
   const candidate:ParallelCorridor={...corridor,mainlineStartJunctionId:orientation.endJunctionId,frontage:corridor.frontage.map(chain=>({...chain,side:chain.side==='left'?'right':'left'}))},
-    transferTerminals=project.transferTerminals.map(terminal=>terminal.corridorId===id?{...terminal,side:terminal.side==='left'?'right':'left'}:terminal),
+    transferTerminals:TransferTerminal[]=project.transferTerminals.map(terminal=>terminal.corridorId===id?{...terminal,side:terminal.side==='left'?'right':'left'}:terminal),
     next={...project,parallelCorridors:project.parallelCorridors.map(v=>v.id===id?candidate:v),transferTerminals},error=validateNetworkProject(next);
   return error?{project,error}:{project:next,corridor:candidate,error:null};
 }
