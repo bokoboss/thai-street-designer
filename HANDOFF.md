@@ -1,23 +1,31 @@
 # Thai Street Designer — Development Handoff
 
-Updated: 2026-10-01  
+Updated: 2026-10-13  
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
-Current post-v1 working branch: `chatgpt/post-v1-parallel-corridor-foundation`  
-Historical audit branch: `chatgpt/full-engineering-ui-audit`  
+Active plan: **Consolidation** — [ADR-0001](docs/decisions/ADR-0001-consolidation.md) · [Consolidation Roadmap](docs/CONSOLIDATION_ROADMAP.md)  
+Deployment target: **Vercel / Next.js** (Sites/vinext path to be removed in Phase 0C)  
 Product v1 pull request: **#1 — merged 2026-09-30**  
-Current post-v1 pull request: **#2 — Draft · Phase 8A Parallel / Frontage Corridor Foundation**  
+Phase 8A (Parallel / Frontage Corridor Foundation): merged to `main` (`cc4994c`)  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`
 
 > Git branch/commit/PR/files are the source of truth. Do not reconstruct current behavior from old ChatGPT conversation memory.
 
+## Current direction (2026-10-13)
+
+The owner decided to make this repository the single product base and to stop parallel work in `street-concept-designer` and `road-concept-builder` (see ADR-0001). Consequences for anyone continuing work:
+
+- **Feature freeze** until Phase 3 of `docs/CONSOLIDATION_ROADMAP.md` is accepted. Phase 8B (ramps / transfer topology) is deferred.
+- The target interaction model is **road-first in one workspace**: draw roads, confirm candidate junctions, edit junction detail in place. Read `docs/spec/UX_ARCHITECTURE.md` and `docs/spec/GOLDEN_WORKFLOWS.md`.
+- The geometry engine, its invariants and the regression suites below remain authoritative. The sections from "Product v1 mission and guardrails" onward describe the released engine and its history; where they conflict with the consolidation documents on *interaction or scope*, the consolidation documents win. Engine rules (Slip invariant, single resolver, explicit migration) are unchanged.
+
 ## Start here
 
-1. For current Phase 8A work, checkout/read `chatgpt/post-v1-parallel-corridor-foundation` and inspect PR #2 before modifying anything.
-2. Treat `main` as the released Product v1 baseline. `chatgpt/full-engineering-ui-audit` is historical audit evidence only; do not resume feature work there.
-3. Read `docs/PROJECT_CONTEXT.md` first to understand why the application exists and how engineering/product decisions should be judged.
-4. Read this file completely, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md`, `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` and `docs/POST_V1_ROADMAP.md`.
-5. If PR #2 has already been merged, start the next milestone from current `main` on a new review branch rather than continuing the historical Phase 8A branch.
+1. Read `AGENTS.md`, then `docs/decisions/ADR-0001-consolidation.md` and `docs/CONSOLIDATION_ROADMAP.md`. Work only on the current roadmap phase.
+2. Read `docs/PROJECT_CONTEXT.md` to understand why the application exists and how engineering/product decisions should be judged.
+3. Read `docs/spec/` (UX architecture, golden workflows, selection/snapping, pavement marking), `docs/GLOSSARY.md` and `docs/standards/`.
+4. Read this file, then `docs/ARCHITECTURE.md`, `docs/NETWORK_FOUNDATION.md` and `docs/ENGINEERING_DESIGN_BASIS.md` for the engine.
+5. Start each change from current `main` on a new review branch.
 6. Run the full quality gates before accepting a code change.
 
 ## Product v1 mission and guardrails
@@ -213,9 +221,13 @@ Product v1 was explicitly accepted by the user and PR #1 was merged to `main` as
 
 ## Immediate next work
 
+**Superseded on 2026-10-13.** The next work is Phase 0 of `docs/CONSOLIDATION_ROADMAP.md` (decision and specs, usability baseline, quick wins). The Phase 8A notes below are kept as history; Phase 8A has been merged and Phase 8B is deferred by the feature freeze.
+
+### History: post-v1 Phase 8A
+
 Product v1 hardening is complete and the audited release has been merged to `main`.
 
-Post-v1 work has started with **Phase 8A — Parallel / Frontage Corridor Foundation** on `chatgpt/post-v1-parallel-corridor-foundation`.
+Post-v1 work started with **Phase 8A — Parallel / Frontage Corridor Foundation** on `chatgpt/post-v1-parallel-corridor-foundation`.
 
 Read `docs/PARALLEL_FRONTAGE_ROAD_DESIGN_BASIS.md` before implementing this feature family. The first step is a Network semantic relationship over existing RoadLinks, not a second geometry engine and not an Arm-level frontage flag.
 
@@ -253,7 +265,7 @@ Current sequence:
    - Release decision completed: user accepted Product v1 and PR #1 was merged to `main`.
    - Audit checklist: `docs/PRODUCT_V1_RELEASE_AUDIT.md`.
 
-Parallel / Frontage Road and advanced CAD-like editing may now be considered as **post-v1** work, but must start on a new branch from released `main` and pass the scope/model gate before implementation.
+Parallel / Frontage Road and advanced CAD-like editing were considered **post-v1** work. As of 2026-10-13 they are under the consolidation feature freeze; see `docs/CONSOLIDATION_ROADMAP.md`.
 
 For Slip visual acceptance, continue to preserve the v6 invariant and fix Slip-owned geometry rather than base junction geometry.
 

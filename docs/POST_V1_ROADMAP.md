@@ -1,5 +1,7 @@
 # Post-v1 Roadmap
 
+> **Superseded on 2026-10-13** by [`CONSOLIDATION_ROADMAP.md`](CONSOLIDATION_ROADMAP.md) and [ADR-0001](decisions/ADR-0001-consolidation.md). Kept as history. Phase 8A is merged; Phase 8B–8D are deferred by the feature freeze.
+
 Updated: 2026-10-01  
 Released baseline: Product v1 on `main`
 

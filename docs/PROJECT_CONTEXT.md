@@ -550,6 +550,8 @@ An AI assistant should not optimize for “producing code quickly”. It should 
 
 ## 19. Current priority
 
+> **Updated 2026-10-13:** the current priority is the consolidation plan in `docs/CONSOLIDATION_ROADMAP.md` — make the core workflows easy to use in one road-first workspace while keeping the geometry engine intact. Feature work is frozen until that workspace is accepted. The text below records the earlier Slip-era priority.
+
 The immediate priority is not adding many new features.
 
 The priority is to make the existing intersection geometry—especially the newly refactored Slip system—**predictable, visually correct and trustworthy**.
@@ -562,6 +564,7 @@ After the current Slip v6 work passes real visual/interaction acceptance, develo
 
 Read in this order:
 
+0. `AGENTS.md`, `docs/decisions/ADR-0001-consolidation.md`, `docs/CONSOLIDATION_ROADMAP.md` — current direction and plan
 1. `docs/PROJECT_CONTEXT.md` — why the application exists
 2. `HANDOFF.md` — current work/status
 3. `docs/ARCHITECTURE.md` — how it is structured
