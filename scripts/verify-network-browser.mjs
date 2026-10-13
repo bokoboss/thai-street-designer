@@ -8,7 +8,7 @@ import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 process.chdir(root);
-const artifactDir='artifacts',profileDir='.sites-runtime/chrome-network-acceptance';
+const artifactDir='artifacts',profileDir='.test-build/chrome-network-acceptance';
 mkdirSync(artifactDir,{recursive:true});rmSync(profileDir,{recursive:true,force:true});
 
 function commandPath(names){
@@ -56,7 +56,7 @@ async function waitForJson(url,timeout=30000){
   throw new Error('Timed out waiting for '+url);
 }
 
-const server=spawn(process.execPath,['scripts/run-next.mjs','start','-p',String(port)],{cwd:root,env:{...process.env,TSD_BUILD_TARGET:'vercel'},stdio:['ignore','pipe','pipe']});
+const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port)],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});
 let serverLog='';server.stdout.on('data',d=>serverLog+=d);server.stderr.on('data',d=>serverLog+=d);
 let chrome=null,ws=null,seq=0;const pending=new Map();let runtimeErrors=[];
 const shutdown=()=>{
@@ -373,7 +373,7 @@ try{
 
   mark('resolved-3d');
   await clickSelector('[data-network-view="3d"]');
-  await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('Resolved Network 3D')`),'resolved Network 3D');
+  await waitFor(()=>evalValue(`!!document.querySelector('canvas[aria-label="Network 3D overview"][data-network-scene-mode="resolved"]')&&document.body.textContent.includes('มุมมอง 3D ของโครงข่าย')`),'resolved Network 3D');
   await waitFor(()=>evalValue(`document.querySelector('canvas[aria-label="Network 3D overview"]')?.getAttribute('data-network-scene-detail-texture')==='true'`),'3D semantic marking detail overlay');
   const sceneCounts=await evalValue(`(()=>{const c=document.querySelector('canvas[aria-label="Network 3D overview"]');return {junction:Number(c?.getAttribute('data-network-scene-junction-surfaces')||0),link:Number(c?.getAttribute('data-network-scene-link-surfaces')||0),detail:c?.getAttribute('data-network-scene-detail-texture')==='true',furniture:Number(c?.getAttribute('data-network-scene-furniture-faces')||0)};})()`);
   assert(sceneCounts.junction>0,'Resolved 3D must contain Junction semantic surfaces');assert(sceneCounts.link>0,'Resolved 3D must contain RoadLink semantic surfaces');assert.equal(sceneCounts.detail,true,'Resolved 3D must restore exact semantic markings through the detail-only overlay');

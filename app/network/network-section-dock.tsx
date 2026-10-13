@@ -27,7 +27,7 @@ function lanePieces(count:number,width:number,prefix:string){
 
 function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
   const resolved=useMemo(()=>resolveLinkSectionGeometry(project,link),[project,link]),[station,setStation]=useState(()=>(resolveLinkSectionGeometry(project,link)?.total??0)/2);
-  if(!resolved)return <section className="network-section-dock"><div className="network-section-empty">Road Link นี้ยังไม่มี resolved section geometry</div></section>;
+  if(!resolved)return <section className="network-section-dock"><div className="network-section-empty">ยังแสดงหน้าตัดของถนนนี้ไม่ได้</div></section>;
   const s=Math.max(0,Math.min(resolved.total,station)),
     laneLifecycleCount=(resolveLinkLaneLifecycles(project,link,'forward',resolved.total,resolved.linear).lifecycles.length+resolveLinkLaneLifecycles(project,link,'backward',resolved.total,resolved.linear).lifecycles.length),
     median=sampleStationSeries(resolved.stations,resolved.medianHalf,s)*2,
@@ -58,7 +58,7 @@ function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
     <div className="network-section-components">
       {pieces.map(p=><div key={p.key} className={'network-section-piece '+p.kind.replace(/ /g,'-')} style={{flex:Math.max(.18,p.width)}} title={p.label+' '+p.width.toFixed(2)+' m'}><span>{p.label}</span><b>{p.width.toFixed(2)}</b></div>)}
     </div>
-    <footer><span>{resolved.linear?'Resolved geometric transition':'Review / constant display mode'}{laneLifecycleCount?` · ${laneLifecycleCount} lane lifecycle${laneLifecycleCount===1?'':'s'}`:''}{link.components.some(component=>component.kind==='width')?` · ${link.components.filter(component=>component.kind==='width').length} width zone${link.components.filter(component=>component.kind==='width').length===1?'':'s'}`:''}</span><span>{backwardCount.toFixed(2)} lanes ← · → {forwardCount.toFixed(2)} lanes</span></footer>
+    <footer><span>{resolved.linear?'หน้าตัดเปลี่ยนต่อเนื่องตามระยะ':'หน้าตัดตามปลาย (โหมดตรวจ)'}{laneLifecycleCount?` · ช่องเสริม ${laneLifecycleCount} รายการ`:''}{link.components.some(component=>component.kind==='width')?` · ช่วงขยายขอบทาง ${link.components.filter(component=>component.kind==='width').length} รายการ`:''}</span><span>← {backwardCount.toFixed(2)} ช่อง · → {forwardCount.toFixed(2)} ช่อง</span></footer>
   </section>;
 }
 

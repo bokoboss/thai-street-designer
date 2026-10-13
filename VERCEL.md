@@ -1,54 +1,28 @@
-# Deploying the existing app to Vercel
+# Deploying to Vercel
 
-The same application supports two independent build paths. No UI or geometry code is forked.
+The application is a standard Next.js app deployed on **Vercel**. Since 2026-10-13 (ADR-0001, roadmap Phase 0C) this is the only deployment target; the former ChatGPT Sites / vinext path has been removed.
 
-| Target | Build command | Output | Local production server |
-| --- | --- | --- | --- |
-| ChatGPT Sites / vinext | `pnpm build` (unchanged) | `dist/` Cloudflare Worker | `pnpm start` (unchanged) |
-| Vercel / Next.js | `pnpm build:vercel` | `.next-vercel/` | `pnpm start:vercel` |
+## Vercel project settings
 
-## Vercel setup
+1. Import `bokoboss/thai-street-designer` with the repository root as Root Directory.
+2. Framework preset: **Next.js**. `vercel.json` sets `pnpm install --frozen-lockfile`, `pnpm run build` and output directory `.next`.
+3. Old dashboard overrides (for example `.next-vercel` or `dist`) are superseded by `vercel.json`; they can be cleared.
 
-1. Import `bokoboss/thai-street-designer` into Vercel. Use the repository root as Root Directory.
-2. Select the **Next.js** framework preset. `vercel.json` specifies `pnpm install --frozen-lockfile`, `pnpm run build:vercel`, and `.next-vercel` as output.
-3. Use Node.js 24.x to match the tested runtime. Keep the pinned pnpm version from `packageManager` in `package.json` (11.19.0).
-4. Remove conflicting old project-level build/output overrides, if any. Do not choose `dist`, Vite or Cloudflare for the Vercel target.
-5. No database, API key or additional application environment variables are required by the current road editor.
+The Cloudflare Workers build that served the former ChatGPT Sites path is no longer supported by this repository and should be disconnected from the repo.
+4. Node.js 24.x (matches CI). pnpm comes from `packageManager` in `package.json`.
+5. No database, API key or application environment variables are required.
 
-The repository is now connected to Vercel through Git integration. Audit-branch commits create Vercel Preview deployments automatically; production should remain on the configured production branch until the audit PR is deliberately merged. Sites publication and audience are unchanged. Browser-local saved designs are origin-specific; export JSON from one origin and import it at another to transfer a design.
+Every pull request gets a Vercel Preview deployment through the Git integration; production follows `main`.
+
+Browser-local autosave is origin-specific. To move a design between origins (Preview ↔ Production ↔ local), save the Project JSON and open it at the other origin.
 
 ## Local commands
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm dev:vercel
-pnpm build:vercel
-pnpm start:vercel
-pnpm test:builds
+pnpm dev            # development server
+pnpm build          # production build (webpack)
+pnpm start          # serve the production build
+pnpm test:builds    # production build + TypeScript check
+pnpm test:browser   # browser acceptance; needs a production build and Chrome/Chromium (CHROME_BIN)
 ```
-
-For a custom port, use `node scripts/run-next.mjs start --port 3000`.
-
-`test:builds` runs Next followed by the **original** Sites/vinext command. It checks build artifacts, unchanged configuration, restoration of `next-env.d.ts`, and output isolation. Run builds sequentially in one checkout; neither target is intended to run simultaneously with the other target's build/dev process.
-
-## Isolation details
-
-- Existing `dev`, `build`, `start`, `install:ci`, `vite.config.ts`, Sites runtime scripts and `.openai/hosting.json` are retained.
-- `run-next.mjs` launches the installed Next CLI with a process-local `TSD_BUILD_TARGET=vercel`. It does not set this variable globally or require it in Vercel settings.
-- That target (or Vercel’s own `VERCEL=1` environment when reading the configuration) selects `tsconfig.vercel.json`. It keeps strict checking for application code while excluding Sites build infrastructure and Cloudflare ambient worker types. TypeScript errors are not ignored.
-- Next build uses its supported webpack path. No dependency versions or lockfile resolution were changed.
-- Next rewrites the ignored `next-env.d.ts`. The wrapper restores its previous bytes on normal completion, failure, SIGINT or SIGTERM. As with other cleanup handlers, it cannot run after SIGKILL or a machine crash; rerunning the existing Sites build regenerates its environment.
-- `.next-vercel/` and `dist/` remain ignored and separate. No Sites access-control/authentication infrastructure is transferred to Vercel. The current road editor does not invoke the Sites authentication helpers.
-
-## Verification
-
-Tested with Node 24.19.0 and pnpm 11.19.0. The Vercel path uses `.next-vercel/` so Next route validators cannot collide with vinext’s `.next/types/` declarations. Verified in this pass:
-
-- `pnpm test:builds`: Next.js 16.2.6 production build and original vinext production build passed; configuration and separate output checks passed.
-- `pnpm exec tsc --noEmit` after both builds: passed (including the former generated-route collision regression).
-- Next production server: `/`, `/junction`, `/roads` and each page's JavaScript asset returned HTTP 200.
-- Sites configuration/runtime scripts and dependency lockfile: unchanged from the baseline.
-
-These local production-build and HTTP smoke checks are supplemented by Vercel Preview build status on GitHub. A successful Preview check proves the branch builds on Vercel, but it is not a substitute for a deliberate visual/interaction acceptance pass. Production deployment remains controlled by the production branch.
-
-References: [Vercel build configuration](https://vercel.com/docs/builds/configure-a-build), [Next.js custom TypeScript configuration](https://nextjs.org/docs/app/api-reference/config/typescript#custom-tsconfig-path).

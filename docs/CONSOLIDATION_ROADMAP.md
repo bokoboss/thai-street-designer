@@ -38,6 +38,8 @@ Exit: baseline table committed to `docs/spec/UX_BASELINE_RESULTS.md`.
 
 Exit: all existing gates pass; screenshots of Network and Junction inspectors show no developer jargon.
 
+Status (2026-10-13): items 1–5 implemented on `consolidation/0c1-vercel-only`. Item 1 is enforced by `scripts/verify-ui-copy.cjs` (part of `pnpm test`). Remaining English UI labels (File/Export, FROM/TO, Generate Left/Right, Junction/Road Link) and the two section conventions are left for the glossary pass in Phase 3.
+
 ---
 
 ## Phase 1 — Core extraction and road-first spike
