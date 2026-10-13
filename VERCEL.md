@@ -5,8 +5,10 @@ The application is a standard Next.js app deployed on **Vercel**. Since 2026-10-
 ## Vercel project settings
 
 1. Import `bokoboss/thai-street-designer` with the repository root as Root Directory.
-2. Framework preset: **Next.js**. `vercel.json` sets `pnpm install --frozen-lockfile` and `pnpm run build`.
-3. Output directory: leave at the Next.js default. Remove any old project-level override such as `.next-vercel` or `dist`.
+2. Framework preset: **Next.js**. `vercel.json` sets `pnpm install --frozen-lockfile`, `pnpm run build` and output directory `.next`.
+3. Old dashboard overrides (for example `.next-vercel` or `dist`) are superseded by `vercel.json`; they can be cleared.
+
+The Cloudflare Workers build that served the former ChatGPT Sites path is no longer supported by this repository and should be disconnected from the repo.
 4. Node.js 24.x (matches CI). pnpm comes from `packageManager` in `package.json`.
 5. No database, API key or application environment variables are required.
 
