@@ -62,6 +62,8 @@ Pass criteria (all required):
 
 Exit: written spike report with evidence and a go / fallback decision recorded as ADR-0002.
 
+Status (2026-10-13): spike done — **GO** (all 8 checks pass; the existing demo is reproduced exactly). Report: `docs/spikes/1B_ROAD_FIRST_SPIKE.md`; decision proposed in `docs/decisions/ADR-0002-road-first-compile.md`. Phase 2 must add a road-end node, a fit-based arm length rule, length-aware marking defaults and leg-keyed treatments.
+
 ---
 
 ## Phase 2 — Road-first model
