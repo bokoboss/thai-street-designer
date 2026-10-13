@@ -3,10 +3,10 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {anchorGround,groundAt,orbitGround} from '../junction/camera3d';
 import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
-import {projectBounds,type NetworkProject} from '@/lib/network-project';
+import {projectBounds,type NetworkProject} from '@/core/network/network-project';
 import {
   resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
-} from '@/lib/network-scene-geometry';
+} from '@/core/network/network-scene-geometry';
 
 type Size={w:number;h:number};
 type CameraMode='pan'|'orbit';

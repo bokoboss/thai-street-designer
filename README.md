@@ -57,15 +57,15 @@ Product v1 ได้รับการยอมรับและ merge เข�
 
 ## Source
 
-- `app/junction/model.ts`: ข้อมูลแบบหลัก, schema v6, validation ระดับข้อมูล และ migration JSON รุ่นเก่า
-- `app/junction/geometry.ts`: **base junction geometry เท่านั้น** — ขอบถนน ทางเท้า ปากแยก median/pocket datums; ห้ามนำ Slip logic กลับเข้ามา
-- `app/junction/slip-model.ts`: source of truth ของ `Design.slips: SlipLane[]` และ lifecycle เพิ่ม/ลบ/แก้ Slip
-- `app/junction/slip-geometry.ts`: Slip overlay geometry, tangent/width transition, approach auxiliary, departure/acceleration, crossing และ validation เฉพาะ Slip
-- `app/junction/design-validation.ts`: รวม base-junction validation กับ Slip-overlay validation
+- `core/junction/model.ts`: ข้อมูลแบบหลัก, schema v6, validation ระดับข้อมูล และ migration JSON รุ่นเก่า
+- `core/junction/geometry.ts`: **base junction geometry เท่านั้น** — ขอบถนน ทางเท้า ปากแยก median/pocket datums; ห้ามนำ Slip logic กลับเข้ามา
+- `core/junction/slip-model.ts`: source of truth ของ `Design.slips: SlipLane[]` และ lifecycle เพิ่ม/ลบ/แก้ Slip
+- `core/junction/slip-geometry.ts`: Slip overlay geometry, tangent/width transition, approach auxiliary, departure/acceleration, crossing และ validation เฉพาะ Slip
+- `core/junction/design-validation.ts`: รวม base-junction validation กับ Slip-overlay validation
 - `app/junction/drawing.tsx`: ผัง SVG; render base junction และ Slip overlay แยกกัน
-- `app/junction/selection.ts` / `object-layer.tsx`: selection และ drag interaction ที่อ้าง geometry ชุดเดียวกับ renderer
+- `core/junction/selection.ts` / `object-layer.tsx`: selection และ drag interaction ที่อ้าง geometry ชุดเดียวกับ renderer
 - `app/junction/section-view.tsx` / `scene3d.tsx`: หน้าตัดและ 3D ที่ consume Slip overlay โดยไม่แก้ base road
-- `app/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D และหลบพื้นที่ Slip overlay
+- `core/junction/objects.ts`: ตำแหน่งต้นไม้/เสาไฟร่วม 2D/3D และหลบพื้นที่ Slip overlay
 - `app/junction/page.tsx`: เครื่องมือ ประวัติการแก้ไข autosave และส่งออก
 - `app/roads/page.tsx`: พื้นที่ทำงานวาดถนนอิสระ (Free Draw / Network)
 

@@ -79,7 +79,7 @@ export function normalizeNetworkScenarioWorkspace(raw:unknown):NetworkScenarioWo
     if(!value||typeof value!=='object')throw Error('Invalid scenario');
     const item=value as Record<string,unknown>,kind:NetworkScenarioKind=item.kind==='existing'?'existing':'alternative',
       id=String(item.id??''),name=String(item.name??''),sourceScenarioId=typeof item.sourceScenarioId==='string'?item.sourceScenarioId:undefined;
-    if(!id||id.length>40||!name.trim()||name.length>60)throw Error('Scenario metadata ไม่สมบูรณ์');
+    if(!id||id.length>40||!name.trim()||name.length>60)throw Error('ข้อมูลทางเลือกไม่สมบูรณ์');
     const scenario:NetworkScenario={id,name:name.trim(),kind,project:normalizeNetworkProject(item.project)};
     if(sourceScenarioId)scenario.sourceScenarioId=sourceScenarioId;
     return scenario;

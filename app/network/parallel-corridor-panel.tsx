@@ -5,7 +5,7 @@ import {
   type ParallelCorridorSide,
   type ParallelCorridorMemberRole,
   type RoadLink
-} from '@/lib/network-project';
+} from '@/core/network/network-project';
 
 type SeedMode=ParallelCorridorSide|'both';
 type Props={

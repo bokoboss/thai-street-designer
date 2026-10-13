@@ -1,4 +1,5 @@
-// Compile shared modules with verify-junction.cjs first.
+// Shared TypeScript build for regression scripts.
+require('./test-support/build.cjs')();
 const assert=require('node:assert/strict'),fs=require('fs'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),sharp=require('../node_modules/.pnpm/sharp@0.34.5/node_modules/sharp');
 const m=require('../.test-build/model.cjs'),g=require('../.test-build/geometry.cjs'),c=require('../.test-build/cross-section.cjs'),r=require('../.test-build/roundabout.cjs'),Drawing=require('../.test-build/drawing.cjs').default;
 let d=m.initial(),a=d.arms[0];a.corridorMode='preserve';a.length=150;a.median=8;const mouth=g.armMouth(d,0),origins=g.treatmentOrigins(a,mouth,false),baseline=g.bounds(a,a.length,origins);a.incomingPockets=m.emptyPockets();a.incomingPockets.right={lanes:1,length:25,taper:20};a.outgoingPockets=m.emptyPockets();a.outgoingPockets.right={lanes:1,length:15,taper:15};const o=origins.incoming;assert.equal(g.designError(d),null);for(let x=Math.max(origins.incoming,origins.outgoing);x<=a.length;x+=.5){assert(g.bounds(a,x,origins).every((v,i)=>Math.abs(v-baseline[i])<1e-8));const edges=c.medianEdges(a,x,origins);assert(edges[1]-edges[0]>=1.5-1e-8);}

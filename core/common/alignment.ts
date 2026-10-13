@@ -1,4 +1,4 @@
-import {offset,selfIntersects,type P} from '../app/junction/geometry';
+import {offset,selfIntersects,type P} from '../junction/geometry';
 export type Alignment={vertices:P[]};
 export type RadiusPoint=P&{radius?:number};
 export const lengthOf=(ps:P[])=>ps.slice(1).reduce((s,p,i)=>s+Math.hypot(p.x-ps[i].x,p.y-ps[i].y),0);

@@ -5,7 +5,7 @@ import {
 import {
   sampleStationProfile,transitionStationProfile,windowStationProfile,
   type StationValueProfile
-} from './station-profile';
+} from '../common/station-profile';
 
 export type LaneLifecycleSource='junction-endpoint'|'roadlink-component';
 export type ResolvedLaneLifecycle={

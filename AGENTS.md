@@ -30,7 +30,8 @@ Follow `docs/standards/STANDARDS_POLICY.md`. Do not label defaults as Thai stand
 ## Code style
 
 - Keep new modules small and readable; do not write multi-thousand-character lines.
-- New logic that is not UI belongs outside React components (target: `core/` after Phase 1A).
+- Engine logic (model, geometry, validation, migration, review, report) lives in `core/` and must not import React, Next, `app/`, `components/` or `lib/` (enforced by `scripts/verify-core-boundary.cjs`). UI code imports it as `@/core/...`.
+- Regression scripts load TypeScript through `scripts/test-support/build.cjs`; do not add per-script transpile code.
 - Add or adjust a failing regression first for behavior changes, then implement.
 
 ## Gates (must pass before a PR is ready)

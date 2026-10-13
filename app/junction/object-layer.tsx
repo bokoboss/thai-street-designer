@@ -1,12 +1,12 @@
 import {memo,useMemo,useState,useRef,useEffect} from 'react';
-import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displayFor} from './model';
-import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from './selection';
-import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,edges,type Edge} from './geometry';
-import {designError} from './design-validation';
-import {slipGeometryForArm,slipArcState,slipOffsetAtPoint} from './slip-geometry';
-import {slipForArm,updateSlip} from './slip-model';
-import {originFor,pocketOriginFor} from './allocation';
-import {arrowOffsetAtX,laneArrowKey,manualPlacementsForLane,resolvedArrow} from './arrow-layout';
+import {type Design,type Arm,pocketsFor,pocketLaneWidth,medianTreeDefaults,displayFor} from '@/core/junction/model';
+import {designShapes,candidates,selectionKey,type Selection,type HitShape,EditTransaction} from '@/core/junction/selection';
+import {rotate,armMouth,armTreatmentOrigins,innerEdge,carBounds,edges,type Edge} from '@/core/junction/geometry';
+import {designError} from '@/core/junction/design-validation';
+import {slipGeometryForArm,slipArcState,slipOffsetAtPoint} from '@/core/junction/slip-geometry';
+import {slipForArm,updateSlip} from '@/core/junction/slip-model';
+import {originFor,pocketOriginFor} from '@/core/junction/allocation';
+import {arrowOffsetAtX,laneArrowKey,manualPlacementsForLane,resolvedArrow} from '@/core/junction/arrow-layout';
 function ObjectLayerImpl({d,s,onSelect,onMenu,onPreview,onFinish,onArmHandle,edgeSet:sharedEdges,handlesEnabled=true}:{d:Design;s:Selection;onSelect:(s:Selection)=>void;onMenu:(items:HitShape[],x:number,y:number)=>void;onPreview:(d:Design)=>void;onFinish:(before:Design,after:Design,cancel:boolean)=>void;onArmHandle:(e:React.PointerEvent<SVGCircleElement>,id:number)=>void;edgeSet?:Edge[];handlesEnabled?:boolean}){const edgeSet=useMemo(()=>sharedEdges??edges(d),[d,sharedEdges]),shapes=useMemo(()=>designShapes(d,edgeSet),[d,edgeSet]),[hover,setHover]=useState(''),drag=useRef<{tx:EditTransaction<Design>;update:(x:number,p:{x:number;y:number},before:Design)=>Design}|null>(null);const point=(e:React.PointerEvent|React.MouseEvent)=>{const svg=(e.currentTarget as SVGElement).ownerSVGElement!,m=svg.getScreenCTM()!;return rotate(new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse()),-d.rotation/90);};
 function finish(cancel=false){if(!drag.current)return;const t=drag.current.tx;drag.current=null;onFinish(t.before,t.latest,cancel);}
 useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&drag.current){e.preventDefault();finish(true);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);});
