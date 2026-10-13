@@ -8,7 +8,7 @@ import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 process.chdir(root);
-const artifactDir='artifacts',profileDir='.sites-runtime/chrome-network-acceptance';
+const artifactDir='artifacts',profileDir='.test-build/chrome-network-acceptance';
 mkdirSync(artifactDir,{recursive:true});rmSync(profileDir,{recursive:true,force:true});
 
 function commandPath(names){
@@ -56,7 +56,7 @@ async function waitForJson(url,timeout=30000){
   throw new Error('Timed out waiting for '+url);
 }
 
-const server=spawn(process.execPath,['scripts/run-next.mjs','start','-p',String(port)],{cwd:root,env:{...process.env,TSD_BUILD_TARGET:'vercel'},stdio:['ignore','pipe','pipe']});
+const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port)],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});
 let serverLog='';server.stdout.on('data',d=>serverLog+=d);server.stderr.on('data',d=>serverLog+=d);
 let chrome=null,ws=null,seq=0;const pending=new Map();let runtimeErrors=[];
 const shutdown=()=>{

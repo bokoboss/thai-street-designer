@@ -21,7 +21,7 @@ Reviews on 2026-10-13 (running the apps, the test suites and probing the SCD ker
 ## Decision
 
 1. **One product, one codebase, one geometry engine.** Thai Street Designer is the base. Development continues in TypeScript.
-2. **Web first.** The deployment target is **Vercel / Next.js**. The ChatGPT Sites / vinext build path will be removed in a follow-up change. A desktop wrapper (for example Tauri around the same frontend) is deferred until there is a concrete need.
+2. **Web first.** The deployment target is **Vercel / Next.js**. The ChatGPT Sites / vinext build path was removed in Phase 0C. A desktop wrapper (for example Tauri around the same frontend) is deferred until there is a concrete need.
 3. **Feature freeze.** No new feature families (including Phase 8B ramps / transfer topology) until the consolidated workspace milestone (Phase 3 in `docs/CONSOLIDATION_ROADMAP.md`) is accepted. Bug fixes and regressions are allowed.
 4. **Target interaction model is road-first.** The engineer draws roads; crossing or connecting roads produces a *candidate junction* that the engineer confirms. Arms become the end portions of roads. This target is subject to the Phase 1 spike gate.
 5. **SCD and RCB become specification sources, not code sources.** Their product, UX, glossary, standards and marking documents are adapted into `docs/spec/`, `docs/standards/` and `docs/GLOSSARY.md`. No Rust code is imported.
