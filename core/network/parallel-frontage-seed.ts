@@ -1,5 +1,5 @@
-import {emptyPockets,markingsFor,type Design} from '../app/junction/model';
-import {profiledParallel} from './alignment';
+import {emptyPockets,markingsFor,type Design} from '../junction/model';
+import {profiledParallel} from '../common/alignment';
 import {
   addJunction,addParallelCorridor,connectPorts,junctionById,linkControlPoints,parallelCorridorChainContinuous,parallelCorridorChainOrientation,
   parallelCorridorForLink,rotateJunction,setLinkVia,updateParallelCorridor,validateNetworkProject,

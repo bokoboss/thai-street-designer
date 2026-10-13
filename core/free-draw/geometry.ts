@@ -1,4 +1,4 @@
-import {lengthOf,station,projectAlignment} from './alignment';
+import {lengthOf,station,projectAlignment} from '../common/alignment';
 export type Point={x:number;y:number};
 export type RoadConfig={lanes:number;laneWidth:number;median:number;shoulder:number;traffic:'Left'|'Right'};
 export type Road={vertices?:Point[];id:string;name:string;a:Point;b:Point;config:RoadConfig};

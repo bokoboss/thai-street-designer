@@ -1,4 +1,5 @@
-// Run verify-junction.cjs first to compile the pure modules.
+// Shared TypeScript build for regression scripts.
+require('./test-support/build.cjs')();
 const assert=require('node:assert/strict');
 const {buildVisibility,visibleOrder,cameraDirection}=require('../.test-build/visibility3d.cjs');
 const {initial}=require('../.test-build/model.cjs');

@@ -2,11 +2,11 @@ import {
   linkEndSection,linkLinearTransitionPossible,linkPoints,
   type LinkDirection,type LinkStationWidthComponent,type NetworkProject,type RoadLink,type WorldPoint
 } from './network-project';
-import {station,stationOffsets} from './alignment';
+import {station,stationOffsets} from '../common/alignment';
 import {
   endpointEnvelopeValues,endpointStationProfile,profileSampleStations,sampleStationProfile,
   windowStationProfile
-} from './station-profile';
+} from '../common/station-profile';
 import {
   laneCountSeries,resolveLinkLaneLifecycles,sampleLaneLifecycles,
   type ResolvedLaneLifecycleSet,type SampledLaneLifecycle

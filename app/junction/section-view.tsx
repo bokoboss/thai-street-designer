@@ -1,11 +1,11 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {roundSettings} from './roundabout';
-import {sectionFor,pocketsFor,type Design,type Direction} from './model';
-import {allocate} from './allocation';
-import {armMouth,armTreatmentOrigins,armIslands,edges,type Edge} from './geometry';
-import {resolveStreetSection,type ResolvedLane} from './lane-configuration';
-import {selectionKey,type Selection} from './selection';
+import {roundSettings} from '@/core/junction/roundabout';
+import {sectionFor,pocketsFor,type Design,type Direction} from '@/core/junction/model';
+import {allocate} from '@/core/junction/allocation';
+import {armMouth,armTreatmentOrigins,armIslands,edges,type Edge} from '@/core/junction/geometry';
+import {resolveStreetSection,type ResolvedLane} from '@/core/junction/lane-configuration';
+import {selectionKey,type Selection} from '@/core/junction/selection';
 
 export const sectionStart=(d:Design,id:number)=>d.type==='roundabout'?roundSettings(d).splitterLength+d.arms[id].medianOffset+8:0;
 

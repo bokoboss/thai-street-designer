@@ -1,12 +1,12 @@
 'use client';
 import {useMemo,useState} from 'react';
 import {CrossSection,sectionStart} from '../junction/section-view';
-import {armMouth} from '../junction/geometry';
-import type {Selection} from '../junction/selection';
-import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
-import {resolveLinkLaneLifecycles} from '@/lib/lane-lifecycle';
-import {sampleStationSeries} from '@/lib/station-profile';
-import type {JunctionInstance,NetworkProject,RoadLink} from '@/lib/network-project';
+import {armMouth} from '@/core/junction/geometry';
+import type {Selection} from '@/core/junction/selection';
+import {resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
+import {resolveLinkLaneLifecycles} from '@/core/network/lane-lifecycle';
+import {sampleStationSeries} from '@/core/common/station-profile';
+import type {JunctionInstance,NetworkProject,RoadLink} from '@/core/network/network-project';
 
 type Props={
   project:NetworkProject;

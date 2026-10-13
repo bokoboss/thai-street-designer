@@ -1,12 +1,12 @@
-import {type Design,type Arm,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,roadsideFor,medianTreeDefaults,options,laneArrowFor,withLaneArrow,markingsFor} from './model';
-import {autoLaneArrowPlacements,clampArrowOffset,laneArrowKey,manualPlacementsForLane,nextArrowId,normalizeArrowOverrides,resolvedArrow} from './arrow-layout';
-import {allocate,allocationMode} from './allocation';
-import {armMouth,edges,type Edge} from './geometry';
-import {slipGeometryForArm,slipCrossLimit,slipArcState} from './slip-geometry';
-import {slipForArm,addSlip,removeSlip,updateSlip,type SlipApproach,type SlipDeparture} from './slip-model';
-import {roundSettings} from './roundabout';
-import {plantingPlan} from './planting';
-import {type Selection,objectNames} from './selection';
+import {type Design,type Arm,type LaneRole,type LaneArrowCode,sectionFor,pocketsFor,roadsideFor,medianTreeDefaults,options,laneArrowFor,withLaneArrow,markingsFor} from '@/core/junction/model';
+import {autoLaneArrowPlacements,clampArrowOffset,laneArrowKey,manualPlacementsForLane,nextArrowId,normalizeArrowOverrides,resolvedArrow} from '@/core/junction/arrow-layout';
+import {allocate,allocationMode} from '@/core/junction/allocation';
+import {armMouth,edges,type Edge} from '@/core/junction/geometry';
+import {slipGeometryForArm,slipCrossLimit,slipArcState} from '@/core/junction/slip-geometry';
+import {slipForArm,addSlip,removeSlip,updateSlip,type SlipApproach,type SlipDeparture} from '@/core/junction/slip-model';
+import {roundSettings} from '@/core/junction/roundabout';
+import {plantingPlan} from '@/core/junction/planting';
+import {type Selection,objectNames} from '@/core/junction/selection';
 import {Num,Pick,Toggle} from './controls';
 export function QuickProperties({d,s,onArm,onDesign,onSelect,edgeSet:sharedEdges}:{d:Design;s:Selection;onArm:(p:Partial<Arm>)=>void;onDesign:(d:Design)=>void;onSelect?:(s:Selection)=>void;edgeSet?:Edge[]}){
 const a=d.arms[s.arm],dir=s.direction??'incoming',section=sectionFor(a,dir),pockets=pocketsFor(a,dir),p=pockets[s.side??'right'],tree={...medianTreeDefaults(),...a.medianTrees},plant=plantingPlan(d,s.arm),round=d.type==='roundabout',r=roundSettings(d),edgeSet=sharedEdges??edges(d),slip=slipForArm(d,s.arm),slipGeometry=slipGeometryForArm(d,s.arm,edgeSet),slipCrossMax=slipCrossLimit(slipGeometry),slipReceiver=slip?d.arms[slip.toArm]:null;

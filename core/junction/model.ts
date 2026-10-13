@@ -338,7 +338,7 @@ type LegacyDesignInput=Partial<Omit<Design,'arms'|'slips'>>&{type:string;arms:Le
 export function migrate(raw:unknown):Design{
   if(!raw||typeof raw!=='object')throw Error('Invalid design');
   const candidate=raw as Partial<LegacyDesignInput>;
-  if((candidate.schemaVersion??0)>6)throw Error('Unsupported future schema');
+  if((candidate.schemaVersion??0)>6)throw Error('ไฟล์นี้สร้างจากแอปรุ่นที่ใหม่กว่า จึงยังเปิดไม่ได้');
   if(typeof candidate.type!=='string'||!Array.isArray(candidate.arms))throw Error('Invalid design');
   const source=candidate as LegacyDesignInput,version=source.schemaVersion??0,defaults=initial(),r=source.type.startsWith('round');
   const arms=source.arms.map((input,i)=>{

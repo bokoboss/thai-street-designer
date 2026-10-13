@@ -1,6 +1,6 @@
 # Selection and Snapping
 
-Source: adapted from `street-concept-designer/docs/ux/SELECTION_SNAPPING_MODEL.md`. This application already has priority-based hit candidates, Alt-click cycling and an overlap chooser (see `app/junction/selection.ts`); this document defines the target behavior for the consolidated workspace.
+Source: adapted from `street-concept-designer/docs/ux/SELECTION_SNAPPING_MODEL.md`. This application already has priority-based hit candidates, Alt-click cycling and an overlap chooser (see `core/junction/selection.ts`); this document defines the target behavior for the consolidated workspace.
 
 ## Invariant
 

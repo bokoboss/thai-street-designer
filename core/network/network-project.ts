@@ -1,9 +1,9 @@
-import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../app/junction/model';
-import {normalizeArrowOverrides} from '../app/junction/arrow-layout';
-import {cachedEdges} from '../app/junction/geometry';
-import {slipGeometries} from '../app/junction/slip-geometry';
-import {designError} from '../app/junction/design-validation';
-import {lengthOf,smoothAlignment,validAlignment} from './alignment';
+import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../junction/model';
+import {normalizeArrowOverrides} from '../junction/arrow-layout';
+import {cachedEdges} from '../junction/geometry';
+import {slipGeometries} from '../junction/slip-geometry';
+import {designError} from '../junction/design-validation';
+import {lengthOf,smoothAlignment,validAlignment} from '../common/alignment';
 
 export type WorldPoint={x:number;y:number};
 export type PortRef={junctionId:string;armId:number};
@@ -231,7 +231,7 @@ function linkWidthTargetRange(project:NetworkProject,link:RoadLink,direction:Lin
 }
 export function addLinkStationComponent(project:NetworkProject,id:string,kind:'lane'|'width'):LinkStationComponentResult{
   const link=project.links.find(l=>l.id===id);if(!link)return{project,error:'ไม่พบ Road Link'};
-  if(link.sectionProfile.mode!=='linear'||!linkLinearTransitionPossible(project,link))return{project,error:'เปิด Resolved geometric transition ให้เรียบร้อยก่อนเพิ่ม station component'};
+  if(link.sectionProfile.mode!=='linear'||!linkLinearTransitionPossible(project,link))return{project,error:'เลือกโหมด “เปลี่ยนต่อเนื่องตามระยะ” ก่อนเพิ่มช่องเสริมหรือช่วงขยายขอบทาง'};
   if(link.components.length>=24)return{project,error:'Road Link รองรับ station components ได้ไม่เกิน 24 รายการ'};
   const total=Math.max(.5,linkLength(project,link)),start=total*.25,end=total*.75,span=end-start,taper=Math.min(20,span*.25),range=stationRange(total,start,end,taper,taper),
     componentId=nextId('C',link.components.map(v=>v.id)),
@@ -319,7 +319,7 @@ export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
     kind:'edge-section',
     message:'องค์ประกอบริมทางปลาย Link ไม่ตรงกัน · bike / shoulder / buffer / sidewalk ต้องกำหนด transition ก่อน'
   });
-  if(link.components.length&&!linear)out.push({kind:'station-component',message:'Station components ถูกพักไว้จนกว่า Road Link จะกลับมาเป็น Resolved geometric transition'});
+  if(link.components.length&&!linear)out.push({kind:'station-component',message:'ช่องเสริมตามระยะถูกพักไว้จนกว่าจะกลับเป็นโหมด “เปลี่ยนต่อเนื่องตามระยะ”'});
   if(link.components.some(component=>component.end>total+.01))out.push({kind:'station-component',message:'มี station component ยาวเกิน Road Link ปัจจุบัน · ปรับช่วง station หลังย้าย Junction/PI'});
   if(link.components.some(component=>component.kind==='width'&&!linkWidthTargets(project,link,component.direction).includes(component.target)))out.push({kind:'station-component',message:'มี edge-width component ที่ target ไม่ต่อเนื่องกับหน้าตัดปลาย Link แล้ว'});
   const points=linkControlPoints(project,link);
@@ -519,16 +519,16 @@ const filteredSeedReviewIds=(project:NetworkProject,chain:ParallelFrontageChain,
   return (chain.seedReviewJunctionIds??[]).filter(id=>allowed.has(id)&&project.junctions.some(j=>j.id===id));
 };
 export function parallelCorridorIssue(project:NetworkProject,corridor:ParallelCorridor){
-  if(!corridor||typeof corridor!=='object'||!corridor.id||corridor.id.length>40||typeof corridor.name!=='string'||!corridor.name.trim()||corridor.name.length>80||typeof corridor.mainlineStartJunctionId!=='string'||!corridor.mainlineStartJunctionId)return'Parallel corridor metadata ไม่สมบูรณ์';
+  if(!corridor||typeof corridor!=='object'||!corridor.id||corridor.id.length>40||typeof corridor.name!=='string'||!corridor.name.trim()||corridor.name.length>80||typeof corridor.mainlineStartJunctionId!=='string'||!corridor.mainlineStartJunctionId)return'ข้อมูลกลุ่มถนนหลักและทางขนานไม่สมบูรณ์';
   if(!parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId))return'Parallel corridor mainline chain / reference direction ไม่ต่อเนื่องหรืออ้าง Road Link ที่ไม่มีอยู่';
   if(!Array.isArray(corridor.frontage)||corridor.frontage.length<1||corridor.frontage.length>2)return'Parallel corridor ต้องมี frontage อย่างน้อยหนึ่งด้าน';
-  if(corridor.frontage.some(chain=>!chain||typeof chain!=='object'||!['left','right'].includes(chain.side)||!Array.isArray(chain.linkIds)))return'Parallel corridor frontage metadata ไม่สมบูรณ์';
+  if(corridor.frontage.some(chain=>!chain||typeof chain!=='object'||!['left','right'].includes(chain.side)||!Array.isArray(chain.linkIds)))return'ข้อมูลทางขนานในกลุ่มไม่สมบูรณ์';
   if(new Set(corridor.frontage.map(chain=>chain.side)).size!==corridor.frontage.length)return'Parallel corridor มี frontage side ซ้ำ';
   const owned=new Set(corridor.mainlineLinkIds);
   for(const chain of corridor.frontage){
     if(!chain||!['left','right'].includes(chain.side)||!parallelCorridorChainContinuous(project,chain.linkIds))return'Frontage chain ไม่ต่อเนื่องหรืออ้าง Road Link ที่ไม่มีอยู่';
     if(chain.seedReviewJunctionIds!==undefined){
-      if(!Array.isArray(chain.seedReviewJunctionIds)||chain.seedReviewJunctionIds.length>100||new Set(chain.seedReviewJunctionIds).size!==chain.seedReviewJunctionIds.length)return'Frontage seed review metadata ไม่สมบูรณ์';
+      if(!Array.isArray(chain.seedReviewJunctionIds)||chain.seedReviewJunctionIds.length>100||new Set(chain.seedReviewJunctionIds).size!==chain.seedReviewJunctionIds.length)return'ข้อมูลการตรวจทางขนานไม่สมบูรณ์';
       const allowed=frontageChainJunctionIds(project,chain.linkIds);
       if(chain.seedReviewJunctionIds.some(id=>!allowed.has(id)||!project.junctions.some(j=>j.id===id)))return'Frontage seed review อ้าง Junction ที่ไม่อยู่ใน frontage chain';
     }
@@ -697,14 +697,14 @@ export function projectBounds(project:NetworkProject,padding=35){
   return{x:minX,y:minY,w:Math.max(100,maxX-minX),h:Math.max(100,maxY-minY)};
 }
 export function validateNetworkProject(project:NetworkProject){
-  if(project.schemaVersion!==4||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors))return'Network schema ไม่รองรับ';
+  if(project.schemaVersion!==4||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors))return'รูปแบบข้อมูลโครงข่ายไม่รองรับ';
   if(typeof project.title!=='string'||project.title.length>120)return'ชื่อ Network ไม่ถูกต้อง';
   if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
   if(new Set(project.junctions.map(j=>j.id)).size!==project.junctions.length)return'Junction ID ซ้ำ';
   if(new Set(project.links.map(l=>l.id)).size!==project.links.length)return'Road Link ID ซ้ำ';
   if(new Set(project.parallelCorridors.map(v=>v.id)).size!==project.parallelCorridors.length)return'Parallel corridor ID ซ้ำ';
   for(const j of project.junctions){
-    if(!j.id||j.id.length>40||typeof j.name!=='string'||j.name.length>80||!Number.isFinite(j.x)||!Number.isFinite(j.y)||!Number.isFinite(j.rotation)||j.rotation<0||j.rotation>=360||!valid(j.design))return'Junction instance ไม่สมบูรณ์';
+    if(!j.id||j.id.length>40||typeof j.name!=='string'||j.name.length>80||!Number.isFinite(j.x)||!Number.isFinite(j.y)||!Number.isFinite(j.rotation)||j.rotation<0||j.rotation>=360||!valid(j.design))return'ข้อมูลทางแยกไม่สมบูรณ์';
   }
   const occupied=new Set<string>();
   for(const l of project.links){
@@ -749,10 +749,10 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
   if(!raw||typeof raw!=='object')throw Error('Invalid network project');
   const source=raw as {schemaVersion?:number;title?:unknown;junctions?:unknown[];links?:unknown[];parallelCorridors?:unknown};
   const schemaVersion=Number(source.schemaVersion);
-  if(![1,2,3,4].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('Unsupported network schema');
+  if(![1,2,3,4].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('รูปแบบข้อมูลโครงข่ายไม่รองรับ');
   if(schemaVersion===4&&source.parallelCorridors!==undefined&&!Array.isArray(source.parallelCorridors))throw Error('Invalid parallel corridor list');
   const junctions=source.junctions.map(input=>{
-    if(!input||typeof input!=='object')throw Error('Invalid junction instance');
+    if(!input||typeof input!=='object')throw Error('ข้อมูลทางแยกไม่ถูกต้อง');
     const item=input as Record<string,unknown>,rotation=((Number(item.rotation)%360)+360)%360;
     return{
       id:String(item.id??''),

@@ -1,13 +1,13 @@
 import {memo} from 'react';
-import {roundSettings} from './roundabout';
-import {roadObjects} from './objects';
-import {type Design,sectionFor,pocketsFor,pocketLaneWidth} from './model';
-import {activeIds,curbBoundsAt,armIslands,innerEdge,direction,laneY,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,crosswalkStripeBands,armTreatmentOrigins,dividerRange,junctionMarkingStart,STOP_LINE_WIDTH,type Edge} from './geometry';
-import {slipGeometries,slipArcState} from './slip-geometry';
-import {slipForArm} from './slip-model';
-import {resolvedArrowsForArm} from './arrow-layout';
-import {pocketFactorAt} from './allocation';
-import {resolvedBandEdge,resolvedLaneBoundaries,resolvedSidewalkEdges} from './lane-configuration';
+import {roundSettings} from '@/core/junction/roundabout';
+import {roadObjects} from '@/core/junction/objects';
+import {type Design,sectionFor,pocketsFor,pocketLaneWidth} from '@/core/junction/model';
+import {activeIds,curbBoundsAt,armIslands,innerEdge,direction,laneY,approachSamples,bounds,carBounds,armTurn,armMouths,coreSize,edges,path,rotate,crossingIntervals,crosswalkStripeBands,armTreatmentOrigins,dividerRange,junctionMarkingStart,STOP_LINE_WIDTH,type Edge} from '@/core/junction/geometry';
+import {slipGeometries,slipArcState} from '@/core/junction/slip-geometry';
+import {slipForArm} from '@/core/junction/slip-model';
+import {resolvedArrowsForArm} from '@/core/junction/arrow-layout';
+import {pocketFactorAt} from '@/core/junction/allocation';
+import {resolvedBandEdge,resolvedLaneBoundaries,resolvedSidewalkEdges} from '@/core/junction/lane-configuration';
 export function Mark({code,x,y,angle=0,mergeSide=1}:{code:string;x:number;y:number;angle?:number;mergeSide?:-1|1}){
 if(code==='none')return null;
 const merge=code==='merge',straight=['straight','sl','sr','all','su'].includes(code),left=['left','sl','lr','all'].includes(code),right=['right','sr','lr','all','ru'].includes(code),u=['uturn','su','ru'].includes(code);
