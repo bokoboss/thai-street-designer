@@ -2,9 +2,18 @@
 
 เว็บออกแบบแนวคิดทางแยกและวงเวียน สำหรับการจราจรชิดซ้าย
 
-รายละเอียดการปรับปรุงล่าสุดและข้อจำกัด: [Remediation report](REMEDIATION.md)
+## ทิศทางปัจจุบัน (13 ต.ค. 2569)
 
-สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [Project Context](docs/PROJECT_CONTEXT.md) เพื่อเข้าใจที่มา/เป้าหมายของแอพ แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md), [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) และ [Product v1 Release Audit](docs/PRODUCT_V1_RELEASE_AUDIT.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
+repository นี้เป็นฐานเดียวของผลิตภัณฑ์ โดยรวมแนวคิดจาก `street-concept-designer` และ `road-concept-builder` เข้ามาในรูปแบบสเปก ไม่ใช่โค้ด เป้าหมายคือ workspace เดียวแบบ road-first ที่วิศวกรใช้งานได้โดยไม่ต้องอ่านคู่มือ ระหว่างนี้งดเพิ่มฟีเจอร์ใหม่จนกว่า workspace ใหม่จะผ่านการยอมรับ
+
+- เหตุผลการตัดสินใจ: [ADR-0001](docs/decisions/ADR-0001-consolidation.md)
+- แผนงาน: [Consolidation Roadmap](docs/CONSOLIDATION_ROADMAP.md)
+- สเปก: [UX Architecture](docs/spec/UX_ARCHITECTURE.md) · [Golden Workflows](docs/spec/GOLDEN_WORKFLOWS.md) · [Selection & Snapping](docs/spec/SELECTION_SNAPPING.md) · [Pavement Marking](docs/spec/PAVEMENT_MARKING_SPEC.md) · [Glossary](docs/GLOSSARY.md) · [Standards](docs/standards/STANDARDS_POLICY.md)
+- สำหรับ coding agent: [AGENTS.md](AGENTS.md)
+
+รายละเอียดการปรับปรุงก่อนหน้าและข้อจำกัด: [Remediation report](REMEDIATION.md)
+
+สำหรับการรับช่วงพัฒนาต่อ ให้เริ่มจาก [AGENTS.md](AGENTS.md) และ [Project Context](docs/PROJECT_CONTEXT.md) แล้วอ่าน [HANDOFF.md](HANDOFF.md), [Architecture](docs/ARCHITECTURE.md), [Slip Lane Design Basis](docs/SLIP_LANE_DESIGN_BASIS.md) และ [Product v1 Release Audit](docs/PRODUCT_V1_RELEASE_AUDIT.md) ก่อนแก้โค้ด โดย repository/branch/commit/PR เป็น source of truth ไม่ใช่ความจำจากบทสนทนาเดิม
 
 ## Product v1 workflow
 
