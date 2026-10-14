@@ -43,9 +43,9 @@ All 8 checks pass (`results.json`). Engine checks per case: `designError` = null
 | # | Limit | Effect on road-first | Needed change |
 | --- | --- | --- | --- |
 | L1 | Network has no **road end** node; RoadLinks only join junction ports | Roads with no confirmed junction, grade-separated crossings, and curved tails beyond the last junction cannot be drawn | **Resolved in Phase 2** — Network schema v5 `roadEnds[]`; road-first compiles curved tails and unjunctioned roads to road-end links |
-| L2 | Junction arms are straight and **≥ 45 m** (`valid()`), and must fit stop line + solid divider | Junctions closer than ~90 m along a road, or a bend within 45 m of a junction, are misrepresented (spike stretches the arm to 45 m and reports it) | Replace the fixed minimum with a fit check against what the arm actually carries; let markings continue onto the RoadLink |
+| L2 | Junction arms are straight and **≥ 45 m** (`valid()`), and must fit stop line + solid divider | Junctions closer than ~90 m along a road, or a bend within 45 m of a junction, are misrepresented (spike stretches the arm to 45 m and reports it) | **Resolved in Phase 2** — arm length is checked against what the arm carries (`core/junction/arm-fit.ts`); a plain four-leg arm needs ~31 m and junctions ~70 m apart compile on the alignment. Continuing the solid divider onto the RoadLink is still open |
 | L3 | Junction Design has **4 arm slots** | 5+ legs rejected (reported) | Out of scope for now; record as known limit |
-| L4 | Arm marking defaults (solid divider 36 m) assume long arms | Short approach zones fail validation | Derive defaults from available length (spike shortens the solid line, then switches to dashed) |
+| L4 | Arm marking defaults (solid divider 36 m) assume long arms | Short approach zones fail validation | **Resolved in Phase 2** — the solid divider keeps its configured length and is drawn up to the arm end; a review note reports the shortened length |
 | L5 | Junction treatments are stored per arm slot | Re-deriving arms could re-assign pockets/Slip to the wrong leg | Key all arm-level treatments (pockets, markings overrides, roadside, Slip) by road leg; spike shows this for Slip |
 
 ## Conclusion
