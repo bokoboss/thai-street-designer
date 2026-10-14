@@ -296,7 +296,7 @@ export function valid(d:unknown):d is Design{
       &&(a.solidLength===undefined||(Number.isFinite(a.solidLength)&&a.solidLength>=1&&a.solidLength<=140))
       &&(a.roadside===undefined||(validRoadside(a.roadside.incoming)&&validRoadside(a.roadside.outgoing)))
       &&Number.isFinite(a.angle)&&a.angle>=0&&a.angle<360
-      &&Number.isFinite(a.length)&&a.length>=45&&a.length<=400
+      &&Number.isFinite(a.length)&&a.length>=12&&a.length<=400
       &&Array.isArray(a.bands)&&a.bands.length<=6&&a.bands.every(b=>typeof b.id==='string'&&['shoulder','bike','motorcycle','buffer'].includes(b.type)&&Number.isFinite(b.width)&&b.width>=.25&&b.width<=4.5)
       &&Number.isFinite(a.stopOffset)&&a.stopOffset>=0&&a.stopOffset<=35
       &&Number.isFinite(a.medianOffset)&&a.medianOffset>=0&&a.medianOffset<=35

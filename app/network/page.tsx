@@ -1,4 +1,5 @@
 'use client';
+import {fitArmLength} from '@/core/junction/arm-fit';
 import {useEffect,useRef,useState} from 'react';
 import {GitBranch,Link2,Map as MapIcon,Minus,MousePointer2,Plus,RotateCw,Trash2,Undo2,Redo2,Maximize2,Move,Network} from 'lucide-react';
 import '../junction/style.css';
@@ -449,7 +450,7 @@ export default function NetworkWorkspace(){
   function applyArmMove(current:ArmDragState,p:WorldPoint,shiftKey:boolean){
     const junction=junctionById(projectRef.current,current.id);if(!junction)return;
     const endpoint={x:current.startEndpoint.x+(p.x-current.startPointer.x),y:current.startEndpoint.y+(p.y-current.startPointer.y)},
-      dx=endpoint.x-junction.x,dy=endpoint.y-junction.y,length=Math.max(45,Math.min(400,Math.hypot(dx,dy))),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
+      dx=endpoint.x-junction.x,dy=endpoint.y-junction.y,length=fitArmLength(junction.design,current.armId,Math.hypot(dx,dy)),rawWorldAngle=normalizeAngle(Math.atan2(dy,dx)*180/Math.PI),
       appliedWorldAngle=shiftKey?normalizeAngle(Math.round(rawWorldAngle/15)*15):rawWorldAngle,
       localAngle=normalizeAngle(appliedWorldAngle-worldJunctionRotation(junction)),
       hint:ArmGuideHint|null=shiftKey?{kind:'snap',worldAngle:appliedWorldAngle,label:`SNAP ${appliedWorldAngle.toFixed(0)}°`}:nearestArmGuide(projectRef.current,current.id,current.armId,rawWorldAngle),

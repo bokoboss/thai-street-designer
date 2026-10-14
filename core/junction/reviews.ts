@@ -5,6 +5,7 @@ import {resolveStreetSection} from './lane-configuration';
 import {slipCrossingClearance,slipGeometries} from './slip-geometry';
 import {plantingPlan} from './planting';
 import {roundArmFeedback,roundFeedback} from './roundabout';
+import {dividerFit} from './arm-fit';
 import type {Selection} from './selection';
 export type Review={level:'geometry'|'engineering'|'note';message:string;selection:Selection};
 
@@ -40,6 +41,17 @@ export function designReviews(d:Design):Review[]{
         level:'engineering',
         selection:{kind:'signal',arm:i},
         message:`${a.name} · เปิดสัญญาณไฟแต่ไม่มีเส้นหยุด — ภาพแนวคิดควรมีแนวหยุดที่สัมพันธ์กับทางข้ามและสัญญาณ`
+      });
+    }
+
+    // Short arms draw the solid divider only up to the arm end; the configured length is kept.
+    const shortDivider=dividerFit(d,i);
+    for(const direction of ['incoming','outgoing'] as const){
+      const s=shortDivider[direction];if(!s)continue;
+      out.push({
+        level:'note',
+        selection:{kind:'approach',arm:i},
+        message:`${a.name} · เส้นทึบ${direction==='incoming'?'ขาเข้า':'ขาออก'}แสดงได้ ${s.shown.toFixed(1)} ม. จากที่กำหนด ${s.requested.toFixed(1)} ม. เพราะขาถนนสั้น — ตรวจความยาวเส้นทึบเมื่อทำแบบรายละเอียด`
       });
     }
 

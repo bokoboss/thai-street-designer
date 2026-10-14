@@ -4,7 +4,7 @@
 // existing geometry, Slip, review, 2D/3D and export path is reused unchanged.
 import {initial,markingsFor,type Arm,type Band,type Design} from '../junction/model';
 import {defaultSlip,type SlipLane} from '../junction/slip-model';
-import {designError} from '../junction/design-validation';
+import {requiredArmLength} from '../junction/arm-fit';
 import type {JunctionInstance,LinkEndRef,NetworkProject,RoadEnd,RoadEndSection,RoadLink,WorldPoint} from '../network/network-project';
 
 export type RoadSection={
@@ -22,7 +22,8 @@ export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[]};
 
-const EPS=1e-6,MIN_ARM=45,BEND_CLEARANCE=15,SHORT_TAIL=20;
+/** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
+const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
 const sub=(a:WorldPoint,b:WorldPoint)=>({x:a.x-b.x,y:a.y-b.y});
 const len=(v:WorldPoint)=>Math.hypot(v.x,v.y);
 const lerp=(a:WorldPoint,b:WorldPoint,t:number)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
@@ -81,7 +82,8 @@ function sectionArm(base:Arm,road:Road,side:'ahead'|'behind',angle:number,length
   return {...arm,laneMarkings:markingsFor(arm)};
 }
 
-type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number};
+/** available: preferred arm length; room: longest straight arm that still leaves the road's next bend or junction clear. */
+type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number;room:number};
 
 /** Compile roads + explicit decisions onto the existing Network model. */
 export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:CompileOptions={}):CompileResult{
@@ -97,10 +99,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
 
   /** Straight approach zone for a leg. A short straight tail is absorbed into the arm; otherwise the road continues as a link. */
   const legLength=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>{
-    if(toNextJunction!==null)return Math.min(approach,toNextJunction/2,vertexIsRoadEnd?toVertex:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
+    if(toNextJunction!==null)return Math.min(approach,(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toVertex:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
     if(vertexIsRoadEnd&&toRoadEnd<=approach+SHORT_TAIL)return toRoadEnd;
     return Math.min(approach,vertexIsRoadEnd?toRoadEnd:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
   };
+  const legRoom=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>
+    Math.min(toNextJunction===null?Infinity:(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toRoadEnd:toVertex-BEND_CLEARANCE);
   const junctions:JunctionInstance[]=[],legs:LegBinding[]=[],armLength=new Map<string,number>();
   confirmed.forEach(({d,c},jIndex)=>{
     const id=`J-${jIndex+1}`,found:Leg[]=[];
@@ -109,25 +113,23 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const next=list[k+1],prev=list[k-1];
       if(ref.station<total-tolerance){
         const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1],toEnd=total-ref.station;
-        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS)});
+        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS),room:legRoom(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS)});
       }
       if(ref.station>tolerance){
         const seg=segmentAt(road.points,ref.station,false),vertex=s[seg];
-        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS)});
+        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS),room:legRoom(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS)});
       }
     }
     if(found.length>4){issues.push(`${id}: มี ${found.length} ขา · เครื่องยนต์ทางแยกปัจจุบันรองรับสูงสุด 4 ขา`);found.length=4;}
     found.sort((a,b)=>a.heading-b.heading);
-    const base=initial(),arms:Arm[]=[],enabled:boolean[]=[];
+    const base=initial(),arms:Arm[]=[],enabled:boolean[]=[],room=new Map<number,number>();
     for(let i=0;i<4;i++){
       const leg=found[i];
       if(!leg){arms.push({...base.arms[i],angle:(found.length?found[found.length-1].heading:0)+90*(i-found.length+1)});enabled.push(false);continue;}
       const road=roadById.get(leg.roadId)!;
-      if(leg.available<MIN_ARM-EPS){issues.push(`${id}: ขา ${road.name} ${leg.side==='ahead'?'→':'←'} ยาวได้ ${leg.available.toFixed(1)} ม. แต่ขาทางแยกต้องยาวอย่างน้อย ${MIN_ARM} ม. (ถูกยืดเป็น ${MIN_ARM} ม. จึงไม่ตรงแนวถนน)`);leg.available=MIN_ARM;}
       arms.push(sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`));
       enabled.push(true);
-      legs.push({junctionId:id,armId:i,roadId:leg.roadId,side:leg.side});
-      armLength.set(`${id}:${i}`,leg.available);
+      legs.push({junctionId:id,armId:i,roadId:leg.roadId,side:leg.side});room.set(i,leg.room);
     }
     let design:Design={...base,arms,enabled,corner:d.treatments?.corner??base.corner,title:d.name??`ทางแยก ${jIndex+1}`};
     // Re-bind treatments by road leg (stable across recompiles), not by arm slot.
@@ -141,13 +143,16 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       slips.push({...defaultSlip(from,to,t.width,t.radius)});
     }
     design={...design,slips};
-    // Arm marking defaults assume long arms. Shorten the solid divider until the arm fits, then fall back to dashed.
-    for(let guard=0;guard<40&&designError(design)?.includes('สั้นเกินไปสำหรับเส้นหยุด');guard++){
-      design={...design,arms:design.arms.map((a,i)=>{
-        if(!design.enabled[i])return a;
-        const solid=a.solidLength??36,out=a.outgoingSolidLength??30;
-        return{...a,solidLength:Math.max(10,solid-2),outgoingSolidLength:Math.max(10,out-2),...(solid<=10?{dividerMode:'dashed' as const}:{}),...(out<=10?{outgoingDividerMode:'dashed' as const}:{})};
-      })};
+    // Fit-based arm length: an arm needs only what it carries. A leg too short for that is stretched and reported.
+    for(const leg of legs.filter(l=>l.junctionId===id)){
+      const road=roadById.get(leg.roadId)!,arm=design.arms[leg.armId],required=Math.ceil(requiredArmLength(design,leg.armId)*1000)/1000;
+      if(arm.length<required-EPS){
+        design.arms[leg.armId]={...arm,length:required};
+        // Lengthening within the straight part of the road keeps the arm on the alignment.
+        if(required<=room.get(leg.armId)!+EPS){armLength.set(`${id}:${leg.armId}`,required);continue;}
+        issues.push(`${id}: ขา ${road.name} ${leg.side==='ahead'?'→':'←'} มีช่วงตรง ${Math.max(0,room.get(leg.armId)!).toFixed(1)} ม. แต่ขานี้ต้องยาวอย่างน้อย ${required.toFixed(1)} ม. สำหรับปากทางแยกและสิ่งที่อยู่บนขา (ถูกยืดจึงไม่ตรงแนวถนน)`);
+      }
+      armLength.set(`${id}:${leg.armId}`,design.arms[leg.armId].length);
     }
     junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design});
   });
