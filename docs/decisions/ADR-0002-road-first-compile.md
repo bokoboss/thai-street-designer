@@ -1,6 +1,6 @@
 # ADR-0002 — Road-first authoring compiles to the existing engine
 
-- Status: **Proposed** (spike evidence ready; owner to accept)
+- Status: **Accepted** (owner decision, 2026-10-14)
 - Date: 2026-10-13
 - Context: [ADR-0001](ADR-0001-consolidation.md), roadmap Phase 1B, [spike report](../spikes/1B_ROAD_FIRST_SPIKE.md)
 
@@ -14,6 +14,10 @@
    - a **fit-based arm length rule** instead of the fixed 45 m minimum, with markings allowed to continue onto the RoadLink (L2);
    - **length-aware marking defaults** for short approach zones (L4).
 5. Junctions remain limited to four legs (L3), documented as a known limit.
+
+## Owner note (2026-10-14)
+
+Road-first is the drawing layer. Detailed junction characteristics (corner treatment, approach details, markings) are tuned afterwards in the junction detail work, not as part of the road-first change.
 
 ## Consequences
 
