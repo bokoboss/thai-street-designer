@@ -124,8 +124,9 @@ If **5** is no, put it in the future backlog and continue the current v1 milesto
 
 The product is now **Network-first**, while preserving the schema-v6 Junction engine as the local intersection source of truth.
 
-Current Network schema is **v4**:
+Current Network schema is **v5**:
 
+- `roadEnds[]` lets a road end without a junction; a `RoadLink` end is either a junction port or a road end (junction port → road end, or road end → road end for a standalone road). A road end owns its position, heading into the road and its section;
 - each `RoadLink` owns semantic endpoints, `LinkVia[]` control points and a radius per PI;
 - each `RoadLink` can persist station-based corridor components for lane and width lifecycles;
 - `parallelCorridors[]` groups ordinary RoadLinks as Mainline and Left/Right Frontage chains without owning duplicate geometry;
@@ -134,7 +135,7 @@ Current Network schema is **v4**:
 - `RoadLink.sectionProfile.mode` is explicit: `review` or `linear`;
 - linear section interpolation is allowed only when lane counts and edge-band topology match at both ends;
 - lane-count changes remain unresolved/explicit rather than being hidden by width interpolation;
-- Network schema v1/v2/v3 imports migrate conservatively to v4; early v4 Parallel Corridor files without an explicit reference start infer it deterministically during load;
+- Network schema v1–v4 imports migrate one way to v5 with `roadEnds: []`; early v4 Parallel Corridor files without an explicit reference start infer it deterministically during load;
 - plan rendering, link length, Fit, Scenario Comparison and Design Summary consume the same canonical Network state.
 
 The Slip work remains a **structural rewrite of Slip lane architecture**, not a cosmetic patch.
