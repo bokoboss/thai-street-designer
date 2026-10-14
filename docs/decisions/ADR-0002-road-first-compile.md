@@ -22,7 +22,7 @@ Road-first is the drawing layer. Detailed junction characteristics (corner treat
 ## Consequences
 
 - The fallback in ADR-0001 ("keep junctions as owned objects, change only creation") is **not needed**.
-- Existing Design v6 / Network v4 files migrate one way into roads + decisions: each RoadLink chain plus its end arms becomes a road; each junction becomes a confirmed decision with treatments re-keyed by leg. A golden test must show migrated files compile back to the same geometry.
+- Existing Design v6 / Network v4–v5 files migrate one way into roads + decisions: each RoadLink chain plus its end arms becomes a road; each junction becomes a confirmed decision with treatments re-keyed by leg. A golden test must show migrated files compile back to the same geometry.
 - Direct arm angle/length editing in Junction detail becomes road editing in the new workspace (Phase 3 UI work).
 - `core/road-first/derive.ts` is a prototype. It is kept as the reference for Phase 2 but must be rewritten with tests before it carries user data.
 

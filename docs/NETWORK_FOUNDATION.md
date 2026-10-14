@@ -1110,3 +1110,17 @@ One-shot assisted frontage generation now persists review provenance on the gene
 `seedReviewJunctionIds[]` contains only generated Junctions that still require explicit concept review. Validation restricts those IDs to Junctions on the same frontage chain. Design Summary surfaces them as engineering warnings, Scenario Comparison observes the lifecycle, and the Inspector can clear a frontage side with **Mark reviewed** without altering road geometry.
 
 The provenance remains part of ParallelCorridor engineering state and follows the same Project JSON, Scenario and Undo/Redo ownership rules as the rest of the Network model.
+
+
+## Network schema v5 — road ends (Consolidation Phase 2, ADR-0002 limit L1)
+
+`NetworkProject.roadEnds[]` adds a terminal node so a road can end without a junction.
+
+- `RoadEnd = { id, name, x, y, heading, section }`. `heading` points from the end **into** the road; outgoing lanes travel from the end into the road, matching the junction-arm convention.
+- `RoadLink.from` / `to` are `LinkEndRef = PortRef | { endId }`. Supported shapes: junction port → road end, road end → junction port, road end → road end (standalone road). A road end serves one link only and must face the link.
+- Helpers: `isJunctionPort`, `nodeId` (junction id or `end:<id>`), `worldPort`, `linkEndHeading`, `linkEndSection`, `portKey`, `addRoadEnd`, `removeRoadEnd`.
+- Removing a road end removes its link; removing a junction keeps road ends.
+- Parallel Corridors and assisted auxiliary proposals apply only to links between two junctions; links with a road end are skipped.
+- v1–v4 files migrate one way to v5 with `roadEnds: []`; geometry is unchanged. Future versions are rejected.
+
+Regression: `scripts/verify-road-ends.cjs`.

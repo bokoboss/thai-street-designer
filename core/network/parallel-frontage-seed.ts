@@ -2,7 +2,7 @@ import {emptyPockets,markingsFor,type Design} from '../junction/model';
 import {profiledParallel} from '../common/alignment';
 import {
   addJunction,addParallelCorridor,connectPorts,junctionById,linkControlPoints,parallelCorridorChainContinuous,parallelCorridorChainOrientation,
-  parallelCorridorForLink,rotateJunction,setLinkVia,updateParallelCorridor,validateNetworkProject,
+  isJunctionPort,nodeId,parallelCorridorForLink,rotateJunction,setLinkVia,updateParallelCorridor,validateNetworkProject,
   type JunctionInstance,type NetworkProject,type ParallelCorridor,type ParallelCorridorSide,type PortRef,type RoadLink
 } from './network-project';
 
@@ -25,8 +25,9 @@ function orientChain(project:NetworkProject,linkIds:string[],startJunctionId:str
   if(links.some(link=>!link))return null;
   let current=startJunctionId;const oriented:OrientedLink[]=[];
   for(const link of links as RoadLink[]){
-    if(link.from.junctionId===current){oriented.push({link,start:link.from,end:link.to,reversed:false});current=link.to.junctionId;}
-    else if(link.to.junctionId===current){oriented.push({link,start:link.to,end:link.from,reversed:true});current=link.from.junctionId;}
+    if(!isJunctionPort(link.from)||!isJunctionPort(link.to))return null; // frontage seeding follows junction-to-junction chains only
+    if(nodeId(link.from)===current){oriented.push({link,start:link.from,end:link.to,reversed:false});current=nodeId(link.to);}
+    else if(nodeId(link.to)===current){oriented.push({link,start:link.to,end:link.from,reversed:true});current=nodeId(link.from);}
     else return null;
   }
   return oriented;
@@ -99,7 +100,7 @@ export function seedParallelFrontage(project:NetworkProject,input:AssistedFronta
   if(!parallelCorridorChainContinuous(project,input.mainlineLinkIds))return{project,generated:[],error:'Mainline chain ไม่ต่อเนื่อง'};
   const existing=input.corridorId?project.parallelCorridors.find(v=>v.id===input.corridorId):undefined,
     firstLink=project.links.find(link=>link.id===input.mainlineLinkIds[0]),
-    mainlineStartJunctionId=existing?.mainlineStartJunctionId||input.mainlineStartJunctionId||firstLink?.from.junctionId||'',
+    mainlineStartJunctionId=existing?.mainlineStartJunctionId||input.mainlineStartJunctionId||(firstLink?nodeId(firstLink.from):''),
     orientation=parallelCorridorChainOrientation(project,input.mainlineLinkIds,mainlineStartJunctionId),
     oriented=orientation?orientChain(project,input.mainlineLinkIds,orientation.startJunctionId):null;
   if(!orientation||!oriented)return{project,generated:[],error:'จัด reference direction ของ mainline chain ไม่สำเร็จ'};

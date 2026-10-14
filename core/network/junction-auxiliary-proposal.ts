@@ -4,7 +4,7 @@ import {pocketsFor,type Direction,type Pocket} from '../junction/model';
 import {
   junctionById,linkLength,linkLinearTransitionPossible,updateJunctionArmPocket,validateNetworkProject,
   type JunctionAuxiliarySource,type LinkDirection,type LinkStationLaneComponent,type NetworkProject,type RoadLink
-} from './network-project';
+,isJunctionPort} from './network-project';
 
 export type JunctionAuxiliaryProposalStatus='ready'|'applied'|'local-only'|'blocked';
 export type JunctionAuxiliaryProposal={
@@ -89,7 +89,9 @@ function sourceMatchesProposal(source:JunctionAuxiliarySource,proposal:JunctionA
 export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink):JunctionAuxiliaryProposal[]{
   const total=Math.max(0,linkLength(project,link)),out:JunctionAuxiliaryProposal[]=[];
   for(const end of ['from','to'] as const){
-    const ref=end==='from'?link.from:link.to,junction=junctionById(project,ref.junctionId);
+    const endRef=end==='from'?link.from:link.to;
+    if(!isJunctionPort(endRef))continue; // road ends carry no junction treatments
+    const ref=endRef,junction=junctionById(project,ref.junctionId);
     if(!junction||!junction.design.enabled[ref.armId])continue;
     const arm=junction.design.arms[ref.armId];
     let origins:ReturnType<typeof armTreatmentOrigins>;

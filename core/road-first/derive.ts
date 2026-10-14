@@ -5,7 +5,7 @@
 import {initial,markingsFor,type Arm,type Band,type Design} from '../junction/model';
 import {defaultSlip,type SlipLane} from '../junction/slip-model';
 import {designError} from '../junction/design-validation';
-import type {JunctionInstance,NetworkProject,RoadLink,WorldPoint} from '../network/network-project';
+import type {JunctionInstance,LinkEndRef,NetworkProject,RoadEnd,RoadEndSection,RoadLink,WorldPoint} from '../network/network-project';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -22,7 +22,7 @@ export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[]};
 
-const EPS=1e-6,MIN_ARM=45;
+const EPS=1e-6,MIN_ARM=45,BEND_CLEARANCE=15,SHORT_TAIL=20;
 const sub=(a:WorldPoint,b:WorldPoint)=>({x:a.x-b.x,y:a.y-b.y});
 const len=(v:WorldPoint)=>Math.hypot(v.x,v.y);
 const lerp=(a:WorldPoint,b:WorldPoint,t:number)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
@@ -81,7 +81,7 @@ function sectionArm(base:Arm,road:Road,side:'ahead'|'behind',angle:number,length
   return {...arm,laneMarkings:markingsFor(arm)};
 }
 
-type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number;viaStation:number};
+type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number};
 
 /** Compile roads + explicit decisions onto the existing Network model. */
 export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:CompileOptions={}):CompileResult{
@@ -95,6 +95,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   confirmed.forEach(({c},jIndex)=>c.roads.forEach(r=>{const list=onRoad.get(r.roadId)??[];list.push({station:r.station,jIndex});onRoad.set(r.roadId,list);}));
   onRoad.forEach(list=>list.sort((a,b)=>a.station-b.station));
 
+  /** Straight approach zone for a leg. A short straight tail is absorbed into the arm; otherwise the road continues as a link. */
+  const legLength=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>{
+    if(toNextJunction!==null)return Math.min(approach,toNextJunction/2,vertexIsRoadEnd?toVertex:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
+    if(vertexIsRoadEnd&&toRoadEnd<=approach+SHORT_TAIL)return toRoadEnd;
+    return Math.min(approach,vertexIsRoadEnd?toRoadEnd:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
+  };
   const junctions:JunctionInstance[]=[],legs:LegBinding[]=[],armLength=new Map<string,number>();
   confirmed.forEach(({d,c},jIndex)=>{
     const id=`J-${jIndex+1}`,found:Leg[]=[];
@@ -102,18 +108,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const road=roadById.get(ref.roadId)!,s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)!,k=list.findIndex(v=>v.jIndex===jIndex);
       const next=list[k+1],prev=list[k-1];
       if(ref.station<total-tolerance){
-        const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1];
-        const limit=next?Math.min(approach,(next.station-ref.station)/2):Math.min(approach,total-ref.station);
-        const available=Math.min(limit,vertex-ref.station);
-        if(!next&&vertex<total-EPS&&vertex-ref.station<total-ref.station)issues.push(`${road.name}: ปลายถนนหลังทางแยก ${id} มีโค้ง · ช่วงหลังโค้งยังแสดงไม่ได้ (ต้องมีจุดปลายถนนในโมเดล)`);
-        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available,viaStation:ref.station+available});
+        const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1],toEnd=total-ref.station;
+        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS)});
       }
       if(ref.station>tolerance){
         const seg=segmentAt(road.points,ref.station,false),vertex=s[seg];
-        const limit=prev?Math.min(approach,(ref.station-prev.station)/2):Math.min(approach,ref.station);
-        const available=Math.min(limit,ref.station-vertex);
-        if(!prev&&vertex>EPS&&ref.station-vertex<ref.station)issues.push(`${road.name}: ปลายถนนก่อนทางแยก ${id} มีโค้ง · ช่วงก่อนโค้งยังแสดงไม่ได้ (ต้องมีจุดปลายถนนในโมเดล)`);
-        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available,viaStation:ref.station-available});
+        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS)});
       }
     }
     if(found.length>4){issues.push(`${id}: มี ${found.length} ขา · เครื่องยนต์ทางแยกปัจจุบันรองรับสูงสุด 4 ขา`);found.length=4;}
@@ -152,18 +152,46 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design});
   });
 
-  const links:RoadLink[]=[];
-  onRoad.forEach((list,roadId)=>{
-    const road=roadById.get(roadId)!,s=stations(road.points);
-    for(let k=0;k<list.length-1;k++){
-      const a=list[k],b=list[k+1],ja=`J-${a.jIndex+1}`,jb=`J-${b.jIndex+1}`;
-      const fromLeg=legs.find(l=>l.junctionId===ja&&l.roadId===roadId&&l.side==='ahead'),toLeg=legs.find(l=>l.junctionId===jb&&l.roadId===roadId&&l.side==='behind');
-      if(!fromLeg||!toLeg){issues.push(`${road.name}: เชื่อม ${ja}→${jb} ไม่ได้`);continue;}
-      const start=a.station+armLength.get(`${ja}:${fromLeg.armId}`)!,end=b.station-armLength.get(`${jb}:${toLeg.armId}`)!;
-      const via=road.points.filter((_,i)=>s[i]>start+EPS&&s[i]<end-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
-      links.push({id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:{junctionId:ja,armId:fromLeg.armId},to:{junctionId:jb,armId:toLeg.armId},via,sectionProfile:{mode:'review'},components:[]});
+  const links:RoadLink[]=[],roadEnds:RoadEnd[]=[];
+  const endSection=(road:Road,atStart:boolean):RoadEndSection=>{
+    const s=road.section,lane={width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[])};
+    // "outgoing" travels from the end into the road: forward lanes at the road start, backward lanes at the road end.
+    return{incoming:atStart?s.backwardLanes:s.forwardLanes,outgoing:atStart?s.forwardLanes:s.backwardLanes,median:s.median,width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[]),incomingSection:{...lane,bands:structuredClone(lane.bands)},outgoingSection:{...lane,bands:structuredClone(lane.bands)}};
+  };
+  const addEnd=(road:Road,atStart:boolean):LinkEndRef=>{
+    const pts=road.points,p=atStart?pts[0]:pts[pts.length-1],q=atStart?pts[1]:pts[pts.length-2];
+    const end:RoadEnd={id:`E-${roadEnds.length+1}`,name:`${road.name} (${atStart?'ต้นทาง':'ปลายทาง'})`,x:round(p.x),y:round(p.y),heading:round(headingDeg(sub(q,p)),6)%360,section:endSection(road,atStart)};
+    roadEnds.push(end);return{endId:end.id};
+  };
+  for(const road of roads){
+    const s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)??[];
+    type Node={ref:LinkEndRef;station:number};
+    const nodes:{ahead?:Node;behind?:Node}[]=[];
+    const first=list[0],last=list.at(-1);
+    // Road start: a junction leg absorbs it, otherwise a road end node.
+    if(!first||first.station>tolerance){
+      const fromJunction=first?legs.find(l=>l.junctionId===`J-${first.jIndex+1}`&&l.roadId===road.id&&l.side==='behind'):undefined;
+      const reach=fromJunction?first!.station-armLength.get(`${fromJunction.junctionId}:${fromJunction.armId}`)!:0;
+      if(!first||reach>EPS)nodes.push({ahead:{ref:addEnd(road,true),station:0}});
     }
-  });
-  for(const road of roads)if(!onRoad.has(road.id))issues.push(`${road.name}: ไม่มีทางแยกที่ยืนยัน · ถนนเดี่ยวยังแสดงไม่ได้ (ต้องมีจุดปลายถนนในโมเดล)`);
-  return {project:{schemaVersion:4,title:'Road-first spike',junctions,links,parallelCorridors:[]},legs,issues};
+    for(const v of list){
+      const jid=`J-${v.jIndex+1}`,ahead=legs.find(l=>l.junctionId===jid&&l.roadId===road.id&&l.side==='ahead'),behind=legs.find(l=>l.junctionId===jid&&l.roadId===road.id&&l.side==='behind');
+      nodes.push({
+        behind:behind?{ref:{junctionId:jid,armId:behind.armId},station:v.station-armLength.get(`${jid}:${behind.armId}`)!}:undefined,
+        ahead:ahead?{ref:{junctionId:jid,armId:ahead.armId},station:v.station+armLength.get(`${jid}:${ahead.armId}`)!}:undefined,
+      });
+    }
+    if(!last||last.station<total-tolerance){
+      const toJunction=last?legs.find(l=>l.junctionId===`J-${last.jIndex+1}`&&l.roadId===road.id&&l.side==='ahead'):undefined;
+      const reach=toJunction?last!.station+armLength.get(`${toJunction.junctionId}:${toJunction.armId}`)!:total;
+      if(!last||reach<total-EPS)nodes.push({behind:{ref:addEnd(road,false),station:total}});
+    }
+    for(let k=0;k<nodes.length-1;k++){
+      const from=nodes[k].ahead,to=nodes[k+1].behind;
+      if(!from||!to){issues.push(`${road.name}: ต่อช่วงถนนไม่ได้`);continue;}
+      const via=road.points.filter((_,i)=>s[i]>from.station+EPS&&s[i]<to.station-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
+      links.push({id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]});
+    }
+  }
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues};
 }

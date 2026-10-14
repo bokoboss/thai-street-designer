@@ -4,7 +4,7 @@ import {
   type NetworkProject,
   type ParallelCorridorSide,
   type ParallelCorridorMemberRole,
-  type RoadLink
+  type RoadLink,nodeId,isJunctionPort
 } from '@/core/network/network-project';
 
 type SeedMode=ParallelCorridorSide|'both';
@@ -37,12 +37,13 @@ export default function ParallelCorridorPanel({
     missingSides:ParallelCorridorSide[]=corridor?(['left','right'] as ParallelCorridorSide[]).filter(side=>!corridor.frontage.some(chain=>chain.side===side)):[],
     seedReviewChains=corridor?.frontage.filter(chain=>(chain.seedReviewJunctionIds?.length??0)>0)??[],
     orientation=corridor?parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId):null,
-    seedStart=orientation?.startJunctionId??selectedLink.from.junctionId,
-    seedEnd=orientation?.endJunctionId??selectedLink.to.junctionId;
+    seedStart=orientation?.startJunctionId??nodeId(selectedLink.from),
+    seedEnd=orientation?.endJunctionId??nodeId(selectedLink.to);
   const linkLabel=(id:string)=>{const link=project.links.find(v=>v.id===id);return link?link.name+' · '+id:id;};
   const junctionLabel=(id:string)=>{const junction=project.junctions.find(v=>v.id===id);return junction?junction.name+' · '+id:id;};
   const memberButton=(id:string,role:string)=><button key={role+':'+id} type="button" data-network-parallel-member={id} data-network-parallel-member-role={role} onClick={()=>onSelectLink(id)}><span>{role}</span><b>{linkLabel(id)}</b></button>;
   const seedControls=(modes:SeedMode[])=>modes.length?<div className="network-parallel-seed" data-network-parallel-seed="true"><div className="network-parallel-seed-head"><span>สร้างทางขนานอัตโนมัติ</span><b>แก้ไขได้หลังสร้าง</b></div><div className="network-parallel-reference" data-network-parallel-reference={seedStart+'>'+seedEnd}><span>ทิศอ้างอิงซ้าย/ขวา</span><b>{junctionLabel(seedStart)} → {junctionLabel(seedEnd)}</b><small>ซ้าย/ขวาอ้างอิงเมื่อมองจากต้นทาง → ปลายทาง</small></div><label>ระยะห่างแนวศูนย์กลาง (ม.)<input data-network-parallel-seed-offset type="number" min="20" max="200" step="5" value={seedOffset} onChange={e=>onSeedOffset(Number(e.target.value))}/></label><div className="network-parallel-seed-actions" data-network-parallel-seed-count={modes.length}>{modes.map(mode=><button key={mode} data-network-parallel-seed-action={mode} onClick={()=>onSeed(mode)}>{mode==='both'?'Generate Both':`Generate ${mode==='left'?'Left':'Right'}`}</button>)}</div><p><strong>ต้องตรวจหลังสร้าง ·</strong> สร้างถนนและทางแยกเป็นแบบตั้งต้นครั้งเดียว ระยะห่างไม่ถูกล็อก · ไม่สร้างทางเชื่อมหรือเชื่อมถนนตัดขวางให้อัตโนมัติ</p></div>:null;
+  if(!isJunctionPort(selectedLink.from)||!isJunctionPort(selectedLink.to))return <div className="network-parallel-panel" data-network-parallel-panel="unavailable"><div className="network-arm-editor-head"><span>ถนนหลักและทางขนาน</span></div><p className="network-note">ใช้ได้กับถนนที่อยู่ระหว่างทางแยกสองแห่งเท่านั้น</p></div>;
   return <div className="network-parallel-panel" data-network-parallel-panel={membership?'member':draftMainlineId?'draft':'available'} data-network-parallel-draft={draftMainlineId??undefined}>
     <div className="network-arm-editor-head"><span>ถนนหลักและทางขนาน</span><b>{corridor?.name??(draftLink?'กำลังสร้างกลุ่ม':'')}</b></div>
     {membership&&corridor?<>

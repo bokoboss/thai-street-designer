@@ -4,7 +4,7 @@ import {path} from '@/core/junction/geometry';
 import {profiledParallel,variableParallel} from '@/core/common/alignment';
 import {
   activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
-  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
+  type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,portKey
 } from '@/core/network/network-project';
 import {resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
 
@@ -197,7 +197,7 @@ export function NetworkDrawing({
   onLinkVertexSelect:(index:number)=>void;
   onPort:(ref:PortRef)=>void;
 }){
-  const occupiedPorts=new Set(project.links.flatMap(link=>[`${link.from.junctionId}:${link.from.armId}`,`${link.to.junctionId}:${link.to.armId}`])),
+  const occupiedPorts=new Set(project.links.flatMap(link=>[portKey(link.from),portKey(link.to)])),
     parallelCorridor=parallelCorridorId?project.parallelCorridors.find(v=>v.id===parallelCorridorId):undefined,
     parallelRole=(id:string):'mainline'|'left'|'right'|'draft-mainline'|undefined=>{
       if(parallelCorridor?.mainlineLinkIds.includes(id))return'mainline';

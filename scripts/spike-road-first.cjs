@@ -102,21 +102,23 @@ record('curved-between-junctions',()=>{
   roads[0].points[1].radius=60;roads[0].points[2].radius=60;
   const r=rf.compileRoadNetwork(roads,confirmAll(roads),{approachLength:50});
   assert.deepEqual(r.issues,[]);
-  assert.equal(r.project.links.length,1);assert.equal(r.project.links[0].via.length,2);
+  const between=r.project.links.filter(l=>np.isJunctionPort(l.from)&&np.isJunctionPort(l.to));
+  assert.equal(between.length,1);assert.equal(between[0].via.length,2);
   assert.deepEqual(engineChecks(r.project),[]);
   return {note:'2 PIs (R=60 m) carried into the RoadLink between the junctions',svg:render('04-curved-between',r.project)};
 });
 
-// 5. Curved road beyond the last junction: current model cannot represent the tail.
-record('curved-dead-end-limit',()=>{
+// 5. Curved road beyond the last junction: drawn through a road end (Phase 2 slice 1).
+record('curved-dead-end',()=>{
   const roads=[
     {id:'R1',name:'ถนนหลัก',points:[{x:-120,y:0},{x:120,y:0}],section:section()},
     {id:'R2',name:'ถนนโค้งปลายตัน',points:[{x:0,y:-80},{x:0,y:30},{x:60,y:110}],section:section()},
   ];
   const r=rf.compileRoadNetwork(roads,confirmAll(roads),{approachLength:60});
-  assert(r.issues.some(i=>i.includes('ปลายถนนหลังทางแยก')),'expected tail limitation');
+  const tail=r.project.links.find(l=>!np.isJunctionPort(l.to)&&l.name.startsWith('ถนนโค้งปลายตัน'));
+  assert(tail,'tail continues as a link to a road end');
   assert.deepEqual(engineChecks(r.project),[]);
-  return {note:'compiles, but the arm stops at the bend; the tail beyond the bend is dropped → needs a road-end node in the model',issues:r.issues,svg:render('05-curved-dead-end',r.project)};
+  return {note:'arm stops before the bend; the tail continues through the bend to a road end',issues:r.issues,svg:render('05-curved-dead-end',r.project)};
 });
 
 // 6. Slip lane is keyed to road legs: survives recompile after a section edit, and the junction mouth follows the road.
@@ -155,8 +157,9 @@ record('candidate-explicit',()=>{
   const none=rf.compileRoadNetwork(roads,[]),gs=rf.compileRoadNetwork(roads,[{candidateId:c.id,decision:'grade-separated'}]);
   assert.equal(none.project.junctions.length,0);assert.equal(gs.project.junctions.length,0);
   assert(none.issues.some(i=>i.includes('ยังไม่ได้ยืนยัน')));
-  assert(gs.issues.some(i=>i.includes('ถนนเดี่ยวยังแสดงไม่ได้')),'standalone roads have no representation yet');
-  return {note:'topology changes only on explicit confirmation; but unconfirmed/grade-separated roads cannot be drawn in the current model',issues:gs.issues};
+  assert.equal(gs.project.links.length,2);assert.equal(gs.project.roadEnds.length,4);
+  assert.deepEqual(engineChecks(gs.project),[]);
+  return {note:'topology changes only on explicit confirmation; grade-separated roads are drawn as two standalone roads',issues:gs.issues,svg:render('07-grade-separated',gs.project)};
 });
 
 // 8. Five legs exceed the four-slot junction design.
