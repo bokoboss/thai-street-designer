@@ -5,7 +5,7 @@
 import {initial} from '../junction/model';
 import type {NetworkProject} from '../network/network-project';
 import {compileRoadNetwork,type CompileOptions,type Decision,type JunctionTreatments,type Road} from './derive';
-import {LEG_FIELDS,ROAD_FIELDS,legKey,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
+import {DESIGN_FIELDS,LEG_FIELDS,ROAD_FIELDS,legKey,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 
 export * from './leg-binding';
 
@@ -18,7 +18,8 @@ const ROAD_FIELD_LABEL:Record<typeof ROAD_FIELDS[number],string>={
 export type CaptureResult={decisions:Decision[];issues:string[]};
 
 export function captureTreatments(roads:Road[],decisions:Decision[],edited:NetworkProject,options:CompileOptions={}):CaptureResult{
-  const plain=compileRoadNetwork(roads,decisions.map(d=>({...d,treatments:undefined})),options),issues:string[]=[];
+  // Baseline keeps the authored approach zones, so only edits made on the junction show up as differences.
+  const plain=compileRoadNetwork(roads,decisions.map(d=>({...d,treatments:d.treatments?.approaches?{approaches:d.treatments.approaches}:undefined})),options),issues:string[]=[];
   const roadName=new Map(roads.map(r=>[r.id,r.name]));
   const confirmed=decisions.filter(d=>d.decision==='junction');
   const next=decisions.map(d=>{
@@ -26,12 +27,12 @@ export function captureTreatments(roads:Road[],decisions:Decision[],edited:Netwo
     const id=`J-${index+1}`,base=plain.project.junctions.find(j=>j.id===id),mine=edited.junctions.find(j=>j.id===id);
     if(!base||!mine)return d;
     const legs=plain.legs.filter(l=>l.junctionId===id),keyOf=(armId:number)=>{const l=legs.find(x=>x.armId===armId);return l?legKey(l.roadId,l.side):undefined;};
-    const treatments:JunctionTreatments={};
+    const treatments:JunctionTreatments=d.treatments?.approaches?{approaches:structuredClone(d.treatments.approaches)}:{};
     const legTreatments:Partial<Record<LegKey,LegTreatment>>={};
     for(const leg of legs){
       const a=mine.design.arms[leg.armId],b=base.design.arms[leg.armId],key=legKey(leg.roadId,leg.side),t:LegTreatment={};
       if(!a||!mine.design.enabled[leg.armId])continue;
-      for(const field of LEG_FIELDS)if(!same(a[field],b[field]))(t as Record<string,unknown>)[field]=structuredClone(a[field]);
+      for(const field of LEG_FIELDS)if(!same(a[field],b[field]))(t as Record<string,unknown>)[field]=a[field]===undefined?null:structuredClone(a[field]);
       if(Object.keys(t).length)legTreatments[key]=t;
       const changed=ROAD_FIELDS.filter(f=>f!=='length'?!same(a[f],b[f]):Math.abs(a.length-b.length)>.01);
       if(changed.length)issues.push(`${mine.name}: ขา ${roadName.get(leg.roadId)??leg.roadId} ${leg.side==='ahead'?'→':'←'} เปลี่ยน${changed.map(f=>ROAD_FIELD_LABEL[f]).join(' / ')} บนทางแยก — ค่านี้เป็นของถนน ให้แก้ที่ถนน`);
@@ -44,7 +45,11 @@ export function captureTreatments(roads:Road[],decisions:Decision[],edited:Netwo
       slips.push({from,to,width:s.width,radius:s.radius,approach:structuredClone(s.approach),departure:structuredClone(s.departure),crossing:{...s.crossing},...(s.arrowOffset!==undefined?{arrowOffset:s.arrowOffset}:{})});
     }
     if(slips.length)treatments.slips=slips;
-    if(mine.design.corner!==initial().corner)treatments.corner=mine.design.corner;
+    const fresh=initial();
+    if(mine.design.corner!==fresh.corner)treatments.corner=mine.design.corner;
+    const settings:DesignSettings={};
+    for(const f of DESIGN_FIELDS)if(f!=='title'?!same(mine.design[f],fresh[f]):mine.design.title!==(d.name??base.design.title))(settings as Record<string,unknown>)[f]=structuredClone(mine.design[f]);
+    if(Object.keys(settings).length)treatments.design=settings;
     return {...d,treatments:Object.keys(treatments).length?treatments:undefined};
   });
   return {decisions:next,issues};

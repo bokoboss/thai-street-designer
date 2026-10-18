@@ -5,20 +5,30 @@
 import {initial,markingsFor,type Arm,type Band,type Design} from '../junction/model';
 import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {requiredArmLength} from '../junction/arm-fit';
-import {applyLegTreatment,legKey,parseLegKey,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
-import type {JunctionInstance,LinkEndRef,NetworkProject,RoadEnd,RoadEndSection,RoadLink,WorldPoint} from '../network/network-project';
+import {applyApproach,applyLegTreatment,legKey,parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
+import {isJunctionPort,type JunctionInstance,type LinkEndRef,type LinkSectionProfile,type LinkStationLaneComponent,type LinkStationWidthComponent,type NetworkProject,type RoadEnd,type RoadEndSection,type RoadLink,type WorldPoint} from '../network/network-project';
+import {proposalId} from '../network/junction-auxiliary-proposal';
+import type {Direction} from '../junction/model';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
 };
 export type RoadPoint=WorldPoint&{radius?:number};
-export type Road={id:string;name:string;points:RoadPoint[];section:RoadSection};
+/** Road end overrides: a road end keeps its own name, facing and section when they differ from the road. */
+export type RoadEndData={name?:string;heading?:number;section?:RoadEndSection};
+/** Pocket continuation source, stored relative to the link end instead of a junction id. */
+export type RoadLinkSource={kind:'junction-auxiliary';end:'from'|'to';direction:Direction;side:'left'|'right';lane:number};
+export type RoadLinkComponent=LinkStationWidthComponent|(Omit<LinkStationLaneComponent,'source'>&{source?:RoadLinkSource});
+/** Settings of the k-th RoadLink along the road (between consecutive junctions / road ends), in road direction. */
+export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;components?:RoadLinkComponent[]};
+export type Road={id:string;name:string;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[]};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
 /** Junction-owned treatments keyed by road leg, so they survive recompiles and road edits. */
-export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Record<LegKey,LegTreatment>>};
-export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;treatments?:JunctionTreatments};
+export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
+/** roads: the roads that join at this junction; any other road through the same point passes over or under it. */
+export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;roads?:string[];treatments?:JunctionTreatments};
 export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[]};
@@ -72,7 +82,13 @@ export function detectCandidates(roads:Road[],tolerance=1):Candidate[]{
   return out;
 }
 
-function sectionArm(base:Arm,road:Road,side:'ahead'|'behind',angle:number,length:number,name:string):Arm{
+/** Section at a road end derived from the road; "outgoing" travels from the end into the road. */
+export function endSection(road:Road,atStart:boolean):RoadEndSection{
+  const s=road.section,lane={width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[])};
+  return{incoming:atStart?s.backwardLanes:s.forwardLanes,outgoing:atStart?s.forwardLanes:s.backwardLanes,median:s.median,width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[]),incomingSection:{...lane,bands:structuredClone(lane.bands)},outgoingSection:{...lane,bands:structuredClone(lane.bands)}};
+}
+
+export function sectionArm(base:Arm,road:Road,side:'ahead'|'behind',angle:number,length:number,name:string):Arm{
   const s=road.section,bands=s.bands??[];
   // Leg pointing along the road's direction: traffic leaving the junction travels forward.
   const outgoing=side==='ahead'?s.forwardLanes:s.backwardLanes,incoming=side==='ahead'?s.backwardLanes:s.forwardLanes;
@@ -90,7 +106,14 @@ type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number;ro
 export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:CompileOptions={}):CompileResult{
   const approach=options.approachLength??40,tolerance=options.tolerance??1,issues:string[]=[];
   const candidates=detectCandidates(roads,tolerance),byId=new Map(candidates.map(c=>[c.id,c]));
-  const confirmed=decisions.filter(d=>d.decision==='junction').map(d=>({d,c:byId.get(d.candidateId)})).filter((v):v is {d:Decision;c:Candidate}=>{if(!v.c)issues.push(`ไม่พบจุดตัดที่เสนอ ${v.d.candidateId}`);return !!v.c;});
+  const confirmed=decisions.filter(d=>d.decision==='junction').map(d=>{
+    const c=byId.get(d.candidateId);
+    return{d,c:c&&d.roads?{...c,roads:c.roads.filter(r=>d.roads!.includes(r.roadId))}:c};
+  }).filter((v):v is {d:Decision;c:Candidate}=>{
+    if(!v.c){issues.push(`ไม่พบจุดตัดที่เสนอ ${v.d.candidateId}`);return false;}
+    if(v.c.roads.length<2){issues.push(`${v.d.name??v.d.candidateId}: ถนนที่เลือกให้มาบรรจบกันมีไม่ถึงสองสาย`);return false;}
+    return true;
+  });
   for(const c of candidates)if(!decisions.some(d=>d.candidateId===c.id))issues.push(`จุดตัด ${c.id} ยังไม่ได้ยืนยัน`);
   const roadById=new Map(roads.map(r=>[r.id,r]));
   // Junction stations per road, sorted.
@@ -126,17 +149,20 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const base=initial(),arms:Arm[]=[],enabled:boolean[]=[],room=new Map<number,number>();
     for(let i=0;i<4;i++){
       const leg=found[i];
-      if(!leg){arms.push({...base.arms[i],angle:(found.length?found[found.length-1].heading:0)+90*(i-found.length+1)});enabled.push(false);continue;}
+      if(!leg){arms.push({...base.arms[i],angle:round((((found.length?found[found.length-1].heading:0)+90*(i-found.length+1))%360+360)%360,4)});enabled.push(false);continue;}
       const road=roadById.get(leg.roadId)!;
-      arms.push(applyLegTreatment(sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`),d.treatments?.legs?.[legKey(leg.roadId,leg.side)]));
+      const key=legKey(leg.roadId,leg.side),approachZone=d.treatments?.approaches?.[key];
+      const derived=sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`);
+      arms.push(applyLegTreatment(applyApproach(derived,approachZone),d.treatments?.legs?.[key]??{}));
       enabled.push(true);
-      legs.push({junctionId:id,armId:i,roadId:leg.roadId,side:leg.side});room.set(i,leg.room);
+      // An authored approach length is kept as is; only a fit shortfall stretches it (and is reported).
+      legs.push({junctionId:id,armId:i,roadId:leg.roadId,side:leg.side});room.set(i,approachZone?.length??leg.room);
     }
-    let design:Design={...base,arms,enabled,corner:d.treatments?.corner??base.corner,title:d.name??`ทางแยก ${jIndex+1}`};
+    let design:Design={...base,...structuredClone(d.treatments?.design??{}),arms,enabled,corner:d.treatments?.corner??base.corner,title:d.treatments?.design?.title??d.name??`ทางแยก ${jIndex+1}`};
     // Re-bind treatments by road leg (stable across recompiles), not by arm slot.
     const armOf=(key:LegKey)=>{const leg=parseLegKey(key);return leg?legs.find(l=>l.junctionId===id&&l.roadId===leg.roadId&&l.side===leg.side)?.armId:undefined;};
     const legLabel=(key:LegKey)=>{const leg=parseLegKey(key),road=leg&&roadById.get(leg.roadId);return road?`${road.name} ${leg!.side==='ahead'?'→':'←'}`:key;};
-    for(const key of Object.keys(d.treatments?.legs??{}) as LegKey[])if(armOf(key)===undefined)issues.push(`${id}: การตั้งค่าขา ${legLabel(key)} อ้างขาถนนที่ไม่มีแล้ว`);
+    for(const key of [...Object.keys(d.treatments?.legs??{}),...Object.keys(d.treatments?.approaches??{})] as LegKey[])if(armOf(key)===undefined)issues.push(`${id}: การตั้งค่าขา ${legLabel(key)} อ้างขาถนนที่ไม่มีแล้ว`);
     const slips:SlipLane[]=[];
     for(const t of d.treatments?.slips??[]){
       const from=armOf(t.from);
@@ -167,15 +193,21 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   });
 
   const links:RoadLink[]=[],roadEnds:RoadEnd[]=[];
-  const endSection=(road:Road,atStart:boolean):RoadEndSection=>{
-    const s=road.section,lane={width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[])};
-    // "outgoing" travels from the end into the road: forward lanes at the road start, backward lanes at the road end.
-    return{incoming:atStart?s.backwardLanes:s.forwardLanes,outgoing:atStart?s.forwardLanes:s.backwardLanes,median:s.median,width:s.laneWidth,walk:s.walk,bands:structuredClone(s.bands??[]),incomingSection:{...lane,bands:structuredClone(lane.bands)},outgoingSection:{...lane,bands:structuredClone(lane.bands)}};
-  };
   const addEnd=(road:Road,atStart:boolean):LinkEndRef=>{
-    const pts=road.points,p=atStart?pts[0]:pts[pts.length-1],q=atStart?pts[1]:pts[pts.length-2];
-    const end:RoadEnd={id:`E-${roadEnds.length+1}`,name:`${road.name} (${atStart?'ต้นทาง':'ปลายทาง'})`,x:round(p.x),y:round(p.y),heading:round(headingDeg(sub(q,p)),6)%360,section:endSection(road,atStart)};
+    const pts=road.points,p=atStart?pts[0]:pts[pts.length-1],q=atStart?pts[1]:pts[pts.length-2],data=road.ends?.[atStart?'start':'end'];
+    const end:RoadEnd={id:`E-${roadEnds.length+1}`,name:data?.name??`${road.name} (${atStart?'ต้นทาง':'ปลายทาง'})`,x:round(p.x),y:round(p.y),
+      heading:data?.heading??round(headingDeg(sub(q,p)),6)%360,section:structuredClone(data?.section??endSection(road,atStart))};
     roadEnds.push(end);return{endId:end.id};
+  };
+  const linkData=(road:Road,link:RoadLink,data:RoadLinkData|undefined):RoadLink=>{
+    if(!data)return link;
+    const components=(data.components??[]).flatMap(c=>{
+      if(c.kind!=='lane'||!c.source)return[structuredClone(c) as RoadLink['components'][number]];
+      const {source:raw,...rest}=structuredClone(c),source=raw!,ref=link[source.end];
+      if(!isJunctionPort(ref)){issues.push(`${road.name}: ช่องต่อเนื่องจากทางแยกบนช่วงถนนนี้ไม่มีทางแยกที่ปลายแล้ว`);return[rest as LinkStationLaneComponent];}
+      return[{...rest,source:{kind:'junction-auxiliary' as const,handoffId:proposalId(link,source.end,source.direction,source.side),junctionId:ref.junctionId,armId:ref.armId,direction:source.direction,side:source.side,lane:source.lane}}];
+    });
+    return{...link,name:data.name??link.name,sectionProfile:structuredClone(data.sectionProfile??link.sectionProfile),components};
   };
   for(const road of roads){
     const s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)??[];
@@ -200,12 +232,15 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const reach=toJunction?last!.station+armLength.get(`${toJunction.junctionId}:${toJunction.armId}`)!:total;
       if(!last||reach<total-EPS)nodes.push({behind:{ref:addEnd(road,false),station:total}});
     }
+    let span=0;
     for(let k=0;k<nodes.length-1;k++){
       const from=nodes[k].ahead,to=nodes[k+1].behind;
       if(!from||!to){issues.push(`${road.name}: ต่อช่วงถนนไม่ได้`);continue;}
       const via=road.points.filter((_,i)=>s[i]>from.station+EPS&&s[i]<to.station-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
-      links.push({id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]});
+      links.push(linkData(road,{id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]},road.links?.[span]));
+      span++;
     }
+    if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues};
 }

@@ -1135,3 +1135,24 @@ Road-first compile re-derives junction arm slots from road headings on every com
 - `captureTreatments(roads, decisions, editedProject)` compares an edited compile with a plain compile of the same roads and returns decisions whose treatments are keyed by leg; compiling them reproduces the edited junction exactly.
 
 Not yet wired into the UI; the Draw Road workflow is Phase 3.
+
+## Road-first project file and migration (Consolidation Phase 2)
+
+`RoadFirstProject` (`core/road-first/project.ts`, `kind: 'road-first'`, `schemaVersion: 1`) stores the authored model; the NetworkProject is always compiled from it.
+
+- **Road**: alignment points (PI radius), typical section, optional road-end overrides (name, facing, section) and per-span RoadLink data (name, section profile, station components; a pocket continuation is stored relative to the link end).
+- **Decision** (one per crossing candidate): `junction` / `grade-separated` / `ignore`, the name, `roads` that join the junction (other roads through the point pass over or under), and treatments:
+  - `approaches[leg]`: approach zone length and any approach-specific section;
+  - `legs[leg]`: junction-owned arm settings;
+  - `slips`, `corner`, `design` (junction-wide settings such as type and roundabout size).
+  - In stored overrides `null` means "remove this setting" (JSON drops `undefined`).
+- Future versions are rejected; a file whose compiled network fails engine validation is rejected on load.
+
+`migrateNetworkProject(net)` (`core/road-first/migrate.ts`) is one way:
+
+1. Arms are paired through each junction (opposite arms of a 4-leg, the straightest pair of a 3-leg); chains of road end / arm → RoadLink → arm · junction · paired arm → … become roads.
+2. Each junction becomes a confirmed decision; arm length and section go to the approach zone; other differences from the derived arm go to leg treatments; Slip is re-keyed by leg; instance and design rotation fold into arm headings.
+3. Crossings that are not existing junctions become `grade-separated`.
+4. Self-check: the result is compiled and compared with the original using the world-space geometry digest (`core/road-first/geometry-digest.ts`, 1 cm); any difference is reported.
+
+Not carried yet (reported): parallel corridor relationships; closed loops where every junction passes the road straight through.
