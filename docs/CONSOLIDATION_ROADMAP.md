@@ -49,6 +49,8 @@ Status (2026-10-13): items 1–5 implemented on `consolidation/0c1-vercel-only`.
 - UI imports only from the core's public API.
 - No behavior change: existing regression and browser suites must pass unchanged.
 
+Status (2026-10-13): done on `consolidation/1a-core-extraction` — 35 modules moved to `core/{junction,network,common,free-draw}`, boundary test added, regression scripts share one TypeScript test build. User-facing engine messages (reviews, proposals, import errors, report header/footer) were also brought under the copy guard.
+
 ### 1B — Road-first spike (time-boxed, disposable branch)
 Question: can a junction be **derived from crossing roads** while reusing the current edge, curb-return, mouth/datum, pocket and Slip geometry?
 

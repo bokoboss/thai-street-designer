@@ -28,7 +28,7 @@ const BANNED=[
 function files(dir){
   return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>{
     const p=path.join(dir,e.name);
-    return e.isDirectory()?files(p):p.endsWith('.tsx')?[p]:[];
+    return e.isDirectory()?files(p):/\.tsx?$/.test(p)?[p]:[];
   });
 }
 const looksLikeCode=s=>/=>|;|&&|\|\||\[data-|^\s*[\w.$-]+\s*$|https?:\/\/|\bfunction\b|\b(const|let|return)\s|\w\(|\w={1,3}[\w'"({]|\n\s*[\w.]+[,:]/.test(s)||!/[A-Za-z฀-๿]{3}/.test(s.replace(/\b\w+\b(?=\s*[,:)])/g,''));
@@ -44,7 +44,8 @@ function candidates(source){
 }
 
 const violations=[];
-for(const file of files('app')){
+// UI components and engine messages that the UI displays (reviews, proposals, errors).
+for(const file of [...files('app'),...files('core')]){
   const source=fs.readFileSync(file,'utf8');
   for(const [index,text] of candidates(source)){
     for(const [pattern,label] of BANNED){
@@ -58,9 +59,7 @@ for(const file of files('app')){
 assert.equal(violations.length,0,'Developer-facing text in UI:\n'+violations.join('\n'));
 
 // Lane-count status shown in the road Inspector must reflect actual lane counts.
-const ts=require('typescript');
-const code=ts.transpileModule(fs.readFileSync('lib/link-lane-status.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
-fs.mkdirSync('.test-build',{recursive:true});fs.writeFileSync('.test-build/link-lane-status.cjs',code);
+require('./test-support/build.cjs')();
 const {laneCountStatus,laneCountStatusLabel}=require(path.resolve('.test-build/link-lane-status.cjs'));
 assert.equal(laneCountStatus('review',false,false),'matched','equal lane counts must not be reported as a mismatch');
 assert.equal(laneCountStatus('review',true,false),'mismatch');

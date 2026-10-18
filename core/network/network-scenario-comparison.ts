@@ -1,4 +1,4 @@
-import {pocketsFor,sectionFor,type Arm,type Direction} from '../app/junction/model';
+import {pocketsFor,sectionFor,type Arm,type Direction} from '../junction/model';
 import {activeArmIds,linkEndSection,linkLength,linkPoints,parallelCorridorForLink,portKey,portPoint,type JunctionInstance,type NetworkProject,type RoadLink} from './network-project';
 
 export type ScenarioDeltaStatus='added'|'removed'|'changed';
@@ -194,7 +194,7 @@ function roadLinkInspectionRows(project:NetworkProject|undefined,link:RoadLink|u
     laneText=from&&to?`${from.forwardLanes}/${from.backwardLanes} → ${to.forwardLanes}/${to.backwardLanes}`:'unresolved';
   return new Map([
     ['Endpoints',`${portKey(link.from)} → ${portKey(link.to)}`],
-    ['Resolved length',`${fmt(linkLength(project,link))} m`],
+    ['Alignment length',`${fmt(linkLength(project,link))} m`],
     ['PI / via points',String(link.via.length)],
     ['Section mode',link.sectionProfile.mode],
     ['End lanes F/B',laneText],

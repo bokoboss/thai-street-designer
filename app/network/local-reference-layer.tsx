@@ -1,5 +1,5 @@
 'use client';
-import type {LocalImageReference} from '@/lib/local-reference';
+import type {LocalImageReference} from '@/core/network/local-reference';
 
 const DB_NAME='thai-street-local-reference-v1',STORE_NAME='images',IMAGE_KEY='active-site-plan';
 

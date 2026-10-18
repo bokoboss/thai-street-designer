@@ -1,10 +1,10 @@
-import {profiledParallel} from './alignment';
+import {profiledParallel} from '../common/alignment';
 import {resolveLinkSectionGeometry} from './network-link-geometry';
 import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
-} from '../app/junction/scene-surfaces';
-import {furnitureFaces} from '../app/junction/furniture3d';
+} from '../junction/scene-surfaces';
+import {furnitureFaces} from '../junction/furniture3d';
 import {worldJunctionRotation,type JunctionInstance,type NetworkProject,type WorldPoint} from './network-project';
 
 export type NetworkSceneSurfaceKind=JunctionSceneSurfaceKind;

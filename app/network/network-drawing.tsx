@@ -1,12 +1,12 @@
 'use client';
 import Drawing from '../junction/drawing';
-import {path} from '../junction/geometry';
-import {profiledParallel,variableParallel} from '@/lib/alignment';
+import {path} from '@/core/junction/geometry';
+import {profiledParallel,variableParallel} from '@/core/common/alignment';
 import {
   activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink
-} from '@/lib/network-project';
-import {resolveLinkSectionGeometry} from '@/lib/network-link-geometry';
+} from '@/core/network/network-project';
+import {resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
 
 export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;

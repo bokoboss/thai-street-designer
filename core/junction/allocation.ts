@@ -1,4 +1,4 @@
-import {taperOutFactor} from '../../lib/lifecycle-math';
+import {taperOutFactor} from '../common/lifecycle-math';
 import {sectionFor,pocketsFor,pocketLaneWidth,type Arm,type Direction,type Pocket} from './model';
 
 export type AllocationMode='auto'|'median'|'retain'|'widen'|'reallocate'|'legacy-preserve';

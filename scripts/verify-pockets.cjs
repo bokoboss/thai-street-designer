@@ -1,4 +1,5 @@
-// Run verify-junction.cjs first to compile TS modules.
+// Shared TypeScript build for regression scripts.
+require('./test-support/build.cjs')();
 const assert=require('node:assert/strict'),fs=require('fs'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),sharp=require('../node_modules/.pnpm/sharp@0.34.5/node_modules/sharp');
 const {initial,migrate,sectionFor,emptyPockets}=require('../.test-build/model.cjs'),g=require('../.test-build/geometry.cjs'),sm=require('../.test-build/slip-model.cjs'),Drawing=require('../.test-build/drawing.cjs').default;
 const design=initial();design.arms.forEach(a=>{a.length=160;a.corridorMode="widen";});const a=design.arms[0];a.incomingSection={width:3.5,walk:3,bands:[{id:'bike',type:'bike',width:1.5}]};a.outgoingSection={width:3,walk:1.5,bands:[{id:'shoulder',type:'shoulder',width:1}]};a.incomingPockets={left:{lanes:1,length:30,taper:20},right:{lanes:2,length:25,taper:20}};a.outgoingPockets={left:{lanes:2,length:35,taper:25},right:{lanes:1,length:25,taper:15}};

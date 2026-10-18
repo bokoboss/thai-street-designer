@@ -6,11 +6,11 @@ import {ActionSearch} from '../junction/action-search';
 import {MousePointer2,Route,GitBranch,CornerDownRight,Split,Trash2,Hand,Plus,Minus,Maximize,RotateCcw,Undo2,MoveUpRight} from 'lucide-react';
 import {Slider} from '@/components/ui/slider';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
-import {Road,RoadConfig,Component,Point,presets,generateRoad,project,componentFrame,demo,distance} from '@/lib/geometry';
-import {vertices,withVertices,snapEndpoint,moveVertex,networkNodes,pocketIssue,pocketImpact} from '@/lib/network';
-import {station,parallel,validAlignment} from '@/lib/alignment';
-import {path} from '../junction/geometry';
-import {pocketFactor} from '../junction/cross-section';
+import {Road,RoadConfig,Component,Point,presets,generateRoad,project,componentFrame,demo,distance} from '@/core/free-draw/geometry';
+import {vertices,withVertices,snapEndpoint,moveVertex,networkNodes,pocketIssue,pocketImpact} from '@/core/free-draw/network';
+import {station,parallel,validAlignment} from '@/core/common/alignment';
+import {path} from '@/core/junction/geometry';
+import {pocketFactor} from '@/core/junction/cross-section';
 type Tool='select'|'road'|'junction'|'pocket'|'opening'|'delete'|'pan';
 const toolList=[['select','เลือก',MousePointer2],['road','ถนน',Route],['junction','แขนทางแยก',GitBranch],['pocket','เลนรอเลี้ยว',CornerDownRight],['opening','ช่องเปิดเกาะ',Split],['pan','เลื่อน',Hand],['delete','ลบ',Trash2]] as const;
 function nextId(prefix:string,ids:string[]){let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;}

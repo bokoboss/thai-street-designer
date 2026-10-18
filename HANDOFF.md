@@ -143,10 +143,10 @@ Current design schema is **v6**:
 
 - `Design.slips: SlipLane[]` is the Slip source of truth.
 - `Arm` no longer owns runtime Slip state.
-- `app/junction/geometry.ts` is base-junction geometry only.
-- `app/junction/slip-model.ts` owns Slip state/lifecycle.
-- `app/junction/slip-geometry.ts` builds the Slip overlay.
-- `app/junction/design-validation.ts` composes base and Slip validation.
+- `core/junction/geometry.ts` is base-junction geometry only.
+- `core/junction/slip-model.ts` owns Slip state/lifecycle.
+- `core/junction/slip-geometry.ts` builds the Slip overlay.
+- `core/junction/design-validation.ts` composes base and Slip validation.
 - Generic `incomingPockets/outgoingPockets` are no longer used as hidden Slip state.
 
 The key invariant is:
@@ -334,19 +334,19 @@ Read `VERCEL.md`.
 - `docs/PROJECT_CONTEXT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SLIP_LANE_DESIGN_BASIS.md`
-- `app/junction/model.ts`
-- `app/junction/geometry.ts`
-- `app/junction/slip-model.ts`
-- `app/junction/slip-geometry.ts`
-- `app/junction/design-validation.ts`
+- `core/junction/model.ts`
+- `core/junction/geometry.ts`
+- `core/junction/slip-model.ts`
+- `core/junction/slip-geometry.ts`
+- `core/junction/design-validation.ts`
 - `app/junction/drawing.tsx`
-- `app/junction/selection.ts`
+- `core/junction/selection.ts`
 - `app/junction/object-layer.tsx`
 - `app/junction/section-view.tsx`
 - `app/junction/scene3d.tsx`
 - `scripts/verify-junction.cjs`
-- `lib/network-project.ts`
-- `lib/alignment.ts`
+- `core/network/network-project.ts`
+- `core/common/alignment.ts`
 - `app/network/page.tsx`
 - `app/network/network-drawing.tsx`
 - `docs/NETWORK_FOUNDATION.md`

@@ -1,7 +1,7 @@
 import type {Road,Point,Component} from './geometry';
-import {initial,emptyPockets,type Arm} from '../app/junction/model';
-import {allocate} from '../app/junction/allocation';
-import {validAlignment,lengthOf,station} from './alignment';
+import {initial,emptyPockets,type Arm} from '../junction/model';
+import {allocate} from '../junction/allocation';
+import {validAlignment,lengthOf,station} from '../common/alignment';
 export const vertices=(r:Road)=>r.vertices??[r.a,r.b];
 export const withVertices=(r:Road,ps:Point[]):Road=>({...r,vertices:ps,a:ps[0],b:ps.at(-1)!});
 export function snapEndpoint(roads:Road[],p:Point,exclude?:{id:string;index:number},tolerance=4){let result=p,best=tolerance;for(const r of roads){const ps=vertices(r);for(const index of [0,ps.length-1]){if(exclude?.id===r.id&&exclude.index===index)continue;const q=ps[index],dist=Math.hypot(q.x-p.x,q.y-p.y);if(dist<best){result={...q};best=dist;}}}return result;}

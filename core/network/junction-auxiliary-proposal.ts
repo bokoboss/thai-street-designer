@@ -1,6 +1,6 @@
-import {pocketFactorAt,pocketOriginFor} from '../app/junction/allocation';
-import {armTreatmentOrigins} from '../app/junction/geometry';
-import {pocketsFor,type Direction,type Pocket} from '../app/junction/model';
+import {pocketFactorAt,pocketOriginFor} from '../junction/allocation';
+import {armTreatmentOrigins} from '../junction/geometry';
+import {pocketsFor,type Direction,type Pocket} from '../junction/model';
 import {
   junctionById,linkLength,linkLinearTransitionPossible,updateJunctionArmPocket,validateNetworkProject,
   type JunctionAuxiliarySource,type LinkDirection,type LinkStationLaneComponent,type NetworkProject,type RoadLink
@@ -139,7 +139,7 @@ export function junctionAuxiliaryProposals(project:NetworkProject,link:RoadLink)
         }else{
           message=continuation==='corridor'
             ?`พร้อมสร้าง/ซ่อม handoff ${pocket.lanes-existing} เลน · ${end==='from'?`Sta. 0–${corridorEnd.toFixed(1)}`:`Sta. ${corridorStart.toFixed(1)}–${total.toFixed(1)}`} m`
-            :`Geometry ผ่าน Port อยู่แล้ว แต่ยังเป็น Junction only · เลือก Continue into Corridor เพื่อบันทึก intent และ provenance`;
+            :`ช่องยาวเลยปลายขาทางแยกอยู่แล้ว แต่ยังตั้งเป็นจบในทางแยก · เลือก “ต่อเนื่องเข้าถนน” เพื่อให้ต่อบนถนน`;
         }
         out.push({...base,status,message,existing,linked,canContinue});
       }
@@ -160,7 +160,7 @@ export function junctionAuxiliaryHandoffIssues(project:NetworkProject,link:RoadL
     const proposal=proposalMap.get(handoffId),source=components[0].source!,componentIds=components.map(component=>component.id),
       sourcePocket=rawPocketForSource(project,source),base={id:`${link.id}:handoff:${handoffId}`,handoffId,componentIds,canDetach:true,canReturnLocal:!!sourcePocket};
     if(!proposal||components.some(component=>!component.source||!sourceMatchesProposal(component.source,proposal))){
-      out.push({...base,kind:'orphan',level:'warning',canRepair:false,message:'Handoff provenance ไม่ตรงกับ Junction/arm ที่ Road Link นี้เชื่อมอยู่แล้ว · อาจเกิดจากย้าย endpoint, ลบ Pocket หรือเปลี่ยน source semantics'});
+      out.push({...base,kind:'orphan',level:'warning',canRepair:false,message:'ช่องที่ต่อเนื่องไม่ตรงกับทางแยกหรือขาที่ถนนนี้เชื่อมอยู่ · อาจเกิดจากการย้ายจุดเชื่อม ลบช่องเลี้ยว หรือเปลี่ยนชนิดช่องที่ทางแยก'});
       continue;
     }
     if(proposal.continuation!=='corridor'){
@@ -180,7 +180,7 @@ export function junctionAuxiliaryHandoffIssues(project:NetworkProject,link:RoadL
       identityOk=components.length===proposal.lanes&&new Set(laneIds).size===proposal.lanes&&laneIds.every(lane=>expectedLanes.has(lane)),
       geometryOk=components.every(component=>equivalentLane(component,proposal));
     if(!identityOk||!geometryOk){
-      out.push({...base,kind:'stale',level:'warning',canRepair:true,message:`Junction treatment เปลี่ยนหลังสร้าง handoff · RoadLink provenance ยังอยู่ แต่ lane identity / station profile ไม่ตรงกับ source ปัจจุบัน (${components.length}→${proposal.lanes} lanes)`});
+      out.push({...base,kind:'stale',level:'warning',canRepair:true,message:`ช่องเลี้ยวที่ทางแยกเปลี่ยนไปหลังสร้างการต่อเนื่อง · ช่องบนถนนไม่ตรงกับทางแยกปัจจุบัน (${components.length}→${proposal.lanes} ช่อง) · ใช้ “ซ่อมจากทางแยก”`});
     }
   }
   return out;
@@ -252,7 +252,7 @@ export function returnJunctionAuxiliaryToLocal(project:NetworkProject,linkId:str
   const proposal=junctionAuxiliaryProposals(project,link).find(item=>item.id===id),
     sourced=link.components.filter((component):component is LinkStationLaneComponent=>component.kind==='lane'&&component.source?.handoffId===id),
     fallbackSource=sourced[0]?.source;
-  if(!proposal&&!fallbackSource)return{project,created:[],error:'ไม่พบ Junction auxiliary proposal หรือ provenance สำหรับ handoff นี้'};
+  if(!proposal&&!fallbackSource)return{project,created:[],error:'ไม่พบข้อมูลช่องเลี้ยวที่ทางแยกสำหรับการต่อเนื่องนี้'};
   let edited=project;
   if(proposal){
     const result=updateJunctionArmPocket(project,proposal.junctionId,proposal.armId,proposal.sourceDirection,proposal.sourceSide,{continuation:'local'});

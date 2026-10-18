@@ -2,6 +2,19 @@
 
 This document describes the current architecture on the `chatgpt/full-engineering-ui-audit` branch after the Slip lane schema-v6 refactor.
 
+## 0. Module layout (since 2026-10-13, roadmap Phase 1A)
+
+| Folder | Contents | May import |
+| --- | --- | --- |
+| `core/junction/` | Junction Design model, geometry, Slip, roundabout, allocation, lane configuration, markings layout, objects/planting, reviews, selection semantics, 3D surfaces/visibility | `core/` only |
+| `core/network/` | Network project, scenarios, project file, comparison, design report, RoadLink geometry, lane lifecycles, Junction→corridor proposals, parallel/frontage seed, local reference | `core/` only |
+| `core/common/` | Alignment/stationing helpers, station profiles, lifecycle math | `core/` only |
+| `core/free-draw/` | Free Draw lab geometry | `core/` only |
+| `app/` | Next.js routes and React components (rendering, interaction, camera/gestures) | `core/`, `components/`, `lib/` |
+| `lib/` | Small UI helpers (labels, hints, class utils) | anything |
+
+`core/` is React-free and is the single semantic engine consumed by 2D, section, 3D, export and review. The boundary is enforced by `scripts/verify-core-boundary.cjs` in `pnpm test`.
+
 ## 1. Architectural intent
 
 The application has two separate geometric systems that must not be conflated:
@@ -42,7 +55,7 @@ The base `Arm` type does not contain runtime Slip fields.
 
 ### SlipLane
 
-Owned by `app/junction/slip-model.ts`.
+Owned by `core/junction/slip-model.ts`.
 
 Conceptually:
 
@@ -91,7 +104,7 @@ type SlipLane = {
 
 ## 3. Base junction pipeline
 
-`app/junction/geometry.ts` is intentionally Slip-agnostic.
+`core/junction/geometry.ts` is intentionally Slip-agnostic.
 
 Typical flow:
 
@@ -129,7 +142,7 @@ Changing these Slip parameters must not change base `edges(d)`:
 
 ## 4. Slip overlay pipeline
 
-Owned by `app/junction/slip-geometry.ts`.
+Owned by `core/junction/slip-geometry.ts`.
 
 ```
 base Design + SlipLane

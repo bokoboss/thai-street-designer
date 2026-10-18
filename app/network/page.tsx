@@ -5,27 +5,27 @@ import '../junction/style.css';
 import './style.css';
 import MapBackground,{IMAGERY_BASEMAP_OPTIONS,MAP_PROVIDER_CREDENTIALS_STORAGE,MAP_REFERENCE_STORAGE,STREET_BASEMAP_OPTIONS,basemapAccessLabel,basemapCredentialKey,basemapDescription,basemapKind,mapProviderCredentialsDefaults,mapReferenceDefaults,restoreMapProviderCredentials,restoreMapReference,searchMapPlaces,searchOpenAerialMapImagery,type MapBasemap,type MapPlace,type MapProviderCredentials,type MapReference,type OamImagerySummary} from '../junction/map-background';
 import LocalImageReferenceLayer,{clearLocalImageBlob,loadLocalImageBlob,readLocalImageDimensions,saveLocalImageBlob} from './local-reference-layer';
-import {LOCAL_IMAGE_REFERENCE_STORAGE,calibrateLocalImageReference,initialLocalImageReference,localImageFootprint,localImageReferenceDefaults,restoreLocalImageReference,type LocalImageReference} from '@/lib/local-reference';
+import {LOCAL_IMAGE_REFERENCE_STORAGE,calibrateLocalImageReference,initialLocalImageReference,localImageFootprint,localImageReferenceDefaults,restoreLocalImageReference,type LocalImageReference} from '@/core/network/local-reference';
 import {clampZoom,panZoom2D} from '../junction/gestures';
-import {applyJunctionAuxiliaryProposal,continueJunctionAuxiliaryToCorridor,detachJunctionAuxiliaryHandoff,junctionAuxiliaryHandoffIssues,junctionAuxiliaryProposals,repairJunctionAuxiliaryHandoff,returnJunctionAuxiliaryToLocal,type JunctionAuxiliaryProposalStatus} from '@/lib/junction-auxiliary-proposal';
+import {applyJunctionAuxiliaryProposal,continueJunctionAuxiliaryToCorridor,detachJunctionAuxiliaryHandoff,junctionAuxiliaryHandoffIssues,junctionAuxiliaryProposals,repairJunctionAuxiliaryHandoff,returnJunctionAuxiliaryToLocal,type JunctionAuxiliaryProposalStatus} from '@/core/network/junction-auxiliary-proposal';
 import {NetworkComparisonGhost,NetworkDrawing,type NetworkComparisonFocus,type NetworkSelection} from './network-drawing';
-import {SCENARIO_CHANGE_FILTERS,compareNetworkProjects,filterScenarioObjectDeltas,scenarioObjectBounds,scenarioObjectInspection,type ScenarioChangeFilter,type ScenarioObjectDelta} from '@/lib/network-scenario-comparison';
-import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/lib/network-scenarios';
-import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/lib/network-project-file';
-import {NETWORK_PROJECT_FILE_SESSION_STORAGE,createNetworkProjectFileSession,networkProjectWorkspaceSignature,restoreNetworkProjectFileSession,serializeNetworkProjectFileSession} from '@/lib/network-project-file-session';
-import {buildNetworkDesignReport,networkDesignReportHtml} from '@/lib/network-design-report';
-import {seedParallelFrontage} from '@/lib/parallel-frontage-seed';
+import {SCENARIO_CHANGE_FILTERS,compareNetworkProjects,filterScenarioObjectDeltas,scenarioObjectBounds,scenarioObjectInspection,type ScenarioChangeFilter,type ScenarioObjectDelta} from '@/core/network/network-scenario-comparison';
+import {NETWORK_SCENARIO_LIMIT,activeNetworkProject,activeNetworkScenario,createNetworkScenarioWorkspace,duplicateNetworkScenario,removeNetworkScenario,renameNetworkScenario,replaceActiveNetworkProject,restoreNetworkScenarioWorkspace,switchNetworkScenario,type NetworkScenarioWorkspace} from '@/core/network/network-scenarios';
+import {parseNetworkProjectFile,serializeNetworkProjectFile} from '@/core/network/network-project-file';
+import {NETWORK_PROJECT_FILE_SESSION_STORAGE,createNetworkProjectFileSession,networkProjectWorkspaceSignature,restoreNetworkProjectFileSession,serializeNetworkProjectFileSession} from '@/core/network/network-project-file-session';
+import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
+import {seedParallelFrontage} from '@/core/network/parallel-frontage-seed';
 import {laneCountStatus as laneCountStatusFor,laneCountStatusLabel} from '@/lib/link-lane-status';
 import {linkModeHint} from '@/lib/tool-hints';
-import {pocketsFor,sectionFor,type Band,type Direction} from '../junction/model';
-import type {Selection} from '../junction/selection';
+import {pocketsFor,sectionFor,type Band,type Direction} from '@/core/junction/model';
+import type {Selection} from '@/core/junction/selection';
 import NetworkScene3D from './network-scene3d';
 import NetworkSectionDock from './network-section-dock';
 import ParallelCorridorPanel from './parallel-corridor-panel';
 import {
   NETWORK_EDIT_JUNCTION_STORAGE,NETWORK_PROJECT_STORAGE,addJunction,addLinkStationComponent,addLinkToParallelCorridor,addParallelCorridor,connectPorts,createNetworkProject,defaultLinkLaneTransition,insertLinkVia,junctionById,junctionConnectedLinkIds,linkControlPoints,linkIssues,linkLaneCounts,linkLaneTransitionPossible,linkLength,linkLinearTransitionPossible,linkWidthTargets,moveJunction,moveJunctionChecked,moveLinkVia,portKey,portPoint,portOccupied,
   markParallelFrontageReviewed,parallelCorridorForLink,projectBounds,reconnectLinkPort,removeJunction,removeLink,removeLinkFromParallelCorridor,removeLinkStationComponent,removeParallelCorridor,reverseParallelCorridorReference,removeLinkVia,rotateJunction,rotateJunctionChecked,setJunctionArmEnabled,transformNetworkProject,updateJunctionArmBasics,updateJunctionArmGeometry,updateJunctionArmPocket,updateJunctionArmSection,updateJunctionDesign,updateLinkLaneTransition,updateLinkSectionProfile,updateLinkStationComponent,updateLinkViaRadius,worldJunctionRotation,type LinkDirection,type LinkStationComponentPatch,type LinkWidthTarget,type NetworkProject,type ParallelCorridorMemberRole,type ParallelCorridorSide,type PortRef,type WorldPoint
-} from '@/lib/network-project';
+} from '@/core/network/network-project';
 
 type Tool='select'|'junction'|'link'|'pan'|'map-align'|'image-align'|'image-calibrate'|'delete';
 type ArmDragState={kind:'arm';id:string;armId:number;before:NetworkProject;startPointer:WorldPoint;startEndpoint:WorldPoint;startClient:{x:number;y:number};active:boolean};
