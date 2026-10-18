@@ -3,8 +3,9 @@
 // junctions compile to ordinary JunctionInstance/RoadLink objects, so every
 // existing geometry, Slip, review, 2D/3D and export path is reused unchanged.
 import {initial,markingsFor,type Arm,type Band,type Design} from '../junction/model';
-import {defaultSlip,type SlipLane} from '../junction/slip-model';
+import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {requiredArmLength} from '../junction/arm-fit';
+import {applyLegTreatment,legKey,parseLegKey,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import type {JunctionInstance,LinkEndRef,NetworkProject,RoadEnd,RoadEndSection,RoadLink,WorldPoint} from '../network/network-project';
 
 export type RoadSection={
@@ -14,9 +15,9 @@ export type RoadPoint=WorldPoint&{radius?:number};
 export type Road={id:string;name:string;points:RoadPoint[];section:RoadSection};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
-export type LegKey=`${string}:${'ahead'|'behind'}`;
+export type {LegKey} from './leg-binding';
 /** Junction-owned treatments keyed by road leg, so they survive recompiles and road edits. */
-export type JunctionTreatments={slips?:{from:LegKey;to?:LegKey;width?:number;radius?:number}[];corner?:number};
+export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Record<LegKey,LegTreatment>>};
 export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;treatments?:JunctionTreatments};
 export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
@@ -127,20 +128,28 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const leg=found[i];
       if(!leg){arms.push({...base.arms[i],angle:(found.length?found[found.length-1].heading:0)+90*(i-found.length+1)});enabled.push(false);continue;}
       const road=roadById.get(leg.roadId)!;
-      arms.push(sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`));
+      arms.push(applyLegTreatment(sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`),d.treatments?.legs?.[legKey(leg.roadId,leg.side)]));
       enabled.push(true);
       legs.push({junctionId:id,armId:i,roadId:leg.roadId,side:leg.side});room.set(i,leg.room);
     }
     let design:Design={...base,arms,enabled,corner:d.treatments?.corner??base.corner,title:d.name??`ทางแยก ${jIndex+1}`};
     // Re-bind treatments by road leg (stable across recompiles), not by arm slot.
-    const armOf=(key:LegKey)=>{const [roadId,side]=key.split(':');return legs.find(l=>l.junctionId===id&&l.roadId===roadId&&l.side===side)?.armId;};
+    const armOf=(key:LegKey)=>{const leg=parseLegKey(key);return leg?legs.find(l=>l.junctionId===id&&l.roadId===leg.roadId&&l.side===leg.side)?.armId:undefined;};
+    const legLabel=(key:LegKey)=>{const leg=parseLegKey(key),road=leg&&roadById.get(leg.roadId);return road?`${road.name} ${leg!.side==='ahead'?'→':'←'}`:key;};
+    for(const key of Object.keys(d.treatments?.legs??{}) as LegKey[])if(armOf(key)===undefined)issues.push(`${id}: การตั้งค่าขา ${legLabel(key)} อ้างขาถนนที่ไม่มีแล้ว`);
     const slips:SlipLane[]=[];
     for(const t of d.treatments?.slips??[]){
       const from=armOf(t.from);
-      if(from===undefined){issues.push(`${id}: Slip lane อ้างขาถนน ${t.from} ที่ไม่มีแล้ว`);continue;}
+      if(from===undefined){issues.push(`${id}: Slip lane อ้างขาถนน ${legLabel(t.from)} ที่ไม่มีแล้ว`);continue;}
       const active=enabled.map((v,i)=>v?i:-1).filter(i=>i>=0),to=t.to?armOf(t.to):active[(active.indexOf(from)+1)%active.length];
       if(to===undefined||to===from){issues.push(`${id}: Slip lane ไม่มีขารับ`);continue;}
-      slips.push({...defaultSlip(from,to,t.width,t.radius)});
+      if(to!==nextActiveArm({enabled,arms},from)){issues.push(`${id}: Slip lane จาก ${legLabel(t.from)} ไม่ได้อยู่ติดกับขารับแล้วหลังแก้ถนน จึงไม่ได้สร้าง`);continue;}
+      const slip:SlipLane=defaultSlip(from,to,t.width,t.radius);
+      if(t.approach)slip.approach=structuredClone(t.approach);
+      if(t.departure)slip.departure=structuredClone(t.departure);
+      if(t.crossing)slip.crossing={...t.crossing};
+      if(t.arrowOffset!==undefined)slip.arrowOffset=t.arrowOffset;
+      slips.push(slip);
     }
     design={...design,slips};
     // Fit-based arm length: an arm needs only what it carries. A leg too short for that is stretched and reported.
