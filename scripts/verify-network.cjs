@@ -2,23 +2,23 @@ const ts=require('typescript'),fs=require('fs'),assert=require('node:assert/stri
 
 // Compile the shared junction allocation/model dependencies plus Free Draw modules.
 const lifecycleMathCode=ts.transpileModule(fs.readFileSync('lib/lifecycle-math.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-fs.writeFileSync('.sites-runtime/lifecycle-math.cjs',lifecycleMathCode);
+fs.writeFileSync('.test-build/lifecycle-math.cjs',lifecycleMathCode);
 for(const name of ['allocation','slip-model','model','cross-section']){
   const code=ts.transpileModule(fs.readFileSync('app/junction/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
     .outputText.replace(/require\("\.\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\.\/\.\.\/lib\/lifecycle-math"\)/g,'require("./lifecycle-math.cjs")');
-  fs.writeFileSync('.sites-runtime/'+name+'.cjs',code);
+  fs.writeFileSync('.test-build/'+name+'.cjs',code);
 }
 for(const name of ['alignment','network','geometry']){
   const code=ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
     .outputText
     .replace(/require\("\.\/(alignment|network|geometry)"\)/g,'require("./network-$1.cjs")')
     .replace(/require\("\.\.\/app\/junction\/(allocation|geometry|model|cross-section)"\)/g,'require("./$1.cjs")');
-  fs.writeFileSync('.sites-runtime/network-'+name+'.cjs',code);
+  fs.writeFileSync('.test-build/network-'+name+'.cjs',code);
 }
 
-const a=require('../.sites-runtime/network-alignment.cjs'),
-      n=require('../.sites-runtime/network-network.cjs'),
-      g=require('../.sites-runtime/network-geometry.cjs');
+const a=require('../.test-build/network-alignment.cjs'),
+      n=require('../.test-build/network-network.cjs'),
+      g=require('../.test-build/network-geometry.cjs');
 
 let r={id:'a',name:'A',a:{x:0,y:0},b:{x:40,y:30},vertices:[{x:0,y:0},{x:40,y:0},{x:40,y:30}],config:g.presets['4-Lane Divided']};
 assert.equal(g.generateRoad(r).length,70);

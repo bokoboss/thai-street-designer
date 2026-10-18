@@ -37,7 +37,7 @@ jobs:
         run: pnpm exec tsc --noEmit
       - name: Lint
         run: pnpm lint
-      - name: Sites and Vercel production builds
+      - name: Production build (Vercel / Next.js)
         run: pnpm test:builds
       - name: Network browser acceptance
         run: pnpm test:browser

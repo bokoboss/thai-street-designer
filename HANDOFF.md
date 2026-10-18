@@ -4,7 +4,7 @@ Updated: 2026-10-13
 Repository: `bokoboss/thai-street-designer`  
 Released branch: `main`  
 Active plan: **Consolidation** — [ADR-0001](docs/decisions/ADR-0001-consolidation.md) · [Consolidation Roadmap](docs/CONSOLIDATION_ROADMAP.md)  
-Deployment target: **Vercel / Next.js** (Sites/vinext path to be removed in Phase 0C)  
+Deployment target: **Vercel / Next.js** only (Sites/vinext path removed in Phase 0C)  
 Product v1 pull request: **#1 — merged 2026-09-30**  
 Phase 8A (Parallel / Frontage Corridor Foundation): merged to `main` (`cc4994c`)  
 Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b` · final pre-release Quality run `36703377299`

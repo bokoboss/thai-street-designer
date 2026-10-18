@@ -1,9 +1,9 @@
 // Run verify-junction.cjs first to compile the pure modules.
 const assert=require('node:assert/strict');
-const {buildVisibility,visibleOrder,cameraDirection}=require('../.sites-runtime/visibility3d.cjs');
-const {initial}=require('../.sites-runtime/model.cjs');
-const {edges,rotate,armTurn}=require('../.sites-runtime/geometry.cjs');
-const {furnitureFaces}=require('../.sites-runtime/furniture3d.cjs');
+const {buildVisibility,visibleOrder,cameraDirection}=require('../.test-build/visibility3d.cjs');
+const {initial}=require('../.test-build/model.cjs');
+const {edges,rotate,armTurn}=require('../.test-build/geometry.cjs');
+const {furnitureFaces}=require('../.test-build/furniture3d.cjs');
 const d=initial();d.trees=true;d.lights=true;
 const faces=furnitureFaces(d);
 for(const e of edges(d)){const p=[...e.outer,...e.walk.slice().reverse()].map(p=>rotate(p,armTurn(d,e.i)));faces.push({points:p.map(p=>({...p,z:.18})),color:'#bdc9ce'});for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];faces.push({points:[{...p[i],z:0},{...q,z:0},{...q,z:.18},{...p[i],z:.18}],color:'#8d9ca4'});}}

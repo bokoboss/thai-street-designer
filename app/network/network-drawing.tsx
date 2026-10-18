@@ -117,7 +117,7 @@ export function JunctionInstanceDrawing({
           <circle data-network-arm-handle-visible={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r={gripVisible} fill="#ffffff" stroke="#0e8995" strokeWidth={.75*interactionScale} pointerEvents="none"/>
           <circle data-network-arm-handle={`${junction.id}:${armId}`} data-network-arm-hit-radius={gripHit.toFixed(2)} cx={p.x} cy={p.y} r={gripHit} fill="transparent" stroke="transparent"
             onPointerDown={e=>{e.preventDefault();e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'grab'}}>
-            <title>ลากจาก grip ที่ปลายแขนเพื่อเปลี่ยนมุม/ความยาว</title>
+            <title>ลากที่ปลายขาเพื่อเปลี่ยนมุม/ความยาว</title>
           </circle>
         </>}
       </g>;
@@ -139,7 +139,7 @@ export function JunctionInstanceDrawing({
         fill={linkMode?(source?'#e3a33d':occupied||sameJunction?'#9ca9ae':facingInvalid?'#f1dada':facingCaution?'#fff4d8':'#ffffff'):'#8ba2aa'}
         stroke={linkMode?(source?'#fff4d6':occupied||sameJunction?'#ffffff':facingInvalid?'#b85858':facingCaution?'#c48a28':'#0e8a82'):'white'} strokeWidth={source?'.8':'.55'}
         pointerEvents={interactive||source?'auto':'none'} onPointerDown={e=>{e.stopPropagation();if(source||interactive)onPort(ref);}} style={{cursor:interactive?'crosshair':source?'pointer':undefined}}>
-        <title>{source?'port ต้นทาง · คลิกซ้ำเพื่อยกเลิก':occupied?'port นี้เชื่อม Road Link อยู่แล้ว':sameJunction?'เชื่อม Road Link ข้ามคนละ Junction เท่านั้น':facingInvalid?`port หันออกจากแนวเชื่อม · FROM ${facing?.fromDeviation.toFixed(0)}° / TO ${facing?.toDeviation.toFixed(0)}°`:facingCaution?`เชื่อมได้ แต่ต้องโค้งเข้าหา port มาก · FROM ${facing?.fromDeviation.toFixed(0)}° / TO ${facing?.toDeviation.toFixed(0)}°`:pendingPort?'ปลายทางที่หันเข้าหากัน · คลิกเพื่อเชื่อม':`port ${key}`}</title>
+        <title>{source?'ปลายขาต้นทาง · คลิกซ้ำเพื่อยกเลิก':occupied?'ปลายขานี้เชื่อมถนนอยู่แล้ว':sameJunction?'เชื่อมได้เฉพาะกับปลายขาของทางแยกอื่น':facingInvalid?`ปลายขาหันออกจากแนวเชื่อม · ต้นทาง ${facing?.fromDeviation.toFixed(0)}° / ปลายทาง ${facing?.toDeviation.toFixed(0)}°`:facingCaution?`เชื่อมได้ แต่ต้องโค้งเข้าหาปลายขามาก · ต้นทาง ${facing?.fromDeviation.toFixed(0)}° / ปลายทาง ${facing?.toDeviation.toFixed(0)}°`:pendingPort?'ปลายทางที่หันเข้าหากัน · คลิกเพื่อเชื่อม':`port ${key}`}</title>
       </circle>;
     })}
   </g>;

@@ -1,51 +1,51 @@
 const ts=require('typescript'),fs=require('fs'),assert=require('node:assert/strict');
 
 const lifecycleMathCode=ts.transpileModule(fs.readFileSync('lib/lifecycle-math.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-fs.writeFileSync('.sites-runtime/lifecycle-math.cjs',lifecycleMathCode);
+fs.writeFileSync('.test-build/lifecycle-math.cjs',lifecycleMathCode);
 for(const file of ['allocation.ts','planting.ts','cross-section.ts','roundabout.ts','slip-model.ts','model.ts','geometry.ts','slip-geometry.ts','design-validation.ts','lane-configuration.ts','scene-surfaces.ts','arrow-layout.ts','objects.ts','furniture3d.ts','reviews.ts']){
   const code=ts.transpileModule(fs.readFileSync('app/junction/'+file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
     .outputText.replace(/require\("\.\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\.\/\.\.\/lib\/lifecycle-math"\)/g,'require("./lifecycle-math.cjs")');
-  fs.writeFileSync('.sites-runtime/'+file.replace(/\.ts$/,'.cjs'),code);
+  fs.writeFileSync('.test-build/'+file.replace(/\.ts$/,'.cjs'),code);
 }
 const stationProfileCode=ts.transpileModule(fs.readFileSync('lib/station-profile.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText
   .replace(/require\("\.\/lifecycle-math"\)/g,'require("./lifecycle-math.cjs")');
-fs.writeFileSync('.sites-runtime/station-profile.cjs',stationProfileCode);
+fs.writeFileSync('.test-build/station-profile.cjs',stationProfileCode);
 const projectCode=ts.transpileModule(fs.readFileSync('lib/network-project.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")');
-fs.writeFileSync('.sites-runtime/network-project.cjs',projectCode);
+fs.writeFileSync('.test-build/network-project.cjs',projectCode);
 const parallelSeedCode=ts.transpileModule(fs.readFileSync('lib/parallel-frontage-seed.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\.\/app\/junction\/model"\)/g,'require("./model.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")').replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")');
-fs.writeFileSync('.sites-runtime/parallel-frontage-seed.cjs',parallelSeedCode);
+fs.writeFileSync('.test-build/parallel-frontage-seed.cjs',parallelSeedCode);
 const scenarioCode=ts.transpileModule(fs.readFileSync('lib/network-scenarios.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")');
-fs.writeFileSync('.sites-runtime/network-scenarios.cjs',scenarioCode);
+fs.writeFileSync('.test-build/network-scenarios.cjs',scenarioCode);
 const projectFileCode=ts.transpileModule(fs.readFileSync('lib/network-project-file.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-scenarios"\)/g,'require("./network-scenarios.cjs")');
-fs.writeFileSync('.sites-runtime/network-project-file.cjs',projectFileCode);
+fs.writeFileSync('.test-build/network-project-file.cjs',projectFileCode);
 const projectFileSessionCode=ts.transpileModule(fs.readFileSync('lib/network-project-file-session.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-fs.writeFileSync('.sites-runtime/network-project-file-session.cjs',projectFileSessionCode);
+fs.writeFileSync('.test-build/network-project-file-session.cjs',projectFileSessionCode);
 const scenarioComparisonCode=ts.transpileModule(fs.readFileSync('lib/network-scenario-comparison.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\.\/app\/junction\/model"\)/g,'require("./model.cjs")');
-fs.writeFileSync('.sites-runtime/network-scenario-comparison.cjs',scenarioComparisonCode);
+fs.writeFileSync('.test-build/network-scenario-comparison.cjs',scenarioComparisonCode);
 const laneLifecycleCode=ts.transpileModule(fs.readFileSync('lib/lane-lifecycle.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/station-profile"\)/g,'require("./station-profile.cjs")');
-fs.writeFileSync('.sites-runtime/lane-lifecycle.cjs',laneLifecycleCode);
+fs.writeFileSync('.test-build/lane-lifecycle.cjs',laneLifecycleCode);
 const junctionAuxiliaryProposalCode=ts.transpileModule(fs.readFileSync('lib/junction-auxiliary-proposal.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")');
-fs.writeFileSync('.sites-runtime/junction-auxiliary-proposal.cjs',junctionAuxiliaryProposalCode);
+fs.writeFileSync('.test-build/junction-auxiliary-proposal.cjs',junctionAuxiliaryProposalCode);
 const designReportCode=ts.transpileModule(fs.readFileSync('lib/network-design-report.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/network-scenario-comparison"\)/g,'require("./network-scenario-comparison.cjs")').replace(/require\("\.\/junction-auxiliary-proposal"\)/g,'require("./junction-auxiliary-proposal.cjs")').replace(/require\("\.\.\/app\/junction\/([a-z-]+)"\)/g,'require("./$1.cjs")');
-fs.writeFileSync('.sites-runtime/network-design-report.cjs',designReportCode);
+fs.writeFileSync('.test-build/network-design-report.cjs',designReportCode);
 const linkGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-link-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")').replace(/require\("\.\/station-profile"\)/g,'require("./station-profile.cjs")').replace(/require\("\.\/lane-lifecycle"\)/g,'require("./lane-lifecycle.cjs")');
-fs.writeFileSync('.sites-runtime/network-link-geometry.cjs',linkGeometryCode);
+fs.writeFileSync('.test-build/network-link-geometry.cjs',linkGeometryCode);
 const sceneGeometryCode=ts.transpileModule(fs.readFileSync('lib/network-scene-geometry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}})
   .outputText.replace(/require\("\.\/network-project"\)/g,'require("./network-project.cjs")').replace(/require\("\.\/network-link-geometry"\)/g,'require("./network-link-geometry.cjs")').replace(/require\("\.\/alignment"\)/g,'require("./network-alignment.cjs")').replace(/require\("\.\.\/app\/junction\/scene-surfaces"\)/g,'require("./scene-surfaces.cjs")').replace(/require\("\.\.\/app\/junction\/furniture3d"\)/g,'require("./furniture3d.cjs")');
-fs.writeFileSync('.sites-runtime/network-scene-geometry.cjs',sceneGeometryCode);
+fs.writeFileSync('.test-build/network-scene-geometry.cjs',sceneGeometryCode);
 
 const localReferenceCode=ts.transpileModule(fs.readFileSync('lib/local-reference.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-fs.writeFileSync('.sites-runtime/local-reference.cjs',localReferenceCode);
-const n=require('../.sites-runtime/network-project.cjs'),seed=require('../.sites-runtime/parallel-frontage-seed.cjs'),ns=require('../.sites-runtime/network-scenarios.cjs'),pf=require('../.sites-runtime/network-project-file.cjs'),pfs=require('../.sites-runtime/network-project-file-session.cjs'),nc=require('../.sites-runtime/network-scenario-comparison.cjs'),dr=require('../.sites-runtime/network-design-report.cjs'),lg=require('../.sites-runtime/network-link-geometry.cjs'),ll=require('../.sites-runtime/lane-lifecycle.cjs'),jp=require('../.sites-runtime/junction-auxiliary-proposal.cjs'),sg=require('../.sites-runtime/network-scene-geometry.cjs'),js=require('../.sites-runtime/scene-surfaces.cjs'),lr=require('../.sites-runtime/local-reference.cjs'),sp=require('../.sites-runtime/station-profile.cjs'),lm=require('../.sites-runtime/lifecycle-math.cjs'),alloc=require('../.sites-runtime/allocation.cjs');
+fs.writeFileSync('.test-build/local-reference.cjs',localReferenceCode);
+const n=require('../.test-build/network-project.cjs'),seed=require('../.test-build/parallel-frontage-seed.cjs'),ns=require('../.test-build/network-scenarios.cjs'),pf=require('../.test-build/network-project-file.cjs'),pfs=require('../.test-build/network-project-file-session.cjs'),nc=require('../.test-build/network-scenario-comparison.cjs'),dr=require('../.test-build/network-design-report.cjs'),lg=require('../.test-build/network-link-geometry.cjs'),ll=require('../.test-build/lane-lifecycle.cjs'),jp=require('../.test-build/junction-auxiliary-proposal.cjs'),sg=require('../.test-build/network-scene-geometry.cjs'),js=require('../.test-build/scene-surfaces.cjs'),lr=require('../.test-build/local-reference.cjs'),sp=require('../.test-build/station-profile.cjs'),lm=require('../.test-build/lifecycle-math.cjs'),alloc=require('../.test-build/allocation.cjs');
 
 const localRef=lr.initialLocalImageReference('site-plan.png',4000,2000,{x:10,y:-20},300),localFootprint=lr.localImageFootprint(localRef);assert(Math.abs(localFootprint.width-300)<1e-8&&Math.abs(localFootprint.height-150)<1e-8,'uncalibrated local image should fit a bounded initial world span');
 const calibrationA={x:-20,y:15},calibrationB={x:20,y:15},calibratedLocal=lr.calibrateLocalImageReference(localRef,calibrationA,calibrationB,100);assert(calibratedLocal&&calibratedLocal.calibrated);assert(Math.abs(calibratedLocal.metersPerPixel/localRef.metersPerPixel-2.5)<1e-8,'A-B calibration must apply one uniform scale factor');assert(Math.abs(calibratedLocal.x-(calibrationA.x+(localRef.x-calibrationA.x)*2.5))<1e-8&&Math.abs(calibratedLocal.y-(calibrationA.y+(localRef.y-calibrationA.y)*2.5))<1e-8,'A-B calibration must keep point A fixed while scaling the image transform');assert.equal(lr.calibrateLocalImageReference(localRef,calibrationA,calibrationA,100),null,'zero-length calibration pick must be rejected');assert.deepEqual(lr.restoreLocalImageReference(JSON.stringify(calibratedLocal)),calibratedLocal,'local reference metadata must round-trip independently from NetworkProject');

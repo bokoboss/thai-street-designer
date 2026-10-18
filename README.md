@@ -183,6 +183,6 @@ pnpm test:browser
 
 `pnpm test:browser` ครอบคลุม Network create/edit/review/compare, Project File recovery, keyboard destructive safety, export/report, 2D/3D และ golden Junction cases.
 
-## Vercel (separate Next.js build)
+## Deployment
 
-See [VERCEL.md](./VERCEL.md). Use `pnpm build:vercel` for Vercel and `pnpm test:builds` to verify both targets. The existing `pnpm build` remains the ChatGPT Sites/vinext path.
+Vercel / Next.js only. See [VERCEL.md](./VERCEL.md). `pnpm test:builds` runs the production build and the TypeScript check.
