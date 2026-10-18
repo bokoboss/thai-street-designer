@@ -32,7 +32,9 @@ export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Re
 export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;roads?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
 export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
-export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[]};
+/** sources: which crossing each compiled junction comes from and which road each RoadLink belongs to (for selection in the editor). */
+export type CompileSources={junctions:Record<string,string>;links:Record<string,string>};
+export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources};
 
 /** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
 const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
@@ -141,6 +143,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   };
   const legRoom=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>
     Math.min(toNextJunction===null?Infinity:(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toRoadEnd:toVertex-BEND_CLEARANCE);
+  const sources:CompileSources={junctions:{},links:{}};
   const junctions:JunctionInstance[]=[],legs:LegBinding[]=[],armLength=new Map<string,number>();
   confirmed.forEach(({d,c},jIndex)=>{
     const id=`J-${jIndex+1}`,found:Leg[]=[];
@@ -201,7 +204,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       }
       armLength.set(`${id}:${leg.armId}`,design.arms[leg.armId].length);
     }
-    junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design});
+    junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design});sources.junctions[id]=d.candidateId;
   });
 
   const links:RoadLink[]=[],roadEnds:RoadEnd[]=[];
@@ -249,10 +252,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const from=nodes[k].ahead,to=nodes[k+1].behind;
       if(!from||!to){issues.push(`${road.name}: ต่อช่วงถนนไม่ได้`);continue;}
       const via=road.points.filter((_,i)=>s[i]>from.station+EPS&&s[i]<to.station-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
+      sources.links[`L-${links.length+1}`]=road.id;
       links.push(linkData(road,{id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]},road.links?.[span]));
       span++;
     }
     if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues};
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues,sources};
 }

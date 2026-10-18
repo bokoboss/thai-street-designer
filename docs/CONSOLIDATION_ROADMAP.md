@@ -95,6 +95,10 @@ Still open from the Phase 2 list above: left-hand-traffic lane-connection defaul
 
 Exit: GW-01 and GW-02 (see `docs/spec/GOLDEN_WORKFLOWS.md`) completed by the owner within the targets set in Phase 0B; UX review gate passed.
 
+Slices: (1) road-first workspace shell at `/design` — Draw Road with presets, crossing confirmation, road section by number, labelled undo/redo, file open/save, migration of the earlier design on first open; (2) junction detail in place (approaches, turn pockets, Slip, corners, crossings); (3) scenarios, comparison and export; (4) make `/design` the only workspace and retire `/network` and `/junction`.
+
+Status (2026-10-18): slice 1 on `phase3/workspace` (`app/design/`, `scripts/verify-design-browser.mjs`); T3 in 5 actions (baseline 17).
+
 ---
 
 ## Phase 4 — Engineering depth
