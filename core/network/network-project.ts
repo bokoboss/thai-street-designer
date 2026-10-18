@@ -1,4 +1,4 @@
-import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../junction/model';
+import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,validSection,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../junction/model';
 import {normalizeArrowOverrides} from '../junction/arrow-layout';
 import {cachedEdges} from '../junction/geometry';
 import {slipGeometries} from '../junction/slip-geometry';
@@ -7,6 +7,12 @@ import {lengthOf,smoothAlignment,validAlignment} from '../common/alignment';
 
 export type WorldPoint={x:number;y:number};
 export type PortRef={junctionId:string;armId:number};
+/** A road end without a junction. Its section is described like an arm: "outgoing" travels from the end into the road. */
+export type RoadEndRef={endId:string};
+export type LinkEndRef=PortRef|RoadEndRef;
+export type RoadEndSection=Pick<Arm,'incoming'|'outgoing'|'median'|'width'|'walk'|'bands'|'incomingSection'|'outgoingSection'>;
+/** heading = direction from the end point into the road, in world degrees (same convention as a port heading). */
+export type RoadEnd={id:string;name:string;x:number;y:number;heading:number;section:RoadEndSection};
 export type JunctionInstance={
   id:string;
   name:string;
@@ -28,8 +34,8 @@ export type LinkStationComponentPatch={direction?:LinkDirection;side?:'curb'|'me
 export type RoadLink={
   id:string;
   name:string;
-  from:PortRef;
-  to:PortRef;
+  from:LinkEndRef;
+  to:LinkEndRef;
   via:LinkVia[];
   sectionProfile:LinkSectionProfile;
   components:LinkStationComponent[];
@@ -48,11 +54,12 @@ export type ParallelCorridorOrientation={startJunctionId:string;endJunctionId:st
 export type ParallelCorridorEditResult={project:NetworkProject;corridor?:ParallelCorridor;error:string|null};
 export type ParallelCorridorLinkRole={corridor:ParallelCorridor;role:'mainline'|'frontage';side?:ParallelCorridorSide};
 export type NetworkProject={
-  schemaVersion:4;
+  schemaVersion:5;
   title:string;
   junctions:JunctionInstance[];
   links:RoadLink[];
   parallelCorridors:ParallelCorridor[];
+  roadEnds:RoadEnd[];
 };
 export type LinkEndSection={
   forwardLanes:number;
@@ -79,6 +86,7 @@ const linkRadius=(value:unknown)=>Math.max(0,Math.min(200,Number.isFinite(Number
 const copyDesign=(d:Design):Design=>structuredClone(d);
 const displayDesignCache=new WeakMap<Design,Design>();
 const nextId=(prefix:string,ids:string[])=>{let n=1;while(ids.includes(`${prefix}-${n}`))n++;return `${prefix}-${n}`;};
+const allIds=(project:NetworkProject)=>[...project.junctions.map(j=>j.id),...project.links.map(l=>l.id),...(project.roadEnds??[]).map(e=>e.id)];
 export const activeArmIds=(j:JunctionInstance)=>j.design.enabled.map((enabled,i)=>enabled?i:-1).filter(i=>i>=0);
 
 export function portDistance(j:JunctionInstance,armId:number){
@@ -126,13 +134,33 @@ export function transformNetworkProject(project:NetworkProject,transform:Network
 export function junctionById(project:NetworkProject,id:string){
   return project.junctions.find(j=>j.id===id);
 }
-export function armForPort(project:NetworkProject,ref:PortRef):Arm|undefined{
+export const isJunctionPort=(ref:LinkEndRef):ref is PortRef=>'junctionId' in ref;
+/** Graph node of a link end: the junction id, or `end:<id>` for a road end. */
+export const nodeId=(ref:LinkEndRef)=>isJunctionPort(ref)?ref.junctionId:`end:${ref.endId}`;
+export function roadEndById(project:NetworkProject,id:string){
+  return (project.roadEnds??[]).find(e=>e.id===id);
+}
+/** Junction arm behind a port. Road ends have no arm. */
+export function armForPort(project:NetworkProject,ref:LinkEndRef):Arm|undefined{
+  if(!isJunctionPort(ref))return undefined;
   const junction=junctionById(project,ref.junctionId);
   return junction?.design.enabled[ref.armId]?junction.design.arms[ref.armId]:undefined;
 }
-export function worldPort(project:NetworkProject,ref:PortRef){
+/** Section source at a link end: the junction arm, or the road end's own section. */
+export function endSectionSource(project:NetworkProject,ref:LinkEndRef):RoadEndSection|undefined{
+  return isJunctionPort(ref)?armForPort(project,ref):roadEndById(project,ref.endId)?.section;
+}
+export function linkEndExists(project:NetworkProject,ref:LinkEndRef){return !!endSectionSource(project,ref);}
+export function worldPort(project:NetworkProject,ref:LinkEndRef):WorldPoint|null{
+  if(!isJunctionPort(ref)){const end=roadEndById(project,ref.endId);return end?{x:end.x,y:end.y}:null;}
   const junction=junctionById(project,ref.junctionId);
   return junction&&junction.design.enabled[ref.armId]?portPoint(junction,ref.armId):null;
+}
+/** Direction in which a link leaves this end, in world degrees. */
+export function linkEndHeading(project:NetworkProject,ref:LinkEndRef):number|null{
+  if(!isJunctionPort(ref)){const end=roadEndById(project,ref.endId);return end?((end.heading%360)+360)%360:null;}
+  const junction=junctionById(project,ref.junctionId);
+  return junction?portHeading(junction,ref.armId):null;
 }
 export function linkControlPoints(project:NetworkProject,link:RoadLink){
   const from=worldPort(project,link.from),to=worldPort(project,link.to);
@@ -147,11 +175,11 @@ const tangentStub=(port:WorldPoint,target:WorldPoint,heading:number)=>{
 };
 /** Derived controls keep Link endpoint tangency aligned to semantic Arm headings. */
 export function linkAlignmentControls(project:NetworkProject,link:RoadLink){
-  const raw=linkControlPoints(project,link),fromJ=junctionById(project,link.from.junctionId),toJ=junctionById(project,link.to.junctionId);
-  if(raw.length<2||!fromJ||!toJ)return raw;
+  const raw=linkControlPoints(project,link),fromHeading=linkEndHeading(project,link.from),toHeading=linkEndHeading(project,link.to);
+  if(raw.length<2||fromHeading===null||toHeading===null)return raw;
   const from=raw[0],to=raw.at(-1)!,fromTarget=link.via[0]??to,toTarget=link.via.at(-1)??from,
-    fromStub=tangentStub(from,fromTarget,portHeading(fromJ,link.from.armId)),
-    toStub=tangentStub(to,toTarget,portHeading(toJ,link.to.armId));
+    fromStub=tangentStub(from,fromTarget,fromHeading),
+    toStub=tangentStub(to,toTarget,toHeading);
   const build=(useFrom:boolean,useTo:boolean,curved:boolean)=>{
     const out:(WorldPoint&{radius?:number})[]=[from];
     if(useFrom&&fromStub)out.push({...fromStub,radius:curved?fromStub.radius:0});
@@ -203,7 +231,7 @@ export function removeLinkVia(project:NetworkProject,id:string,index:number){
   return setLinkVia(project,id,link.via.filter((_,i)=>i!==index));
 }
 export function linkEndSection(project:NetworkProject,link:RoadLink,end:'from'|'to'):LinkEndSection|null{
-  const arm=armForPort(project,end==='from'?link.from:link.to);
+  const arm=endSectionSource(project,end==='from'?link.from:link.to);
   if(!arm)return null;
   const incoming=sectionFor(arm,'incoming'),outgoing=sectionFor(arm,'outgoing');
   return end==='from'
@@ -326,20 +354,20 @@ export function linkIssues(project:NetworkProject,link:RoadLink):LinkIssue[]{
   if(points.length>=2&&!validAlignment(points))out.push({kind:'alignment',message:'แนว Road Link หักกลับ ตัดตัวเอง หรือมีช่วงสั้นเกินไป · ปรับตำแหน่ง Junction หรือจุดแนว'});
   return out;
 }
-export function portKey(ref:PortRef){return `${ref.junctionId}:${ref.armId}`;}
-export function portOccupied(project:NetworkProject,ref:PortRef,exceptLinkId?:string){
+export function portKey(ref:LinkEndRef){return isJunctionPort(ref)?`${ref.junctionId}:${ref.armId}`:`end:${ref.endId}`;}
+export function portOccupied(project:NetworkProject,ref:LinkEndRef,exceptLinkId?:string){
   const key=portKey(ref);
   return project.links.some(link=>link.id!==exceptLinkId&&(portKey(link.from)===key||portKey(link.to)===key));
 }
 const angleDifference=(a:number,b:number)=>Math.abs((((a-b)+540)%360)-180);
-export function assessPortConnection(project:NetworkProject,from:PortRef,to:PortRef):PortConnectionAssessment|null{
-  const fromJ=junctionById(project,from.junctionId),toJ=junctionById(project,to.junctionId),a=worldPort(project,from),b=worldPort(project,to);
-  if(!fromJ||!toJ||!a||!b||from.junctionId===to.junctionId)return null;
+export function assessPortConnection(project:NetworkProject,from:LinkEndRef,to:LinkEndRef):PortConnectionAssessment|null{
+  const fromHeading=linkEndHeading(project,from),toHeading=linkEndHeading(project,to),a=worldPort(project,from),b=worldPort(project,to);
+  if(fromHeading===null||toHeading===null||!a||!b||nodeId(from)===nodeId(to))return null;
   const dx=b.x-a.x,dy=b.y-a.y,distance=Math.hypot(dx,dy);
   if(distance<1e-6)return{distance,fromDeviation:180,toDeviation:180,status:'invalid'};
   const heading=(Math.atan2(dy,dx)*180/Math.PI+360)%360,
-    fromDeviation=angleDifference(portHeading(fromJ,from.armId),heading),
-    toDeviation=angleDifference(portHeading(toJ,to.armId),(heading+180)%360),
+    fromDeviation=angleDifference(fromHeading,heading),
+    toDeviation=angleDifference(toHeading,(heading+180)%360),
     worst=Math.max(fromDeviation,toDeviation),
     status:PortConnectionAssessment['status']=worst>90?'invalid':worst>60?'caution':'valid';
   return{distance,fromDeviation,toDeviation,status};
@@ -359,7 +387,7 @@ export function rotateJunction(project:NetworkProject,id:string,rotation:number)
 const facingWorst=(value:PortConnectionAssessment|null)=>value?Math.max(value.fromDeviation,value.toDeviation):180;
 export function junctionLinkFacingIssue(project:NetworkProject,id:string,previous?:NetworkProject){
   for(const link of project.links){
-    if(link.from.junctionId!==id&&link.to.junctionId!==id)continue;
+    if(nodeId(link.from)!==id&&nodeId(link.to)!==id)continue;
     const after=assessPortConnection(project,link.from,link.to);
     if(after?.status!=='invalid'&&after!==null)continue;
     const before=previous?.links.find(v=>v.id===link.id),prior=before&&previous?assessPortConnection(previous,before.from,before.to):null;
@@ -378,26 +406,26 @@ export function rotateJunctionChecked(project:NetworkProject,id:string,rotation:
   const next=rotateJunction(project,id,rotation),error=junctionLinkFacingIssue(next,id,project);
   return error?{project,error}:{project:next,error:null};
 }
-export function connectPorts(project:NetworkProject,from:PortRef,to:PortRef):ConnectPortsResult{
-  if(portKey(from)===portKey(to))return{project,error:'เลือก port เดิมซ้ำ'};
-  if(from.junctionId===to.junctionId)return{project,error:'Road Link รุ่น foundation เชื่อมคนละทางแยกเท่านั้น'};
-  if(!armForPort(project,from)||!armForPort(project,to))return{project,error:'ไม่พบ arm/port ที่เลือก'};
-  if(portOccupied(project,from)||portOccupied(project,to))return{project,error:'port นี้มี Road Link เชื่อมอยู่แล้ว'};
+export function connectPorts(project:NetworkProject,from:LinkEndRef,to:LinkEndRef):ConnectPortsResult{
+  if(portKey(from)===portKey(to))return{project,error:'เลือกปลายเดิมซ้ำ'};
+  if(nodeId(from)===nodeId(to))return{project,error:'เชื่อมได้เฉพาะปลายขาของทางแยกอื่น'};
+  if(!linkEndExists(project,from)||!linkEndExists(project,to))return{project,error:'ไม่พบปลายขาหรือปลายถนนที่เลือก'};
+  if(portOccupied(project,from)||portOccupied(project,to))return{project,error:'ปลายนี้มีถนนเชื่อมอยู่แล้ว'};
   const facing=assessPortConnection(project,from,to);
   if(!facing||facing.status==='invalid')return{project,error:'เชื่อมไม่ได้ · port อย่างน้อยหนึ่งด้านหันออกจากแนวเชื่อมเกิน 90° · เลือกขาที่หันเข้าหากันหรือจัดตำแหน่ง Junction ใหม่'};
-  const ids=[...project.junctions.map(j=>j.id),...project.links.map(l=>l.id)],id=nextId('L',ids);
+  const ids=allIds(project),id=nextId('L',ids);
   const link:RoadLink={id,name:`Road Link ${project.links.length+1}`,from,to,via:[],sectionProfile:{mode:'review'},components:[]};
   return{project:{...project,links:[...project.links,link]},link,error:null};
 }
-export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'to',ref:PortRef):ConnectPortsResult{
+export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'to',ref:LinkEndRef):ConnectPortsResult{
   const link=project.links.find(item=>item.id===id);if(!link)return{project,error:'ไม่พบ Road Link ที่เลือก'};
   const current=end==='from'?link.from:link.to,other=end==='from'?link.to:link.from;
   if(portKey(current)===portKey(ref))return{project,link,error:null};
-  if(!armForPort(project,ref))return{project,error:'ไม่พบ arm/port ปลายทางที่เลือก'};
-  if(ref.junctionId===other.junctionId)return{project,error:'Road Link ต้องเชื่อมคนละ Junction'};
+  if(!linkEndExists(project,ref))return{project,error:'ไม่พบปลายขาหรือปลายถนนที่เลือก'};
+  if(nodeId(ref)===nodeId(other))return{project,error:'ถนนต้องเชื่อมคนละทางแยก'};
   if(portOccupied(project,ref,id))return{project,error:'port นี้มี Road Link อื่นเชื่อมอยู่แล้ว'};
-  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
-  if(ownsHandoff)return{project,error:`เปลี่ยน ${end.toUpperCase()} port ไม่ได้ขณะที่มี Junction handoff ผูกกับปลายนี้ · Detach as manual หรือ Back to Junction only ก่อน`};
+  const ownsHandoff=link.components.some(component=>component.kind==='lane'&&component.source&&isJunctionPort(current)&&component.source.junctionId===current.junctionId&&component.source.armId===current.armId);
+  if(ownsHandoff)return{project,error:`เปลี่ยน ${end.toUpperCase()} port ไม่ได้ขณะที่ปลายนี้มีช่องที่ต่อเนื่องจากทางแยก · ใช้ “แยกเป็นช่องบนถนน” หรือ “กลับเป็นจบในทางแยก” ก่อน`};
   const candidate:RoadLink={...link,[end]:ref},candidateProject={...project,links:project.links.map(item=>item.id===id?candidate:item)},
     facing=assessPortConnection(candidateProject,candidate.from,candidate.to);
   if(!facing||facing.status==='invalid')return{project,error:'เปลี่ยน port ไม่ได้ · ปลายใหม่หันออกจากแนวเชื่อมเกิน 90°'};
@@ -460,12 +488,12 @@ export function setJunctionArmEnabled(project:NetworkProject,id:string,armId:num
   return{project:updateJunctionDesign(project,id,design),error:null};
 }
 export function junctionConnectedLinkIds(project:NetworkProject,junctionId:string){
-  return project.links.filter(link=>link.from.junctionId===junctionId||link.to.junctionId===junctionId).map(link=>link.id);
+  return project.links.filter(link=>nodeId(link.from)===junctionId||nodeId(link.to)===junctionId).map(link=>link.id);
 }
 export function linkedArmIds(project:NetworkProject,junctionId:string){
   return [...new Set(project.links.flatMap(link=>[
-    ...(link.from.junctionId===junctionId?[link.from.armId]:[]),
-    ...(link.to.junctionId===junctionId?[link.to.armId]:[])
+    ...(isJunctionPort(link.from)&&link.from.junctionId===junctionId?[link.from.armId]:[]),
+    ...(isJunctionPort(link.to)&&link.to.junctionId===junctionId?[link.to.armId]:[])
   ]))].sort((a,b)=>a-b);
 }
 export function junctionDesignLinkIssue(project:NetworkProject,id:string,design:Design){
@@ -481,9 +509,9 @@ export function updateJunctionDesign(project:NetworkProject,id:string,design:Des
 function inferredChainStartFromLinks(links:RoadLink[],linkIds:string[]){
   if(!Array.isArray(linkIds)||!linkIds.length)return null;
   const first=links.find(link=>link.id===linkIds[0]);if(!first)return null;
-  if(linkIds.length===1)return first.from.junctionId;
+  if(linkIds.length===1)return nodeId(first.from);
   const second=links.find(link=>link.id===linkIds[1]);if(!second)return null;
-  const firstEnds=[first.from.junctionId,first.to.junctionId],secondEnds=new Set([second.from.junctionId,second.to.junctionId]),
+  const firstEnds=[nodeId(first.from),nodeId(first.to)],secondEnds=new Set([nodeId(second.from),nodeId(second.to)]),
     starts=firstEnds.filter(id=>!secondEnds.has(id));
   return starts.length===1?starts[0]:null;
 }
@@ -493,8 +521,8 @@ function chainJunctionsFromStart(project:NetworkProject,linkIds:string[],startJu
   let current=startJunctionId;const junctionIds=[current],visited=new Set<string>([current]);
   for(const link of links as RoadLink[]){
     let next:string;
-    if(link.from.junctionId===current)next=link.to.junctionId;
-    else if(link.to.junctionId===current)next=link.from.junctionId;
+    if(nodeId(link.from)===current)next=nodeId(link.to);
+    else if(nodeId(link.to)===current)next=nodeId(link.from);
     else return null;
     if(visited.has(next))return null;
     visited.add(next);junctionIds.push(next);current=next;
@@ -511,7 +539,7 @@ export function parallelCorridorChainContinuous(project:NetworkProject,linkIds:s
 }
 function frontageChainJunctionIds(project:NetworkProject,linkIds:string[]){
   const ids=new Set<string>();
-  for(const id of linkIds){const link=project.links.find(v=>v.id===id);if(link){ids.add(link.from.junctionId);ids.add(link.to.junctionId);}}
+  for(const id of linkIds){const link=project.links.find(v=>v.id===id);if(link){ids.add(nodeId(link.from));ids.add(nodeId(link.to));}}
   return ids;
 }
 const filteredSeedReviewIds=(project:NetworkProject,chain:ParallelFrontageChain,linkIds=chain.linkIds)=>{
@@ -589,12 +617,12 @@ export function addLinkToParallelCorridor(project:NetworkProject,corridorId:stri
   if(role==='mainline'){
     const orientation=parallelCorridorChainOrientation(project,corridor.mainlineLinkIds,corridor.mainlineStartJunctionId),link=project.links.find(v=>v.id===linkId);
     if(!orientation||!link)return{project,error:'เพิ่ม Mainline ไม่ได้ · reference direction หรือ Road Link ไม่สมบูรณ์'};
-    const touchesStart=link.from.junctionId===orientation.startJunctionId||link.to.junctionId===orientation.startJunctionId,
-      touchesEnd=link.from.junctionId===orientation.endJunctionId||link.to.junctionId===orientation.endJunctionId;
+    const touchesStart=nodeId(link.from)===orientation.startJunctionId||nodeId(link.to)===orientation.startJunctionId,
+      touchesEnd=nodeId(link.from)===orientation.endJunctionId||nodeId(link.to)===orientation.endJunctionId;
     if(touchesStart===touchesEnd)return{project,error:'เพิ่ม Mainline ไม่ได้ · Link ต้องต่อที่ปลาย chain เพียงด้านเดียว'};
     if(touchesEnd)candidates.push({...corridor,mainlineLinkIds:[...corridor.mainlineLinkIds,linkId]});
     else{
-      const newStart=link.from.junctionId===orientation.startJunctionId?link.to.junctionId:link.from.junctionId;
+      const newStart=nodeId(link.from)===orientation.startJunctionId?nodeId(link.to):nodeId(link.from);
       candidates.push({...corridor,mainlineLinkIds:[linkId,...corridor.mainlineLinkIds],mainlineStartJunctionId:newStart});
     }
   }else{
@@ -662,7 +690,17 @@ function cleanupParallelCorridors(previous:NetworkProject,project:NetworkProject
   return{...project,parallelCorridors};
 }
 export function removeJunction(project:NetworkProject,id:string):NetworkProject{
-  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),links:project.links.filter(l=>l.from.junctionId!==id&&l.to.junctionId!==id)});
+  return cleanupParallelCorridors(project,{...project,junctions:project.junctions.filter(j=>j.id!==id),links:project.links.filter(l=>nodeId(l.from)!==id&&nodeId(l.to)!==id)});
+}
+export function addRoadEnd(project:NetworkProject,point:WorldPoint,heading:number,section:RoadEndSection,name?:string):{project:NetworkProject;roadEnd?:RoadEnd;error:string|null}{
+  const roadEnds=project.roadEnds??[],id=nextId('E',allIds(project));
+  const roadEnd:RoadEnd={id,name:name??`ปลายถนน ${roadEnds.length+1}`,x:point.x,y:point.y,heading:((heading%360)+360)%360,section:structuredClone(section)};
+  if(!validRoadEnd(roadEnd))return{project,error:'ข้อมูลปลายถนนไม่ถูกต้อง'};
+  return{project:{...project,roadEnds:[...roadEnds,roadEnd]},roadEnd,error:null};
+}
+export function removeRoadEnd(project:NetworkProject,id:string):NetworkProject{
+  const node=`end:${id}`;
+  return cleanupParallelCorridors(project,{...project,roadEnds:(project.roadEnds??[]).filter(e=>e.id!==id),links:project.links.filter(l=>nodeId(l.from)!==node&&nodeId(l.to)!==node)});
 }
 export function removeLink(project:NetworkProject,id:string):NetworkProject{
   return cleanupParallelCorridors(project,{...project,links:project.links.filter(l=>l.id!==id)});
@@ -696,10 +734,21 @@ export function projectBounds(project:NetworkProject,padding=35){
   const xs=points.map(p=>p.x),ys=points.map(p=>p.y),minX=Math.min(...xs)-padding,maxX=Math.max(...xs)+padding,minY=Math.min(...ys)-padding,maxY=Math.max(...ys)+padding;
   return{x:minX,y:minY,w:Math.max(100,maxX-minX),h:Math.max(100,maxY-minY)};
 }
+function validRoadEnd(e:RoadEnd){
+  const s=e?.section;
+  return !!e&&typeof e.id==='string'&&e.id.length>0&&e.id.length<=40&&typeof e.name==='string'&&e.name.length<=80
+    &&Number.isFinite(e.x)&&Number.isFinite(e.y)&&Number.isFinite(e.heading)&&e.heading>=0&&e.heading<360
+    &&!!s&&[0,1,2,3,4].includes(s.incoming)&&[0,1,2,3,4].includes(s.outgoing)&&s.incoming+s.outgoing>0
+    &&Number.isFinite(s.median)&&s.median>=0&&s.median<=30
+    &&validSection({width:s.width,walk:s.walk,bands:s.bands})&&(s.incomingSection===undefined||validSection(s.incomingSection))&&(s.outgoingSection===undefined||validSection(s.outgoingSection));
+}
 export function validateNetworkProject(project:NetworkProject){
-  if(project.schemaVersion!==4||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors))return'รูปแบบข้อมูลโครงข่ายไม่รองรับ';
+  if(project.schemaVersion!==5||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors)||!Array.isArray(project.roadEnds))return'รูปแบบข้อมูลโครงข่ายไม่รองรับ';
   if(typeof project.title!=='string'||project.title.length>120)return'ชื่อ Network ไม่ถูกต้อง';
-  if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
+  if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100||project.roadEnds.length>500)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
+  const nodeIds=[...project.junctions.map(j=>j.id),...project.roadEnds.map(e=>e.id)];
+  if(new Set(nodeIds).size!==nodeIds.length)return'ID ของทางแยกหรือปลายถนนซ้ำ';
+  for(const e of project.roadEnds)if(!validRoadEnd(e))return'ข้อมูลปลายถนนไม่สมบูรณ์';
   if(new Set(project.junctions.map(j=>j.id)).size!==project.junctions.length)return'Junction ID ซ้ำ';
   if(new Set(project.links.map(l=>l.id)).size!==project.links.length)return'Road Link ID ซ้ำ';
   if(new Set(project.parallelCorridors.map(v=>v.id)).size!==project.parallelCorridors.length)return'Parallel corridor ID ซ้ำ';
@@ -720,7 +769,7 @@ export function validateNetworkProject(project:NetworkProject){
         return !!component.id&&component.id.length<=40&&['forward','backward'].includes(component.direction)&&Number.isFinite(component.start)&&component.start>=0&&Number.isFinite(component.end)&&component.end>component.start&&Number.isFinite(component.taperIn)&&component.taperIn>=0&&Number.isFinite(component.taperOut)&&component.taperOut>=0&&(component.kind==='lane'?(['curb','median'].includes(component.side)&&validSource(component.source)):(component.kind==='width'&&['walk','shoulder','bike','motorcycle','buffer'].includes(component.target)&&Number.isFinite(component.delta)&&Math.abs(component.delta)>=.01&&component.delta>=-5&&component.delta<=5));
       },
       componentList=Array.isArray(l.components)?l.components:[];
-    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||l.from.junctionId===l.to.junctionId||!armForPort(project,l.from)||!armForPort(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
+    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||nodeId(l.from)===nodeId(l.to)||!linkEndExists(project,l.from)||!linkEndExists(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
@@ -735,7 +784,7 @@ export function validateNetworkProject(project:NetworkProject){
   return null;
 }
 export function createNetworkProject():NetworkProject{
-  let project:NetworkProject={schemaVersion:4,title:'Thai Street Network Concept',junctions:[],links:[],parallelCorridors:[]};
+  let project:NetworkProject={schemaVersion:5,title:'Thai Street Network Concept',junctions:[],links:[],parallelCorridors:[],roadEnds:[]};
   const first=addJunction(project,{x:-150,y:0}),a=first.junction;
   project=first.project;
   const second=addJunction(project,{x:150,y:0}),b=second.junction;
@@ -745,12 +794,31 @@ export function createNetworkProject():NetworkProject{
   return connected.project;
 }
 
+function readLinkEnd(value:Record<string,unknown>|null,schemaVersion:number):LinkEndRef{
+  if(schemaVersion>=5&&value&&typeof value.endId==='string')return{endId:value.endId};
+  return{junctionId:String(value?.junctionId??''),armId:Number(value?.armId)};
+}
+function readRoadEnd(input:unknown):RoadEnd{
+  if(!input||typeof input!=='object')throw Error('ข้อมูลปลายถนนไม่ถูกต้อง');
+  const item=input as Record<string,unknown>,s=(item.section&&typeof item.section==='object'?item.section:{}) as Record<string,unknown>;
+  const readSection=(value:unknown):Section|undefined=>{
+    if(!value||typeof value!=='object')return undefined;
+    const v=value as Record<string,unknown>;
+    return{width:Number(v.width),walk:Number(v.walk),bands:Array.isArray(v.bands)?structuredClone(v.bands) as Band[]:[]};
+  };
+  const section:RoadEndSection={incoming:Number(s.incoming),outgoing:Number(s.outgoing),median:Number(s.median),width:Number(s.width),walk:Number(s.walk),bands:Array.isArray(s.bands)?structuredClone(s.bands) as Band[]:[]};
+  const incomingSection=readSection(s.incomingSection),outgoingSection=readSection(s.outgoingSection);
+  if(incomingSection)section.incomingSection=incomingSection;
+  if(outgoingSection)section.outgoingSection=outgoingSection;
+  return{id:String(item.id??''),name:String(item.name??''),x:Number(item.x),y:Number(item.y),heading:((Number(item.heading)%360)+360)%360,section};
+}
 export function normalizeNetworkProject(raw:unknown):NetworkProject{
   if(!raw||typeof raw!=='object')throw Error('Invalid network project');
-  const source=raw as {schemaVersion?:number;title?:unknown;junctions?:unknown[];links?:unknown[];parallelCorridors?:unknown};
+  const source=raw as {schemaVersion?:number;title?:unknown;junctions?:unknown[];links?:unknown[];parallelCorridors?:unknown;roadEnds?:unknown};
   const schemaVersion=Number(source.schemaVersion);
-  if(![1,2,3,4].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('รูปแบบข้อมูลโครงข่ายไม่รองรับ');
-  if(schemaVersion===4&&source.parallelCorridors!==undefined&&!Array.isArray(source.parallelCorridors))throw Error('Invalid parallel corridor list');
+  if(![1,2,3,4,5].includes(schemaVersion)||!Array.isArray(source.junctions)||!Array.isArray(source.links))throw Error('รูปแบบข้อมูลโครงข่ายไม่รองรับ');
+  if(schemaVersion>=4&&source.parallelCorridors!==undefined&&!Array.isArray(source.parallelCorridors))throw Error('Invalid parallel corridor list');
+  if(schemaVersion>=5&&source.roadEnds!==undefined&&!Array.isArray(source.roadEnds))throw Error('ข้อมูลปลายถนนไม่ถูกต้อง');
   const junctions=source.junctions.map(input=>{
     if(!input||typeof input!=='object')throw Error('ข้อมูลทางแยกไม่ถูกต้อง');
     const item=input as Record<string,unknown>,rotation=((Number(item.rotation)%360)+360)%360;
@@ -802,14 +870,14 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
     return{
       id:String(item.id??''),
       name:String(item.name??''),
-      from:{junctionId:String(from?.junctionId??''),armId:Number(from?.armId)},
-      to:{junctionId:String(to?.junctionId??''),armId:Number(to?.armId)},
+      from:readLinkEnd(from,schemaVersion),
+      to:readLinkEnd(to,schemaVersion),
       via,
       sectionProfile,
       components
     };
   });
-  const parallelCorridors:ParallelCorridor[]=schemaVersion===4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map(value=>{
+  const parallelCorridors:ParallelCorridor[]=schemaVersion>=4&&Array.isArray(source.parallelCorridors)?source.parallelCorridors.map(value=>{
     if(!value||typeof value!=='object')throw Error('Invalid parallel corridor');
     const item=value as Record<string,unknown>,frontageRaw=Array.isArray(item.frontage)?item.frontage:[],
       mainlineLinkIds=Array.isArray(item.mainlineLinkIds)?item.mainlineLinkIds.map(String):[],
@@ -830,7 +898,8 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       })
     };
   }):[];
-  const project:NetworkProject={schemaVersion:4,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors};
+  const roadEnds:RoadEnd[]=schemaVersion>=5&&Array.isArray(source.roadEnds)?source.roadEnds.map(readRoadEnd):[];
+  const project:NetworkProject={schemaVersion:5,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors,roadEnds};
   const error=validateNetworkProject(project);if(error)throw Error(error);
   return project;
 }

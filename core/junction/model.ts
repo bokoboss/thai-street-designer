@@ -11,7 +11,7 @@ export const emptyPockets=():Pockets=>({
   left:{lanes:0,length:25,taper:15},
   right:{lanes:0,length:25,taper:15}
 });
-export const sectionFor=(a:Arm,side:Direction):Section=>a[side==='incoming'?'incomingSection':'outgoingSection']??{width:a.width,walk:a.walk,bands:a.bands};
+export const sectionFor=(a:Pick<Arm,"width"|"walk"|"bands"|"incomingSection"|"outgoingSection">,side:Direction):Section=>a[side==='incoming'?'incomingSection':'outgoingSection']??{width:a.width,walk:a.walk,bands:a.bands};
 export const pocketsFor=(a:Arm,side:Direction):Pockets=>a[side==='incoming'?'incomingPockets':'outgoingPockets']??emptyPockets();
 export const pocketLaneWidth=(a:Arm,side:Direction,which:'left'|'right')=>pocketsFor(a,side)[which].width??sectionFor(a,side).width;
 
@@ -26,8 +26,8 @@ export type LaneMarkings={
   outgoingAux:{left:LaneArrowCode[];right:LaneArrowCode[]};
 };
 
-const validBands=(v:Band[])=>Array.isArray(v)&&v.length<=6&&v.every(b=>!!b&&typeof b.id==='string'&&['shoulder','bike','motorcycle','buffer'].includes(b.type)&&Number.isFinite(b.width)&&b.width>=.25&&b.width<=4.5);
-const validSection=(s:Section)=>!!s&&Number.isFinite(s.width)&&s.width>=2.5&&s.width<=4.5&&Number.isFinite(s.walk)&&s.walk>=0&&s.walk<=5&&validBands(s.bands);
+export const validBands=(v:Band[])=>Array.isArray(v)&&v.length<=6&&v.every(b=>!!b&&typeof b.id==='string'&&['shoulder','bike','motorcycle','buffer'].includes(b.type)&&Number.isFinite(b.width)&&b.width>=.25&&b.width<=4.5);
+export const validSection=(s:Section)=>!!s&&Number.isFinite(s.width)&&s.width>=2.5&&s.width<=4.5&&Number.isFinite(s.walk)&&s.walk>=0&&s.walk<=5&&validBands(s.bands);
 const validPockets=(p:Pockets)=>!!p&&['left','right'].every(k=>{
   const v=p[k as keyof Pockets];
   return !!v

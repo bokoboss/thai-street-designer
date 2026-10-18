@@ -71,9 +71,11 @@ Status (2026-10-13): spike done — **GO** (all 8 checks pass; the existing demo
 - New schema version where roads own alignment and section; junctions own approaches, corners (per-corner radius), treatments and lane connections.
 - Typed command layer for all edits (manual drag, numeric entry, future automation) with readable undo history.
 - Lane connections default by left-hand-traffic rules (curb-side lane for left turns, median-side lane for right turns) and remain editable.
-- One-way migration from Design v6 / Network v4; golden images of migrated files must match.
+- One-way migration from Design v6 / Network v4–v5; golden images of migrated files must match.
 
 Exit: migration golden suite passes; existing regression intent preserved.
+
+Status (2026-10-14): slice 1 — road ends (L1) — implemented on `phase2/road-end`: Network schema v5 with `roadEnds[]`, links junction port → road end and road end → road end, one-way v4 → v5 migration, road-first compile emits road-end links (`scripts/verify-road-ends.cjs`). Next slices: fit-based arm length + length-aware marking defaults (L2, L4); leg-keyed treatments (L5); road-first schema and migration golden suite.
 
 ---
 
