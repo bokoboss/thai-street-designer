@@ -28,7 +28,8 @@ export type {LegKey} from './leg-binding';
 /** Junction-owned treatments keyed by road leg, so they survive recompiles and road edits. */
 export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
 /** roads: the roads that join at this junction; any other road through the same point passes over or under it. */
-export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;roads?:string[];treatments?:JunctionTreatments};
+/** at: last known position of the crossing, used to re-attach the decision after road edits. */
+export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;roads?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
 export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[]};
@@ -76,10 +77,21 @@ export function detectCandidates(roads:Road[],tolerance=1):Candidate[]{
         for(const ref of [{roadId:A.id,station:round(stA)},{roadId:B.id,station:round(stB)}])if(!same.roads.some(r=>r.roadId===ref.roadId))same.roads.push(ref);
         continue;
       }
-      out.push({id:`C-${A.id}-${B.id}-${out.length+1}`,kind:endA||endB?'tee':'cross',point,roads:[{roadId:A.id,station:round(stA)},{roadId:B.id,station:round(stB)}]});
+      out.push({id:'',kind:endA||endB?'tee':'cross',point,roads:[{roadId:A.id,station:round(stA)},{roadId:B.id,station:round(stB)}]});
     }
   }
-  return out;
+  return withStableIds(out);
+}
+
+/** Crossing id from the roads that meet there plus its order along the first road, so unrelated edits keep it. */
+function withStableIds(list:Candidate[]){
+  const groups=new Map<string,Candidate[]>();
+  for(const c of list){const key=c.roads.map(r=>r.roadId).sort().join('+');groups.set(key,[...(groups.get(key)??[]),c]);}
+  for(const [key,group] of groups){
+    const lead=key.split('+')[0],at=(c:Candidate)=>c.roads.find(r=>r.roadId===lead)!.station;
+    group.sort((a,b)=>at(a)-at(b)).forEach((c,k)=>{c.id=`C-${key}-${k+1}`;});
+  }
+  return list;
 }
 
 /** Section at a road end derived from the road; "outgoing" travels from the end into the road. */
