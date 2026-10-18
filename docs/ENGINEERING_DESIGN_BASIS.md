@@ -61,6 +61,24 @@ Thai DOH marking guidance uses about 2.0 m minimum crosswalk width for normal ca
 
 Thai intersection-marking guidance places the stop line about 1 m in advance of the crosswalk and calls for a no-lane-change / solid-line treatment for at least **36 m before a crosswalk**. New junctions may use 36 m as a visually plausible default rather than 30 m. A different value is not automatically a runtime warning in a concept tool.
 
+### Arm length (fit-based)
+An arm has no fixed minimum length. It must be long enough for what it carries (`core/junction/arm-fit.ts`, mirrored by `designError()`):
+
+| Item | Required arm length (from junction centre) | Basis |
+| --- | --- | --- |
+| Approach beyond the mouth | mouth + 12 m | tool default |
+| Lane divider (2+ lanes in a direction) | divider start + 5 m | tool default |
+| Pocket / receiving lane (local) | origin + storage + taper + 2 m | existing engine rule |
+| Pocket continuing as corridor | origin + 1 m | tool default |
+| Median opening | mouth + start + length + 1 m | existing engine rule |
+| Roundabout splitter | outer radius + splitter length + 6 m | existing engine rule |
+
+The schema data floor is 12 m and the maximum stays 400 m. None of these values are Thai standards; they keep the concept geometry coherent.
+
+A solid divider keeps its configured length (default 36 m, see above). On a shorter arm it is drawn only up to the arm end and Review shows a note with the drawn and configured lengths. Continuing the remainder onto the RoadLink is not implemented yet.
+
+Road-first compile keeps a 5 m RoadLink between two adjacent junctions and 15 m before a bend (tool defaults).
+
 ### Outgoing lane-divider datum
 Incoming and outgoing markings must not share the incoming stop-line datum. Incoming dividers use the approach control datum; outgoing dividers use the departure-side mouth/tangent and must clear a pedestrian crossing. The engine now uses the departure-side origin for outgoing dividers.
 

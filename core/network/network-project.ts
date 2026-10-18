@@ -2,6 +2,7 @@ import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,validSection,typ
 import {normalizeArrowOverrides} from '../junction/arrow-layout';
 import {cachedEdges} from '../junction/geometry';
 import {slipGeometries} from '../junction/slip-geometry';
+import {fitArmLength} from '../junction/arm-fit';
 import {designError} from '../junction/design-validation';
 import {lengthOf,smoothAlignment,validAlignment} from '../common/alignment';
 
@@ -439,8 +440,10 @@ export function reconnectLinkPort(project:NetworkProject,id:string,end:'from'|'t
 }
 export function updateJunctionArmGeometry(project:NetworkProject,id:string,armId:number,angle:number,length:number):NetworkEditResult{
   const junction=junctionById(project,id);if(!junction||!junction.design.enabled[armId])return{project,error:'ไม่พบขาถนนที่เลือก'};
-  const design=copyDesign(junction.design),normalized=((angle%360)+360)%360,nextLength=Math.max(45,Math.min(400,length));
-  design.arms[armId]={...design.arms[armId],angle:+normalized.toFixed(2),length:+nextLength.toFixed(2)};
+  const design=copyDesign(junction.design),normalized=((angle%360)+360)%360;
+  design.arms[armId]={...design.arms[armId],angle:+normalized.toFixed(2)};
+  // The arm only has to fit what it carries (mouth, dividers, pockets, openings), not a fixed minimum.
+  design.arms[armId].length=+(Math.ceil(fitArmLength(design,armId,length)*100)/100).toFixed(2);
   const error=designError(design);if(error)return{project,error};
   const linkError=junctionDesignLinkIssue(project,id,design);if(linkError)return{project,error:linkError};
   return{project:updateJunctionDesign(project,id,design),error:null};

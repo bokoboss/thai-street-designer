@@ -75,7 +75,7 @@ Status (2026-10-13): spike done — **GO** (all 8 checks pass; the existing demo
 
 Exit: migration golden suite passes; existing regression intent preserved.
 
-Status (2026-10-14): slice 1 — road ends (L1) — implemented on `phase2/road-end`: Network schema v5 with `roadEnds[]`, links junction port → road end and road end → road end, one-way v4 → v5 migration, road-first compile emits road-end links (`scripts/verify-road-ends.cjs`). Next slices: fit-based arm length + length-aware marking defaults (L2, L4); leg-keyed treatments (L5); road-first schema and migration golden suite.
+Status (2026-10-14): slice 1 — road ends (L1) — implemented on `phase2/road-end`: Network schema v5 with `roadEnds[]`, links junction port → road end and road end → road end, one-way v4 → v5 migration, road-first compile emits road-end links (`scripts/verify-road-ends.cjs`). Slice 2 — fit-based arm length + length-aware divider (L2, L4) — on `phase2/arm-fit`: the fixed 45 m arm minimum is replaced by a fit against the arm's content (`core/junction/arm-fit.ts`, `scripts/verify-arm-fit.cjs`). Next slices: leg-keyed treatments (L5); road-first schema and migration golden suite. Continuing the solid divider onto the RoadLink is deferred to the RoadLink marking work.
 
 ---
 
