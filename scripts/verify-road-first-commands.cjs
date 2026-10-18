@@ -97,4 +97,12 @@ const moved=compiled(u2);
 assert.equal(moved.junctions.length,1);assert(moved.junctions[0].x>0&&moved.junctions[0].name==='แยกตะวันออก','decision re-attached to the east crossing');
 assert.equal(u2.project.decisions[0].candidateId,'C-A+B-1');
 
+// 10. Section presets are valid starting points and are matched back for display.
+const pr=T('core/road-first/presets.cjs');
+for(const preset of pr.ROAD_PRESETS){
+  const x=run(u2,{type:'road.setSection',roadId:'A',patch:pr.presetSection(preset.id)});
+  assert.equal(x.result.error,null,`${preset.id} applies`);assert.equal(pr.matchingPreset(x.editor.project.roads[0].section),preset.id);
+}
+assert.equal(pr.matchingPreset({...pr.presetSection('two-lane'),laneWidth:3.4}),null,'edited section no longer matches a preset');
+
 console.log(`PASS road-first commands: JSON commands for roads, crossings, junction legs and Slip; drag/typing merge into one step; readable labels; rejected edits leave no trace; undo/redo exact; road removal; decisions follow their crossing`);

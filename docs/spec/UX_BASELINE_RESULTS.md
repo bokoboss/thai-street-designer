@@ -18,7 +18,7 @@ Actions follow the protocol definition (one click, drag, key press that commits 
 
 ## Targets for end of Phase 3
 
-Set by the owner after the baseline. The values below are a **proposal** for the owner to confirm or change.
+Set by the owner after the baseline. The values below were proposed after the scripted baseline. On 2026-10-18 the owner chose to skip the manual timing run, so these action targets are the working targets and time is not tracked.
 
 | ID | Target time | Target actions | Notes |
 | --- | --- | --- | --- |
@@ -31,3 +31,12 @@ Set by the owner after the baseline. The values below are a **proposal** for the
 ## Later measurements
 
 Add one table per measured build (commit, date) using the same columns.
+
+### Road-first workspace `/design`, first slice (2026-10-18, scripted)
+
+Only tasks the new workspace already supports are measured; the rest follow in later Phase 3 slices.
+
+| ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
+| --- | --- | --- | --- | --- |
+| T2 (road-first form) | Y | — | 8 | Draw two crossing roads with the 4-lane divided preset (3 + 3 actions) and confirm the crossing as a junction (2). The section is set by the preset on the road itself. |
+| T3 | Y | — | 5 | Select the road, type lane width 3.5 and sidewalk 2.5 (both sides together). Baseline: 17. |
