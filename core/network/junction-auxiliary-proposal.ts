@@ -54,7 +54,8 @@ export type JunctionAuxiliaryHandoffIssue={
 };
 
 const near=(a:number,b:number,tolerance=.05)=>Math.abs(a-b)<=tolerance;
-const proposalId=(link:RoadLink,end:'from'|'to',direction:Direction,side:'left'|'right')=>`${link.id}:${end}:${direction}:${side}`;
+/** Stable id of a pocket-to-link handoff; also used by road-first compile to rebuild component sources. */
+export const proposalId=(link:RoadLink,end:'from'|'to',direction:Direction,side:'left'|'right')=>`${link.id}:${end}:${direction}:${side}`;
 const mapDirection=(end:'from'|'to',direction:Direction):LinkDirection=>
   end==='from'?(direction==='outgoing'?'forward':'backward'):(direction==='incoming'?'forward':'backward');
 const mapSide=(side:'left'|'right')=>side==='left'?'curb' as const:'median' as const;
