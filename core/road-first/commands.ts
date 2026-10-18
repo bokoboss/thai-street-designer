@@ -1,0 +1,178 @@
+// Typed edit commands for the road-first model (roadmap Phase 2).
+// Every edit — a drag, a typed number, a menu action or future automation — is a plain JSON command.
+// executeCommand() applies it, keeps junction decisions attached to their crossing, checks the result
+// with the engine and returns a readable Thai label for the undo history. A rejected edit changes nothing.
+import {designError} from '../junction/design-validation';
+import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
+import {validateNetworkProject,type WorldPoint} from '../network/network-project';
+import {detectCandidates,type Candidate,type Decision,type Road,type RoadSection} from './derive';
+import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
+import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
+
+export type RoadFirstCommand=
+  |{type:'project.rename';title:string}
+  |{type:'road.add';road:Road}
+  |{type:'road.remove';roadId:string}
+  |{type:'road.rename';roadId:string;name:string}
+  |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
+  |{type:'road.insertPoint';roadId:string;index:number;point:WorldPoint}
+  |{type:'road.removePoint';roadId:string;index:number}
+  |{type:'road.setPointRadius';roadId:string;index:number;radius:number}
+  |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
+  |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
+  |{type:'junction.rename';candidateId:string;name:string}
+  |{type:'junction.setRoads';candidateId:string;roads:string[]}
+  |{type:'junction.setCorner';candidateId:string;corner:number}
+  |{type:'junction.setDesign';candidateId:string;patch:DesignSettings}
+  |{type:'leg.setApproach';candidateId:string;leg:LegKey;patch:ApproachOverride}
+  |{type:'leg.setTreatment';candidateId:string;leg:LegKey;patch:LegTreatment}
+  |{type:'leg.reset';candidateId:string;leg:LegKey}
+  |{type:'slip.set';candidateId:string;slip:LegSlip}
+  |{type:'slip.remove';candidateId:string;from:LegKey};
+
+export type CommandResult={project:RoadFirstProject;error:string|null;label:string;warnings:string[];group?:string};
+
+const SECTION_LABEL:Record<keyof RoadSection,string>={forwardLanes:'ช่องขาไป',backwardLanes:'ช่องขากลับ',laneWidth:'ความกว้างช่อง',median:'เกาะกลาง',walk:'ทางเท้า',bands:'แถบริมทาง'};
+const fmt=(v:unknown)=>typeof v==='number'?String(+v.toFixed(2)):Array.isArray(v)?`${v.length} แถบ`:String(v);
+
+/** Re-attach every junction decision to the crossing it belongs to after roads change. */
+export function rebindDecisions(before:Road[],after:Road[],decisions:Decision[]):Decision[]{
+  const old=new Map(detectCandidates(before).map(c=>[c.id,c])),fresh=detectCandidates(after),taken=new Set<string>();
+  const near=(a:WorldPoint,b:WorldPoint)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const pending=decisions.map(d=>{
+    const was=old.get(d.candidateId),roads=d.roads??was?.roads.map(r=>r.roadId)??[],at=was?.point??d.at;
+    return{d,roads,at};
+  });
+  const out=new Map<Decision,Decision>();
+  // Closest matches first, so two crossings of the same roads keep their own decisions.
+  const options=pending.flatMap(p=>fresh.filter(c=>fits(c,p.roads)).map(c=>({p,c,gap:p.at?near(p.at,c.point):0}))).sort((a,b)=>a.gap-b.gap);
+  for(const {p,c} of options){
+    if(out.has(p.d)||taken.has(c.id))continue;
+    taken.add(c.id);out.set(p.d,{...p.d,candidateId:c.id,at:{x:c.point.x,y:c.point.y}});
+  }
+  // A decision whose crossing is gone stays dormant at its last position until the roads cross again.
+  return pending.map(p=>out.get(p.d)??(p.at?{...p.d,at:p.at}:p.d));
+}
+function fits(c:Candidate,roads:string[]){
+  const ids=c.roads.map(r=>r.roadId);
+  return roads.length>=2&&roads.every(r=>ids.includes(r));
+}
+
+function dropRoad(p:RoadFirstProject,roadId:string):RoadFirstProject{
+  const keep=(key:string)=>parseLegKey(key)?.roadId!==roadId,filter=<T>(r?:Partial<Record<LegKey,T>>)=>r&&Object.fromEntries(Object.entries(r).filter(([k])=>keep(k))) as Partial<Record<LegKey,T>>;
+  const decisions=p.decisions.flatMap(d=>{
+    const roads=d.roads?.filter(r=>r!==roadId);
+    if(roads&&roads.length<2)return[];
+    const t=d.treatments;
+    return[{...d,...(roads?{roads}:{}),treatments:t&&{...t,legs:filter(t.legs),approaches:filter(t.approaches),slips:t.slips?.filter(s=>keep(s.from)&&(!s.to||keep(s.to)))}}];
+  });
+  return{...p,roads:p.roads.filter(r=>r.id!==roadId),decisions};
+}
+
+export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):CommandResult{
+  const fail=(error:string,label='แก้ไข'):CommandResult=>({project,error,label,warnings:[]});
+  const p=structuredClone(project);
+  const road=(id:string)=>p.roads.find(r=>r.id===id);
+  const decision=(id:string)=>p.decisions.find(d=>d.candidateId===id);
+  const jname=(d:Decision|undefined)=>d?.name??'ทางแยก';
+  const legName=(key:LegKey)=>{const l=parseLegKey(key),r=l&&road(l.roadId);return r?`${r.name} ${l!.side==='ahead'?'→':'←'}`:key;};
+  let label='แก้ไข',group:string|undefined,roadsChanged=false;
+  const t=(d:Decision)=>(d.treatments??={});
+  switch(cmd.type){
+    case 'project.rename':p.title=cmd.title;label=`เปลี่ยนชื่อโครงการเป็น ${cmd.title}`;group='project.rename';break;
+    case 'road.add':{
+      if(road(cmd.road.id))return fail(`มีถนนรหัส ${cmd.road.id} อยู่แล้ว`,`เพิ่มถนน ${cmd.road.name}`);
+      p.roads.push(structuredClone(cmd.road));label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;
+    }
+    case 'road.remove':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      Object.assign(p,dropRoad(p,cmd.roadId));label=`ลบถนน ${r.name}`;roadsChanged=true;break;
+    }
+    case 'road.rename':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      label=`เปลี่ยนชื่อถนน ${r.name} เป็น ${cmd.name}`;r.name=cmd.name;group=`road.rename:${r.id}`;break;
+    }
+    case 'road.movePoint':case 'road.insertPoint':case 'road.removePoint':case 'road.setPointRadius':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      const i=cmd.index,last=cmd.type==='road.insertPoint'?r.points.length:r.points.length-1;
+      if(!Number.isInteger(i)||i<0||i>last)return fail('ไม่พบจุดแนวถนนที่เลือก');
+      if(cmd.type==='road.movePoint'){r.points[i]={...r.points[i],x:cmd.point.x,y:cmd.point.y};label=`ย้ายจุดแนวถนน ${r.name}`;group=`road.move:${r.id}:${i}`;}
+      else if(cmd.type==='road.insertPoint'){r.points.splice(i,0,{x:cmd.point.x,y:cmd.point.y});label=`เพิ่มจุดแนวถนน ${r.name}`;}
+      else if(cmd.type==='road.removePoint'){if(r.points.length<=2)return fail('ถนนต้องมีอย่างน้อยสองจุด',`ลบจุดแนวถนน ${r.name}`);r.points.splice(i,1);label=`ลบจุดแนวถนน ${r.name}`;}
+      else{r.points[i]={...r.points[i],radius:cmd.radius};label=`ปรับรัศมีโค้ง ${r.name} เป็น ${fmt(cmd.radius)} ม.`;group=`road.radius:${r.id}:${i}`;}
+      roadsChanged=true;break;
+    }
+    case 'road.setSection':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      r.section={...r.section,...structuredClone(cmd.patch)};
+      const keys=Object.keys(cmd.patch) as (keyof RoadSection)[];
+      label=`ปรับหน้าตัด ${r.name}: ${keys.map(k=>`${SECTION_LABEL[k]} ${fmt(cmd.patch[k])}`).join(', ')}`;group=`road.section:${r.id}:${keys.join(',')}`;break;
+    }
+    case 'crossing.decide':{
+      const c=detectCandidates(p.roads).find(x=>x.id===cmd.candidateId);if(!c)return fail('ไม่พบจุดตัดที่เลือก');
+      const names=c.roads.map(x=>road(x.roadId)?.name??x.roadId).join(' × '),d=decision(c.id);
+      const next:Decision={...d,candidateId:c.id,decision:cmd.decision,name:cmd.name??d?.name,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
+      p.decisions=[...p.decisions.filter(x=>x!==d),next];
+      label=cmd.decision==='junction'?`ยืนยันทางแยก ${next.name??names}`:cmd.decision==='grade-separated'?`กำหนด ${names} เป็นทางต่างระดับ`:`ไม่ใช้จุดตัด ${names}`;break;
+    }
+    default:{
+      const d=decision(cmd.candidateId);if(!d||d.decision!=='junction')return fail('ไม่พบทางแยกที่เลือก');
+      switch(cmd.type){
+        case 'junction.rename':label=`เปลี่ยนชื่อ ${jname(d)} เป็น ${cmd.name}`;d.name=cmd.name;group=`junction.rename:${d.candidateId}`;break;
+        case 'junction.setRoads':{
+          if(cmd.roads.length<2||cmd.roads.some(id=>!road(id)))return fail('ทางแยกต้องมีถนนอย่างน้อยสองสาย');
+          d.roads=[...cmd.roads];label=`กำหนดถนนที่บรรจบที่ ${jname(d)}: ${cmd.roads.map(id=>road(id)!.name).join(', ')}`;break;
+        }
+        case 'junction.setCorner':t(d).corner=cmd.corner;label=`ปรับรัศมีมุม ${jname(d)} เป็น ${fmt(cmd.corner)} ม.`;group=`junction.corner:${d.candidateId}`;break;
+        case 'junction.setDesign':t(d).design={...t(d).design,...structuredClone(cmd.patch)};label=`ปรับการตั้งค่า ${jname(d)}`;group=`junction.design:${d.candidateId}:${Object.keys(cmd.patch).join(',')}`;break;
+        case 'leg.setApproach':{
+          const a=t(d).approaches??={};a[cmd.leg]={...a[cmd.leg],...structuredClone(cmd.patch)};
+          label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
+        }
+        case 'leg.setTreatment':{
+          const l=t(d).legs??={};l[cmd.leg]={...l[cmd.leg],...structuredClone(cmd.patch)};
+          label=`แก้ขา ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.treatment:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
+        }
+        case 'leg.reset':{
+          delete t(d).legs?.[cmd.leg];delete t(d).approaches?.[cmd.leg];label=`คืนค่าเริ่มต้นขา ${legName(cmd.leg)} ที่ ${jname(d)}`;break;
+        }
+        case 'slip.set':{
+          t(d).slips=[...(t(d).slips??[]).filter(s=>s.from!==cmd.slip.from),structuredClone(cmd.slip)];
+          label=`ตั้ง Slip lane จาก ${legName(cmd.slip.from)} ที่ ${jname(d)}`;group=`slip:${d.candidateId}:${cmd.slip.from}`;break;
+        }
+        case 'slip.remove':{
+          const before=t(d).slips?.length??0;t(d).slips=(t(d).slips??[]).filter(s=>s.from!==cmd.from);
+          if(t(d).slips!.length===before)return fail('ไม่พบ Slip lane ที่เลือก');
+          label=`ลบ Slip lane จาก ${legName(cmd.from)} ที่ ${jname(d)}`;break;
+        }
+        default:return fail('ไม่รู้จักคำสั่งนี้');
+      }
+    }
+  }
+  if(roadsChanged)p.decisions=rebindDecisions(project.roads,p.roads,p.decisions);
+  const structural=validateRoadFirstProject(p);if(structural)return fail(structural,label);
+  const compiled=compileRoadFirstProject(p),engine=validateNetworkProject(compiled.project);
+  if(engine)return fail(`ทำไม่ได้ · ${engine}`,label);
+  for(const j of compiled.project.junctions){const e=designError(j.design);if(e)return fail(`${j.name}: ${e}`,label);}
+  return{project:p,error:null,label,warnings:compiled.issues,group};
+}
+
+/** Editor state: the project plus its readable undo history. */
+export type RoadFirstEditor={project:RoadFirstProject;history:History<RoadFirstProject>};
+export const createEditor=(project:RoadFirstProject,limit=100):RoadFirstEditor=>({project,history:createHistory(limit)});
+
+export function runCommand(editor:RoadFirstEditor,cmd:RoadFirstCommand):{editor:RoadFirstEditor;result:CommandResult}{
+  const result=executeCommand(editor.project,cmd);
+  if(result.error)return{editor,result};
+  return{editor:{project:result.project,history:recordStep(editor.history,editor.project,result.label,result.group)},result};
+}
+/** Call when a drag or typed entry ends, so the next one becomes its own undo step. */
+export const endGesture=(editor:RoadFirstEditor):RoadFirstEditor=>({...editor,history:closeGroup(editor.history)});
+export function undo(editor:RoadFirstEditor){
+  const r=undoStep(editor.history,editor.project);
+  return r?{editor:{project:r.state,history:r.history},label:r.label}:null;
+}
+export function redo(editor:RoadFirstEditor){
+  const r=redoStep(editor.history,editor.project);
+  return r?{editor:{project:r.state,history:r.history},label:r.label}:null;
+}

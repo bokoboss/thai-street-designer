@@ -1156,3 +1156,13 @@ Not yet wired into the UI; the Draw Road workflow is Phase 3.
 4. Self-check: the result is compiled and compared with the original using the world-space geometry digest (`core/road-first/geometry-digest.ts`, 1 cm); any difference is reported.
 
 Not carried yet (reported): parallel corridor relationships; closed loops where every junction passes the road straight through.
+
+## Road-first edit commands and undo history (Consolidation Phase 2)
+
+All road-first edits go through `executeCommand(project, command)` (`core/road-first/commands.ts`). A command is plain JSON, so a drag, a typed value, a menu action and future automation use the same path.
+
+- Commands: project rename; road add / remove / rename / move, insert or remove point / point radius / section; crossing decide; junction rename / joined roads / corner / junction-wide settings; leg approach / treatment / reset; Slip set / remove.
+- Each command returns a Thai label for the history (for example `ย้ายจุดแนวถนน ถนนรอง`, `ปรับหน้าตัด ถนนหลัก: ความกว้างช่อง 3.5`), engine warnings, and an optional merge group.
+- A command is rejected, with no change and no history step, when the file structure is invalid, the compiled network fails validation, or any compiled junction fails `designError()`.
+- Crossing ids come from the roads that meet plus their order along the first road (`C-R1+R2-1`). After any road edit, `rebindDecisions()` re-attaches each junction decision to the closest crossing of the same roads; a decision whose crossing disappears stays dormant at its last position and comes back when the roads cross again.
+- `core/common/history.ts`: labelled undo/redo; consecutive steps with the same group (one drag, typing into one field) merge into one step until `endGesture()`.
