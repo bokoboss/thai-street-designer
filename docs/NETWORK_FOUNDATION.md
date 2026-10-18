@@ -1124,3 +1124,14 @@ The provenance remains part of ParallelCorridor engineering state and follows th
 - v1–v4 files migrate one way to v5 with `roadEnds: []`; geometry is unchanged. Future versions are rejected.
 
 Regression: `scripts/verify-road-ends.cjs`.
+
+## Road-first leg treatments (Consolidation Phase 2, ADR-0002 limit L5)
+
+Road-first compile re-derives junction arm slots from road headings on every compile, so junction-owned settings are stored against a **road leg** (`roadId:ahead|behind`), never against an arm slot.
+
+- `LEG_FIELDS` (junction-owned, stored per leg): pockets, lane markings and arrow overrides, roadside, median openings and trees, crossing / signal / stop and their offsets, divider mode and solid lengths, corridor mode. Lane-indexed settings are resized to the road's lane counts on compile.
+- `ROAD_FIELDS` (road-owned): lane counts, lane width, median, sidewalk, bands, sections, angle, length, name. Editing these on a junction is reported by `captureTreatments()` as an edit to make on the road.
+- Slip is stored as `from`/`to` legs with its full settings. If a road edit means the two legs are no longer neighbours, compile reports it and does not create the Slip.
+- `captureTreatments(roads, decisions, editedProject)` compares an edited compile with a plain compile of the same roads and returns decisions whose treatments are keyed by leg; compiling them reproduces the edited junction exactly.
+
+Not yet wired into the UI; the Draw Road workflow is Phase 3.

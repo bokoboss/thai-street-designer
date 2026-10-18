@@ -46,7 +46,7 @@ All 8 checks pass (`results.json`). Engine checks per case: `designError` = null
 | L2 | Junction arms are straight and **≥ 45 m** (`valid()`), and must fit stop line + solid divider | Junctions closer than ~90 m along a road, or a bend within 45 m of a junction, are misrepresented (spike stretches the arm to 45 m and reports it) | **Resolved in Phase 2** — arm length is checked against what the arm carries (`core/junction/arm-fit.ts`); a plain four-leg arm needs ~31 m and junctions ~70 m apart compile on the alignment. Continuing the solid divider onto the RoadLink is still open |
 | L3 | Junction Design has **4 arm slots** | 5+ legs rejected (reported) | Out of scope for now; record as known limit |
 | L4 | Arm marking defaults (solid divider 36 m) assume long arms | Short approach zones fail validation | **Resolved in Phase 2** — the solid divider keeps its configured length and is drawn up to the arm end; a review note reports the shortened length |
-| L5 | Junction treatments are stored per arm slot | Re-deriving arms could re-assign pockets/Slip to the wrong leg | Key all arm-level treatments (pockets, markings overrides, roadside, Slip) by road leg; spike shows this for Slip |
+| L5 | Junction treatments are stored per arm slot | Re-deriving arms could re-assign pockets/Slip to the wrong leg | **Resolved in Phase 2** — junction-owned arm settings and Slip are stored per road leg (`core/road-first/leg-binding.ts`); `captureTreatments()` re-keys Junction edits by leg; a Slip whose legs stop being neighbours is reported |
 
 ## Conclusion
 
@@ -57,6 +57,6 @@ Phase 2 must address L1, L2, L4 and L5 before the Draw Road workflow can ship. L
 ## Not covered by the spike
 
 - Roundabouts compiled from roads (expected to work through the same arm mapping; untested).
-- Pockets and per-arm overrides keyed by leg (same mechanism as Slip; untested).
+- ~~Pockets and per-arm overrides keyed by leg~~ — covered in Phase 2 by `scripts/verify-leg-treatments.cjs`.
 - Editing a junction's arm geometry directly (in road-first this becomes a road edit — UI design question for Phase 3).
 - Performance on large networks (compile is linear in candidates × legs; not measured).
