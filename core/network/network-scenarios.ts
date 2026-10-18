@@ -95,3 +95,16 @@ export function restoreNetworkScenarioWorkspace(raw:string|null):NetworkScenario
   try{return normalizeNetworkScenarioWorkspace(JSON.parse(raw));}
   catch{return createNetworkScenarioWorkspace();}
 }
+
+/**
+ * Junction detail edits one junction of the active scenario. Reading and writing go through the whole
+ * scenario workspace, so other scenarios (Existing and every Alternative) are never replaced.
+ * Returns null when the stored data cannot be read; callers must then leave storage untouched.
+ */
+export function junctionEditContext(raw:string|null,junctionId:string){
+  if(!raw)return null;
+  let workspace:NetworkScenarioWorkspace;
+  try{workspace=normalizeNetworkScenarioWorkspace(JSON.parse(raw));}catch{return null;}
+  const scenario=activeNetworkScenario(workspace),junction=scenario.project.junctions.find(j=>j.id===junctionId);
+  return junction?{workspace,scenario,project:scenario.project,junction}:null;
+}
