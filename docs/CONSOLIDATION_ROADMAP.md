@@ -29,6 +29,8 @@ Exit: merged; no code changes.
 
 Exit: baseline table committed to `docs/spec/UX_BASELINE_RESULTS.md`.
 
+Status (2026-10-18): actions, completion and friction recorded on `main` @ `cc4994c` (T1 12, T2 5, T3 17, T4 not completed, T5 2). Times from a manual run and the Phase 3 targets (proposed in the results file) are owner decisions. The T4 failure (Junction detail dropped the Alternative) is fixed separately.
+
 ### 0C — Quick wins (no model change)
 1. Remove developer-facing text from the UI (phase numbers, schema names, provenance/runtime jargon). Move necessary explanations to help text or docs. Add a lint/test that rejects those terms in user-facing strings.
 2. Mode feedback: every tool states what it expects next and why an action did not happen (for example, Connect mode clicked on a junction body).
