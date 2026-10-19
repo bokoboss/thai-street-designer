@@ -9,6 +9,7 @@ import {SectionStrip} from './section-strip';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
+import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {normalizeRoadFirstProject} from '@/core/road-first/project';
 import {migrateNetworkProject} from '@/core/road-first/migrate';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
@@ -18,13 +19,16 @@ import type {WorldPoint} from '@/core/network/network-project';
 const TOOL_HINT:Record<DesignTool,string>={
   select:'เลือก: คลิกถนน จุดตัด หรือทางแยก · ลากจุดแนวถนนเพื่อย้าย · ลากด้วยปุ่มกลางเพื่อเลื่อนมุมมอง',
   pan:'เลื่อนมุมมอง: ลากเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม',
-  road:'วาดถนน: คลิกเพื่อวางจุด · ดับเบิลคลิกหรือ Enter เพื่อจบ · Esc เพื่อยกเลิก',
+  road:'วาดถนน: คลิกวางจุด (ดูดเข้าปลายถนน แนวถนน และมุมทุก 15°) · พิมพ์ตัวเลขแล้ว Enter = ความยาว · ดับเบิลคลิกหรือ Enter เพื่อจบ · Shift ค้าง = ไม่ดูด · Esc ยกเลิก',
 };
 
 export default function DesignWorkspace(){
   const ed=useRoadEditor();
   const [tool,setTool]=useState<DesignTool>('select'),[selection,setSelection]=useState<DesignSelection>(null);
-  const [draft,setDraft]=useState<WorldPoint[]>([]);
+  const [draft,setDraft]=useState<WorldPoint[]>([]),[typedLength,setTypedLength]=useState('');
+  // Drawing that starts on a road end continues that road instead of adding a new one.
+  const [extend,setExtend]=useState<{roadId:string;atStart:boolean}|null>(null);
+  const snapRef=useRef<SnapResult|null>(null);
   const [fitKey,setFitKey]=useState(0),[newArmed,setNewArmed]=useState(false);
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
   const candidates=useMemo(()=>detectCandidates(ed.project.roads),[ed.project.roads]);
@@ -34,20 +38,37 @@ export default function DesignWorkspace(){
   // Fit once the stored project has been loaded.
   useEffect(()=>{if(!loaded.current&&ed.project.roads.length){loaded.current=true;setFitKey(k=>k+1);}},[ed.project.roads.length]);
 
-  function chooseTool(next:DesignTool){setDraft([]);setTool(next);}
+  function clearDraft(){setDraft([]);setExtend(null);setTypedLength('');}
+  function chooseTool(next:DesignTool){clearDraft();setTool(next);}
+  function addDraftPoint(points:WorldPoint[],snap:SnapResult){
+    if(points.length===1)setExtend(snap.kind==='end'&&snap.roadId?{roadId:snap.roadId,atStart:snap.end==='start'}:null);
+    setDraft(points);setTypedLength('');
+  }
   function finishDraft(){
     if(draft.length<2){ed.setNotice({text:'ถนนต้องมีอย่างน้อยสองจุด',kind:'error'});return;}
+    if(extend){
+      const r=ed.run({type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:draft.slice(1)});
+      if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id:extend.roadId});}
+      return;
+    }
     const ids=new Set(ed.project.roads.map(r=>r.id));let n=1;while(ids.has(`R-${n}`))n++;
     const id=`R-${n}`,r=ed.run({type:'road.add',road:{id,name:`ถนน ${n}`,points:draft,section:structuredClone(ed.lastSection)}});
-    if(r.ok){setDraft([]);setTool('select');setSelection({kind:'road',id});}
+    if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
   function onKey(e:React.KeyboardEvent){
     if((e.target as HTMLElement).matches('input,select,textarea'))return;
     const k=e.key.toLowerCase();
     if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();if(e.shiftKey)ed.redo();else ed.undo();return;}
     if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();ed.redo();return;}
-    if(e.key==='Escape'){if(draft.length)setDraft([]);else{setTool('select');setSelection(null);}return;}
-    if(e.key==='Enter'&&tool==='road'){finishDraft();return;}
+    if(e.key==='Escape'){if(typedLength)setTypedLength('');else if(draft.length)clearDraft();else{setTool('select');setSelection(null);}return;}
+    // Typed length while drawing: digits build a length, Enter places the point at that distance along the cursor direction.
+    if(tool==='road'&&draft.length&&/^[0-9.]$/.test(e.key)){setTypedLength(t=>(t+e.key).slice(0,8));return;}
+    if(tool==='road'&&e.key==='Backspace'&&typedLength){setTypedLength(t=>t.slice(0,-1));return;}
+    if(e.key==='Enter'&&tool==='road'){
+      const len=Number(typedLength),last=draft.at(-1),toward=snapRef.current?.point;
+      if(typedLength&&len>0&&last&&toward){setDraft([...draft,pointAtLength(last,toward,len)]);setTypedLength('');return;}
+      finishDraft();return;
+    }
     if((e.key==='Delete'||e.key==='Backspace')&&selectedRoad){if(ed.run({type:'road.remove',roadId:selectedRoad.id}).ok)setSelection(null);return;}
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(k==='v')chooseTool('select');if(k==='h')chooseTool('pan');if(k==='r')chooseTool('road');
@@ -95,7 +116,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={setDraft} onFinishDraft={finishDraft} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>

@@ -57,3 +57,9 @@ Only tasks the new workspace already supports are measured; the rest follow in l
 | --- | --- | --- | --- | --- |
 | T2 (road-first form) | Y | — | 6 (3 per road) | Tool, click start, double-click end, twice; the junction appears by itself with a notice (Undo · grade separation). One road = 3, the research target. |
 | T3 | Y | — | 3 by the research counting rule (5 counting click and typing separately) | Unchanged from slice 1; meets the ≤ 3 target. |
+
+### `/design` slice 3 — drawing aids (2026-10-19, scripted)
+
+| ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
+| --- | --- | --- | --- | --- |
+| Continue a road by an exact length | Y | — | 5 (tool, click road end, type length, Enter, Enter) | Snaps to the road end and continues that road (one road, not two); angle locks to 15° steps; typed length places the point exactly. Shift held turns snapping off. A sharp corner still renders as a plain mitre — curves come later. |

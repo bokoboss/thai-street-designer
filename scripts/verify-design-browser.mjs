@@ -61,7 +61,32 @@ try{
   // Work survives a reload.
   await sleep(300);await b.goto('/design');
   await b.waitFor(async()=>await b.count('[data-design-road]')===2&&await b.count('[data-network-junction-hit]')>0,'project restored after reload');
+  // Drawing aids (slice 3): continue a road from its end, typed length, Shift turns snapping off.
+  const move=(p,modifiers=0)=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
+  await b.clickAt(at(-250,0));
+  const endPt=await b.waitFor(()=>b.rect('[data-design-road-point="R-1:1"]'),'road 1 end handle');
+  const near={x:endPt.x+4,y:endPt.y+4},up={x:endPt.x+1,y:endPt.y-160};
+  const aidStart=actions.length;
+  await act('tool: Draw Road',()=>b.click('[data-design-tool-button="road"]'));
+  await move(near,8);
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-snap]')?.dataset.designSnap`)==='none','Shift turns snapping off');
+  await move(near);
+  await b.waitFor(async()=>(await b.text('[data-design-readout]'))?.includes('ต่อจากปลายถนน'),'snaps to the road end');
+  await act('click road end',()=>b.clickAt(near));
+  await move(up);
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-snap]')?.dataset.designSnap`)==='angle','angle lock while drawing');
+  await act('type 50',async()=>{await b.key('5','Digit5');await b.key('0','Digit0');});
+  await b.waitFor(async()=>(await b.text('[data-design-readout]'))?.includes('50 ม.'),'typed length shown');
+  await act('Enter (place point)',()=>b.key('Enter'));
+  await act('Enter (finish)',()=>b.key('Enter'));
+  await b.waitFor(()=>b.count('[data-design-road-point="R-1:2"]'),'road 1 continued, not a new road');
+  assert.equal(await b.count('[data-design-road]'),2,'continuing does not add a road');
+  assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ต่อถนน ถนน 1/);
+  const [p1,p2]=[await b.rect('[data-design-road-point="R-1:1"]'),await b.rect('[data-design-road-point="R-1:2"]')];
+  assert.ok(Math.abs(p1.x-p2.x)<1.5&&p2.y<p1.y,'typed segment follows the locked angle');
+  const aidActions=actions.length-aidStart;
+  assert.equal(aidActions,5,'continue a road by an exact length in 5 actions');
   await b.screenshot('artifacts/design-browser.png');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions)`);
 }finally{b.close();}
