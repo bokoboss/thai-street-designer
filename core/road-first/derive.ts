@@ -124,7 +124,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const c=byId.get(d.candidateId);
     return{d,c:c&&d.roads?{...c,roads:c.roads.filter(r=>d.roads!.includes(r.roadId))}:c};
   }).filter((v):v is {d:Decision;c:Candidate}=>{
-    if(!v.c){issues.push(`ไม่พบจุดตัดที่เสนอ ${v.d.candidateId}`);return false;}
+    // A decision set aside while its roads do not cross ("dormant:" id) is kept quietly until they cross again.
+    if(!v.c){if(!v.d.candidateId.startsWith('dormant:'))issues.push(`ไม่พบจุดตัดที่เสนอ ${v.d.candidateId}`);return false;}
     if(v.c.roads.length<2){issues.push(`${v.d.name??v.d.candidateId}: ถนนที่เลือกให้มาบรรจบกันมีไม่ถึงสองสาย`);return false;}
     return true;
   });

@@ -11,16 +11,22 @@ const run=(ed,cmd)=>c.runCommand(ed,JSON.parse(JSON.stringify(cmd)));
 const ok=(ed,cmd)=>{const r=run(ed,cmd);assert.equal(r.result.error,null,`${cmd.type}: ${r.result.error}`);return r.editor;};
 const compiled=ed=>rp.compileRoadFirstProject(ed.project).project;
 
-// 1. Draw two roads; the crossing stays a candidate until confirmed.
+// 1. Draw two roads; the crossing becomes a junction automatically, announced in the same undo step.
 let ed=c.createEditor(empty);
 ed=ok(ed,{type:'road.add',road:{id:'R1',name:'ถนนหลัก',points:[{x:-200,y:0},{x:200,y:0}],section:sec()}});
 let r=run(ed,{type:'road.add',road:{id:'R2',name:'ถนนรอง',points:[{x:0,y:-150},{x:0,y:150}],section:sec(1,1)}});
-assert(r.result.warnings.some(w=>/ยังไม่ได้ยืนยัน/.test(w)),'unconfirmed crossing is a warning, not an error');ed=r.editor;
-assert.equal(compiled(ed).junctions.length,0);
-const cand=rf.detectCandidates(ed.project.roads)[0];
+const cand=rf.detectCandidates(r.editor.project.roads)[0];
 assert.equal(cand.id,'C-R1+R2-1','crossing id comes from its roads');
-ed=ok(ed,{type:'crossing.decide',candidateId:cand.id,decision:'junction',name:'แยกกลาง'});
-assert.equal(compiled(ed).junctions.length,1);
+assert.deepEqual(r.result.autoJunctions,[cand.id]);assert.equal(r.result.label,'เพิ่มถนน ถนนรอง · สร้างทางแยก 1 แห่ง');ed=r.editor;
+assert.equal(compiled(ed).junctions.length,1);assert.equal(compiled(ed).junctions[0].name,'แยก ถนนหลัก × ถนนรอง');
+assert.equal(c.undo(ed).editor.project.decisions.length,0,'one undo removes road and junction together');
+const gs=ok(ed,{type:'crossing.decide',candidateId:cand.id,decision:'grade-separated'});
+assert.equal(compiled(gs).junctions.length,0,'can be turned into a grade separation');
+ed=ok(ed,{type:'junction.rename',candidateId:cand.id,name:'แยกกลาง'});
+// A crossing too sharp for a junction stays open with the reason instead of rejecting the road.
+const sharpRoad=run(ed,{type:'road.add',road:{id:'R9',name:'ถนนเฉียง',points:[{x:-180,y:-40},{x:180,y:60}],section:sec(1,1)}});
+assert.equal(sharpRoad.result.error,null,'drawing a sharp crossing is allowed');
+assert(sharpRoad.result.openCrossings.some(o=>/40°/.test(o.reason))&&sharpRoad.result.warnings.some(w=>/40°/.test(w)),'reason given');
 
 // 2. Junction detail through leg-keyed commands.
 const pocket={left:{...m.emptyPockets().left},right:{...m.emptyPockets().right,lanes:1,length:30,taper:15}};
@@ -45,7 +51,7 @@ assert.equal(h.historyLabels(ed.history).length,steps+3);
 
 // 4. Readable history.
 assert.deepEqual(h.historyLabels(ed.history).slice(0,6),[
-  'เพิ่มถนน ถนนหลัก','เพิ่มถนน ถนนรอง','ยืนยันทางแยก แยกกลาง','แก้ขา ถนนหลัก ← ที่ แยกกลาง','ตั้ง Slip lane จาก ถนนรอง → ที่ แยกกลาง','ปรับรัศมีมุม แยกกลาง เป็น 12 ม.',
+  'เพิ่มถนน ถนนหลัก','เพิ่มถนน ถนนรอง · สร้างทางแยก 1 แห่ง','เปลี่ยนชื่อ แยก ถนนหลัก × ถนนรอง เป็น แยกกลาง','แก้ขา ถนนหลัก ← ที่ แยกกลาง','ตั้ง Slip lane จาก ถนนรอง → ที่ แยกกลาง','ปรับรัศมีมุม แยกกลาง เป็น 12 ม.',
 ]);
 assert(h.historyLabels(ed.history).includes('ย้ายจุดแนวถนน ถนนรอง'));
 
@@ -91,11 +97,12 @@ let u2=c.createEditor(empty);
 u2=ok(u2,{type:'road.add',road:{id:'A',name:'ถนน ก',points:[{x:-200,y:0},{x:200,y:0}],section:sec()}});
 u2=ok(u2,{type:'road.add',road:{id:'B',name:'ถนน ข',points:[{x:-60,y:-100},{x:-60,y:100},{x:60,y:100},{x:60,y:-100}],section:sec(1,1)}});
 const east=rf.detectCandidates(u2.project.roads).find(x=>x.point.x>0);assert.equal(east.id,'C-A+B-2');
-u2=ok(u2,{type:'crossing.decide',candidateId:east.id,decision:'junction',name:'แยกตะวันออก'});
+assert.equal(compiled(u2).junctions.length,2,'both crossings became junctions');
+u2=ok(u2,{type:'junction.rename',candidateId:east.id,name:'แยกตะวันออก'});
 u2=ok(u2,{type:'road.movePoint',roadId:'B',index:0,point:{x:-60,y:50}});   // west crossing disappears
 const moved=compiled(u2);
 assert.equal(moved.junctions.length,1);assert(moved.junctions[0].x>0&&moved.junctions[0].name==='แยกตะวันออก','decision re-attached to the east crossing');
-assert.equal(u2.project.decisions[0].candidateId,'C-A+B-1');
+assert.equal(u2.project.decisions.find(d=>d.name==='แยกตะวันออก').candidateId,'C-A+B-1');
 
 // 10. Section presets are valid starting points and are matched back for display.
 const pr=T('core/road-first/presets.cjs');

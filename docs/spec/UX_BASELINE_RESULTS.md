@@ -28,6 +28,16 @@ Set by the owner after the baseline. The values below were proposed after the sc
 | T4 | owner | completes, ≤ 6 (proposal) | Junction edits happen inside the active Alternative; Existing is never changed. |
 | T5 | owner | ≤ 2 (proposal) | Keep; add north arrow and legend in Phase 5. |
 
+**Revised targets (owner, 2026-10-19, from `docs/research/2026-10-UX-RESEARCH.md`).** These replace the proposal above. Counting rule from the research: one click, one drag, one keyboard command or one committed field edit = one action; automatic system work (snapping, auto junction) is not an action.
+
+| ID | Baseline | Target |
+| --- | --- | --- |
+| T1 Four-leg junction + right-turn pocket 3.0 m / 50 m / 30 m | 12 | ≤ 5–6 after the junction exists |
+| T2 Road 2+2 divided between two points | 5 | ≤ 3 |
+| T3 3.5 m lanes + 2.5 m sidewalks | 17 (old) / 5 (new, click + type counted separately) | ≤ 3 |
+| T4 Duplicate Alternative + Slip lane + compare | not completed | 100 % completion, ≤ 4–5, no data loss |
+| T5 Export plan figure | 2 | ≤ 2 |
+
 ## Later measurements
 
 Add one table per measured build (commit, date) using the same columns.
@@ -40,3 +50,10 @@ Only tasks the new workspace already supports are measured; the rest follow in l
 | --- | --- | --- | --- | --- |
 | T2 (road-first form) | Y | — | 8 | Draw two crossing roads with the 4-lane divided preset (3 + 3 actions) and confirm the crossing as a junction (2). The section is set by the preset on the road itself. |
 | T3 | Y | — | 5 | Select the road, type lane width 3.5 and sidewalk 2.5 (both sides together). Baseline: 17. |
+
+### `/design` slice 2 — automatic junctions (2026-10-19, scripted)
+
+| ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
+| --- | --- | --- | --- | --- |
+| T2 (road-first form) | Y | — | 6 (3 per road) | Tool, click start, double-click end, twice; the junction appears by itself with a notice (Undo · grade separation). One road = 3, the research target. |
+| T3 | Y | — | 3 by the research counting rule (5 counting click and typing separately) | Unchanged from slice 1; meets the ≤ 3 target. |

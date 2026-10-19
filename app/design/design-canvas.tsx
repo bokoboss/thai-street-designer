@@ -115,8 +115,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}
               onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'road',id:road.id});}} onDoubleClick={e=>insertPoint(e,road)}/>
             <path d={d} fill="none" stroke={selected?'#0b7f86':'#5f7f86'} strokeWidth={px(selected?2:1)} strokeDasharray={`${px(8)} ${px(5)}`} pointerEvents="none" opacity={selected?1:.55}/>
-            {selected&&road.points.map((p,i)=><circle key={i} data-design-road-point={`${road.id}:${i}`} cx={p.x} cy={p.y} r={px(6)} fill="#fff" stroke="#0b7f86" strokeWidth={px(2)}
-              style={{cursor:'move'}} onPointerDown={e=>startPointDrag(e,road,i)}/>)}
+            {selected&&road.points.map((p,i)=><g key={i} style={{cursor:'move'}} onPointerDown={e=>startPointDrag(e,road,i)}>
+              {/* Large invisible target around a small visible handle. */}
+              <circle data-design-road-point={`${road.id}:${i}`} cx={p.x} cy={p.y} r={px(14)} fill="transparent"/>
+              <circle cx={p.x} cy={p.y} r={px(6)} fill="#fff" stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+            </g>)}
           </g>;
         })}
       </g>

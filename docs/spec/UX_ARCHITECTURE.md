@@ -80,7 +80,7 @@ Keep the visible set small; everything else is contextual or in command search (
 | --- | --- | --- |
 | Navigation | Select, Pan, Fit, Measure | Zoom to selection |
 | Road | Draw Road | Apply preset, edit section, insert/remove alignment point, width transition, lane add/drop, turn pocket |
-| Junction | (created from candidate) | Corners, lane connections, islands, crossings, stop/give-way lines, Slip, U-turn, roundabout conversion |
+| Junction | (created automatically where roads cross) | Corners, lane connections, islands, crossings, stop/give-way lines, Slip, U-turn, roundabout conversion |
 | Markings | Mark | Arrow, line, crossing, hatch, text, detach generated marking |
 | Reference | (in Project menu) | Import image, calibrate, opacity, lock |
 | Scenario | Scenario strip | Duplicate, rename, compare |

@@ -8,7 +8,7 @@ import {DesignInspector} from './design-inspector';
 import {SectionStrip} from './section-strip';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
-import {DEFAULT_PRESET,presetSection,type RoadPresetId} from '@/core/road-first/presets';
+import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {normalizeRoadFirstProject} from '@/core/road-first/project';
 import {migrateNetworkProject} from '@/core/road-first/migrate';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
@@ -24,7 +24,7 @@ const TOOL_HINT:Record<DesignTool,string>={
 export default function DesignWorkspace(){
   const ed=useRoadEditor();
   const [tool,setTool]=useState<DesignTool>('select'),[selection,setSelection]=useState<DesignSelection>(null);
-  const [draft,setDraft]=useState<WorldPoint[]>([]),[preset,setPreset]=useState<RoadPresetId>(DEFAULT_PRESET);
+  const [draft,setDraft]=useState<WorldPoint[]>([]);
   const [fitKey,setFitKey]=useState(0),[newArmed,setNewArmed]=useState(false);
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
   const candidates=useMemo(()=>detectCandidates(ed.project.roads),[ed.project.roads]);
@@ -38,7 +38,7 @@ export default function DesignWorkspace(){
   function finishDraft(){
     if(draft.length<2){ed.setNotice({text:'ถนนต้องมีอย่างน้อยสองจุด',kind:'error'});return;}
     const ids=new Set(ed.project.roads.map(r=>r.id));let n=1;while(ids.has(`R-${n}`))n++;
-    const id=`R-${n}`,r=ed.run({type:'road.add',road:{id,name:`ถนน ${n}`,points:draft,section:presetSection(preset)}});
+    const id=`R-${n}`,r=ed.run({type:'road.add',road:{id,name:`ถนน ${n}`,points:draft,section:structuredClone(ed.lastSection)}});
     if(r.ok){setDraft([]);setTool('select');setSelection({kind:'road',id});}
   }
   function onKey(e:React.KeyboardEvent){
@@ -96,15 +96,21 @@ export default function DesignWorkspace(){
       </nav>
       <div className="design-center">
         <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={setDraft} onFinishDraft={finishDraft} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey}/>
+        {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
+          <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
+          <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
+          <button data-design-toast-action="grade-separated" onClick={()=>{for(const id of ed.notice.autoJunctions??[])ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});}}>เป็นทางต่างระดับ</button>
+          <button data-design-toast-action="select" onClick={()=>{const id=ed.notice.autoJunctions?.[0];if(id){setTool('select');setSelection({kind:'junction',id});}}}>ดูทางแยก</button>
+        </div>}
         {selectedRoad&&<SectionStrip road={selectedRoad}/>}
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} newRoadPreset={preset} onNewRoadPreset={setPreset}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{TOOL_HINT[tool]}</span>
       {ed.notice.text&&<span className={'design-notice '+ed.notice.kind} data-design-notice={ed.notice.kind}>{ed.notice.text}</span>}
       <span className="design-status-right">
-        {openCrossings>0&&<button className="design-open-crossings" data-design-open-crossings={openCrossings} onClick={()=>{const c=candidates.find(x=>!ed.project.decisions.some(d=>d.candidateId===x.id));if(c){setTool('select');setSelection({kind:'crossing',id:c.id});}}}>จุดตัดรอยืนยัน {openCrossings}</button>}
+        {openCrossings>0&&<button className="design-open-crossings" data-design-open-crossings={openCrossings} onClick={()=>{const c=candidates.find(x=>!ed.project.decisions.some(d=>d.candidateId===x.id));if(c){setTool('select');setSelection({kind:'crossing',id:c.id});}}}>จุดตัดที่ยังไม่เป็นทางแยก {openCrossings}</button>}
         <span>จราจรชิดซ้าย · หน่วยเมตร · แบบแนวคิด</span>
       </span>
     </footer>
