@@ -29,13 +29,13 @@ Source: adapted from `street-concept-designer/docs/ux/SELECTION_SNAPPING_MODEL.m
 ## Snapping is not topology
 
 ```text
-cursor snaps to Road B endpoint
+cursor snaps to Road B (end or alignment)
 → coordinate chosen
-→ if a connection is possible, a Candidate Junction / Connection is shown
-→ engineer confirms: Create Junction · Grade separated · Ignore
+→ the edit is committed; where roads now cross, a junction is created automatically
+→ notice: "Junction created" · Undo · Make it a grade separation
 ```
 
-Never merge nodes, connect lanes or create a junction just because a snap scored highest.
+A snap only chooses a coordinate. Junctions come from roads crossing after the edit, are always announced, and are undoable as part of the same step (owner decision 2026-10-19).
 
 ## Tolerances
 
@@ -45,6 +45,6 @@ Keep three separate tolerances: UI acquisition radius (screen pixels), geometry 
 
 - Same object selected from 2D, section and Inspector.
 - Overlap cycling is deterministic.
-- Snapping to a crossing does not create topology without confirmation.
+- A new crossing creates an announced, undoable junction; an impossible junction leaves the crossing open with a reason.
 - A stale snap candidate is invalidated when geometry changes before commit.
 - Locked/reference layers cannot be edited accidentally.

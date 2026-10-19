@@ -95,9 +95,18 @@ Still open from the Phase 2 list above: left-hand-traffic lane-connection defaul
 
 Exit: GW-01 and GW-02 (see `docs/spec/GOLDEN_WORKFLOWS.md`) completed by the owner within the targets set in Phase 0B; UX review gate passed.
 
-Slices: (1) road-first workspace shell at `/design` — Draw Road with presets, crossing confirmation, road section by number, labelled undo/redo, file open/save, migration of the earlier design on first open; (2) junction detail in place (approaches, turn pockets, Slip, corners, crossings); (3) scenarios, comparison and export; (4) make `/design` the only workspace and retire `/network` and `/junction`.
+Slices (re-planned 2026-10-19 from `docs/research/2026-10-UX-RESEARCH.md`, accepted by the owner):
+1. Road-first workspace shell at `/design` — Draw Road with presets, road section by number, labelled undo/redo, file open/save, migration of the earlier design on first open. **Done.**
+2. Quick wins — automatic junction where roads cross (announced, with Undo and "make it a grade separation"; replaces confirmation of every crossing), last-used section for the next road, larger handle targets, plan never shifts when the section strip opens, engineer wording (approach instead of arm), fit messages with numbers.
+3. Drawing aids — snap to road ends and alignments with a visible halo, continue from a road end, 90°/15° angle inference, typed length while drawing, Shift to suspend snapping.
+4. Junction detail in place — select an approach, then "+ right-turn pocket" / "+ Slip lane" with width, storage and taper typed in place; left-hand-traffic defaults; drag handles for corner radius and pocket length (handles and fields edit the same value).
+5. Scenarios on the new workspace — duplicate as Alternative, compare with a highlighted difference, export a report figure.
+6. Make `/design` the only workspace and retire `/network` and `/junction`.
+7. Later — one-click junction ↔ roundabout conversion keeping compatible details; station-based lane transitions; OSM/GeoJSON start.
 
-Status (2026-10-18): slice 1 on `phase3/workspace` (`app/design/`, `scripts/verify-design-browser.mjs`); T3 in 5 actions (baseline 17).
+Not adopted from the research for now: usage telemetry (no backend; privacy first). Action counts are measured by the browser acceptance scripts.
+
+Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 on `phase3/quick-wins` (2026-10-19).
 
 ---
 

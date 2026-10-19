@@ -22,9 +22,10 @@
   background-image:linear-gradient(#e3e9e7 1px,transparent 1px),linear-gradient(90deg,#e3e9e7 1px,transparent 1px);background-size:40px 40px}
 .design-canvas>svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none}
 .design-canvas[data-design-tool="road"]>svg{cursor:crosshair}.design-canvas[data-design-tool="pan"]>svg{cursor:grab}
-.design-scale{position:absolute;left:14px;bottom:12px;font-size:11px;color:#35484e;pointer-events:none}
+.design-scale{position:absolute;left:14px;top:12px;font-size:11px;color:#35484e;pointer-events:none}
 .design-scale i{display:block;height:6px;border:2px solid #35484e;border-top:0;margin-top:2px}
-.design-section{background:var(--d-panel);border-top:1px solid var(--d-line);padding:8px 12px 10px}
+/* Overlays the bottom of the plan so selecting a road never resizes or shifts the view. */
+.design-section{position:absolute;left:0;right:0;bottom:0;z-index:4;background:#fffffff2;border-top:1px solid var(--d-line);padding:8px 12px 10px}
 .design-section header{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}.design-section header span{color:var(--d-muted);font-size:11.5px}
 .design-section-bands{display:flex;height:52px;border-radius:5px;overflow:hidden;border:1px solid #cfd8d6}
 .design-section-bands .band{flex-basis:0;min-width:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;border-right:1px solid #ffffff55;overflow:hidden}
@@ -55,3 +56,8 @@
 .design-status-right{display:flex;align-items:center;gap:10px;white-space:nowrap}
 .design-open-crossings{border:1px solid #e7c58d;background:var(--d-warn-soft);color:var(--d-warn);border-radius:999px;padding:2px 10px;font-size:11.5px;cursor:pointer}
 @media(max-width:900px){.design-body{grid-template-columns:56px minmax(0,1fr)}.design-inspector{display:none}}
+
+.design-center{position:relative}
+.design-toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;background:#1f2d33;color:#fff;border-radius:8px;padding:6px 8px 6px 12px;box-shadow:0 6px 18px #0003;font-size:12.5px;white-space:nowrap}
+.design-toast button{border:1px solid #ffffff40;background:transparent;color:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px}
+.design-toast button:hover{background:#ffffff1a}

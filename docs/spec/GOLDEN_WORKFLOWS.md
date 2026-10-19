@@ -22,7 +22,7 @@ Timing targets are **not invented here**. They are set from the measured baselin
 
 ## GW-02 Intersection improvement
 
-Draw or trace two crossing roads, confirm the candidate junction, adjust per-corner geometry, add turn pockets, Slip lane, islands, stop lines and crossings, then compare alternatives.
+Draw or trace two crossing roads (the junction is created automatically), adjust per-corner geometry, add turn pockets, Slip lane, islands, stop lines and crossings, then compare alternatives.
 
 ## GW-03 Road widening
 
@@ -46,7 +46,7 @@ Prepare plan views, dim the reference, switch engineering/presentation display, 
 - Standard features are created from parameters, never by drawing polygons by hand.
 - Direct manipulation and numeric entry edit the same property.
 - Each meaningful edit is one undoable step; previews during a drag do not create history.
-- Crossing or snapping roads never changes topology silently; the engineer confirms a junction.
+- Crossing roads create a junction automatically, never silently: the result is announced at once with **Undo** and **Make it a grade separation** (owner decision 2026-10-19, replacing "the engineer confirms every junction"). If the junction cannot be built (for example the roads cross at too sharp an angle) the crossing stays open with the reason shown.
 - Reference images and maps are visually subordinate and are never engineering truth.
 
 ## First usability benchmark

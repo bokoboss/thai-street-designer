@@ -30,7 +30,8 @@ export type RoadFirstCommand=
   |{type:'slip.set';candidateId:string;slip:LegSlip}
   |{type:'slip.remove';candidateId:string;from:LegKey};
 
-export type CommandResult={project:RoadFirstProject;error:string|null;label:string;warnings:string[];group?:string};
+/** autoJunctions: crossings that became junctions automatically in this step; openCrossings: crossings that could not (with the reason). */
+export type CommandResult={project:RoadFirstProject;error:string|null;label:string;warnings:string[];group?:string;autoJunctions:string[];openCrossings:{candidateId:string;reason:string}[]};
 
 const SECTION_LABEL:Record<keyof RoadSection,string>={forwardLanes:'ช่องขาไป',backwardLanes:'ช่องขากลับ',laneWidth:'ความกว้างช่อง',median:'เกาะกลาง',walk:'ทางเท้า',bands:'แถบริมทาง'};
 const fmt=(v:unknown)=>typeof v==='number'?String(+v.toFixed(2)):Array.isArray(v)?`${v.length} แถบ`:String(v);
@@ -51,8 +52,12 @@ export function rebindDecisions(before:Road[],after:Road[],decisions:Decision[])
     taken.add(c.id);out.set(p.d,{...p.d,candidateId:c.id,at:{x:c.point.x,y:c.point.y}});
   }
   // A decision whose crossing is gone stays dormant at its last position until the roads cross again.
-  return pending.map(p=>out.get(p.d)??(p.at?{...p.d,at:p.at}:p.d));
+  // Its id is set aside so a new crossing of the same roads can take the old id without a clash.
+  const used=new Set([...taken,...decisions.map(d=>d.candidateId)]);
+  const dormantId=(id:string)=>{if(id.startsWith(DORMANT_PREFIX))return id;let n=1;while(used.has(`${DORMANT_PREFIX}${n}:${id}`))n++;const next=`${DORMANT_PREFIX}${n}:${id}`;used.add(next);return next;};
+  return pending.map(p=>out.get(p.d)??{...p.d,candidateId:dormantId(p.d.candidateId),...(p.at?{at:p.at}:{})});
 }
+export const DORMANT_PREFIX='dormant:';
 function fits(c:Candidate,roads:string[]){
   const ids=c.roads.map(r=>r.roadId);
   return roads.length>=2&&roads.every(r=>ids.includes(r));
@@ -70,7 +75,7 @@ function dropRoad(p:RoadFirstProject,roadId:string):RoadFirstProject{
 }
 
 export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):CommandResult{
-  const fail=(error:string,label='แก้ไข'):CommandResult=>({project,error,label,warnings:[]});
+  const fail=(error:string,label='แก้ไข'):CommandResult=>({project,error,label,warnings:[],autoJunctions:[],openCrossings:[]});
   const p=structuredClone(project);
   const road=(id:string)=>p.roads.find(r=>r.id===id);
   const decision=(id:string)=>p.decisions.find(d=>d.candidateId===id);
@@ -151,10 +156,30 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   }
   if(roadsChanged)p.decisions=rebindDecisions(project.roads,p.roads,p.decisions);
   const structural=validateRoadFirstProject(p);if(structural)return fail(structural,label);
+  const invalid=engineError(p);if(invalid)return fail(invalid,label);
+  // New crossings become junctions automatically (owner decision 2026-10-19); one that cannot be built stays open with its reason.
+  const autoJunctions:string[]=[],openCrossings:{candidateId:string;reason:string}[]=[];
+  if(roadsChanged){
+    const known=new Set(p.decisions.map(d=>d.candidateId));
+    for(const c of detectCandidates(p.roads).filter(x=>!known.has(x.id))){
+      const names=c.roads.map(r=>road(r.roadId)?.name??r.roadId);
+      const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:`แยก ${names.join(' × ')}`,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
+      const reason=engineError({...p,decisions:trial});
+      if(reason)openCrossings.push({candidateId:c.id,reason});else{p.decisions=trial;autoJunctions.push(c.id);}
+    }
+    if(autoJunctions.length)label+=` · สร้างทางแยก ${autoJunctions.length} แห่ง`;
+  }
+  const compiled=compileRoadFirstProject(p);
+  const warnings=[...compiled.issues,...openCrossings.map(o=>`จุดตัดนี้ยังเป็นทางแยกไม่ได้ · ${o.reason}`)];
+  return{project:p,error:null,label,warnings,group,autoJunctions,openCrossings};
+}
+
+/** Engine check of the compiled network and every junction; null when the project can be built. */
+function engineError(p:RoadFirstProject):string|null{
   const compiled=compileRoadFirstProject(p),engine=validateNetworkProject(compiled.project);
-  if(engine)return fail(`ทำไม่ได้ · ${engine}`,label);
-  for(const j of compiled.project.junctions){const e=designError(j.design);if(e)return fail(`${j.name}: ${e}`,label);}
-  return{project:p,error:null,label,warnings:compiled.issues,group};
+  if(engine)return`ทำไม่ได้ · ${engine}`;
+  for(const j of compiled.project.junctions){const e=designError(j.design);if(e)return`${j.name}: ${e}`;}
+  return null;
 }
 
 /** Editor state: the project plus its readable undo history. */

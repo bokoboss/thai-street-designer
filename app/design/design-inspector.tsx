@@ -59,12 +59,12 @@ function RoadInspector({road,run,onDeleted}:{road:Road;run:Run;onDeleted:()=>voi
 
 function CrossingInspector({candidate,project,run,onConfirmed}:{candidate:Candidate;project:RoadFirstProject;run:Run;onConfirmed:()=>void}){
   const names=candidate.roads.map(r=>project.roads.find(x=>x.id===r.roadId)?.name??r.roadId),d=project.decisions.find(x=>x.candidateId===candidate.id);
-  const state=d?.decision==='grade-separated'?'กำหนดเป็นทางต่างระดับ':d?.decision==='ignore'?'ไม่ใช้เป็นทางแยก':'ยังไม่ได้ยืนยัน';
+  const state=d?.decision==='grade-separated'?'ทางต่างระดับ':d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังเป็นทางแยกไม่ได้';
   return <>
     <header className="design-inspector-head"><small>จุดตัดของถนน</small><b>{names.join(' × ')}</b><span className="design-state">{state}</span></header>
-    <p className="design-meta">ถนนที่ตัดกันจะยังไม่กลายเป็นทางแยกจนกว่าจะยืนยัน</p>
+    <p className="design-meta">{d?'จุดนี้ถนนข้ามกันโดยไม่มีทางแยก':'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>
     <div className="design-actions">
-      <button className="primary" data-design-action="confirm-junction" onClick={()=>{if(run({type:'crossing.decide',candidateId:candidate.id,decision:'junction',name:d?.name??`แยก ${names.join(' × ')}`}).ok)onConfirmed();}}>ยืนยันเป็นทางแยก</button>
+      <button className="primary" data-design-action="confirm-junction" onClick={()=>{if(run({type:'crossing.decide',candidateId:candidate.id,decision:'junction',name:d?.name??`แยก ${names.join(' × ')}`}).ok)onConfirmed();}}>ทำเป็นทางแยก</button>
       <button data-design-action="grade-separated" onClick={()=>run({type:'crossing.decide',candidateId:candidate.id,decision:'grade-separated'})}>ทางต่างระดับ (ข้ามกัน)</button>
       <button data-design-action="ignore" onClick={()=>run({type:'crossing.decide',candidateId:candidate.id,decision:'ignore'})}>ไม่ใช่ทางแยก</button>
     </div>
@@ -79,23 +79,25 @@ function JunctionInspector({candidateId,project,compiled,run}:{candidateId:strin
   const legs=compiled.legs.filter(l=>l.junctionId===jid).map(l=>`${project.roads.find(r=>r.id===l.roadId)?.name??l.roadId} ${l.side==='ahead'?'→':'←'}`);
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
-    <p className="design-meta">{legs.length} ขา: {legs.join(', ')}</p>
+    <p className="design-meta">{legs.length} ปากทาง: {legs.join(', ')}</p>
     <div className="design-fields">
       <NumberField field="corner" label="รัศมีมุมขอบทาง (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
     </div>
     <div className="design-actions">
+      <button data-design-action="to-grade-separated" onClick={()=>run({type:'crossing.decide',candidateId,decision:'grade-separated'})}>เปลี่ยนเป็นทางต่างระดับ</button>
       <button className="danger" data-design-action="unconfirm" onClick={()=>{if(!armed){setArmed(true);return;}run({type:'crossing.decide',candidateId,decision:'ignore'});}}>{armed?'กดอีกครั้งเพื่อยกเลิกทางแยก':'ยกเลิกทางแยก'}</button>
     </div>
   </>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,newRoadPreset,onNewRoadPreset}:{
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,newRoadPreset,newRoadSection,onNewRoadPreset}:{
   selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;
-  tool:string;newRoadPreset:RoadPresetId;onNewRoadPreset:(id:RoadPresetId)=>void;
+  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
     <header className="design-inspector-head"><small>วาดถนน</small><b>ถนนใหม่</b></header>
     <PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>
+    {!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
     <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · Esc เพื่อยกเลิก · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;

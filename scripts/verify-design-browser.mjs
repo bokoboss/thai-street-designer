@@ -1,4 +1,4 @@
-// Browser acceptance for the road-first workspace (/design): draw two roads, confirm the junction,
+// Browser acceptance for the road-first workspace (/design): draw two roads (junction created automatically),
 // edit the road section by number, undo/redo with readable labels, drag a road point, reload.
 import assert from 'node:assert/strict';
 import {mkdirSync} from 'node:fs';
@@ -23,14 +23,15 @@ try{
   await act('click road start',()=>b.clickAt(at(0,-250)));
   await act('double-click road end',()=>b.clickAt(at(0,250),2));
   await b.waitFor(async()=>await b.count('[data-design-road]')===2,'second road');
-  assert.equal(await b.count('[data-design-candidate-state="open"]'),1,'crossing waits for confirmation');
-  assert.equal(await b.count('[data-network-junction-hit]'),0,'no junction before confirmation');
-
-  // Confirm the crossing as a junction.
-  await act('open crossing',()=>b.click('[data-design-open-crossings]'));
-  await act('confirm junction',()=>b.click('[data-design-action="confirm-junction"]'));
-  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction drawn');
-  assert.equal(await b.count('[data-design-candidate]'),0);
+  // The crossing becomes a junction automatically and says so, with Undo and grade separation at hand.
+  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction created automatically');
+  assert.equal(await b.count('[data-design-candidate]'),0,'no pending crossing');
+  assert.equal(actions.length,6,'two roads and a junction in 6 actions');
+  assert.match(await b.text('[data-design-auto-junction]'),/สร้างทางแยกให้แล้ว 1 แห่ง/);
+  await b.click('[data-design-toast-action="grade-separated"]');
+  await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===0,'turned into a grade separation');
+  await b.click('[data-design-undo]');
+  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo brings the junction back');
 
   // Edit the first road's section by number (T3).
   const before=actions.length;
@@ -62,5 +63,5 @@ try{
   await b.waitFor(async()=>await b.count('[data-design-road]')===2&&await b.count('[data-network-junction-hit]')>0,'project restored after reload');
   await b.screenshot('artifacts/design-browser.png');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads, confirm junction, section by number in 5 actions, labelled undo/redo, point drag, reload)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload)`);
 }finally{b.close();}
