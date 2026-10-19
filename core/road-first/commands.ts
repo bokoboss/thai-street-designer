@@ -14,6 +14,7 @@ export type RoadFirstCommand=
   |{type:'road.add';road:Road}
   |{type:'road.remove';roadId:string}
   |{type:'road.rename';roadId:string;name:string}
+  |{type:'road.extend';roadId:string;atStart:boolean;points:WorldPoint[]}
   |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.insertPoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.removePoint';roadId:string;index:number}
@@ -92,6 +93,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     case 'road.remove':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       Object.assign(p,dropRoad(p,cmd.roadId));label=`ลบถนน ${r.name}`;roadsChanged=true;break;
+    }
+    case 'road.extend':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(!cmd.points.length)return fail('ไม่มีจุดให้ต่อถนน',`ต่อถนน ${r.name}`);
+      const added=cmd.points.map(q=>({x:q.x,y:q.y}));
+      r.points=cmd.atStart?[...added.reverse(),...r.points]:[...r.points,...added];
+      label=`ต่อถนน ${r.name}`;roadsChanged=true;break;
     }
     case 'road.rename':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

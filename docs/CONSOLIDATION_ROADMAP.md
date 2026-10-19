@@ -106,7 +106,7 @@ Slices (re-planned 2026-10-19 from `docs/research/2026-10-UX-RESEARCH.md`, accep
 
 Not adopted from the research for now: usage telemetry (no backend; privacy first). Action counts are measured by the browser acceptance scripts.
 
-Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 on `phase3/quick-wins` (2026-10-19).
+Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 merged 2026-10-19 (PR #16). Slice 3 on `phase3/drawing-aids` (2026-10-19).
 
 ---
 
