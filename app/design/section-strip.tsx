@@ -7,14 +7,20 @@ import {useState} from 'react';
 import type {CompileResult,Road} from '@/core/road-first/derive';
 import NetworkSectionDock from '../network/network-section-dock';
 
+const BAND_LABEL:Record<string,string>={bike:'จักรยาน',motorcycle:'จยย.',shoulder:'ไหล่ทาง',buffer:'แถบคั่น'};
+
 export function SectionStrip({road,compiled}:{road:Road;compiled:CompileResult}){
   const [mode,setMode]=useState<'road'|'station'>('road'),[segment,setSegment]=useState(0);
   const links=compiled.project.links.filter(l=>compiled.sources.links[l.id]===road.id),link=links[Math.min(segment,links.length-1)];
   const s=road.section,parts:{kind:string;label:string;width:number}[]=[];
+  // Bands (bike, motorcycle, shoulder, buffer) sit between the lanes and the sidewalk on both sides.
+  const bands=s.bands??[],band=(b:{type:string;width:number})=>({kind:'band band-'+b.type,label:BAND_LABEL[b.type]??b.type,width:b.width});
   if(s.walk>0)parts.push({kind:'walk',label:'ทางเท้า',width:s.walk});
+  for(const b of [...bands].reverse())parts.push(band(b));
   for(let i=s.forwardLanes;i>=1;i--)parts.push({kind:'lane forward',label:`↑ ช่อง ${i}`,width:s.laneWidth});
   if(s.median>0)parts.push({kind:'median',label:'เกาะกลาง',width:s.median});
   for(let i=1;i<=s.backwardLanes;i++)parts.push({kind:'lane backward',label:`↓ ช่อง ${i}`,width:s.laneWidth});
+  for(const b of bands)parts.push(band(b));
   if(s.walk>0)parts.push({kind:'walk',label:'ทางเท้า',width:s.walk});
   const total=parts.reduce((a,p)=>a+p.width,0);
   const tabs=<div className="design-section-modes" role="group" aria-label="แสดงหน้าตัด">

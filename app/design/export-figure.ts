@@ -8,7 +8,7 @@ export type FigureInput={svg:SVGSVGElement;bounds:{x:number;y:number;w:number;h:
 
 const NS='http://www.w3.org/2000/svg';
 /** Editing aids that never belong in a report figure. */
-const EDITING_ONLY='[data-design-roads],[data-design-candidates],[data-design-handles],[data-design-snap],[data-design-draft],[data-network-junction-hit],[data-network-instance-handle],[data-network-instance-selection],[data-network-arm-handle],[data-network-arm-handle-visible],[data-network-arm-selection],[data-network-port],[data-link-via-group],[data-network-arm-guide],[data-network-link-preview]';
+const EDITING_ONLY='[data-design-shortfalls],[data-design-roads],[data-design-candidates],[data-design-handles],[data-design-snap],[data-design-draft],[data-network-junction-hit],[data-network-instance-handle],[data-network-instance-selection],[data-network-arm-handle],[data-network-arm-handle-visible],[data-network-arm-selection],[data-network-port],[data-link-via-group],[data-network-arm-guide],[data-network-link-preview]';
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 export const safeFilePart=(s:string)=>s.replace(/[\\/:*?"<>|\s]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')||'design';
 
@@ -57,6 +57,13 @@ export function buildFigureSvg({svg,bounds,title,scenario,comparison}:Omit<Figur
 export async function exportFigure(input:FigureInput):Promise<{blob:Blob;name:string}>{
   await document.fonts?.ready;
   const {svg,width,height}=buildFigureSvg(input);
+  // The reference image lives in this browser (blob URL); embed it so the SVG opens elsewhere and the PNG includes it.
+  for(const img of [...svg.querySelectorAll('image')]){
+    const href=img.getAttribute('href')??img.getAttribute('xlink:href')??'';
+    if(!href.startsWith('blob:'))continue;
+    try{const blob=await (await fetch(href)).blob();img.setAttribute('href',await new Promise<string>((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result));r.onerror=()=>no(r.error);r.readAsDataURL(blob);}));}
+    catch{img.remove();}
+  }
   const svgBlob=new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml;charset=utf-8'});
   const name=`${safeFilePart(input.title)}-${safeFilePart(input.scenario)}${input.comparison?'-เทียบ-'+safeFilePart(input.comparison.reference):''}.${input.format}`;
   if(input.format==='svg')return{blob:svgBlob,name};

@@ -60,3 +60,15 @@ export function applyLegTreatment(arm:Arm,t:LegTreatment|undefined):Arm{
   next.arrowOverrides=normalizeArrowOverrides(next);
   return next;
 }
+
+/**
+ * Road-owned values changed between two junction designs (arms present, lane counts, widths, median, sidewalk,
+ * bands, sections, direction, length, name). In the advanced editor opened from /design these belong to the road.
+ */
+export function roadOwnedChanges(before:Design,after:Design):string[]{
+  const out:string[]=[];
+  if(JSON.stringify(before.enabled)!==JSON.stringify(after.enabled))out.push('enabled');
+  before.arms.forEach((a,i)=>{if(!before.enabled[i])return;const b=after.arms[i];if(!b)return;
+    for(const f of ROAD_FIELDS)if(f==='length'?Math.abs(a.length-b.length)>.01:JSON.stringify(a[f])!==JSON.stringify(b[f]))out.push(f);});
+  return [...new Set(out)];
+}

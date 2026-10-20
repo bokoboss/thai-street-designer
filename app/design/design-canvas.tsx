@@ -3,7 +3,7 @@
 // before); roads, their points and crossing candidates are drawn on top as the editable layer.
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {NetworkDrawing} from '../network/network-drawing';
-import {projectBounds,type WorldPoint} from '@/core/network/network-project';
+import {portHeading,projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {detectCandidates,stations,type Road} from '@/core/road-first/derive';
 import type {CompileResult} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
@@ -184,6 +184,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           onSelect(leg?{kind:'approach',id:compiled.sources.junctions[j],leg:legKey(leg.roadId,leg.side)}:{kind:'junction',id:compiled.sources.junctions[j]});
         }}
         onJunctionMoveStart={noop} onArmMoveStart={noop} onLinkInsertVertex={noop} onLinkVertexMoveStart={noop} onLinkVertexSelect={noop} onPort={noop}/>
+      {/* Arms longer than the straight part of their road: the extra length is off the drawn alignment. */}
+      {compiled.shortfalls.length>0&&<g data-design-shortfalls={compiled.shortfalls.length} pointerEvents="none">
+        {compiled.shortfalls.map(s=>{const j=compiled.project.junctions.find(x=>x.id===s.junctionId);if(!j)return null;
+          const h=portHeading(j,s.armId)*Math.PI/180,at=(m:number)=>({x:j.x+Math.cos(h)*m,y:j.y+Math.sin(h)*m}),a=at(s.room),e=at(s.required);
+          return <g key={`${s.junctionId}:${s.armId}`} data-design-shortfall={`${s.roadId}:${s.side}`}>
+            <line x1={a.x} y1={a.y} x2={e.x} y2={e.y} stroke="#b3261e" strokeWidth={px(4)} strokeDasharray={`${px(6)} ${px(4)}`} strokeLinecap="round"/>
+            <text x={e.x+px(6)} y={e.y-px(6)} fontSize={px(12)} fontWeight="700" fill="#b3261e" fontFamily="Arial, Noto Sans Thai, Tahoma, sans-serif">ช่วงตรงไม่พอ {(s.required-s.room).toFixed(1)} ม.</text>
+          </g>;})}
+      </g>}
       {comparison&&<g data-design-compare={comparison.deltas.length} pointerEvents="none">
         {comparison.deltas.map(d=>{const b=d.bounds;if(!b)return null;const s=DELTA_STYLE[d.status];
           return <g key={`${d.target.kind}:${d.target.id}`} data-design-delta={d.status}>
@@ -231,7 +240,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       </g>}
       {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
         {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
-          <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"/>
+          <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"><title>รัศมีมุมขอบทาง (ทุกมุมของทางแยกนี้ใช้ค่าเดียวกัน)</title></circle>
           <rect x={h.point.x-px(5)} y={h.point.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
         </g>)}
         {pocketHandles.map(h=><g key={h.side} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'pocket',candidateId:h.candidateId,leg:h.leg,side:h.side})}>

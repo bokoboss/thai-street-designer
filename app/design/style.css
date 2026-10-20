@@ -55,7 +55,21 @@
 .design-notice{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}.design-notice.info{color:var(--d-accent)}.design-notice.error{color:var(--d-danger);font-weight:700}
 .design-status-right{display:flex;align-items:center;gap:10px;white-space:nowrap}
 .design-open-crossings{border:1px solid #e7c58d;background:var(--d-warn-soft);color:var(--d-warn);border-radius:999px;padding:2px 10px;font-size:11.5px;cursor:pointer}
-@media(max-width:900px){.design-body{grid-template-columns:56px minmax(0,1fr)}.design-inspector{display:none}}
+/* Narrow screens: the inspector becomes a drawer over the plan instead of disappearing. */
+.design-inspector-toggle{display:none!important}
+@media(max-width:900px){
+  .design-body{grid-template-columns:56px minmax(0,1fr)}
+  .design-inspector{position:fixed;right:0;top:48px;bottom:32px;width:min(340px,92vw);z-index:30;box-shadow:-8px 0 24px #0002;transform:translateX(105%);transition:transform .18s ease}
+  .design-workspace[data-inspector-open="true"] .design-inspector{transform:none}
+  .design-inspector-toggle{display:flex!important}
+  .design-scenarios{justify-content:flex-start}
+  .design-brand span,.design-brand b{display:none}
+  .design-top{gap:6px;padding:0 8px}
+  .design-top-actions{flex-shrink:0}
+  .design-top-actions button span{display:none}
+  .design-top-actions button{padding:5px 7px}
+  .design-scenarios{min-width:0;flex:1 1 auto}
+}
 
 .design-center{position:relative}
 .design-toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;background:#1f2d33;color:#fff;border-radius:8px;padding:6px 8px 6px 12px;box-shadow:0 6px 18px #0003;font-size:12.5px;white-space:nowrap}
@@ -104,3 +118,6 @@
 .design-section-station{padding:6px 0 0}.design-section-station>header{padding:0 12px}
 .design-section-station .network-section-dock{border-top:0}
 .design-save-state.saved{color:var(--d-muted)}.design-save-state.error,.design-save-state.blocked{color:var(--d-danger);font-weight:700}
+.band.band-bike{background:#467d70;color:#fff}.band.band-motorcycle{background:#6d6a8f;color:#fff}.band.band-shoulder{background:#7d8a8f;color:#fff}.band.band-buffer{background:#d9dfd2;color:#2e3c40}
+.design-export-note{display:block;max-width:220px;padding:4px 8px 2px;color:var(--d-muted);font-size:11px;line-height:1.4}
+.design-band-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px}

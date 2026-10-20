@@ -39,7 +39,9 @@ export type CompileSources={junctions:Record<string,string>;links:Record<string,
  * unjoined: per junction (candidate id), roads that pass through or end at the junction point but are not part of it.
  * overflow: candidate ids of junctions with more legs than the engine supports (extra legs are left out and reported).
  */
-export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[]};
+/** shortfalls: arms that need more length than the straight part of their road gives (stretched off the alignment). */
+export type ArmShortfall={candidateId:string;junctionId:string;armId:number;roadId:string;side:'ahead'|'behind';room:number;required:number};
+export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[]};
 
 /** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
 const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
@@ -125,7 +127,7 @@ type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number;ro
 export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:CompileOptions={}):CompileResult{
   const approach=options.approachLength??40,tolerance=options.tolerance??1,issues:string[]=[];
   const candidates=detectCandidates(roads,tolerance),byId=new Map(candidates.map(c=>[c.id,c]));
-  const unjoined:Record<string,string[]>={},overflow:string[]=[];
+  const unjoined:Record<string,string[]>={},overflow:string[]=[],shortfalls:ArmShortfall[]=[];
   const confirmed=decisions.filter(d=>d.decision==='junction').map(d=>{
     const c=byId.get(d.candidateId);
     const left=c&&d.roads?c.roads.map(r=>r.roadId).filter(id=>!d.roads!.includes(id)&&!d.excluded?.includes(id)):[];
@@ -209,7 +211,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
         design.arms[leg.armId]={...arm,length:required};
         // Lengthening within the straight part of the road keeps the arm on the alignment.
         if(required<=room.get(leg.armId)!+EPS){armLength.set(`${id}:${leg.armId}`,required);continue;}
-        issues.push(`${id}: ขา ${road.name} ${leg.side==='ahead'?'→':'←'} มีช่วงตรง ${Math.max(0,room.get(leg.armId)!).toFixed(1)} ม. แต่ขานี้ต้องยาวอย่างน้อย ${required.toFixed(1)} ม. สำหรับปากทางแยกและสิ่งที่อยู่บนขา (ถูกยืดจึงไม่ตรงแนวถนน)`);
+        shortfalls.push({candidateId:d.candidateId,junctionId:id,armId:leg.armId,roadId:road.id,side:leg.side,room:Math.max(0,room.get(leg.armId)!),required});
+        issues.push(`${d.name??id}: ขา ${road.name} ${leg.side==='ahead'?'→':'←'} มีช่วงตรง ${Math.max(0,room.get(leg.armId)!).toFixed(1)} ม. แต่ขานี้ต้องยาวอย่างน้อย ${required.toFixed(1)} ม. สำหรับปากทางแยกและสิ่งที่อยู่บนขา (ถูกยืดจึงไม่ตรงแนวถนน)`);
       }
       armLength.set(`${id}:${leg.armId}`,design.arms[leg.armId].length);
     }
@@ -267,5 +270,5 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     }
     if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues,sources,unjoined,overflow};
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues,sources,unjoined,overflow,shortfalls};
 }

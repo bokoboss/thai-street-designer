@@ -2,7 +2,7 @@
 // Road-first workspace (roadmap Phase 3): one shell — top bar, tool rail, plan, inspector, section strip, status bar.
 import './style.css';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown} from 'lucide-react';
+import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
 import {DesignInspector} from './design-inspector';
 import {SectionStrip} from './section-strip';
@@ -22,7 +22,7 @@ import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
 import NetworkScene3D from '../network/network-scene3d';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
 
-const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมเพื่อปรับรัศมี · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
+const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมใดก็ได้เพื่อปรับรัศมีทุกมุมพร้อมกัน · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
 const TOOL_HINT:Record<DesignTool,string>={
   select:'เลือก: คลิกถนน จุดตัด หรือทางแยก · ลากจุดแนวถนนเพื่อย้าย · ลากด้วยปุ่มกลางเพื่อเลื่อนมุมมอง',
   pan:'เลื่อนมุมมอง: ลากเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม',
@@ -46,6 +46,9 @@ export default function DesignWorkspace(){
   const map=useMapReference();
   // Work saved by the earlier Network page in this browser can be brought in as extra alternatives.
   const [hasEarlier,setHasEarlier]=useState(false);
+  // On narrow screens the inspector is a drawer: it opens when something is selected and can be toggled.
+  const [inspectorOpen,setInspectorOpen]=useState(false);
+  function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
   // Comparison with the scenario this alternative was copied from (else Existing), highlighted on the plan.
@@ -149,7 +152,7 @@ export default function DesignWorkspace(){
     setNewArmed(false);ed.replaceWorkspace(createWorkspace(emptyRoadFirstProject()),'เริ่มโครงการใหม่แล้ว');setSelection(null);setCompare(false);setFitKey(k=>k+1);
   }
 
-  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true">
+  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true" data-inspector-open={inspectorOpen?'true':'false'}>
     <header className="design-top">
       <div className="design-brand"><Route size={18}/><b>Thai Street Designer</b><span>{ed.project.title}</span></div>
       <div className="design-scenarios" role="tablist" aria-label="ทางเลือก">
@@ -165,6 +168,7 @@ export default function DesignWorkspace(){
         <span className="design-sep"/>
         <button data-design-undo="true" disabled={!ed.undoText} title={ed.undoText?`ย้อนกลับ: ${ed.undoText}`:'ไม่มีขั้นตอนให้ย้อน'} onClick={ed.undo}><Undo2 size={15}/><span>{ed.undoText??'ย้อนกลับ'}</span></button>
         <button data-design-redo="true" disabled={!ed.redoText} title={ed.redoText?`ทำซ้ำ: ${ed.redoText}`:'ไม่มีขั้นตอนให้ทำซ้ำ'} onClick={ed.redo}><Redo2 size={15}/></button>
+        <button className="design-inspector-toggle" data-design-inspector-toggle="true" aria-expanded={inspectorOpen} onClick={()=>setInspectorOpen(v=>!v)} title="แผงตั้งค่า"><PanelRight size={15}/><span>{inspectorOpen?'ซ่อนแผง':'แผงตั้งค่า'}</span></button>
         <button data-design-fit="true" onClick={()=>setFitKey(k=>k+1)} title="ดูทั้งแบบ"><Maximize2 size={15}/></button>
         <span className="design-export">
           <button data-design-export="true" aria-expanded={exportOpen} onClick={()=>setExportOpen(v=>!v)} onBlur={e=>{if(!e.currentTarget.parentElement?.contains(e.relatedTarget))setExportOpen(false);}} title="ส่งออกรูปสำหรับรายงาน"><ImageDown size={15}/><span>ส่งออกรูป</span></button>
@@ -172,6 +176,7 @@ export default function DesignWorkspace(){
             <button role="menuitem" data-design-export-format="png" onClick={()=>void saveFigure('png')}>PNG (ใส่รายงาน)</button>
             <button role="menuitem" data-design-export-format="svg" onClick={()=>void saveFigure('svg')}>SVG (แก้ต่อได้)</button>
             <button role="menuitem" data-design-export-format="report" onClick={saveReport}>รายงานสรุปแบบ (HTML)</button>
+            <small className="design-export-note">รูปรวมภาพอ้างอิง แต่ไม่รวมแผนที่ออนไลน์ (สิทธิ์การใช้ภาพแผนที่ต่างกันตามผู้ให้บริการ)</small>
           </span>}
         </span>
       </div>
@@ -183,7 +188,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
@@ -200,7 +205,7 @@ export default function DesignWorkspace(){
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>
