@@ -77,7 +77,7 @@ try{
     `--remote-debugging-port=${debugPort}`,`--user-data-dir=${profileDir}`,'--window-size=1440,1000','about:blank'
   ],{stdio:'ignore'});
   await waitForJson(`http://127.0.0.1:${debugPort}/json/version`);
-  const target=await fetch(`http://127.0.0.1:${debugPort}/json/new?${encodeURIComponent(baseUrl)}`,{method:'PUT'}).then(r=>r.json());
+  const target=await fetch(`http://127.0.0.1:${debugPort}/json/new?${encodeURIComponent(baseUrl+'network')}`,{method:'PUT'}).then(r=>r.json());
   assert(target.webSocketDebuggerUrl,'Chrome did not return a CDP websocket target');
 
   ws=new WebSocket(target.webSocketDebuggerUrl);
@@ -99,7 +99,7 @@ try{
   });
   await send('Page.enable');await send('Runtime.enable');await send('Network.enable');
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
-  await send('Page.navigate',{url:baseUrl});
+  await send('Page.navigate',{url:baseUrl+'network'});
 
   async function evalValue(expression){
     const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});

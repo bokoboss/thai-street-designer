@@ -148,6 +148,27 @@ try{
   // Scenarios survive a reload.
   await sleep(300);await b.goto('/design');
   await b.waitFor(async()=>await b.count('[data-design-scenario]')===2,'both scenarios restored after reload');
+
+  // Advanced junction editing (slice 6, staged): hand the junction to the junction editor, add a median opening there,
+  // come back — the edit arrives as one undoable step in the same scenario.
+  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction after reload');
+  const jc2=await b.rect('[data-network-junction-hit]');
+  await b.clickAt({x:jc2.x+14,y:jc2.y});
+  await b.click('[data-design-action="back-to-junction"]');
+  await b.click('[data-design-action="advanced-junction"]');
+  await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/junction'&&await b.count('[data-junction-back-to-design]')===1,'junction editor opened from /design');
+  await b.evalValue(`document.querySelector('[title^="ค้นหาคำสั่ง"]').click()`);
+  await b.waitFor(()=>b.count('input[aria-label="ค้นหาคำสั่ง"]'),'command search');
+  await b.click('input[aria-label="ค้นหาคำสั่ง"]');await b.type('เพิ่มช่องเปิดเกาะกลาง');await b.key('Enter');
+  await b.waitFor(async()=>await b.evalValue(`(()=>{const h=JSON.parse(localStorage.getItem('thai-street-design-junction-handoff-v1'));const p=h.network.scenarios[0].project;return p.junctions[0].design.arms.some(a=>(a.medianOpenings??[]).length>0);})()`),'edit saved into the hand-off');
+  await b.click('[data-junction-back-to-design]');
+  await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-undo]')?.title??''`)).startsWith('ย้อนกลับ: แก้ทางแยกขั้นสูง'),'advanced edit back as one undo step');
+  assert.equal(await b.evalValue(`document.querySelector('[data-design-inspector]').dataset.designInspector`),'junction','returned junction selected');
+  assert.equal(await b.text('[data-design-scenario][aria-selected="true"]'),'ทางเลือก A','same scenario');
+  assert.equal(await b.evalValue(`localStorage.getItem('thai-street-design-junction-handoff-v1')`),null,'hand-off consumed');
+  assert.equal(await b.evalValue(`localStorage.getItem('thai-street-network-project-v1')`),null,'earlier Network data untouched');
+  // The home page is the road-first workspace.
+  await b.goto('/');await b.waitFor(()=>b.count('[data-design-workspace]'),'home page is /design');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page)`);
 }finally{b.close();}
