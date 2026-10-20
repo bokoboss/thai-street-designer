@@ -17,22 +17,21 @@ repository นี้เป็นฐานเดียวของผลิตภ
 
 ## Product v1 workflow
 
-ผลิตภัณฑ์ปัจจุบันเป็น **Network-first concept-design workspace** โดยยังใช้ Junction Design schema v6 เป็น source of truth ของ geometry ภายในทางแยกแต่ละแห่ง
+หน้าหลักคือ **หน้าออกแบบ** (`/` และ `/design`) แบบวาดถนนก่อน (road-first): ถนนเป็นเจ้าของแนวและหน้าตัด ทางแยกเกิดเองตรงที่ถนนตัดกัน
 
-Workflow หลักอยู่ที่ `/network`:
+1. วาดถนน (ดูดเข้าปลายถนน/แนวถนน ล็อกมุม 15° พิมพ์ความยาว) และเลือกหน้าตัดสำเร็จรูปหรือพิมพ์ค่า
+2. ทางแยกสร้างให้อัตโนมัติพร้อมแจ้งเตือน ย้อนกลับได้ หรือเปลี่ยนเป็นทางต่างระดับ
+3. คลิกปากทางเพื่อเพิ่มเลนเลี้ยวขวา/ซ้ายหรือ Slip lane และลากจุดบนแบบปรับระยะเก็บรถและรัศมีมุม
+4. “แก้ทางแยกขั้นสูง” เปิด `/junction` สำหรับ 3 มิติของทางแยก ทางข้าม สัญญาณไฟ วงเวียน ช่องเปิดเกาะกลาง ลูกศร และ Slip lane ขั้นสูง แล้วนำค่ากลับมาเป็นขั้นตอนเดียวที่ย้อนได้
+5. สภาพเดิม / ทางเลือก A, B… เปรียบเทียบพร้อมไฮไลต์จุดที่ต่าง
+6. มุมมอง 3 มิติ ภาพอ้างอิงพร้อมตั้งมาตราส่วน แผนที่พื้นหลัง หน้าตัดตามระยะทาง
+7. ส่งออกรูป PNG/SVG สำหรับรายงาน และรายงานสรุปแบบ (HTML) · บันทึก/เปิดไฟล์โครงการ (เปิดไฟล์จากหน้า Network เดิมได้)
 
-1. สร้าง/วาง Junction หลายแห่งและเชื่อมด้วย RoadLink
-2. แก้ Arm, lane, median, street section, auxiliary/receiving lane และ corridor lifecycle
-3. ตรวจ engineering review / continuity / handoff warnings
-4. สร้าง Existing / Alternative scenarios และเปรียบเทียบ Active กับ Reference
-5. Save/Open portable Project JSON พร้อม browser autosave ที่แยกจากกัน
-6. Export Current View / Full Network เป็น SVG/PNG และ Design Summary เป็น HTML
-
-`/junction` เป็น detail workspace สำหรับ geometry ภายใน Junction/Slip/Roundabout ส่วน `/roads` ยังคงเป็น alignment/free-road lab ไม่ใช่ Network source of truth หลัก
+หน้า `/network` เดิมปลดแล้ว (URL พาไปหน้าออกแบบ) งานที่เคยบันทึกไว้ในเบราว์เซอร์นำเข้าเป็นทางเลือกเพิ่มได้ ส่วน `/roads` ยังเป็นห้องทดลองแนวถนน ไม่ใช่ส่วนหลักของผลิตภัณฑ์ ดูรายการความสามารถที่ย้ายหรือตัดออกใน [docs/spec/RETIREMENT_PARITY.md](docs/spec/RETIREMENT_PARITY.md)
 
 Product v1 ได้รับการยอมรับและ merge เข้า `main` ผ่าน PR #1 แล้วเมื่อ 2026-09-30 (merge commit `98198c443b4aee96fcb25c64d5c426aa03bb8d0b`). รายละเอียด release gate และข้อจำกัดที่ตั้งใจไว้บันทึกใน [docs/PRODUCT_V1_RELEASE_AUDIT.md](docs/PRODUCT_V1_RELEASE_AUDIT.md)
 
-## เริ่มใช้งาน
+## แก้ทางแยกขั้นสูง (`/junction`)
 
 เลือกทางแยกหรือวงเวียน เปิด/ปิดขาถนนให้เหลือ 3 หรือ 4 ขา จากนั้นคลิกขาถนนบนแบบเพื่อแก้ไข
 

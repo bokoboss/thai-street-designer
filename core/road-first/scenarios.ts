@@ -8,7 +8,7 @@ import type {NetworkScenarioWorkspace} from '../network/network-scenarios';
 export type RoadFirstScenarioKind='existing'|'alternative';
 export type RoadFirstScenario={id:string;name:string;kind:RoadFirstScenarioKind;sourceScenarioId?:string;project:RoadFirstProject};
 export type RoadFirstWorkspace={kind:'road-first-workspace';workspaceVersion:1;activeScenarioId:string;scenarios:RoadFirstScenario[]};
-export type ScenarioEdit={workspace:RoadFirstWorkspace;error:string|null;scenario?:RoadFirstScenario};
+export type ScenarioEdit={workspace:RoadFirstWorkspace;error:string|null;scenario?:RoadFirstScenario;note?:string};
 
 export const SCENARIO_LIMIT=8;
 export const EXISTING_NAME='สภาพเดิม';
@@ -88,4 +88,19 @@ export function migrateNetworkWorkspace(network:NetworkScenarioWorkspace):{works
     return out;
   });
   return{workspace:{kind:'road-first-workspace',workspaceVersion:1,activeScenarioId:network.activeScenarioId,scenarios},issues};
+}
+
+/** Add scenarios from another workspace as alternatives (e.g. work left in the earlier Network page), within the limit. */
+export function appendScenarios(w:RoadFirstWorkspace,incoming:RoadFirstWorkspace,suffix:string):ScenarioEdit{
+  const room=SCENARIO_LIMIT-w.scenarios.length;
+  if(room<1)return{workspace:w,error:`มีทางเลือกครบ ${SCENARIO_LIMIT} รายการแล้ว ลบทางเลือกที่ไม่ใช้ก่อนนำเข้า`};
+  const ids=new Set(w.scenarios.map(s=>s.id)),names=new Set(w.scenarios.map(s=>s.name.trim().toLowerCase())),added:RoadFirstScenario[]=[];
+  const source=existingScenario(w).id;
+  for(const s of incoming.scenarios.slice(0,room)){
+    let n=1;while(ids.has(`alt-${n}`))n++;const id=`alt-${n}`;ids.add(id);
+    let name=`${s.name} ${suffix}`.trim().slice(0,60),k=2;while(names.has(name.toLowerCase()))name=`${s.name} ${suffix} ${k++}`.trim().slice(0,60);names.add(name.toLowerCase());
+    added.push({id,name,kind:'alternative',sourceScenarioId:source,project:structuredClone(s.project)});
+  }
+  const skipped=incoming.scenarios.length-added.length;
+  return{workspace:{...w,activeScenarioId:added[0]!.id,scenarios:[...w.scenarios,...added]},scenario:added[0],error:null,note:skipped?`ไม่ได้นำเข้า ${skipped} รายการเพราะเกินจำนวนที่รองรับ`:undefined};
 }
