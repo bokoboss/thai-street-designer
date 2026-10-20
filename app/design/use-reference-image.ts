@@ -10,7 +10,7 @@ export const REFERENCE_IMAGE_LIMIT=50*1024*1024;
 export function useReferenceImage(onMessage:(text:string,kind?:'info'|'error')=>void){
   const [reference,setReference]=useState<LocalImageReference>(localImageReferenceDefaults);
   const [url,setUrl]=useState<string|null>(null);
-  const urlRef=useRef<string|null>(null),ready=useRef(false);
+  const urlRef=useRef<string|null>(null),[loaded,setLoaded]=useState(false);
   const show=useCallback((blob:Blob)=>{const next=URL.createObjectURL(blob);if(urlRef.current)URL.revokeObjectURL(urlRef.current);urlRef.current=next;setUrl(next);},[]);
 
   useEffect(()=>{
@@ -18,11 +18,11 @@ export function useReferenceImage(onMessage:(text:string,kind?:'info'|'error')=>
     let alive=true;
     const stored=restoreLocalImageReference((()=>{try{return localStorage.getItem(LOCAL_IMAGE_REFERENCE_STORAGE);}catch{return null;}})());
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReference(stored);ready.current=true;
+    setReference(stored);setLoaded(true);
     if(stored.widthPx>0)loadLocalImageBlob().then(blob=>{if(alive&&blob)show(blob);}).catch(()=>{});
     return()=>{alive=false;};
   },[show]);
-  useEffect(()=>{if(ready.current)try{localStorage.setItem(LOCAL_IMAGE_REFERENCE_STORAGE,JSON.stringify(reference));}catch{/* keep in memory */}},[reference]);
+  useEffect(()=>{if(loaded)try{localStorage.setItem(LOCAL_IMAGE_REFERENCE_STORAGE,JSON.stringify(reference));}catch{/* keep in memory */}},[reference,loaded]);
   useEffect(()=>()=>{if(urlRef.current)URL.revokeObjectURL(urlRef.current);},[]);
 
   /** Place a new image centred on the plan view, about 300 m across until it is scaled. */

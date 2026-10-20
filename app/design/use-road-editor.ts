@@ -64,7 +64,8 @@ export function useRoadEditor(){
   const [returned,setReturned]=useState<string|null>(null),[storage,setStorage]=useState<StorageState>('saved');
   // New roads start with the section used last (drawn or edited), not always the default preset.
   const [lastSection,setLastSection]=useState<RoadSection>(()=>presetSection(DEFAULT_PRESET));
-  const ready=useRef(false),bookRef=useRef(book);
+  // Loaded is state (not a ref) so autosave never runs with the placeholder project of the first render.
+  const [loaded,setLoaded]=useState(false),bookRef=useRef(book);
   const setBook=useCallback((next:Book)=>{bookRef.current=next;setBookState(next);},[]);
   const activeId=book.workspace.activeScenarioId,editor=book.editors[activeId]!;
   const setEditor=useCallback((next:RoadFirstEditor)=>{const b=bookRef.current;setBook({...b,editors:{...b.editors,[b.workspace.activeScenarioId]:next}});},[setBook]);
@@ -90,16 +91,18 @@ export function useRoadEditor(){
       }
     }catch{/* storage unavailable: keep the loaded work */}
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBook(next);setNotice({text,kind:first.error?'error':'info'});setReturned(returnedId);if(first.blocked)setStorage('blocked');ready.current=true;
+    setBook(next);setNotice({text,kind:first.error?'error':'info'});setReturned(returnedId);if(first.blocked)setStorage('blocked');setLoaded(true);
   },[setBook]);
   const workspace=useMemo(()=>currentWorkspace(book),[book]);
   useEffect(()=>{
-    if(!ready.current||storage==='blocked')return;
+    if(!loaded||storage==='blocked')return;
     // Autosave state is shown in the status bar; a failed write (storage full or unavailable) must not pass silently.
     let ok=true;
     try{localStorage.setItem(ROAD_FIRST_STORAGE,JSON.stringify(workspace));}catch{ok=false;}
+    // The result of the write is shown in the status bar.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStorage(ok?'saved':'error');
-  },[workspace,storage]);
+  },[workspace,storage,loaded]);
   const [unreadable,setUnreadable]=useState<string|null>(null);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setUnreadable(localStorage.getItem(ROAD_FIRST_UNREADABLE_STORAGE));}catch{/* unavailable */}},[]);

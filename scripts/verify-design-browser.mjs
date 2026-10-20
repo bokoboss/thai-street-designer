@@ -9,7 +9,7 @@ import {startSession} from './test-support/cdp-browser.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));process.chdir(root);mkdirSync('artifacts',{recursive:true});
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-design-acceptance'});
-const actions=[];const act=(label,fn)=>{actions.push(label);return fn();};
+const actions=[],diag={};const act=(label,fn)=>{actions.push(label);return fn();};
 try{
   await b.waitFor(()=>b.count('[data-design-notice]'),'workspace loaded');
   assert.match(await b.text('.design-inspector'),/วาดถนน/,'empty project explains how to start');
@@ -55,7 +55,7 @@ try{
   await b.waitFor(async()=>(await b.text('[data-design-section]'))?.includes('2.50'),'redo re-applies');
 
   // Road ids are opaque and never reused; find them in drawing order.
-  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);
+  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);diag.ids=[R1,R2];
   // Drag the first road's start point: one undo step.
   const point=await b.rect(`[data-design-road-point="${R1}:0"]`);
   await b.drag(point,{x:point.x,y:point.y+40});
@@ -201,7 +201,7 @@ try{
     if(node.nodeId)await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
     await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image',5000).catch(()=>null);
   }
-  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'));throw e;});
+  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'),await b.count('[data-design-scenario]'),await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,300)`),await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`));throw e;});
   await b.click('[data-design-action="calibrate-reference"]');
   const ca={x:canvas.x-canvas.w/2+120,y:canvas.y+canvas.h/2-120},cb={x:ca.x+200,y:ca.y};
   await b.clickAt(ca);await b.clickAt(cb);
@@ -241,6 +241,8 @@ try{
 
   // The earlier Network page is retired: its URL opens /design, and work it saved in this browser can be added as alternatives.
   await b.goto('/network');await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
+  await sleep(300);diag.afterRedirect={notice:await b.text('[data-design-notice]'),tabs:await b.count('[data-design-scenario]'),unreadable:await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,80)`)};
+  assert.equal(diag.afterRedirect.tabs,2,'saved work reopens after the redirect: '+JSON.stringify(diag.afterRedirect));
   await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:{schemaVersion:5,title:'งานเดิม',junctions:[],links:[],parallelCorridors:[],roadEnds:[]}}]}))`);
   await b.goto('/design');await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
   const scenariosBefore=await b.count('[data-design-scenario]');
@@ -281,7 +283,8 @@ try{
   console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept)`);
 }catch(error){
   // On CI the message becomes a check annotation, so a failure can be read without the job log.
-  if(process.env.GITHUB_ACTIONS){const msg=String(error?.message??error).replace(/\r?\n/g,' ').slice(0,900);console.log(`::error title=design browser acceptance::${msg}`);}
+  if(process.env.GITHUB_ACTIONS){let state='';try{state=JSON.stringify({...diag,path:await b.evalValue('location.pathname'),active:await b.text('[data-design-scenario][aria-selected="true"]'),tabs:await b.evalValue(`[...document.querySelectorAll('[data-design-scenario]')].map(x=>x.dataset.designScenario+'='+x.textContent).join('|')`),roads:await b.evalValue(`[...document.querySelectorAll('[data-design-road]')].map(x=>x.dataset.designRoad).join(',')`),notice:await b.text('[data-design-notice]')});}catch{}
+    const msg=(String(error?.message??error)+' · '+state).replace(/\r?\n/g,' ').slice(0,1500);console.log(`::error title=design browser acceptance::${msg}`);}
   try{await b.screenshot('artifacts/design-browser-failure.png');}catch{}
   throw error;
 }finally{b.close();}
