@@ -201,7 +201,7 @@ try{
     if(node.nodeId)await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
     await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image',5000).catch(()=>null);
   }
-  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'));throw e;});
+  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'),await b.count('[data-design-scenario]'),await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,300)`),await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`));throw e;});
   await b.click('[data-design-action="calibrate-reference"]');
   const ca={x:canvas.x-canvas.w/2+120,y:canvas.y+canvas.h/2-120},cb={x:ca.x+200,y:ca.y};
   await b.clickAt(ca);await b.clickAt(cb);
@@ -242,6 +242,7 @@ try{
   // The earlier Network page is retired: its URL opens /design, and work it saved in this browser can be added as alternatives.
   await b.goto('/network');await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
   await sleep(300);diag.afterRedirect={notice:await b.text('[data-design-notice]'),tabs:await b.count('[data-design-scenario]'),unreadable:await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,80)`)};
+  assert.equal(diag.afterRedirect.tabs,2,'saved work reopens after the redirect: '+JSON.stringify(diag.afterRedirect));
   await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:{schemaVersion:5,title:'งานเดิม',junctions:[],links:[],parallelCorridors:[],roadEnds:[]}}]}))`);
   await b.goto('/design');await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
   const scenariosBefore=await b.count('[data-design-scenario]');

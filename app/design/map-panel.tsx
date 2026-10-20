@@ -2,7 +2,7 @@
 // Online map under the plan (street map or imagery), kept per browser in the same storage as the earlier pages.
 // Place search sets the map so the found place sits at the middle of the design; "ย้ายแผนที่" drags the map
 // (its offset) to line it up with the roads. Provider keys stay in this browser and are never saved to the file.
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {IMAGERY_BASEMAP_OPTIONS,MAP_PROVIDER_CREDENTIALS_STORAGE,MAP_REFERENCE_STORAGE,STREET_BASEMAP_OPTIONS,basemapAccessLabel,basemapCredentialKey,basemapDescription,basemapKind,mapProviderCredentialsDefaults,mapReferenceDefaults,restoreMapProviderCredentials,restoreMapReference,searchMapPlaces,type MapBasemap,type MapPlace,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {DesignTool} from './design-canvas';
@@ -12,14 +12,14 @@ const write=(key:string,value:unknown)=>{try{localStorage.setItem(key,JSON.strin
 
 export function useMapReference(){
   const [reference,setReference]=useState<MapReference>(mapReferenceDefaults),[credentials,setCredentials]=useState<MapProviderCredentials>(mapProviderCredentialsDefaults);
-  const ready=useRef(false);
+  const [loaded,setLoaded]=useState(false);
   useEffect(()=>{
     // Browser storage is only available after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReference(restoreMapReference(read(MAP_REFERENCE_STORAGE)));setCredentials(restoreMapProviderCredentials(read(MAP_PROVIDER_CREDENTIALS_STORAGE)));ready.current=true;
+    setReference(restoreMapReference(read(MAP_REFERENCE_STORAGE)));setCredentials(restoreMapProviderCredentials(read(MAP_PROVIDER_CREDENTIALS_STORAGE)));setLoaded(true);
   },[]);
-  useEffect(()=>{if(ready.current)write(MAP_REFERENCE_STORAGE,reference);},[reference]);
-  useEffect(()=>{if(ready.current)write(MAP_PROVIDER_CREDENTIALS_STORAGE,credentials);},[credentials]);
+  useEffect(()=>{if(loaded)write(MAP_REFERENCE_STORAGE,reference);},[reference,loaded]);
+  useEffect(()=>{if(loaded)write(MAP_PROVIDER_CREDENTIALS_STORAGE,credentials);},[credentials,loaded]);
   const update=(patch:Partial<MapReference>)=>setReference(r=>({...r,...patch}));
   return{reference,credentials,update,setCredentials};
 }
