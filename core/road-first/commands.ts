@@ -5,7 +5,7 @@
 import {designError} from '../junction/design-validation';
 import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
 import {validateNetworkProject,type WorldPoint} from '../network/network-project';
-import {detectCandidates,type Candidate,type Decision,type Road,type RoadSection} from './derive';
+import {detectCandidates,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadSection} from './derive';
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 
@@ -25,6 +25,8 @@ export type RoadFirstCommand=
   |{type:'junction.setRoads';candidateId:string;roads:string[]}
   |{type:'junction.setCorner';candidateId:string;corner:number}
   |{type:'junction.setDesign';candidateId:string;patch:DesignSettings}
+  /** Every junction-owned setting at once (edits brought back from the advanced junction editor). */
+  |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined}
   |{type:'leg.setApproach';candidateId:string;leg:LegKey;patch:ApproachOverride}
   |{type:'leg.setTreatment';candidateId:string;leg:LegKey;patch:LegTreatment}
   |{type:'leg.reset';candidateId:string;leg:LegKey}
@@ -140,6 +142,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
         }
         case 'junction.setCorner':t(d).corner=cmd.corner;label=`ปรับรัศมีมุม ${jname(d)} เป็น ${fmt(cmd.corner)} ม.`;group=`junction.corner:${d.candidateId}`;break;
         case 'junction.setDesign':t(d).design={...t(d).design,...structuredClone(cmd.patch)};label=`ปรับการตั้งค่า ${jname(d)}`;group=`junction.design:${d.candidateId}:${Object.keys(cmd.patch).join(',')}`;break;
+        case 'junction.setTreatments':d.treatments=cmd.treatments?structuredClone(cmd.treatments):undefined;label=`แก้ทางแยกขั้นสูง ${jname(d)}`;break;
         case 'leg.setApproach':{
           const a=t(d).approaches??={};a[cmd.leg]={...a[cmd.leg],...structuredClone(cmd.patch)};
           label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;

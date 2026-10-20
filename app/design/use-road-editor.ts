@@ -8,6 +8,7 @@ import {activeScenario,createWorkspace,duplicateScenario,migrateNetworkWorkspace
 import {redoLabel,undoLabel} from '@/core/common/history';
 import {NETWORK_PROJECT_STORAGE} from '@/core/network/network-project';
 import {restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
+import {DESIGN_HANDOFF_STORAGE,handoffCommand,readHandoff} from '@/core/road-first/junction-handoff';
 import type {RoadSection} from '@/core/road-first/derive';
 import {DEFAULT_PRESET,presetSection} from '@/core/road-first/presets';
 
@@ -41,6 +42,8 @@ const currentWorkspace=(b:Book):RoadFirstWorkspace=>({...b.workspace,scenarios:b
 export function useRoadEditor(){
   const [book,setBookState]=useState<Book>(()=>bookOf(createWorkspace(emptyRoadFirstProject())));
   const [notice,setNotice]=useState<EditorNotice>({text:'',kind:'info'});
+  /** Junction whose advanced edits were just brought back (selected by the page). */
+  const [returned,setReturned]=useState<string|null>(null);
   // New roads start with the section used last (drawn or edited), not always the default preset.
   const [lastSection,setLastSection]=useState<RoadSection>(()=>presetSection(DEFAULT_PRESET));
   const ready=useRef(false),bookRef=useRef(book);
@@ -51,9 +54,25 @@ export function useRoadEditor(){
 
   useEffect(()=>{
     // Browser storage is only available after mount; load the saved work once.
-    const first=initialWorkspace();
+    const first=initialWorkspace(),next=bookOf(first.workspace);let text=first.notice,returnedId:string|null=null;
+    // Coming back from the advanced junction editor: bring its edits back as one undoable step in that scenario.
+    try{
+      const handoff=readHandoff(localStorage.getItem(DESIGN_HANDOFF_STORAGE)),scenario=handoff&&next.workspace.scenarios.find(s=>s.id===handoff.scenarioId);
+      if(handoff){
+        localStorage.removeItem(DESIGN_HANDOFF_STORAGE);
+        if(!scenario)text='ทางเลือกที่ส่งทางแยกไปแก้ไม่มีแล้ว จึงไม่ได้นำค่ากลับมา';
+        else{
+          const back=handoffCommand(handoff,scenario.project);
+          if(back.cmd){
+            const out=runCommand(next.editors[scenario.id]!,back.cmd);
+            if(out.result.error)text=`นำค่าจากหน้าแก้ทางแยกกลับมาไม่ได้ · ${out.result.error}`;
+            else{next.editors[scenario.id]=out.editor;next.workspace={...next.workspace,activeScenarioId:scenario.id};text=[out.result.label,...back.issues].join(' · ');returnedId=handoff.candidateId;}
+          }else text=[back.message,...back.issues].join(' · ');
+        }
+      }
+    }catch{/* storage unavailable: keep the loaded work */}
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBook(bookOf(first.workspace));setNotice({text:first.notice,kind:'info'});ready.current=true;
+    setBook(next);setNotice({text,kind:'info'});setReturned(returnedId);ready.current=true;
   },[setBook]);
   const workspace=useMemo(()=>currentWorkspace(book),[book]);
   useEffect(()=>{
@@ -95,6 +114,6 @@ export function useRoadEditor(){
   return{
     project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
-    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,
   };
 }

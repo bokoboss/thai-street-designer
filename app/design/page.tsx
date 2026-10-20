@@ -12,6 +12,7 @@ import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
 import {compareScenarios} from '@/core/road-first/compare';
+import {DESIGN_HANDOFF_STORAGE,createHandoff} from '@/core/road-first/junction-handoff';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
 import {projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
@@ -39,6 +40,9 @@ export default function DesignWorkspace(){
   const selectedRoad=selection?.kind==='road'?ed.project.roads.find(r=>r.id===selection.id):undefined;
   const openCrossings=candidates.filter(c=>!ed.project.decisions.some(d=>d.candidateId===c.id)).length;
 
+  // Select the junction whose advanced edits were just brought back.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{if(ed.returned)setSelection({kind:'junction',id:ed.returned});},[ed.returned]);
   // Fit once the stored project has been loaded.
   useEffect(()=>{if(!loaded.current&&ed.project.roads.length){loaded.current=true;setFitKey(k=>k+1);}},[ed.project.roads.length]);
 
@@ -97,6 +101,13 @@ export default function DesignWorkspace(){
       const out=await exportFigure({svg,bounds,title:ed.project.title,scenario:ed.active.name,comparison:comparison&&ed.reference?{reference:ed.reference.name,diff:comparison}:null,format});
       download(out.blob,out.name);ed.setNotice({text:`ส่งออกรูป ${out.name} แล้ว`,kind:'info'});
     }catch(error){ed.setNotice({text:'ส่งออกรูปไม่สำเร็จ · '+(error instanceof Error?error.message:''),kind:'error'});}
+  }
+  /** Hand the junction to the advanced junction editor; its edits come back when /design opens again. */
+  function openAdvanced(candidateId:string){
+    const handoff=createHandoff(ed.project,ed.active.id,candidateId);
+    if(!handoff){ed.setNotice({text:'ไม่พบทางแยกนี้ในแบบ',kind:'error'});return;}
+    try{localStorage.setItem(DESIGN_HANDOFF_STORAGE,JSON.stringify(handoff));window.location.assign('/junction?design=1');}
+    catch{ed.setNotice({text:'บันทึกข้อมูลชั่วคราวในเบราว์เซอร์ไม่ได้ จึงเปิดหน้าแก้ทางแยกขั้นสูงไม่ได้',kind:'error'});}
   }
   function switchScenario(id:string){if(ed.switchTo(id)){setSelection(null);clearDraft();setTool('select');}}
   async function open(file:File|undefined){
@@ -158,7 +169,7 @@ export default function DesignWorkspace(){
         </div>}
         {selectedRoad&&<SectionStrip road={selectedRoad}/>}
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

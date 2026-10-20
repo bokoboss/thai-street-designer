@@ -133,7 +133,7 @@ function ApproachInspector({candidateId,leg,project,compiled,run,onSelect}:{cand
   </>;
 }
 
-function JunctionInspector({candidateId,project,compiled,run,onSelect}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void}){
+function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void}){
   const d=project.decisions.find(x=>x.candidateId===candidateId),jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
   const j=compiled.project.junctions.find(x=>x.id===jid);
   const [armed,setArmed]=useState(false);
@@ -148,6 +148,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect}:{candidat
       <NumberField field="corner" label="รัศมีมุมขอบทาง (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
     </div>
     <div className="design-actions">
+      <button data-design-action="advanced-junction" title="3 มิติ ทางข้าม สัญญาณไฟ เส้นหยุด วงเวียน ช่องเปิดเกาะกลาง ลูกศร และ Slip lane ขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (3 มิติ ทางข้าม สัญญาณไฟ วงเวียน …)</button>
       <button data-design-action="to-grade-separated" onClick={()=>run({type:'crossing.decide',candidateId,decision:'grade-separated'})}>เปลี่ยนเป็นทางต่างระดับ</button>
       <button className="danger" data-design-action="unconfirm" onClick={()=>{if(!armed){setArmed(true);return;}run({type:'crossing.decide',candidateId,decision:'ignore'});}}>{armed?'กดอีกครั้งเพื่อยกเลิกทางแยก':'ยกเลิกทางแยก'}</button>
     </div>
@@ -180,8 +181,8 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
-  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;scenario:ScenarioPanel;
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
+  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
@@ -195,7 +196,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
     {road?<RoadInspector key={road.id} road={road} run={run} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
-    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
+    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
