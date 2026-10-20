@@ -157,7 +157,8 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
     if(j.design.corner!==designBase.corner)treatments.corner=j.design.corner;
     if(Object.keys(settings).length)treatments.design=settings;
     const joined=[...new Set([...legOf].filter(([arm])=>arm.startsWith(`${j.id}:`)).map(([,leg])=>parseLegKey(leg)!.roadId))];
-    decisions.push({candidateId:c.id,decision:'junction',name:j.name,roads:joined,treatments});
+    const excluded=c.roads.map(r=>r.roadId).filter(id=>!joined.includes(id));
+    decisions.push({candidateId:c.id,decision:'junction',name:j.name,roads:joined,...(excluded.length?{excluded}:{}),treatments});
   }
   for(const j of net.junctions)if(!matched.has(j.id))issues.push(`${j.name}: หาจุดตัดของถนนที่ทางแยกนี้ไม่พบ`);
   if(net.parallelCorridors.length)issues.push(`ความสัมพันธ์ถนนหลักและทางขนาน ${net.parallelCorridors.length} ชุดยังไม่ย้ายมาในรูปแบบใหม่`);

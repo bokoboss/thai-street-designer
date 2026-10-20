@@ -144,6 +144,10 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const approaches=junctionApproaches(compiled,candidateId);
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
+    {compiled.unjoined[candidateId]&&<div className="design-issues" data-design-unjoined-note={compiled.unjoined[candidateId].length}>
+      <b>มีถนนถึงทางแยกนี้แต่ไม่ได้เชื่อม</b>
+      <ul><li>{compiled.unjoined[candidateId].map(id=>project.roads.find(r=>r.id===id)?.name??id).join(', ')} — {compiled.overflow.includes(candidateId)||approaches.length>=4?'ทางแยกรองรับสูงสุด 4 ขา':'ถูกแยกออกจากทางแยกนี้'} · ถ้าต้องการเชื่อม ให้ปรับแนวถนนไปบรรจบที่จุดอื่น</li></ul>
+    </div>}
     <div className="design-presets" data-design-approaches={approaches.length}><span>ปากทาง {approaches.length} ด้าน — เลือกเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane</span>
       {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
     </div>
