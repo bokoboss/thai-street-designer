@@ -63,3 +63,9 @@ Only tasks the new workspace already supports are measured; the rest follow in l
 | ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
 | --- | --- | --- | --- | --- |
 | Continue a road by an exact length | Y | — | 5 (tool, click road end, type length, Enter, Enter) | Snaps to the road end and continues that road (one road, not two); angle locks to 15° steps; typed length places the point exactly. Shift held turns snapping off. A sharp corner still renders as a plain mitre — curves come later. |
+
+### `/design` slice 4 — junction detail in place (2026-10-20, scripted)
+
+| ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
+| --- | --- | --- | --- | --- |
+| T4-style detail: right-turn pocket with a typed storage length | Y | — | 4 (click approach on the plan, "+ เลนเลี้ยวขวา", click storage field, type + Enter) | Stays in `/design`, no page switch, nothing lost. Storage handle and corner handles on the plan edit the same stored values as the fields (one undo step per drag). "+ Slip lane" adds a Slip to the next approach in 1 action; approaches now stretch along the road to fit a Slip lane. Default sizes are tool starting values, not standards. |

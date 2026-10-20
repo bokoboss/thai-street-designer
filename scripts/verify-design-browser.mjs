@@ -86,7 +86,37 @@ try{
   assert.ok(Math.abs(p1.x-p2.x)<1.5&&p2.y<p1.y,'typed segment follows the locked angle');
   const aidActions=actions.length-aidStart;
   assert.equal(aidActions,5,'continue a road by an exact length in 5 actions');
+  // Junction detail in place (slice 4): click an approach on the plan, add a right-turn pocket and type its storage,
+  // drag the storage and corner handles, add a Slip lane.
+  await b.key('Escape');
+  // Each arm has a hit line from the junction centre; click beside the road centreline so the approach, not the road, is picked.
+  const jc=await b.rect('[data-network-junction-hit]');
+  const detailStart=actions.length;
+  await act('click approach on plan',()=>b.clickAt({x:jc.x+14,y:jc.y}));
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`)==='approach','approach selected from the plan');
+  await act('+ right-turn pocket',()=>b.click('[data-design-action="add-right-pocket"]'));
+  await b.waitFor(()=>b.count('[data-design-pocket="right"]'),'pocket fields');
+  await act('click storage field',()=>b.click('[data-design-field="right-length"]'));
+  await b.evalValue(`document.querySelector('[data-design-field="right-length"]').select()`);
+  await act('type 40 + Enter',async()=>{await b.type('40');await b.key('Enter');});
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="right-length"]').value`)==='40','storage typed in place');
+  const pocketActions=actions.length-detailStart;
+  assert.ok(pocketActions<=5,`right-turn pocket with typed storage in ${pocketActions} actions`);
+  const ph=await b.waitFor(()=>b.rect('[data-design-pocket-handle="right"]'),'storage handle on the plan');
+  // Drag away from the junction centre (start of the arm hit line) to lengthen the storage.
+  const centre=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
+  const away=Math.hypot(ph.x-centre.x,ph.y-centre.y);
+  await b.drag(ph,{x:ph.x+(ph.x-centre.x)/away*25,y:ph.y+(ph.y-centre.y)/away*25});
+  const dragged=await b.waitFor(async()=>{const v=Number(await b.evalValue(`document.querySelector('[data-design-field="right-length"]').value`));return v>=45?v:null;},'dragging the handle changes the same storage value');
+  assert.ok(Number.isInteger(dragged),'handle snaps storage to whole metres');
+  assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: แก้ขา /);
+  const ch=await b.rect('[data-design-corner-handle="0"]');
+  await b.drag(ch,{x:ch.x+12,y:ch.y+12});
+  await b.waitFor(async()=>/^ย้อนกลับ: ปรับรัศมีมุม /.test(await b.evalValue(`document.querySelector('[data-design-undo]').title`)),'corner handle edits the corner radius');
+  await b.click('[data-design-action="add-slip"]');
+  await b.waitFor(()=>b.count('[data-design-slip]'),'Slip lane added in place');
+  assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ตั้ง Slip lane/);
   await b.screenshot('artifacts/design-browser.png');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane)`);
 }finally{b.close();}

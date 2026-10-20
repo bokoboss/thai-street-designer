@@ -10,8 +10,11 @@ import type {RoadFirstProject} from '@/core/road-first/project';
 import type {CommandOutcome} from './use-road-editor';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
+import {approachInfo,cornerFromPoint,cornerHandles,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
+import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 
-export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|null;
+/** approach: one road leg at a junction (id = junction candidate id, leg = road leg key). */
+export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
 export type DesignTool='select'|'pan'|'road';
 type View={x:number;y:number;scale:number};
 
@@ -28,7 +31,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const wrap=useRef<HTMLDivElement>(null),svg=useRef<SVGSVGElement>(null);
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
-  const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}|null>(null);
+  const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
+    |{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|null>(null);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -77,7 +81,25 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(tool==='road'){const s=snapAt(e);setSnap(s);onSnap(s);}
     if(!d)return;
     if(d.kind==='pan'){setView({...d.start,x:d.start.x-(e.clientX-d.from.x)/d.start.scale,y:d.start.y-(e.clientY-d.from.y)/d.start.scale});return;}
+    if(d.kind==='corner'){
+      const j=junctionOf(d.candidateId);if(!j)return;
+      const corner=cornerFromPoint(j,d.corner,toWorld(e));
+      if(corner!==j.design.corner)run({type:'junction.setCorner',candidateId:d.candidateId,corner});return;
+    }
+    if(d.kind==='pocket'){
+      const info=approachInfo(compiled,d.candidateId,d.leg);if(!info)return;
+      const length=pocketLengthFromPoint(info.junction,info.armId,d.side,toWorld(e));
+      if(length!==info.arm.incomingPockets?.[d.side].length)run({type:'leg.setTreatment',candidateId:d.candidateId,leg:d.leg,patch:pocketTreatment(info.arm,d.side,{length})});return;
+    }
     run({type:'road.movePoint',roadId:d.roadId,index:d.index,point:toWorld(e)});
+  }
+  function junctionOf(candidateId:string){
+    const jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
+    return compiled.project.junctions.find(j=>j.id===jid);
+  }
+  function startHandleDrag(e:React.PointerEvent,next:NonNullable<typeof drag.current>){
+    if(tool!=='select'||e.button!==0)return;
+    e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);drag.current=next;
   }
   /** Snapped cursor for Draw Road; Shift suspends snapping. */
   function snapAt(e:{clientX:number;clientY:number;shiftKey:boolean}):SnapResult{
@@ -86,7 +108,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       previousHeading:from&&prev?((Math.atan2(from.y-prev.y,from.x-prev.x)*180/Math.PI)+360)%360:undefined});
   }
   function onPointerUp(){
-    if(drag.current?.kind==='point')finishGesture();
+    if(drag.current&&drag.current.kind!=='pan')finishGesture();
     drag.current=null;
   }
   function onWheel(e:React.WheelEvent<SVGSVGElement>){
@@ -107,6 +129,9 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   }
 
   const scaleLen=niceLength(px(120));
+  const selectedJunction=selection&&(selection.kind==='junction'||selection.kind==='approach')?junctionOf(selection.id):undefined;
+  const selectedApproach=selection?.kind==='approach'?approachInfo(compiled,selection.id,selection.leg):null;
+  const pocketHandles=selectedApproach?(['right','left'] as const).flatMap(side=>{const point=pocketHandle(selectedApproach.junction,selectedApproach.armId,side);return point?[{side,point,candidateId:selectedApproach.candidateId,leg:selectedApproach.leg}]:[];}):[];
   const typed=Number(typedLength),last=draft.at(-1);
   const cursor=tool!=='road'||!snap?null:typedLength&&last&&typed>0?pointAtLength(last,snap.point,typed):snap.point;
   const preview=tool==='road'&&draft.length?[...draft,...(cursor?[cursor]:[])]:[];
@@ -114,10 +139,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
       onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}} onWheel={onWheel} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" onPointerDown={()=>{if(tool==='select')onSelect(null);}}/>
-      <NetworkDrawing project={compiled.project} zoom={1} selection={selection?.kind==='junction'?{kind:'junction',id:Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===selection.id)??''}:null}
-        comparisonFocus={null} parallelCorridorId={null} parallelDraftMainlineId={null} selectedArm={null} linkMode={false} pendingPort={null} selectedLinkVertex={null}
+      <NetworkDrawing project={compiled.project} zoom={1} selection={selectedJunction?{kind:'junction',id:selectedJunction.id}:null}
+        comparisonFocus={null} parallelCorridorId={null} parallelDraftMainlineId={null} selectedArm={selectedApproach?.armId??null} linkMode={false} pendingPort={null} selectedLinkVertex={null}
         onSelect={s=>{if(tool!=='select'||!s)return;onSelect(s.kind==='junction'?{kind:'junction',id:compiled.sources.junctions[s.id]}:{kind:'road',id:compiled.sources.links[s.id]});}}
-        onArmSelect={j=>{if(tool==='select')onSelect({kind:'junction',id:compiled.sources.junctions[j]});}}
+        onArmSelect={(j,armId)=>{
+          if(tool!=='select')return;
+          const leg=compiled.legs.find(l=>l.junctionId===j&&l.armId===armId);
+          onSelect(leg?{kind:'approach',id:compiled.sources.junctions[j],leg:legKey(leg.roadId,leg.side)}:{kind:'junction',id:compiled.sources.junctions[j]});
+        }}
         onJunctionMoveStart={noop} onArmMoveStart={noop} onLinkInsertVertex={noop} onLinkVertexMoveStart={noop} onLinkVertexSelect={noop} onPort={noop}/>
       <g data-design-roads="true">
         {project.roads.map(road=>{
@@ -148,6 +177,16 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       {preview.length>0&&<g data-design-draft="true" pointerEvents="none">
         <polyline points={preview.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke="#0b7f86" strokeWidth={px(2)} strokeDasharray={`${px(6)} ${px(4)}`}/>
         {draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={px(4)} fill="#0b7f86"/>)}
+      </g>}
+      {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
+        {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
+          <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"/>
+          <rect x={h.point.x-px(5)} y={h.point.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
+        </g>)}
+        {pocketHandles.map(h=><g key={h.side} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'pocket',candidateId:h.candidateId,leg:h.leg,side:h.side})}>
+          <circle data-design-pocket-handle={h.side} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"/>
+          <circle cx={h.point.x} cy={h.point.y} r={px(6)} fill="#0b7f86" stroke="#fff" strokeWidth={px(2)} pointerEvents="none"/>
+        </g>)}
       </g>}
       {tool==='road'&&snap&&<g data-design-snap={snap.kind} pointerEvents="none">
         {snap.kind==='angle'&&draft.length>0&&(()=>{const a=draft.at(-1)!,r=(snap.angle??0)*Math.PI/180,L=px(2000);

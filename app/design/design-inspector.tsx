@@ -3,7 +3,9 @@
 import {useState} from 'react';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
-import type {RoadFirstCommand} from '@/core/road-first/commands';
+import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
+import {approachInfo,junctionApproaches,newSlip,pocketTreatment,slipPatch,type ApproachInfo,type PocketSide} from '@/core/road-first/approach-edit';
+import {parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
 import type {CommandOutcome} from './use-road-editor';
@@ -71,15 +73,74 @@ function CrossingInspector({candidate,project,run,onConfirmed}:{candidate:Candid
   </>;
 }
 
-function JunctionInspector({candidateId,project,compiled,run}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run}){
+const legLabel=(project:RoadFirstProject,leg:LegKey)=>{const l=parseLegKey(leg);return l?`${project.roads.find(r=>r.id===l.roadId)?.name??l.roadId} ${l.side==='ahead'?'→':'←'}`:leg;};
+
+/** Turn pocket on an approach: an add button until it exists, then its sizes typed in place. */
+function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;run:Run;title:string}){
+  const p=info.arm.incomingPockets?.[side],set=(patch:Parameters<typeof pocketTreatment>[2])=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:pocketTreatment(info.arm,side,patch)});
+  if(!p?.lanes)return <button data-design-action={`add-${side}-pocket`} onClick={()=>set({})}>+ {title}</button>;
+  return <section className="design-block" data-design-pocket={side}>
+    <header><b>{title}</b><button className="link" data-design-action={`remove-${side}-pocket`} onClick={()=>set(null)}>ลบ</button></header>
+    <div className="design-fields">
+      <NumberField field={`${side}-lanes`} label="จำนวนช่อง" value={p.lanes} min={1} max={3} onCommit={lanes=>set({lanes})}/>
+      <NumberField field={`${side}-width`} label="ความกว้างช่อง (ม.)" value={p.width??info.arm.incomingSection?.width??info.arm.width} step={.05} min={2.5} max={4.5} onCommit={width=>set({width})}/>
+      <NumberField field={`${side}-length`} label="ระยะเก็บรถ (ม.)" value={p.length} min={5} max={140} onCommit={length=>set({length})}/>
+      <NumberField field={`${side}-taper`} label="ระยะ taper (ม.)" value={p.taper} min={5} max={80} onCommit={taper=>set({taper})}/>
+    </div>
+  </section>;
+}
+
+function SlipBlock({info,project,run}:{info:ApproachInfo;project:RoadFirstProject;run:Run}){
+  if(!info.slipTo)return null;
+  const target=legLabel(project,info.slipTo),s=info.slip;
+  if(!s)return <button data-design-action="add-slip" onClick={()=>{
+    const slip=newSlip(info,x=>!executeCommand(project,{type:'slip.set',candidateId:info.candidateId,slip:x}).error);
+    if(slip)run({type:'slip.set',candidateId:info.candidateId,slip});
+  }}>+ Slip lane ไป {target}</button>;
+  const set=(patch:Parameters<typeof slipPatch>[1])=>{const slip=slipPatch(info,patch);if(slip)run({type:'slip.set',candidateId:info.candidateId,slip});};
+  const aux=s.approach.mode==='auxiliary'?s.approach:null;
+  return <section className="design-block" data-design-slip="true">
+    <header><b>Slip lane ไป {target}</b><button className="link" data-design-action="remove-slip" onClick={()=>run({type:'slip.remove',candidateId:info.candidateId,from:info.leg})}>ลบ</button></header>
+    <div className="design-fields">
+      <NumberField field="slip-width" label="ความกว้าง (ม.)" value={s.width} step={.25} min={3} max={6} onCommit={width=>set({width})}/>
+      <NumberField field="slip-radius" label="รัศมี (ม.)" value={s.radius} min={10} max={60} onCommit={radius=>set({radius})}/>
+      {aux&&<>
+        <NumberField field="slip-aux-width" label="ช่องชะลอ กว้าง (ม.)" value={aux.width} step={.05} min={2.5} max={4.5} onCommit={width=>set({approach:{...aux,width}})}/>
+        <NumberField field="slip-aux-storage" label="ช่องชะลอ ยาว (ม.)" value={aux.storage} min={5} max={140} onCommit={storage=>set({approach:{...aux,storage}})}/>
+        <NumberField field="slip-aux-taper" label="ช่องชะลอ taper (ม.)" value={aux.taper} min={5} max={80} onCommit={taper=>set({approach:{...aux,taper}})}/>
+      </>}
+    </div>
+    <button className="link" data-design-action={aux?'remove-slip-aux':'add-slip-aux'} onClick={()=>set({approach:aux?{mode:'direct'}:{mode:'auxiliary',width:s.width>4.5?4.5:Math.max(2.5,s.width),storage:30,taper:20}})}>{aux?'ไม่ใช้ช่องชะลอก่อนเข้า Slip':'+ ช่องชะลอก่อนเข้า Slip'}</button>
+  </section>;
+}
+
+function ApproachInspector({candidateId,leg,project,compiled,run,onSelect}:{candidateId:string;leg:LegKey;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void}){
+  const info=approachInfo(compiled,candidateId,leg),d=project.decisions.find(x=>x.candidateId===candidateId);
+  if(!info)return <p className="design-meta">ไม่พบปากทางนี้แล้ว</p>;
+  return <>
+    <header className="design-inspector-head"><small>ปากทาง · {d?.name??info.junction.name}</small><b>{legLabel(project,leg)}</b>
+      <button className="link" data-design-action="back-to-junction" onClick={()=>onSelect({kind:'junction',id:candidateId})}>← ทางแยกทั้งหมด</button></header>
+    <PocketBlock info={info} side="right" run={run} title="เลนเลี้ยวขวา"/>
+    <PocketBlock info={info} side="left" run={run} title="เลนเลี้ยวซ้าย"/>
+    <SlipBlock info={info} project={project} run={run}/>
+    <p className="design-meta">ลากจุดบนแบบเพื่อปรับระยะเก็บรถและรัศมีมุมได้ · ขนาดเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน ควรตรวจกับแนวทางออกแบบที่ใช้</p>
+    <div className="design-actions">
+      <button data-design-action="reset-approach" onClick={()=>run({type:'leg.reset',candidateId,leg})}>คืนค่าเริ่มต้นของปากทางนี้</button>
+    </div>
+  </>;
+}
+
+function JunctionInspector({candidateId,project,compiled,run,onSelect}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void}){
   const d=project.decisions.find(x=>x.candidateId===candidateId),jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
   const j=compiled.project.junctions.find(x=>x.id===jid);
   const [armed,setArmed]=useState(false);
   if(!d||!j)return <p className="design-meta">ไม่พบทางแยกนี้แล้ว</p>;
-  const legs=compiled.legs.filter(l=>l.junctionId===jid).map(l=>`${project.roads.find(r=>r.id===l.roadId)?.name??l.roadId} ${l.side==='ahead'?'→':'←'}`);
+  const approaches=junctionApproaches(compiled,candidateId);
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
-    <p className="design-meta">{legs.length} ปากทาง: {legs.join(', ')}</p>
+    <div className="design-presets" data-design-approaches={approaches.length}><span>ปากทาง {approaches.length} ด้าน — เลือกเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane</span>
+      {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
+    </div>
     <div className="design-fields">
       <NumberField field="corner" label="รัศมีมุมขอบทาง (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
     </div>
@@ -105,7 +166,8 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
     {road?<RoadInspector key={road.id} road={road} run={run} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
-    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run}/>
+    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
+    :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>

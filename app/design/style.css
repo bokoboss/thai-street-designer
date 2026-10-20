@@ -63,3 +63,7 @@
 .design-toast button:hover{background:#ffffff1a}
 .design-readout{position:absolute;z-index:6;pointer-events:none;display:flex;gap:6px;align-items:baseline;background:#1f2d33e6;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap}
 .design-readout span{color:#cfe3e1}
+.design-block{border:1px solid var(--d-line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+.design-block>header{display:flex;align-items:center;justify-content:space-between}
+.design-inspector button.link{border:0;background:none;color:var(--d-accent);padding:0;cursor:pointer;font-size:12px;text-align:left;align-self:flex-start}
+.design-inspector>button{text-align:left;border:1px dashed #9fc7c4;background:#fff;color:var(--d-accent);border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:700}

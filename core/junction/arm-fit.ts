@@ -7,6 +7,7 @@ import {pocketOriginFor} from './allocation';
 import {armMouth,armTreatmentOrigins,dividerRange,edges,laneCount,type Edge} from './geometry';
 import {pocketsFor,type Design} from './model';
 import {outerRadius,roundSettings,roundDefaults} from './roundabout';
+import {slipGeometries} from './slip-geometry';
 
 /** Approach kept beyond the junction mouth (m). Tool default, not a standard value. */
 export const ARM_MOUTH_CLEARANCE=12;
@@ -15,7 +16,7 @@ export const DIVIDER_MIN_RUN=5;
 /** Data bounds for arm length (m). Whether an arm fits is checked against its content. */
 export const ARM_LENGTH_MIN=12,ARM_LENGTH_MAX=400;
 
-export type ArmFitKind='mouth'|'divider'|'pocket'|'opening'|'splitter';
+export type ArmFitKind='mouth'|'divider'|'pocket'|'opening'|'splitter'|'slip';
 export type ArmFitItem={kind:ArmFitKind;required:number};
 
 export function armFitItems(d:Design,i:number,boundaries:Edge[]=edges(d)):ArmFitItem[]{
@@ -31,6 +32,20 @@ export function armFitItems(d:Design,i:number,boundaries:Edge[]=edges(d)):ArmFit
   }
   for(const o of a.medianOpenings??[])out.push({kind:'opening',required:mouth+o.start+o.length+1});
   if(round)out.push({kind:'splitter',required:outerRadius(d)+settings.splitterLength+6});
+  // Slip lanes leaving or joining this arm (mirrors slipDesignError in slip-geometry.ts).
+  const slips=!round&&d.slips.some(s=>s.fromArm===i||s.toArm===i)?slipGeometries(d,boundaries):[];
+  for(const s of d.slips){
+    const g=slips.find(x=>x.id===s.id);if(!g||g.entryX<0||g.exitX<0)continue;
+    if(s.fromArm===i){
+      out.push({kind:'slip',required:g.entryX+6});
+      if(s.approach.mode==='auxiliary')out.push({kind:'slip',required:g.entryX+s.approach.storage+s.approach.taper+2});
+    }
+    if(s.toArm===i){
+      out.push({kind:'slip',required:g.exitX+6});
+      if(s.departure.mode==='shared-aux')out.push({kind:'slip',required:armMouth(d,i)+s.departure.length+s.departure.taper+2});
+      if(s.departure.mode==='acceleration')out.push({kind:'slip',required:g.exitX+s.departure.length+s.departure.merge+2});
+    }
+  }
   return out;
 }
 
