@@ -24,8 +24,7 @@ assert(ns.junctionEditContext(JSON.stringify(n.createNetworkProject()),'J-1'),'s
 assert.equal(ns.junctionEditContext('{broken','J-1'),null);assert.equal(ns.junctionEditContext(stored,'J-404'),null);
 
 // The pages use the workspace path (no single-project write into the shared storage key).
-const network=fs.readFileSync('app/network/page.tsx','utf8'),junction=fs.readFileSync('app/junction/page.tsx','utf8');
-assert(!network.includes('localStorage.setItem(NETWORK_PROJECT_STORAGE,JSON.stringify(projectRef.current))'),'Network page writes the whole workspace before opening Junction detail');
+const junction=fs.readFileSync('app/junction/page.tsx','utf8');
 assert(junction.includes('junctionEditContext(')&&!junction.includes('restoreNetworkProject(localStorage.getItem(NETWORK_PROJECT_STORAGE))'),'Junction detail reads and writes through the workspace');
 
 console.log('PASS junction detail hand-off keeps every scenario and edits only the active one');

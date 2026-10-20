@@ -107,7 +107,7 @@ Slices (re-planned 2026-10-19 from `docs/research/2026-10-UX-RESEARCH.md`, accep
 Not adopted from the research for now: usage telemetry (no backend; privacy first). Action counts are measured by the browser acceptance scripts.
 
 Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 merged 2026-10-19 (PR #16). Slice 3 merged 2026-10-19 (PR #17). Slice 4 merged 2026-10-20 (PR #18). Slice 5 on `phase3/scenarios` (2026-10-20): scenario tabs, "+ ทางเลือก", comparison highlights by road/crossing identity, report figure PNG/SVG, workspace file with every scenario; earlier Network files migrate every scenario.
-Slice 5 merged 2026-10-20 (PR #19); fix PR #20 (left-turn pocket and Slip lane not on the same approach). Slice 6 staged (owner decision 2026-10-20): 6a on `phase3/one-workspace` — `/` opens `/design`, `/junction` becomes the advanced junction editor with a round trip, `/network` kept by URL as the earlier page; parity register in `docs/spec/RETIREMENT_PARITY.md`. 6b: port the remaining rows, then remove the earlier pages.
+Slice 5 merged 2026-10-20 (PR #19); fix PR #20 (left-turn pocket and Slip lane not on the same approach). Slice 6 staged (owner decision 2026-10-20): 6a on `phase3/one-workspace` — `/` opens `/design`, `/junction` becomes the advanced junction editor with a round trip, `/network` kept by URL as the earlier page; parity register in `docs/spec/RETIREMENT_PARITY.md`. 6b-1..3 merged (PR #22–#24): 3D, Design Summary, reference image, online map, section by station; parallel/frontage corridors and auxiliary proposals dropped for now (owner). 6c on `phase3/retire-network`: `/network` redirects to `/design`, import of earlier work as alternatives, Network browser test reduced to the junction golden suite.
 
 ---
 

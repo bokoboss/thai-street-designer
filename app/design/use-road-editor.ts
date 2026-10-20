@@ -4,7 +4,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createEditor,endGesture,redo as redoEditor,runCommand,undo as undoEditor,type RoadFirstCommand,type RoadFirstEditor} from '@/core/road-first/commands';
 import {compileRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
-import {activeScenario,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
+import {activeScenario,appendScenarios,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
 import {redoLabel,undoLabel} from '@/core/common/history';
 import {NETWORK_PROJECT_STORAGE} from '@/core/network/network-project';
 import {restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
@@ -110,10 +110,17 @@ export function useRoadEditor(){
   const remove=useCallback((id:string)=>applyScenario(w=>removeScenario(w,id),e=>`ลบ ${e.scenario!.name} แล้ว`),[applyScenario]);
   const switchTo=useCallback((id:string)=>applyScenario(w=>({workspace:switchScenario(w,id),error:null}),e=>`แก้ไข ${activeScenario(e.workspace).name}`),[applyScenario]);
 
+  /** Work left in the earlier Network page in this browser, added as extra alternatives (nothing is replaced). */
+  const importEarlier=useCallback(()=>{
+    let raw:string|null=null;try{raw=localStorage.getItem(NETWORK_PROJECT_STORAGE);}catch{/* unavailable */}
+    if(!raw){setNotice({text:'ไม่พบงานจากหน้าจอเดิมในเบราว์เซอร์นี้',kind:'error'});return false;}
+    const migrated=migrateNetworkWorkspace(restoreNetworkScenarioWorkspace(raw));
+    return applyScenario(w=>appendScenarios(w,migrated.workspace,'(หน้าเดิม)'),e=>[`นำเข้างานจากหน้าจอเดิมเป็นทางเลือกเพิ่มแล้ว (เริ่มที่ ${e.scenario!.name})`,e.note,migrated.issues?`มีรายการให้ตรวจ ${migrated.issues} รายการ`:''].filter(Boolean).join(' · '));
+  },[applyScenario]);
   const reference=referenceScenario(workspace);
   return{
     project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
-    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,
   };
 }

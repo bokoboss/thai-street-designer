@@ -55,3 +55,17 @@ const mig=sc.migrateNetworkWorkspace(nw);
 assert.deepEqual(mig.workspace.scenarios.map(s=>[s.name,s.kind]),[['สภาพเดิม','existing'],['Alt A','alternative']]);
 assert.equal(mig.workspace.activeScenarioId,nw.activeScenarioId);
 console.log('PASS scenarios: duplicate/rename/remove, comparison by road and crossing identity with metrics, storage + single-project files, migration of every earlier scenario');
+
+// Work left in the earlier Network page is added as extra alternatives, never replacing anything.
+{
+  let base=sc.createWorkspace(existing);base=sc.duplicateScenario(base).workspace;
+  const add=sc.appendScenarios(base,mig.workspace,'(หน้าเดิม)');
+  assert.equal(add.error,null);
+  assert.deepEqual(add.workspace.scenarios.map(s=>s.name),['สภาพเดิม','ทางเลือก A','สภาพเดิม (หน้าเดิม)','Alt A (หน้าเดิม)']);
+  assert.ok(add.workspace.scenarios.slice(2).every(s=>s.kind==='alternative'&&s.sourceScenarioId==='existing'));
+  assert.equal(add.workspace.activeScenarioId,add.workspace.scenarios[2].id);
+  let full=base;for(let i=0;i<5;i++)full=sc.duplicateScenario(full).workspace;
+  const partial=sc.appendScenarios(full,mig.workspace,'(หน้าเดิม)');assert.equal(partial.workspace.scenarios.length,8);assert.match(partial.note,/ไม่ได้นำเข้า 1 รายการ/);
+  full=sc.duplicateScenario(full).workspace;assert.match(sc.appendScenarios(full,mig.workspace,'x').error,/ครบ 8 รายการ/);
+  console.log('PASS earlier Network work imports as extra alternatives within the limit');
+}

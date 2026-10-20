@@ -31,5 +31,7 @@ Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/d
 | Design Summary (HTML report) | ✓ (ส่งออกรูป → รายงานสรุปแบบ) | | |
 | Road section by station (per segment between junctions) | ✓ (หน้าตัด → ตามระยะทาง) | | |
 
-Next (slice 6c): with every row either in `/design` or dropped, remove `/network` and the `/junction` stand-alone mode;
-the junction editor stays only as the advanced editor opened from `/design`.
+Slice 6c (2026-10-20): `/network` is retired — its URL redirects to `/design`; work it saved in this browser is migrated on
+first open of `/design` and can be imported again as extra alternatives (`appendScenarios`). The Network browser acceptance
+is replaced by `scripts/verify-junction-goldens.mjs` (the junction editor golden suite it contained). `/junction` stays as the
+advanced junction editor; opened directly it still works as a stand-alone junction sketch (used by the golden suite).
