@@ -14,6 +14,7 @@ import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
 import {compareScenarios} from '@/core/road-first/compare';
+import {newRoadId,nextRoadName} from '@/core/road-first/ids';
 import {DESIGN_HANDOFF_STORAGE,createHandoff} from '@/core/road-first/junction-handoff';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
 import {NETWORK_PROJECT_STORAGE,projectBounds,type WorldPoint} from '@/core/network/network-project';
@@ -73,8 +74,8 @@ export default function DesignWorkspace(){
       if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id:extend.roadId});}
       return;
     }
-    const ids=new Set(ed.project.roads.map(r=>r.id));let n=1;while(ids.has(`R-${n}`))n++;
-    const id=`R-${n}`,r=ed.run({type:'road.add',road:{id,name:`ถนน ${n}`,points:draft,section:structuredClone(ed.lastSection)}});
+    // Ids are never reused across scenarios, so the comparison never mistakes a new road for an old one.
+    const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads),points:draft,section:structuredClone(ed.lastSection)}});
     if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
   function onKey(e:React.KeyboardEvent){
@@ -189,19 +190,24 @@ export default function DesignWorkspace(){
           <button data-design-toast-action="grade-separated" onClick={()=>{for(const id of ed.notice.autoJunctions??[])ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});}}>เป็นทางต่างระดับ</button>
           <button data-design-toast-action="select" onClick={()=>{const id=ed.notice.autoJunctions?.[0];if(id){setTool('select');setSelection({kind:'junction',id});}}}>ดูทางแยก</button>
         </div>}
+        {ed.notice.restorable&&<div className="design-toast" role="status" data-design-removed-toast="true">
+          <span>ลบ {ed.notice.restorable} แล้ว</span>
+          <button data-design-toast-action="restore-scenario" onClick={ed.restoreRemoved}>เรียกคืน</button>
+        </div>}
         {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled}/>}
         {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>
       {ed.notice.text&&<span className={'design-notice '+ed.notice.kind} data-design-notice={ed.notice.kind}>{ed.notice.text}</span>}
       <span className="design-status-right">
         {openCrossings>0&&<button className="design-open-crossings" data-design-open-crossings={openCrossings} onClick={()=>{const c=candidates.find(x=>!ed.project.decisions.some(d=>d.candidateId===x.id));if(c){setTool('select');setSelection({kind:'crossing',id:c.id});}}}>จุดตัดที่ยังไม่เป็นทางแยก {openCrossings}</button>}
+        <span className={'design-save-state '+ed.storage} data-design-save-state={ed.storage} title="งานบันทึกอัตโนมัติในเบราว์เซอร์นี้ · ใช้ “บันทึกไฟล์” เพื่อเก็บถาวรหรือย้ายเครื่อง">{ed.storage==='saved'?'บันทึกในเบราว์เซอร์แล้ว':ed.storage==='blocked'?'ปิดการบันทึกอัตโนมัติ — บันทึกไฟล์ไว้ก่อน':'บันทึกในเบราว์เซอร์ไม่ได้ — กด “บันทึกไฟล์”'}</span>
         <span>จราจรชิดซ้าย · หน่วยเมตร · แบบแนวคิด</span>
       </span>
     </footer>

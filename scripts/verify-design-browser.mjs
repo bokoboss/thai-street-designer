@@ -54,8 +54,10 @@ try{
   await b.click('[data-design-redo]');
   await b.waitFor(async()=>(await b.text('[data-design-section]'))?.includes('2.50'),'redo re-applies');
 
+  // Road ids are opaque and never reused; find them in drawing order.
+  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);
   // Drag the first road's start point: one undo step.
-  const point=await b.rect('[data-design-road-point="R-1:0"]');
+  const point=await b.rect(`[data-design-road-point="${R1}:0"]`);
   await b.drag(point,{x:point.x,y:point.y+40});
   await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-undo]').title`))==='ย้อนกลับ: ย้ายจุดแนวถนน ถนน 1','drag recorded as one step');
 
@@ -67,7 +69,7 @@ try{
   // Let the plan finish fitting after the reload before picking a road by position.
   await sleep(500);
   await b.clickAt(at(-250,0));
-  const endPt=await b.waitFor(()=>b.rect('[data-design-road-point="R-1:1"]'),'road 1 end handle');
+  const endPt=await b.waitFor(()=>b.rect(`[data-design-road-point="${R1}:1"]`),'road 1 end handle');
   const near={x:endPt.x+4,y:endPt.y+4},up={x:endPt.x+1,y:endPt.y-160};
   const aidStart=actions.length;
   await act('tool: Draw Road',()=>b.click('[data-design-tool-button="road"]'));
@@ -82,10 +84,10 @@ try{
   await b.waitFor(async()=>(await b.text('[data-design-readout]'))?.includes('50 ม.'),'typed length shown');
   await act('Enter (place point)',()=>b.key('Enter'));
   await act('Enter (finish)',()=>b.key('Enter'));
-  await b.waitFor(()=>b.count('[data-design-road-point="R-1:2"]'),'road 1 continued, not a new road');
+  await b.waitFor(()=>b.count(`[data-design-road-point="${R1}:2"]`),'road 1 continued, not a new road');
   assert.equal(await b.count('[data-design-road]'),2,'continuing does not add a road');
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ต่อถนน ถนน 1/);
-  const [p1,p2]=[await b.rect('[data-design-road-point="R-1:1"]'),await b.rect('[data-design-road-point="R-1:2"]')];
+  const [p1,p2]=[await b.rect(`[data-design-road-point="${R1}:1"]`),await b.rect(`[data-design-road-point="${R1}:2"]`)];
   assert.ok(Math.abs(p1.x-p2.x)<1.5&&p2.y<p1.y,'typed segment follows the locked angle');
   const aidActions=actions.length-aidStart;
   assert.equal(aidActions,5,'continue a road by an exact length in 5 actions');
@@ -137,6 +139,7 @@ try{
   await b.click('[data-design-scenario="existing"]');
   await b.waitFor(async()=>await b.count('[data-design-compare-toggle]')===0&&await b.count('[data-design-compare]')===0,'Existing shown without comparison');
   await b.click('[data-design-scenario="alt-1"]');
+  await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','switched to the alternative');
   await b.waitFor(async()=>await b.count('[data-design-delta="changed"]')===1,'back on the alternative with its change');
   // Report figure (PNG) of the comparison.
   // Capture the download (headless has no download folder) and keep the figure as evidence.
@@ -218,7 +221,7 @@ try{
 
   // Section by station (slice 6b-3): the selected road's segment through the same resolver as the earlier page.
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'plan');
-  const r1=await b.rect('[data-design-road="R-2"] path');
+  const r1=await b.rect(`[data-design-road="${R2}"] path`);
   await b.clickAt({x:r1.x,y:r1.y-r1.h*.35});
   await b.click('[data-design-section-mode="station"]');
   await b.waitFor(async()=>await b.count('[data-design-section-station]')===1&&await b.count('.network-section-components')===1,'section at a station');
@@ -244,6 +247,36 @@ try{
   await b.click('[data-design-action="import-earlier"]');
   await b.waitFor(async()=>await b.count('[data-design-scenario]')===scenariosBefore+1,'earlier work added as an alternative');
   assert.equal(await b.text('[data-design-scenario][aria-selected="true"]'),'สภาพเดิม (หน้าเดิม)');
+
+  // Data safety (P0, independent review): save state visible; a removed alternative can be restored.
+  assert.equal(await b.count('[data-design-save-state="saved"]'),1,'autosave state shown');
+  const before2=await b.count('[data-design-scenario]');
+  await b.click('[data-design-action="remove-scenario"]');await b.click('[data-design-action="remove-scenario"]');
+  await b.waitFor(async()=>await b.count('[data-design-scenario]')===before2-1&&await b.count('[data-design-removed-toast]')===1,'alternative removed, restore offered');
+  await b.click('[data-design-toast-action="restore-scenario"]');
+  await b.waitFor(async()=>await b.count('[data-design-scenario]')===before2&&(await b.text('[data-design-scenario][aria-selected="true"]'))==='สภาพเดิม (หน้าเดิม)','alternative restored');
+  // Two typed values in the same field are two undo steps.
+  await b.click('[data-design-scenario="alt-1"]');
+  await b.waitFor(()=>b.count(`[data-design-road="${R2}"]`),'alternative plan');await sleep(300);
+  const rr=await b.rect(`[data-design-road="${R2}"] path`);await b.clickAt({x:rr.x,y:rr.y-rr.h*.35});
+  await b.waitFor(()=>b.count('[data-design-field="walk"]'),'road selected');
+  for(const v of ['3','3.5']){await b.click('[data-design-field="walk"]');await b.evalValue(`document.querySelector('[data-design-field="walk"]').select()`);await b.type(v);await b.key('Enter');
+    await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="walk"]').value`)===v,'walk '+v);}
+  await b.click('[data-design-undo]');
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="walk"]').value`)==='3','one undo goes back one typed value');
+  // Leaving the advanced editor waits for a successful save.
+  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction');const jc3=await b.rect('[data-network-junction-hit]');
+  await b.clickAt({x:jc3.x+14,y:jc3.y});await b.click('[data-design-action="back-to-junction"]');await b.click('[data-design-action="advanced-junction"]');
+  await b.waitFor(()=>b.count('[data-junction-back-to-design]'),'advanced editor');
+  await b.evalValue(`localStorage.setItem('thai-street-design-junction-handoff-v1','{broken')`);
+  await b.click('[data-junction-back-to-design]');await sleep(400);
+  assert.equal(await b.evalValue('location.pathname'),'/junction','stays when the edits cannot be saved back');
+  assert.match(await b.evalValue('document.body.innerText'),/อ่านข้อมูลที่ส่งมาจากหน้าออกแบบไม่ได้/);
+  // Stored work that cannot be read is copied aside, never silently replaced.
+  await b.evalValue(`localStorage.setItem('thai-street-road-first-v1','{broken')`);
+  await b.goto('/design');await b.waitFor(()=>b.count('[data-design-unreadable]'),'unreadable work reported');
+  assert.equal(await b.evalValue(`localStorage.getItem('thai-street-road-first-v1-unreadable')`),'{broken','copy kept');
+  assert.equal(await b.count('[data-design-notice="error"]'),1);
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept)`);
 }finally{b.close();}
