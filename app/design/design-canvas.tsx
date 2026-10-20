@@ -12,6 +12,9 @@ import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
 import {approachInfo,cornerFromPoint,cornerHandles,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
+import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
+
+export const DELTA_STYLE:Record<DeltaStatus,{color:string;label:string}>={added:{color:'#1f8a4c',label:'เพิ่ม'},removed:{color:'#b3261e',label:'ตัดออก'},changed:{color:'#c47b12',label:'แก้ไข'}};
 
 /** approach: one road leg at a junction (id = junction candidate id, leg = road leg key). */
 export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
@@ -21,14 +24,16 @@ type View={x:number;y:number;scale:number};
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef}:{
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
   run:(cmd:RoadFirstCommand)=>CommandOutcome;finishGesture:()=>void;fitKey:number;
   /** Latest snapped cursor while drawing (used for typed length); typedLength: digits typed so far. */
   onSnap:(snap:SnapResult|null)=>void;typedLength:string;
+  /** Differences from the reference scenario, highlighted on the plan; svgRef: the plan, for figure export. */
+  comparison:ScenarioDiff|null;svgRef:React.RefObject<SVGSVGElement|null>;
 }){
-  const wrap=useRef<HTMLDivElement>(null),svg=useRef<SVGSVGElement>(null);
+  const wrap=useRef<HTMLDivElement>(null),svg=svgRef;
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
@@ -56,7 +61,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const toWorld=useCallback((e:{clientX:number;clientY:number}):WorldPoint=>{
     const m=svg.current?.getScreenCTM();if(!m)return{x:0,y:0};
     const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());return{x:+p.x.toFixed(2),y:+p.y.toFixed(2)};
-  },[]);
+  },[svg]);
   const vb={x:view.x-size.w/2/view.scale,y:view.y-size.h/2/view.scale,w:size.w/view.scale,h:size.h/view.scale};
   const px=(n:number)=>n/view.scale;
 
@@ -148,6 +153,13 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           onSelect(leg?{kind:'approach',id:compiled.sources.junctions[j],leg:legKey(leg.roadId,leg.side)}:{kind:'junction',id:compiled.sources.junctions[j]});
         }}
         onJunctionMoveStart={noop} onArmMoveStart={noop} onLinkInsertVertex={noop} onLinkVertexMoveStart={noop} onLinkVertexSelect={noop} onPort={noop}/>
+      {comparison&&<g data-design-compare={comparison.deltas.length} pointerEvents="none">
+        {comparison.deltas.map(d=>{const b=d.bounds;if(!b)return null;const s=DELTA_STYLE[d.status];
+          return <g key={`${d.target.kind}:${d.target.id}`} data-design-delta={d.status}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={px(6)} fill={s.color} fillOpacity={.08} stroke={s.color} strokeWidth={px(2.5)} strokeDasharray={d.status==='removed'?`${px(8)} ${px(5)}`:undefined}/>
+            <text x={b.x+px(4)} y={b.y-px(5)} fontSize={px(12)} fontWeight="700" fill={s.color} fontFamily="Arial, Noto Sans Thai, Tahoma, sans-serif">{s.label} · {d.name}</text>
+          </g>;})}
+      </g>}
       <g data-design-roads="true">
         {project.roads.map(road=>{
           const d=road.points.map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id;

@@ -3,72 +3,98 @@
 // so the undo history has a readable label for each step.
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createEditor,endGesture,redo as redoEditor,runCommand,undo as undoEditor,type RoadFirstCommand,type RoadFirstEditor} from '@/core/road-first/commands';
-import {compileRoadFirstProject,normalizeRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
-import {migrateNetworkProject} from '@/core/road-first/migrate';
+import {compileRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
+import {activeScenario,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
 import {redoLabel,undoLabel} from '@/core/common/history';
 import {NETWORK_PROJECT_STORAGE} from '@/core/network/network-project';
-import {activeNetworkProject,restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
+import {restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
 import type {RoadSection} from '@/core/road-first/derive';
 import {DEFAULT_PRESET,presetSection} from '@/core/road-first/presets';
 
 export const ROAD_FIRST_STORAGE='thai-street-road-first-v1';
 export const emptyRoadFirstProject=():RoadFirstProject=>({kind:'road-first',schemaVersion:1,title:'โครงการใหม่',roads:[],decisions:[],options:{approachLength:40}});
 
-/** First open: the saved road-first project, else the design from the earlier Network page, else an empty project. */
-function initialProject():{project:RoadFirstProject;notice:string}{
+/** First open: the saved workspace (or an earlier single saved project), else every scenario of the earlier Network page, else an empty project. */
+function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string}{
   try{
     const saved=localStorage.getItem(ROAD_FIRST_STORAGE);
-    if(saved)return{project:normalizeRoadFirstProject(JSON.parse(saved)),notice:'เปิดงานล่าสุดแล้ว'};
+    if(saved)return{workspace:normalizeWorkspace(JSON.parse(saved)),notice:'เปิดงานล่าสุดแล้ว'};
     const network=localStorage.getItem(NETWORK_PROJECT_STORAGE);
     if(network){
-      const migrated=migrateNetworkProject(activeNetworkProject(restoreNetworkScenarioWorkspace(network)));
-      return{project:migrated.project,notice:migrated.issues.length?`นำแบบเดิมมาแล้ว · มีรายการให้ตรวจ ${migrated.issues.length} รายการ`:'นำแบบจากหน้าจอเดิมมาแล้ว'};
+      const migrated=migrateNetworkWorkspace(restoreNetworkScenarioWorkspace(network));
+      return{workspace:migrated.workspace,notice:migrated.issues?`นำแบบเดิมมาแล้ว · มีรายการให้ตรวจ ${migrated.issues} รายการ`:'นำแบบจากหน้าจอเดิมมาแล้ว'};
     }
   }catch{/* fall through to an empty project */}
-  return{project:emptyRoadFirstProject(),notice:'เลือกเครื่องมือวาดถนน แล้วคลิกบนแบบเพื่อเริ่ม'};
+  return{workspace:createWorkspace(emptyRoadFirstProject()),notice:'เลือกเครื่องมือวาดถนน แล้วคลิกบนแบบเพื่อเริ่ม'};
 }
 
 export type CommandOutcome={ok:boolean;message:string};
 /** autoJunctions: crossings that became junctions in the last step, offered for Undo / grade separation. */
 export type EditorNotice={text:string;kind:'info'|'error';autoJunctions?:string[]};
 
+/** Each scenario keeps its own editor, so its undo history survives switching between scenarios. */
+type Book={workspace:RoadFirstWorkspace;editors:Record<string,RoadFirstEditor>};
+const bookOf=(workspace:RoadFirstWorkspace):Book=>({workspace,editors:Object.fromEntries(workspace.scenarios.map(s=>[s.id,createEditor(s.project)]))});
+/** The workspace with every scenario's current project. */
+const currentWorkspace=(b:Book):RoadFirstWorkspace=>({...b.workspace,scenarios:b.workspace.scenarios.map(s=>({...s,project:b.editors[s.id]?.project??s.project}))});
+
 export function useRoadEditor(){
-  const [editor,setEditor]=useState<RoadFirstEditor>(()=>createEditor(emptyRoadFirstProject()));
+  const [book,setBookState]=useState<Book>(()=>bookOf(createWorkspace(emptyRoadFirstProject())));
   const [notice,setNotice]=useState<EditorNotice>({text:'',kind:'info'});
   // New roads start with the section used last (drawn or edited), not always the default preset.
   const [lastSection,setLastSection]=useState<RoadSection>(()=>presetSection(DEFAULT_PRESET));
-  const ready=useRef(false),editorRef=useRef(editor);
-  useEffect(()=>{editorRef.current=editor;},[editor]);
+  const ready=useRef(false),bookRef=useRef(book);
+  const setBook=useCallback((next:Book)=>{bookRef.current=next;setBookState(next);},[]);
+  const activeId=book.workspace.activeScenarioId,editor=book.editors[activeId]!;
+  const setEditor=useCallback((next:RoadFirstEditor)=>{const b=bookRef.current;setBook({...b,editors:{...b.editors,[b.workspace.activeScenarioId]:next}});},[setBook]);
+  const editorNow=()=>bookRef.current.editors[bookRef.current.workspace.activeScenarioId]!;
 
   useEffect(()=>{
     // Browser storage is only available after mount; load the saved work once.
-    const first=initialProject();
+    const first=initialWorkspace();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEditor(createEditor(first.project));setNotice({text:first.notice,kind:'info'});ready.current=true;
-  },[]);
+    setBook(bookOf(first.workspace));setNotice({text:first.notice,kind:'info'});ready.current=true;
+  },[setBook]);
+  const workspace=useMemo(()=>currentWorkspace(book),[book]);
   useEffect(()=>{
     if(!ready.current)return;
-    try{localStorage.setItem(ROAD_FIRST_STORAGE,JSON.stringify(editor.project));}catch{/* storage unavailable: keep working in memory */}
-  },[editor.project]);
+    try{localStorage.setItem(ROAD_FIRST_STORAGE,JSON.stringify(workspace));}catch{/* storage unavailable: keep working in memory */}
+  },[workspace]);
 
   const compiled=useMemo(()=>compileRoadFirstProject(editor.project),[editor.project]);
 
   const run=useCallback((cmd:RoadFirstCommand):CommandOutcome=>{
-    const {editor:next,result}=runCommand(editorRef.current,cmd);
+    const {editor:next,result}=runCommand(editorNow(),cmd);
     if(result.error){setNotice({text:result.error,kind:'error'});return{ok:false,message:result.error};}
-    editorRef.current=next;setEditor(next);
+    setEditor(next);
     setNotice({text:result.openCrossings.length?`${result.label} · ${result.warnings.at(-1)}`:result.label,kind:'info',autoJunctions:result.autoJunctions.length?result.autoJunctions:undefined});
     if(cmd.type==='road.add')setLastSection(structuredClone(cmd.road.section));
     if(cmd.type==='road.setSection'){const r=next.project.roads.find(x=>x.id===cmd.roadId);if(r)setLastSection(structuredClone(r.section));}
     return{ok:true,message:result.label};
-  },[]);
-  const finishGesture=useCallback(()=>{const next=endGesture(editorRef.current);editorRef.current=next;setEditor(next);},[]);
-  const undo=useCallback(()=>{const r=undoEditor(editorRef.current);if(!r)return;editorRef.current=r.editor;setEditor(r.editor);setNotice({text:`ย้อนกลับ: ${r.label}`,kind:'info'});},[]);
-  const redo=useCallback(()=>{const r=redoEditor(editorRef.current);if(!r)return;editorRef.current=r.editor;setEditor(r.editor);setNotice({text:`ทำซ้ำ: ${r.label}`,kind:'info'});},[]);
-  const replaceProject=useCallback((project:RoadFirstProject,text:string)=>{const next=createEditor(project);editorRef.current=next;setEditor(next);setNotice({text,kind:'info'});},[]);
+  },[setEditor]);
+  const finishGesture=useCallback(()=>setEditor(endGesture(editorNow())),[setEditor]);
+  const undo=useCallback(()=>{const r=undoEditor(editorNow());if(!r)return;setEditor(r.editor);setNotice({text:`ย้อนกลับ: ${r.label}`,kind:'info'});},[setEditor]);
+  const redo=useCallback(()=>{const r=redoEditor(editorNow());if(!r)return;setEditor(r.editor);setNotice({text:`ทำซ้ำ: ${r.label}`,kind:'info'});},[setEditor]);
+  const replaceWorkspace=useCallback((next:RoadFirstWorkspace,text:string)=>{setBook(bookOf(next));setNotice({text,kind:'info'});},[setBook]);
 
+  // Scenario edits keep every scenario's current project and editor.
+  const applyScenario=useCallback((edit:(w:RoadFirstWorkspace)=>ScenarioEdit,ok:(e:ScenarioEdit)=>string)=>{
+    const b=bookRef.current,e=edit(currentWorkspace(b));
+    if(e.error){setNotice({text:e.error,kind:'error'});return false;}
+    const editors={...b.editors};
+    for(const s of e.workspace.scenarios)if(!editors[s.id])editors[s.id]=createEditor(s.project);
+    for(const id of Object.keys(editors))if(!e.workspace.scenarios.some(s=>s.id===id))delete editors[id];
+    setBook({workspace:e.workspace,editors});setNotice({text:ok(e),kind:'info'});return true;
+  },[setBook]);
+  const duplicate=useCallback(()=>applyScenario(w=>duplicateScenario(w),e=>`สร้าง ${e.scenario!.name} จาก ${activeScenario(currentWorkspace(bookRef.current)).name} แล้ว`),[applyScenario]);
+  const rename=useCallback((id:string,name:string)=>applyScenario(w=>renameScenario(w,id,name),e=>`เปลี่ยนชื่อทางเลือกเป็น ${e.scenario!.name}`),[applyScenario]);
+  const remove=useCallback((id:string)=>applyScenario(w=>removeScenario(w,id),e=>`ลบ ${e.scenario!.name} แล้ว`),[applyScenario]);
+  const switchTo=useCallback((id:string)=>applyScenario(w=>({workspace:switchScenario(w,id),error:null}),e=>`แก้ไข ${activeScenario(e.workspace).name}`),[applyScenario]);
+
+  const reference=referenceScenario(workspace);
   return{
-    project:editor.project,compiled,run,finishGesture,undo,redo,replaceProject,notice,setNotice,lastSection,setLastSection,
+    project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,
   };
 }

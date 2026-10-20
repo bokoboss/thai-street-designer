@@ -106,7 +106,7 @@ Slices (re-planned 2026-10-19 from `docs/research/2026-10-UX-RESEARCH.md`, accep
 
 Not adopted from the research for now: usage telemetry (no backend; privacy first). Action counts are measured by the browser acceptance scripts.
 
-Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 merged 2026-10-19 (PR #16). Slice 3 merged 2026-10-19 (PR #17). Slice 4 on `phase3/junction-in-place` (2026-10-20): approach selection on the plan, + right/left-turn pocket and + Slip lane with sizes typed in place, storage and corner handles; arm fit now includes Slip lanes.
+Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 merged 2026-10-19 (PR #16). Slice 3 merged 2026-10-19 (PR #17). Slice 4 merged 2026-10-20 (PR #18). Slice 5 on `phase3/scenarios` (2026-10-20): scenario tabs, "+ ทางเลือก", comparison highlights by road/crossing identity, report figure PNG/SVG, workspace file with every scenario; earlier Network files migrate every scenario.
 
 ---
 

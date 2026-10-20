@@ -9,7 +9,8 @@ import {parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
 import type {CommandOutcome} from './use-road-editor';
-import type {DesignSelection} from './design-canvas';
+import {DELTA_STYLE,type DesignSelection} from './design-canvas';
+import type {ScenarioDiff} from '@/core/road-first/compare';
 
 type Run=(cmd:RoadFirstCommand)=>CommandOutcome;
 
@@ -151,8 +152,34 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect}:{candidat
   </>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,newRoadPreset,newRoadSection,onNewRoadPreset}:{
-  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;
+export type ScenarioPanel={name:string;existing:boolean;count:number;reference:string|null;comparison:ScenarioDiff|null;onRename:(name:string)=>boolean;onRemove:()=>void};
+
+function ScenarioInspector({scenario}:{scenario:ScenarioPanel}){
+  const [armed,setArmed]=useState(false);
+  return <section className="design-block" data-design-scenario-panel="true">
+    <small className="design-block-title">ทางเลือกที่กำลังแก้</small>
+    <TextField label="ชื่อ" value={scenario.name} field="scenario-name" onCommit={name=>{scenario.onRename(name);}}/>
+    <p className="design-meta">{scenario.existing?`สภาพเดิมเป็นฐานของทุกทางเลือก · มีทั้งหมด ${scenario.count} รายการ`:`คัดลอกมาจาก ${scenario.reference} · แก้ไขได้โดยไม่กระทบรายการอื่น`}</p>
+    {!scenario.existing&&<button className="link" data-design-action="remove-scenario" onBlur={()=>setArmed(false)} onClick={()=>{if(!armed){setArmed(true);return;}scenario.onRemove();}}>{armed?'กดอีกครั้งเพื่อลบทางเลือกนี้':'ลบทางเลือกนี้'}</button>}
+  </section>;
+}
+
+function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:string;onSelect:(s:DesignSelection)=>void}){
+  const metrics=diff.metrics.filter(m=>m.delta!==0);
+  return <section className="design-compare" data-design-comparison={diff.deltas.length}>
+    <b>สิ่งที่ต่างจาก {reference}</b>
+    <div className="design-compare-counts">{(['added','removed','changed'] as const).map(s=><span key={s} style={{color:DELTA_STYLE[s].color}}>{DELTA_STYLE[s].label} <b>{diff.counts[s]}</b></span>)}</div>
+    {metrics.length>0&&<table><tbody>{metrics.map(m=><tr key={m.key}><td>{m.label}</td><td>{m.reference} → {m.active}{m.unit?` ${m.unit}`:''}</td><td>{m.delta>0?'+':''}{m.delta}</td></tr>)}</tbody></table>}
+    {diff.deltas.length?<ul>{diff.deltas.map(d=><li key={`${d.target.kind}:${d.target.id}`}>
+      <button data-design-delta-item={d.status} style={{borderLeftColor:DELTA_STYLE[d.status].color}} disabled={d.status==='removed'}
+        onClick={()=>onSelect(d.target.kind==='road'?{kind:'road',id:d.target.id}:{kind:'junction',id:d.target.id})}>
+        {DELTA_STYLE[d.status].label} · {d.target.kind==='road'?'ถนน':'ทางแยก'} {d.name}{d.changes.length>0&&<small>{d.changes.join(' · ')}</small>}
+      </button></li>)}</ul>:<p className="design-meta">ยังเหมือนกันทุกอย่าง</p>}
+  </section>;
+}
+
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
+  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
@@ -171,6 +198,8 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
+      <ScenarioInspector key={scenario.name} scenario={scenario}/>
+      {scenario.comparison&&scenario.reference&&<ComparisonPanel diff={scenario.comparison} reference={scenario.reference} onSelect={onSelect}/>}
       {compiled.issues.length>0&&<div className="design-issues" data-design-issues={compiled.issues.length}><b>รายการที่ควรตรวจ</b>
         <ul>{compiled.issues.slice(0,12).map((s,i)=><li key={i}>{s}</li>)}</ul></div>}
       {!project.roads.length&&<p className="design-empty">เริ่มจากเลือกเครื่องมือ “วาดถนน” ทางซ้าย แล้วคลิกบนแบบเพื่อวางจุดแนวถนน</p>}

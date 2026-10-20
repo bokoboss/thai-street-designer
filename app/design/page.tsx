@@ -2,7 +2,7 @@
 // Road-first workspace (roadmap Phase 3): one shell — top bar, tool rail, plan, inspector, section strip, status bar.
 import './style.css';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route} from 'lucide-react';
+import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
 import {DesignInspector} from './design-inspector';
 import {SectionStrip} from './section-strip';
@@ -10,11 +10,11 @@ import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
-import {normalizeRoadFirstProject} from '@/core/road-first/project';
-import {migrateNetworkProject} from '@/core/road-first/migrate';
+import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
+import {compareScenarios} from '@/core/road-first/compare';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
-import {activeNetworkProject} from '@/core/network/network-scenarios';
-import type {WorldPoint} from '@/core/network/network-project';
+import {projectBounds,type WorldPoint} from '@/core/network/network-project';
+import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
 
 const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมเพื่อปรับรัศมี · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
 const TOOL_HINT:Record<DesignTool,string>={
@@ -30,7 +30,10 @@ export default function DesignWorkspace(){
   // Drawing that starts on a road end continues that road instead of adding a new one.
   const [extend,setExtend]=useState<{roadId:string;atStart:boolean}|null>(null);
   const snapRef=useRef<SnapResult|null>(null);
-  const [fitKey,setFitKey]=useState(0),[newArmed,setNewArmed]=useState(false);
+  const [fitKey,setFitKey]=useState(0),[newArmed,setNewArmed]=useState(false),[compare,setCompare]=useState(false),[exportOpen,setExportOpen]=useState(false);
+  const planSvg=useRef<SVGSVGElement>(null);
+  // Comparison with the scenario this alternative was copied from (else Existing), highlighted on the plan.
+  const comparison=useMemo(()=>compare&&ed.reference?compareScenarios(ed.reference.project,ed.project):null,[compare,ed.reference,ed.project]);
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
   const candidates=useMemo(()=>detectCandidates(ed.project.roads),[ed.project.roads]);
   const selectedRoad=selection?.kind==='road'?ed.project.roads.find(r=>r.id===selection.id):undefined;
@@ -74,31 +77,53 @@ export default function DesignWorkspace(){
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(k==='v')chooseTool('select');if(k==='h')chooseTool('pan');if(k==='r')chooseTool('road');
   }
-  function save(){
-    const blob=new Blob([JSON.stringify(ed.project,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-    a.href=url;a.download=`${ed.project.title.replace(/[\\/:*?"<>|]+/g,'-')||'project'}.road.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-    ed.setNotice({text:'บันทึกไฟล์แล้ว',kind:'info'});
+  function download(blob:Blob,name:string){
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
+  function save(){
+    download(new Blob([JSON.stringify(ed.workspace,null,2)],{type:'application/json'}),`${safeFilePart(ed.project.title)}.road.json`);
+    ed.setNotice({text:`บันทึกไฟล์แล้ว (${ed.workspace.scenarios.length} ทางเลือก)`,kind:'info'});
+  }
+  /** Report figure of the whole design (with the comparison highlights when they are shown). */
+  async function saveFigure(format:FigureFormat){
+    setExportOpen(false);
+    const svg=planSvg.current;if(!svg)return;
+    const pts=[...ed.project.roads.flatMap(r=>r.points),...(comparison?.deltas.flatMap(d=>d.bounds?[{x:d.bounds.x,y:d.bounds.y},{x:d.bounds.x+d.bounds.w,y:d.bounds.y+d.bounds.h}]:[])??[])];
+    if(!pts.length){ed.setNotice({text:'ยังไม่มีแบบให้ส่งออก',kind:'error'});return;}
+    const b=ed.compiled.project.junctions.length||ed.compiled.project.links.length?projectBounds(ed.compiled.project,10):null;
+    const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),x=Math.min(...xs,b?.x??Infinity),y=Math.min(...ys,b?.y??Infinity);
+    const bounds={x,y,w:Math.max(...xs,b?b.x+b.w:-Infinity)-x,h:Math.max(...ys,b?b.y+b.h:-Infinity)-y};
+    try{
+      const out=await exportFigure({svg,bounds,title:ed.project.title,scenario:ed.active.name,comparison:comparison&&ed.reference?{reference:ed.reference.name,diff:comparison}:null,format});
+      download(out.blob,out.name);ed.setNotice({text:`ส่งออกรูป ${out.name} แล้ว`,kind:'info'});
+    }catch(error){ed.setNotice({text:'ส่งออกรูปไม่สำเร็จ · '+(error instanceof Error?error.message:''),kind:'error'});}
+  }
+  function switchScenario(id:string){if(ed.switchTo(id)){setSelection(null);clearDraft();setTool('select');}}
   async function open(file:File|undefined){
     if(!file)return;
     try{
       const text=await file.text(),raw=JSON.parse(text);
-      if(raw?.kind==='road-first'){ed.replaceProject(normalizeRoadFirstProject(raw),`เปิด ${file.name} แล้ว`);}
+      if(raw?.kind==='road-first'||raw?.kind==='road-first-workspace'){ed.replaceWorkspace(normalizeWorkspace(raw),`เปิด ${file.name} แล้ว`);}
       else{
-        const migrated=migrateNetworkProject(activeNetworkProject(parseNetworkProjectFile(text).workspace));
-        ed.replaceProject(migrated.project,migrated.issues.length?`เปิด ${file.name} แล้ว · มีรายการให้ตรวจ ${migrated.issues.length} รายการ`:`เปิด ${file.name} แล้ว`);
+        const migrated=migrateNetworkWorkspace(parseNetworkProjectFile(text).workspace);
+        ed.replaceWorkspace(migrated.workspace,migrated.issues?`เปิด ${file.name} แล้ว · มีรายการให้ตรวจ ${migrated.issues} รายการ`:`เปิด ${file.name} แล้ว`);
       }
-      setSelection(null);setTool('select');setFitKey(k=>k+1);
+      setSelection(null);setTool('select');setCompare(false);setFitKey(k=>k+1);
     }catch(error){ed.setNotice({text:'เปิดไฟล์ไม่สำเร็จ · '+(error instanceof Error?error.message:'ไฟล์ไม่ถูกต้อง'),kind:'error'});}
   }
   function newProject(){
     if(!newArmed){setNewArmed(true);ed.setNotice({text:'กด “ใหม่” อีกครั้งเพื่อเริ่มโครงการใหม่ งานปัจจุบันจะถูกแทนที่',kind:'info'});return;}
-    setNewArmed(false);ed.replaceProject(emptyRoadFirstProject(),'เริ่มโครงการใหม่แล้ว');setSelection(null);setFitKey(k=>k+1);
+    setNewArmed(false);ed.replaceWorkspace(createWorkspace(emptyRoadFirstProject()),'เริ่มโครงการใหม่แล้ว');setSelection(null);setCompare(false);setFitKey(k=>k+1);
   }
 
   return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true">
     <header className="design-top">
       <div className="design-brand"><Route size={18}/><b>Thai Street Designer</b><span>{ed.project.title}</span></div>
+      <div className="design-scenarios" role="tablist" aria-label="ทางเลือก">
+        {ed.workspace.scenarios.map(s=><button key={s.id} role="tab" aria-selected={s.id===ed.active.id} className={s.id===ed.active.id?'active':''} data-design-scenario={s.id} onClick={()=>switchScenario(s.id)}>{s.name}</button>)}
+        <button data-design-scenario-add="true" title={`คัดลอก ${ed.active.name} เป็นทางเลือกใหม่`} onClick={()=>{if(ed.duplicate()){setSelection(null);setCompare(true);}}}><Plus size={14}/><span>ทางเลือก</span></button>
+        {ed.reference&&<button className={compare?'active compare':'compare'} aria-pressed={compare} data-design-compare-toggle="true" onClick={()=>setCompare(v=>!v)} title={`ไฮไลต์สิ่งที่ต่างจาก ${ed.reference.name}`}><GitCompare size={14}/><span>เทียบกับ {ed.reference.name}</span></button>}
+      </div>
       <div className="design-top-actions">
         <button data-design-file="new" onClick={newProject} onBlur={()=>setNewArmed(false)}>{newArmed?'ยืนยันโครงการใหม่':'ใหม่'}</button>
         <button data-design-file="open" onClick={()=>fileInput.current?.click()}>เปิดไฟล์</button>
@@ -108,6 +133,13 @@ export default function DesignWorkspace(){
         <button data-design-undo="true" disabled={!ed.undoText} title={ed.undoText?`ย้อนกลับ: ${ed.undoText}`:'ไม่มีขั้นตอนให้ย้อน'} onClick={ed.undo}><Undo2 size={15}/><span>{ed.undoText??'ย้อนกลับ'}</span></button>
         <button data-design-redo="true" disabled={!ed.redoText} title={ed.redoText?`ทำซ้ำ: ${ed.redoText}`:'ไม่มีขั้นตอนให้ทำซ้ำ'} onClick={ed.redo}><Redo2 size={15}/></button>
         <button data-design-fit="true" onClick={()=>setFitKey(k=>k+1)} title="ดูทั้งแบบ"><Maximize2 size={15}/></button>
+        <span className="design-export">
+          <button data-design-export="true" aria-expanded={exportOpen} onClick={()=>setExportOpen(v=>!v)} onBlur={e=>{if(!e.currentTarget.parentElement?.contains(e.relatedTarget))setExportOpen(false);}} title="ส่งออกรูปสำหรับรายงาน"><ImageDown size={15}/><span>ส่งออกรูป</span></button>
+          {exportOpen&&<span className="design-export-menu" role="menu">
+            <button role="menuitem" data-design-export-format="png" onClick={()=>void saveFigure('png')}>PNG (ใส่รายงาน)</button>
+            <button role="menuitem" data-design-export-format="svg" onClick={()=>void saveFigure('svg')}>SVG (แก้ต่อได้)</button>
+          </span>}
+        </span>
       </div>
     </header>
     <div className="design-body">
@@ -117,7 +149,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
@@ -126,7 +158,7 @@ export default function DesignWorkspace(){
         </div>}
         {selectedRoad&&<SectionStrip road={selectedRoad}/>}
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

@@ -69,3 +69,10 @@ Only tasks the new workspace already supports are measured; the rest follow in l
 | ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
 | --- | --- | --- | --- | --- |
 | T4-style detail: right-turn pocket with a typed storage length | Y | — | 4 (click approach on the plan, "+ เลนเลี้ยวขวา", click storage field, type + Enter) | Stays in `/design`, no page switch, nothing lost. Storage handle and corner handles on the plan edit the same stored values as the fields (one undo step per drag). "+ Slip lane" adds a Slip to the next approach in 1 action; approaches now stretch along the road to fit a Slip lane. Default sizes are tool starting values, not standards. |
+
+### `/design` slice 5 — scenarios, comparison, report figure (2026-10-20, scripted)
+
+| ID | Completed (Y/N) | Time (mm:ss) | Actions | Friction notes |
+| --- | --- | --- | --- | --- |
+| T5 (alternative + see the difference) | Y | — | 1 ("+ ทางเลือก"; comparison turns on by itself) | Copies the active scenario, keeps each scenario's own undo history, highlights added / removed / changed roads and junctions on the plan and lists what changed with metric deltas. Matching is by road and crossing identity, so unrelated objects never show as changed. |
+| Report figure | Y | — | 2 ("ส่งออกรูป" → PNG or SVG) | Whole design with title block, scenario, comparison legend and counts, scale bar, concept-design note. No north arrow: the plan has no surveyed orientation. |
