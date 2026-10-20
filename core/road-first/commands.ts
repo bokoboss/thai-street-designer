@@ -59,6 +59,8 @@ export function rebindDecisions(before:Road[],after:Road[],decisions:Decision[])
   return pending.map(p=>out.get(p.d)??{...p.d,candidateId:dormantId(p.d.candidateId),...(p.at?{at:p.at}:{})});
 }
 export const DORMANT_PREFIX='dormant:';
+export const LEFT_WITH_SLIP='ปากทางนี้มี Slip lane เลี้ยวซ้ายแล้ว — ใช้ช่องชะลอก่อนเข้า Slip แทนเลนเลี้ยวซ้าย';
+export const SLIP_WITH_LEFT='ปากทางนี้มีเลนเลี้ยวซ้ายแล้ว — ลบเลนเลี้ยวซ้ายก่อนเพิ่ม Slip lane (ใช้ช่องชะลอก่อนเข้า Slip แทนได้)';
 function fits(c:Candidate,roads:string[]){
   const ids=c.roads.map(r=>r.roadId);
   return roads.length>=2&&roads.every(r=>ids.includes(r));
@@ -143,6 +145,9 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
           label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
         }
         case 'leg.setTreatment':{
+          // A Slip lane already takes the left turn; a left-turn pocket beside it gives a broken channel (use the deceleration lane of the Slip).
+          const hadLeft=(t(d).legs?.[cmd.leg]?.incomingPockets?.left?.lanes??0)>0,addsLeft=(cmd.patch.incomingPockets?.left?.lanes??0)>0;
+          if(addsLeft&&!hadLeft&&t(d).slips?.some(s=>s.from===cmd.leg))return fail(LEFT_WITH_SLIP,`แก้ขา ${legName(cmd.leg)}`);
           const l=t(d).legs??={};l[cmd.leg]={...l[cmd.leg],...structuredClone(cmd.patch)};
           label=`แก้ขา ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.treatment:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
         }
@@ -150,6 +155,8 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
           delete t(d).legs?.[cmd.leg];delete t(d).approaches?.[cmd.leg];label=`คืนค่าเริ่มต้นขา ${legName(cmd.leg)} ที่ ${jname(d)}`;break;
         }
         case 'slip.set':{
+          const adding=!t(d).slips?.some(s=>s.from===cmd.slip.from);
+          if(adding&&(t(d).legs?.[cmd.slip.from]?.incomingPockets?.left?.lanes??0)>0)return fail(SLIP_WITH_LEFT,`ตั้ง Slip lane จาก ${legName(cmd.slip.from)}`);
           t(d).slips=[...(t(d).slips??[]).filter(s=>s.from!==cmd.slip.from),structuredClone(cmd.slip)];
           label=`ตั้ง Slip lane จาก ${legName(cmd.slip.from)} ที่ ${jname(d)}`;group=`slip:${d.candidateId}:${cmd.slip.from}`;break;
         }

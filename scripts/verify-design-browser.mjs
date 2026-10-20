@@ -121,7 +121,11 @@ try{
   await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','alternative created and active');
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-compare]')?.dataset.designCompare`)==='0','comparison on, nothing differs yet');
   await b.clickAt({x:jc.x+14,y:jc.y});
-  await b.click('[data-design-action="add-left-pocket"]');
+  // A Slip lane already serves the left turn here, so a left-turn pocket is not offered; change the right-turn pocket instead.
+  assert.equal(await b.count('[data-design-blocked="left-pocket"]'),1,'left-turn pocket blocked beside the Slip lane');
+  await b.click('[data-design-field="right-lanes"]');
+  await b.evalValue(`document.querySelector('[data-design-field="right-lanes"]').select()`);
+  await b.type('2');await b.key('Enter');
   await b.waitFor(async()=>await b.count('[data-design-delta="changed"]')===1,'changed junction highlighted on the plan');
   await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y+canvas.h/2-60});
   await b.waitFor(async()=>(await b.text('[data-design-comparison]'))?.includes('เลนเลี้ยว'),'comparison list names what changed');

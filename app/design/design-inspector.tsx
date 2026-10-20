@@ -79,6 +79,7 @@ const legLabel=(project:RoadFirstProject,leg:LegKey)=>{const l=parseLegKey(leg);
 /** Turn pocket on an approach: an add button until it exists, then its sizes typed in place. */
 function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;run:Run;title:string}){
   const p=info.arm.incomingPockets?.[side],set=(patch:Parameters<typeof pocketTreatment>[2])=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:pocketTreatment(info.arm,side,patch)});
+  if(!p?.lanes&&side==='left'&&info.slip)return <p className="design-meta" data-design-blocked="left-pocket">เลนเลี้ยวซ้าย: ปากทางนี้มี Slip lane เลี้ยวซ้ายแล้ว ใช้ช่องชะลอก่อนเข้า Slip แทน</p>;
   if(!p?.lanes)return <button data-design-action={`add-${side}-pocket`} onClick={()=>set({})}>+ {title}</button>;
   return <section className="design-block" data-design-pocket={side}>
     <header><b>{title}</b><button className="link" data-design-action={`remove-${side}-pocket`} onClick={()=>set(null)}>ลบ</button></header>
@@ -94,6 +95,7 @@ function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;ru
 function SlipBlock({info,project,run}:{info:ApproachInfo;project:RoadFirstProject;run:Run}){
   if(!info.slipTo)return null;
   const target=legLabel(project,info.slipTo),s=info.slip;
+  if(!s&&(info.arm.incomingPockets?.left.lanes??0)>0)return <p className="design-meta" data-design-blocked="slip">Slip lane: ปากทางนี้มีเลนเลี้ยวซ้ายแล้ว ลบเลนเลี้ยวซ้ายก่อนถ้าต้องการใช้ Slip lane</p>;
   if(!s)return <button data-design-action="add-slip" onClick={()=>{
     const slip=newSlip(info,x=>!executeCommand(project,{type:'slip.set',candidateId:info.candidateId,slip:x}).error);
     if(slip)run({type:'slip.set',candidateId:info.candidateId,slip});

@@ -50,3 +50,19 @@ step({type:'junction.setCorner',candidateId:cid,corner:15});
 const j2=ae.approachInfo(compiled(),cid,leg).junction,h2=ae.cornerHandles(j2)[0];
 assert.equal(ae.cornerFromPoint(j,0,h2.point),15,'a handle moved to the 15 m arc reads 15 m');
 console.log('PASS approach editing in place: right-turn pocket add/size/remove, pocket handle ↔ length, Slip lane add/size/remove, corner handles ↔ radius');
+
+// A left-turn pocket and a Slip lane on the same approach both serve the left turn and give a broken channel: refused both ways.
+{
+  let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'ก',points:[{x:-200,y:0},{x:200,y:0}],section:sec},{id:'B',name:'ข',points:[{x:0,y:-200},{x:0,y:200}],section:sec}]});
+  e=c.runCommand(e,{type:'road.add',road:{id:'Z',name:'z',points:[{x:500,y:500},{x:600,y:500}],section:sec}}).editor;
+  const id=e.project.decisions[0].candidateId,leg='B:ahead',inf=()=>ae.approachInfo(rp.compileRoadFirstProject(e.project),id,leg);
+  const s=ae.newSlip(inf());let x=c.runCommand(e,{type:'slip.set',candidateId:id,slip:s});assert.equal(x.result.error,null);e=x.editor;
+  x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg,patch:ae.pocketTreatment(inf().arm,'left',{})});
+  assert.equal(x.result.error,c.LEFT_WITH_SLIP,'left pocket refused beside a Slip lane');
+  x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg,patch:ae.pocketTreatment(inf().arm,'right',{})});assert.equal(x.result.error,null,'right pocket still allowed');e=x.editor;
+  x=c.runCommand(e,{type:'slip.set',candidateId:id,slip:ae.slipPatch(inf(),{width:4.5})});assert.equal(x.result.error,null,'editing the Slip stays allowed');e=x.editor;
+  e=c.runCommand(e,{type:'slip.remove',candidateId:id,from:leg}).editor;
+  x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg,patch:ae.pocketTreatment(inf().arm,'left',{})});assert.equal(x.result.error,null);e=x.editor;
+  assert.equal(c.runCommand(e,{type:'slip.set',candidateId:id,slip:ae.newSlip(inf())}).result.error,c.SLIP_WITH_LEFT,'Slip refused beside a left pocket');
+  console.log('PASS left-turn pocket and Slip lane on one approach are refused both ways; right pocket and Slip edits still allowed');
+}
