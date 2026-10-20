@@ -16,7 +16,12 @@ import {DESIGN_HANDOFF_STORAGE,createHandoff} from '@/core/road-first/junction-h
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
 import {projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
+import NetworkScene3D from '../network/network-scene3d';
+import {mapProviderCredentialsDefaults,mapReferenceDefaults} from '../junction/map-background';
+import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
 
+/** The 3D view without a map underlay (map and reference images are not in this workspace yet). */
+const NO_MAP=mapReferenceDefaults(),NO_MAP_KEYS=mapProviderCredentialsDefaults();
 const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมเพื่อปรับรัศมี · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
 const TOOL_HINT:Record<DesignTool,string>={
   select:'เลือก: คลิกถนน จุดตัด หรือทางแยก · ลากจุดแนวถนนเพื่อย้าย · ลากด้วยปุ่มกลางเพื่อเลื่อนมุมมอง',
@@ -32,7 +37,7 @@ export default function DesignWorkspace(){
   const [extend,setExtend]=useState<{roadId:string;atStart:boolean}|null>(null);
   const snapRef=useRef<SnapResult|null>(null);
   const [fitKey,setFitKey]=useState(0),[newArmed,setNewArmed]=useState(false),[compare,setCompare]=useState(false),[exportOpen,setExportOpen]=useState(false);
-  const planSvg=useRef<SVGSVGElement>(null);
+  const planSvg=useRef<SVGSVGElement>(null),[view,setView]=useState<'2d'|'3d'>('2d');
   // Comparison with the scenario this alternative was copied from (else Existing), highlighted on the plan.
   const comparison=useMemo(()=>compare&&ed.reference?compareScenarios(ed.reference.project,ed.project):null,[compare,ed.reference,ed.project]);
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
@@ -109,6 +114,13 @@ export default function DesignWorkspace(){
     try{localStorage.setItem(DESIGN_HANDOFF_STORAGE,JSON.stringify(handoff));window.location.assign('/junction?design=1');}
     catch{ed.setNotice({text:'บันทึกข้อมูลชั่วคราวในเบราว์เซอร์ไม่ได้ จึงเปิดหน้าแก้ทางแยกขั้นสูงไม่ได้',kind:'error'});}
   }
+  /** Design Summary of the scenario being edited (same report as the earlier Network page). */
+  function saveReport(){
+    setExportOpen(false);
+    const html=networkDesignReportHtml(buildNetworkDesignReport({...ed.compiled.project,title:ed.project.title},ed.active.name));
+    const name=`${safeFilePart(ed.project.title)}-${safeFilePart(ed.active.name)}-สรุปแบบ.html`;
+    download(new Blob([html],{type:'text/html;charset=utf-8'}),name);ed.setNotice({text:`ส่งออก ${name} แล้ว`,kind:'info'});
+  }
   function switchScenario(id:string){if(ed.switchTo(id)){setSelection(null);clearDraft();setTool('select');}}
   async function open(file:File|undefined){
     if(!file)return;
@@ -149,6 +161,7 @@ export default function DesignWorkspace(){
           {exportOpen&&<span className="design-export-menu" role="menu">
             <button role="menuitem" data-design-export-format="png" onClick={()=>void saveFigure('png')}>PNG (ใส่รายงาน)</button>
             <button role="menuitem" data-design-export-format="svg" onClick={()=>void saveFigure('svg')}>SVG (แก้ต่อได้)</button>
+            <button role="menuitem" data-design-export-format="report" onClick={saveReport}>รายงานสรุปแบบ (HTML)</button>
           </span>}
         </span>
       </div>
@@ -167,7 +180,11 @@ export default function DesignWorkspace(){
           <button data-design-toast-action="grade-separated" onClick={()=>{for(const id of ed.notice.autoJunctions??[])ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});}}>เป็นทางต่างระดับ</button>
           <button data-design-toast-action="select" onClick={()=>{const id=ed.notice.autoJunctions?.[0];if(id){setTool('select');setSelection({kind:'junction',id});}}}>ดูทางแยก</button>
         </div>}
-        {selectedRoad&&<SectionStrip road={selectedRoad}/>}
+        {selectedRoad&&view==='2d'&&<SectionStrip road={selectedRoad}/>}
+        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={NO_MAP} mapCredentials={NO_MAP_KEYS} active/>}
+        <div className="design-view-toggle" role="group" aria-label="มุมมอง">
+          {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
+        </div>
       </div>
       <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
