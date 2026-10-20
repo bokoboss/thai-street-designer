@@ -207,7 +207,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       </g>
       <g data-design-candidates="true">
         {candidates.map(c=>{
-          const d=decisionOf(c.id);if(d?.decision==='junction'&&compiled.project.junctions.some(j=>compiled.sources.junctions[j.id]===c.id))return null;
+          const d=decisionOf(c.id);
+          if(d?.decision==='junction'&&compiled.project.junctions.some(j=>compiled.sources.junctions[j.id]===c.id)){
+            // A road reaches this junction but is not part of it: keep that visible on the plan.
+            if(!compiled.unjoined[c.id])return null;
+            return <g key={c.id} data-design-unjoined={c.id} style={{cursor:'pointer'}} onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'junction',id:c.id});}}>
+              <circle cx={c.point.x+px(18)} cy={c.point.y-px(18)} r={px(10)} fill="#fff4e0" stroke="#c47b12" strokeWidth={px(2)}/>
+              <text x={c.point.x+px(18)} y={c.point.y-px(18)} dy={px(4.5)} textAnchor="middle" fontSize={px(13)} fontWeight="800" fill="#a35f00" pointerEvents="none">!</text>
+            </g>;
+          }
           const state=d?.decision??'open',selected=selection?.kind==='crossing'&&selection.id===c.id;
           return <g key={c.id} data-design-candidate={c.id} data-design-candidate-state={state} style={{cursor:'pointer'}}
             onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'crossing',id:c.id});}}>
