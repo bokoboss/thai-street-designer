@@ -103,3 +103,4 @@
 .design-section-modes button.active{background:var(--d-accent-soft);border-color:var(--d-accent);color:var(--d-accent);font-weight:700}.design-section-modes button:disabled{opacity:.4;cursor:default}
 .design-section-station{padding:6px 0 0}.design-section-station>header{padding:0 12px}
 .design-section-station .network-section-dock{border-top:0}
+.design-save-state.saved{color:var(--d-muted)}.design-save-state.error,.design-save-state.blocked{color:var(--d-danger);font-weight:700}

@@ -4,7 +4,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createEditor,endGesture,redo as redoEditor,runCommand,undo as undoEditor,type RoadFirstCommand,type RoadFirstEditor} from '@/core/road-first/commands';
 import {compileRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
-import {activeScenario,appendScenarios,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
+import {SCENARIO_LIMIT,activeScenario,appendScenarios,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
 import {redoLabel,undoLabel} from '@/core/common/history';
 import {NETWORK_PROJECT_STORAGE} from '@/core/network/network-project';
 import {restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
@@ -15,11 +15,28 @@ import {DEFAULT_PRESET,presetSection} from '@/core/road-first/presets';
 export const ROAD_FIRST_STORAGE='thai-street-road-first-v1';
 export const emptyRoadFirstProject=():RoadFirstProject=>({kind:'road-first',schemaVersion:1,title:'โครงการใหม่',roads:[],decisions:[],options:{approachLength:40}});
 
-/** First open: the saved workspace (or an earlier single saved project), else every scenario of the earlier Network page, else an empty project. */
-function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string}{
+/** Copy of stored work that could not be read; kept until the user downloads or clears it. */
+export const ROAD_FIRST_UNREADABLE_STORAGE='thai-street-road-first-v1-unreadable';
+export type StorageState='saved'|'error'|'blocked';
+
+/**
+ * First open: the saved workspace (or an earlier single saved project), else every scenario of the earlier Network page,
+ * else an empty project. Stored work that cannot be read is copied aside first; if that copy fails, autosave stays off so
+ * nothing overwrites it.
+ */
+function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string;error?:boolean;blocked?:boolean}{
+  let saved:string|null=null;
+  try{saved=localStorage.getItem(ROAD_FIRST_STORAGE);}catch{/* storage unavailable */}
+  if(saved){
+    try{return{workspace:normalizeWorkspace(JSON.parse(saved)),notice:'เปิดงานล่าสุดแล้ว'};}
+    catch(e){
+      const why=e instanceof Error?e.message:'ข้อมูลไม่ถูกต้อง';
+      try{localStorage.setItem(ROAD_FIRST_UNREADABLE_STORAGE,saved);}
+      catch{return{workspace:createWorkspace(emptyRoadFirstProject()),error:true,blocked:true,notice:`งานที่บันทึกไว้ในเบราว์เซอร์อ่านไม่ได้ (${why}) · ปิดการบันทึกอัตโนมัติไว้เพื่อไม่ให้ทับข้อมูลเดิม`};}
+      return{workspace:createWorkspace(emptyRoadFirstProject()),error:true,notice:`งานที่บันทึกไว้ในเบราว์เซอร์อ่านไม่ได้ (${why}) · เก็บสำเนาไว้แล้ว ดาวน์โหลดได้ที่แผงโครงการ`};
+    }
+  }
   try{
-    const saved=localStorage.getItem(ROAD_FIRST_STORAGE);
-    if(saved)return{workspace:normalizeWorkspace(JSON.parse(saved)),notice:'เปิดงานล่าสุดแล้ว'};
     const network=localStorage.getItem(NETWORK_PROJECT_STORAGE);
     if(network){
       const migrated=migrateNetworkWorkspace(restoreNetworkScenarioWorkspace(network));
@@ -31,7 +48,8 @@ function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string}{
 
 export type CommandOutcome={ok:boolean;message:string};
 /** autoJunctions: crossings that became junctions in the last step, offered for Undo / grade separation. */
-export type EditorNotice={text:string;kind:'info'|'error';autoJunctions?:string[]};
+/** restorable: name of an alternative just removed, offered for restore. */
+export type EditorNotice={text:string;kind:'info'|'error';autoJunctions?:string[];restorable?:string};
 
 /** Each scenario keeps its own editor, so its undo history survives switching between scenarios. */
 type Book={workspace:RoadFirstWorkspace;editors:Record<string,RoadFirstEditor>};
@@ -43,7 +61,7 @@ export function useRoadEditor(){
   const [book,setBookState]=useState<Book>(()=>bookOf(createWorkspace(emptyRoadFirstProject())));
   const [notice,setNotice]=useState<EditorNotice>({text:'',kind:'info'});
   /** Junction whose advanced edits were just brought back (selected by the page). */
-  const [returned,setReturned]=useState<string|null>(null);
+  const [returned,setReturned]=useState<string|null>(null),[storage,setStorage]=useState<StorageState>('saved');
   // New roads start with the section used last (drawn or edited), not always the default preset.
   const [lastSection,setLastSection]=useState<RoadSection>(()=>presetSection(DEFAULT_PRESET));
   const ready=useRef(false),bookRef=useRef(book);
@@ -72,19 +90,28 @@ export function useRoadEditor(){
       }
     }catch{/* storage unavailable: keep the loaded work */}
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBook(next);setNotice({text,kind:'info'});setReturned(returnedId);ready.current=true;
+    setBook(next);setNotice({text,kind:first.error?'error':'info'});setReturned(returnedId);if(first.blocked)setStorage('blocked');ready.current=true;
   },[setBook]);
   const workspace=useMemo(()=>currentWorkspace(book),[book]);
   useEffect(()=>{
-    if(!ready.current)return;
-    try{localStorage.setItem(ROAD_FIRST_STORAGE,JSON.stringify(workspace));}catch{/* storage unavailable: keep working in memory */}
-  },[workspace]);
+    if(!ready.current||storage==='blocked')return;
+    // Autosave state is shown in the status bar; a failed write (storage full or unavailable) must not pass silently.
+    let ok=true;
+    try{localStorage.setItem(ROAD_FIRST_STORAGE,JSON.stringify(workspace));}catch{ok=false;}
+    setStorage(ok?'saved':'error');
+  },[workspace,storage]);
+  const [unreadable,setUnreadable]=useState<string|null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{try{setUnreadable(localStorage.getItem(ROAD_FIRST_UNREADABLE_STORAGE));}catch{/* unavailable */}},[]);
+  const clearUnreadable=useCallback(()=>{try{localStorage.removeItem(ROAD_FIRST_UNREADABLE_STORAGE);}catch{/* unavailable */}setUnreadable(null);setStorage(s=>s==='blocked'?'saved':s);},[]);
 
   const compiled=useMemo(()=>compileRoadFirstProject(editor.project),[editor.project]);
 
-  const run=useCallback((cmd:RoadFirstCommand):CommandOutcome=>{
-    const {editor:next,result}=runCommand(editorNow(),cmd);
+  /** Typed values, buttons and menu actions are one undo step each; drags pass gesture and end with finishGesture. */
+  const run=useCallback((cmd:RoadFirstCommand,opts?:{gesture?:boolean}):CommandOutcome=>{
+    const {editor:stepped,result}=runCommand(editorNow(),cmd);
     if(result.error){setNotice({text:result.error,kind:'error'});return{ok:false,message:result.error};}
+    const next=opts?.gesture?stepped:endGesture(stepped);
     setEditor(next);
     setNotice({text:result.openCrossings.length||result.blocked.length?`${result.label} · ${result.warnings.at(-1)}`:result.label,kind:'info',autoJunctions:result.autoJunctions.length?result.autoJunctions:undefined});
     if(cmd.type==='road.add')setLastSection(structuredClone(cmd.road.section));
@@ -107,7 +134,21 @@ export function useRoadEditor(){
   },[setBook]);
   const duplicate=useCallback(()=>applyScenario(w=>duplicateScenario(w),e=>`สร้าง ${e.scenario!.name} จาก ${activeScenario(currentWorkspace(bookRef.current)).name} แล้ว`),[applyScenario]);
   const rename=useCallback((id:string,name:string)=>applyScenario(w=>renameScenario(w,id,name),e=>`เปลี่ยนชื่อทางเลือกเป็น ${e.scenario!.name}`),[applyScenario]);
-  const remove=useCallback((id:string)=>applyScenario(w=>removeScenario(w,id),e=>`ลบ ${e.scenario!.name} แล้ว`),[applyScenario]);
+  // A removed alternative can be restored (with its own undo history) from the notice right after removing it.
+  const removedRef=useRef<{scenario:RoadFirstScenario;editor:RoadFirstEditor;index:number;active:string}|null>(null);
+  const remove=useCallback((id:string)=>{
+    const b=bookRef.current,w=currentWorkspace(b),index=w.scenarios.findIndex(s=>s.id===id),scenario=w.scenarios[index];
+    const done=applyScenario(x=>removeScenario(x,id),e=>`ลบ ${e.scenario!.name} แล้ว`);
+    if(done&&scenario){removedRef.current={scenario,editor:b.editors[id]!,index,active:w.activeScenarioId};setNotice({text:`ลบ ${scenario.name} แล้ว`,kind:'info',restorable:scenario.name});}
+    return done;
+  },[applyScenario]);
+  const restoreRemoved=useCallback(()=>{
+    const r=removedRef.current,b=bookRef.current;if(!r)return;
+    if(b.workspace.scenarios.length>=SCENARIO_LIMIT||b.workspace.scenarios.some(s=>s.id===r.scenario.id)){setNotice({text:'เรียกคืนทางเลือกไม่ได้ เพราะมีทางเลือกครบจำนวนแล้ว',kind:'error'});return;}
+    const scenarios=[...b.workspace.scenarios];scenarios.splice(Math.min(r.index,scenarios.length),0,r.scenario);
+    setBook({workspace:{...b.workspace,scenarios,activeScenarioId:r.scenario.id},editors:{...b.editors,[r.scenario.id]:r.editor}});
+    removedRef.current=null;setNotice({text:`เรียกคืน ${r.scenario.name} แล้ว`,kind:'info'});
+  },[setBook]);
   const switchTo=useCallback((id:string)=>applyScenario(w=>({workspace:switchScenario(w,id),error:null}),e=>`แก้ไข ${activeScenario(e.workspace).name}`),[applyScenario]);
 
   /** Work left in the earlier Network page in this browser, added as extra alternatives (nothing is replaced). */
@@ -121,6 +162,6 @@ export function useRoadEditor(){
   return{
     project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
-    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,restoreRemoved,storage,unreadable,clearUnreadable,
   };
 }

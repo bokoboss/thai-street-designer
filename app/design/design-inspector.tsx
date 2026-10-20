@@ -191,7 +191,9 @@ function ReferencePanel({image,tool,onTool,calibration,viewCenter}:ReferencePane
 
 export type ScenarioPanel={name:string;existing:boolean;count:number;reference:string|null;comparison:ScenarioDiff|null;onRename:(name:string)=>boolean;onRemove:()=>void;
   /** Present when work from the earlier Network page is stored in this browser. */
-  onImportEarlier?:()=>void};
+  onImportEarlier?:()=>void;
+  /** Present when stored work could not be read and a copy was kept aside. */
+  unreadable?:{download:()=>void;clear:()=>void}};
 
 function ScenarioInspector({scenario}:{scenario:ScenarioPanel}){
   const [armed,setArmed]=useState(false);
@@ -199,6 +201,10 @@ function ScenarioInspector({scenario}:{scenario:ScenarioPanel}){
     <small className="design-block-title">ทางเลือกที่กำลังแก้</small>
     <TextField label="ชื่อ" value={scenario.name} field="scenario-name" onCommit={name=>{scenario.onRename(name);}}/>
     <p className="design-meta">{scenario.existing?`สภาพเดิมเป็นฐานของทุกทางเลือก · มีทั้งหมด ${scenario.count} รายการ`:`คัดลอกมาจาก ${scenario.reference} · แก้ไขได้โดยไม่กระทบรายการอื่น`}</p>
+    {scenario.unreadable&&<div className="design-issues" data-design-unreadable="true"><b>งานที่บันทึกไว้เดิมอ่านไม่ได้</b>
+      <p className="design-meta">เก็บสำเนาไว้ในเบราว์เซอร์นี้แล้ว ดาวน์โหลดเก็บไว้หรือส่งให้ผู้ดูแลตรวจสอบได้</p>
+      <button className="link" data-design-action="download-unreadable" onClick={scenario.unreadable.download}>ดาวน์โหลดงานเดิม</button>{' '}
+      <button className="link danger" data-design-action="clear-unreadable" onClick={scenario.unreadable.clear}>ลบสำเนา</button></div>}
     {scenario.onImportEarlier&&<button className="link" data-design-action="import-earlier" title="เพิ่มเป็นทางเลือกใหม่ ไม่แทนที่งานปัจจุบัน" onClick={scenario.onImportEarlier}>นำเข้างานจากหน้าจอเดิม (Network) เป็นทางเลือกเพิ่ม</button>}
     {!scenario.existing&&<button className="link" data-design-action="remove-scenario" onBlur={()=>setArmed(false)} onClick={()=>{if(!armed){setArmed(true);return;}scenario.onRemove();}}>{armed?'กดอีกครั้งเพื่อลบทางเลือกนี้':'ลบทางเลือกนี้'}</button>}
   </section>;

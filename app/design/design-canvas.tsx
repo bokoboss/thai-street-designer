@@ -31,7 +31,8 @@ const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,
 export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove}:{
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
-  run:(cmd:RoadFirstCommand)=>CommandOutcome;finishGesture:()=>void;fitKey:number;
+  /** gesture: part of a drag (one undo step until finishGesture); otherwise every call is its own step. */
+  run:(cmd:RoadFirstCommand,opts?:{gesture?:boolean})=>CommandOutcome;finishGesture:()=>void;fitKey:number;
   /** Latest snapped cursor while drawing (used for typed length); typedLength: digits typed so far. */
   onSnap:(snap:SnapResult|null)=>void;typedLength:string;
   /** Differences from the reference scenario, highlighted on the plan; svgRef: the plan, for figure export. */
@@ -111,14 +112,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(d.kind==='corner'){
       const j=junctionOf(d.candidateId);if(!j)return;
       const corner=cornerFromPoint(j,d.corner,toWorld(e));
-      if(corner!==j.design.corner)run({type:'junction.setCorner',candidateId:d.candidateId,corner});return;
+      if(corner!==j.design.corner)run({type:'junction.setCorner',candidateId:d.candidateId,corner},{gesture:true});return;
     }
     if(d.kind==='pocket'){
       const info=approachInfo(compiled,d.candidateId,d.leg);if(!info)return;
       const length=pocketLengthFromPoint(info.junction,info.armId,d.side,toWorld(e));
-      if(length!==info.arm.incomingPockets?.[d.side].length)run({type:'leg.setTreatment',candidateId:d.candidateId,leg:d.leg,patch:pocketTreatment(info.arm,d.side,{length})});return;
+      if(length!==info.arm.incomingPockets?.[d.side].length)run({type:'leg.setTreatment',candidateId:d.candidateId,leg:d.leg,patch:pocketTreatment(info.arm,d.side,{length})},{gesture:true});return;
     }
-    run({type:'road.movePoint',roadId:d.roadId,index:d.index,point:toWorld(e)});
+    run({type:'road.movePoint',roadId:d.roadId,index:d.index,point:toWorld(e)},{gesture:true});
   }
   function junctionOf(candidateId:string){
     const jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
