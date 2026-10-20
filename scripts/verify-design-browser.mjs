@@ -55,7 +55,7 @@ try{
   await b.waitFor(async()=>(await b.text('[data-design-section]'))?.includes('2.50'),'redo re-applies');
 
   // Road ids are opaque and never reused; find them in drawing order.
-  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);diag.roads=[R1,R2];
+  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);diag.ids=[R1,R2];
   // Drag the first road's start point: one undo step.
   const point=await b.rect(`[data-design-road-point="${R1}:0"]`);
   await b.drag(point,{x:point.x,y:point.y+40});
@@ -241,6 +241,7 @@ try{
 
   // The earlier Network page is retired: its URL opens /design, and work it saved in this browser can be added as alternatives.
   await b.goto('/network');await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
+  await sleep(300);diag.afterRedirect={notice:await b.text('[data-design-notice]'),tabs:await b.count('[data-design-scenario]'),unreadable:await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,80)`)};
   await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:{schemaVersion:5,title:'งานเดิม',junctions:[],links:[],parallelCorridors:[],roadEnds:[]}}]}))`);
   await b.goto('/design');await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
   const scenariosBefore=await b.count('[data-design-scenario]');
