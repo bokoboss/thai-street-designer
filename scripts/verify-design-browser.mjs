@@ -279,4 +279,9 @@ try{
   assert.equal(await b.count('[data-design-notice="error"]'),1);
   assert.deepEqual(b.errors,[],'no runtime errors');
   console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept)`);
+}catch(error){
+  // On CI the message becomes a check annotation, so a failure can be read without the job log.
+  if(process.env.GITHUB_ACTIONS){const msg=String(error?.message??error).replace(/\r?\n/g,' ').slice(0,900);console.log(`::error title=design browser acceptance::${msg}`);}
+  try{await b.screenshot('artifacts/design-browser-failure.png');}catch{}
+  throw error;
 }finally{b.close();}
