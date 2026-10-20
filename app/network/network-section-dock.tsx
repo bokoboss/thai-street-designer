@@ -1,4 +1,5 @@
 'use client';
+import './section-dock.css';
 import {useMemo,useState} from 'react';
 import {CrossSection,sectionStart} from '../junction/section-view';
 import {armMouth} from '@/core/junction/geometry';

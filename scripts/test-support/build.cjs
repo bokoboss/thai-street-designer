@@ -39,7 +39,7 @@ module.exports=function build(){
   fs.rmSync(TREE,{recursive:true,force:true});
   const sources=SOURCE_DIRS.flatMap(d=>walk(path.join(ROOT,d)));
   for(const src of sources){
-    const out=ts.transpileModule(fs.readFileSync(src,'utf8'),{fileName:src,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText
+    const out=ts.transpileModule(fs.readFileSync(src,'utf8').replace(/^import\s+['"][^'"]+\.css['"];?\s*$/gm,'// (stylesheet import removed for Node tests)'),{fileName:src,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText
       .replace(/require\("([^"]+)"\)/g,(m,spec)=>{
         const target=resolveSource(src,spec);if(!target)return m;
         let rel=path.relative(path.dirname(treePath(src)),treePath(target)).split(path.sep).join('/');

@@ -1,4 +1,5 @@
 'use client';
+import './map-background.css';
 import {useEffect,useMemo,useRef,useState} from 'react';
 
 export type MapBasemap=

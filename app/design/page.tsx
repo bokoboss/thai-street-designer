@@ -7,6 +7,7 @@ import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas
 import {DesignInspector} from './design-inspector';
 import {SectionStrip} from './section-strip';
 import {useReferenceImage} from './use-reference-image';
+import {useMapReference} from './map-panel';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
@@ -18,15 +19,13 @@ import {parseNetworkProjectFile} from '@/core/network/network-project-file';
 import {projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
 import NetworkScene3D from '../network/network-scene3d';
-import {mapProviderCredentialsDefaults,mapReferenceDefaults} from '../junction/map-background';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
 
-/** The 3D view without a map underlay (map and reference images are not in this workspace yet). */
-const NO_MAP=mapReferenceDefaults(),NO_MAP_KEYS=mapProviderCredentialsDefaults();
 const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมเพื่อปรับรัศมี · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
 const TOOL_HINT:Record<DesignTool,string>={
   select:'เลือก: คลิกถนน จุดตัด หรือทางแยก · ลากจุดแนวถนนเพื่อย้าย · ลากด้วยปุ่มกลางเพื่อเลื่อนมุมมอง',
   pan:'เลื่อนมุมมอง: ลากเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม',
+  'map-move':'ย้ายแผนที่: ลากบนแบบเพื่อเลื่อนแผนที่ให้ตรงกับถนน · Esc เพื่อจบ',
   'ref-move':'ย้ายภาพอ้างอิง: ลากบนแบบเพื่อเลื่อนภาพ · Esc เพื่อจบ',
   'ref-calibrate':'ตั้งมาตราส่วนภาพ: คลิกจุด A และ B บนภาพที่รู้ระยะจริง แล้วพิมพ์ระยะทางด้านขวา · Esc เพื่อยกเลิก',
   road:'วาดถนน: คลิกวางจุด (ดูดเข้าปลายถนน แนวถนน และมุมทุก 15°) · พิมพ์ตัวเลขแล้ว Enter = ความยาว · ดับเบิลคลิกหรือ Enter เพื่อจบ · Shift ค้าง = ไม่ดูด · Esc ยกเลิก',
@@ -43,6 +42,7 @@ export default function DesignWorkspace(){
   const planSvg=useRef<SVGSVGElement>(null),[view,setView]=useState<'2d'|'3d'>('2d');
   const image=useReferenceImage((text,kind='info')=>ed.setNotice({text,kind}));
   const [calibration,setCalibration]=useState<WorldPoint[]>([]);
+  const map=useMapReference();
   // Comparison with the scenario this alternative was copied from (else Existing), highlighted on the plan.
   const comparison=useMemo(()=>compare&&ed.reference?compareScenarios(ed.reference.project,ed.project):null,[compare,ed.reference,ed.project]);
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
@@ -178,20 +178,20 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={setSelection} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
           <button data-design-toast-action="grade-separated" onClick={()=>{for(const id of ed.notice.autoJunctions??[])ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});}}>เป็นทางต่างระดับ</button>
           <button data-design-toast-action="select" onClick={()=>{const id=ed.notice.autoJunctions?.[0];if(id){setTool('select');setSelection({kind:'junction',id});}}}>ดูทางแยก</button>
         </div>}
-        {selectedRoad&&view==='2d'&&<SectionStrip road={selectedRoad}/>}
-        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={NO_MAP} mapCredentials={NO_MAP_KEYS} active/>}
+        {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled}/>}
+        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>
       </div>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={setSelection} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}}}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

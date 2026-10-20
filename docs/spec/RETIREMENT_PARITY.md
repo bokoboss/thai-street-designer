@@ -3,7 +3,7 @@
 Roadmap Phase 3 slice 6 is staged (owner decision 2026-10-20): `/design` becomes the home page first; the earlier
 pages are removed only when everything below is available from `/design`.
 
-Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/design`; 6b-2 the reference image):
+Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/design`; 6b-2 the reference image; 6b-3 the online map and the section by station):
 
 - `/` opens `/design`.
 - `/junction` is the **advanced junction editor**, opened from the junction inspector in `/design` ("แก้ทางแยกขั้นสูง").
@@ -25,11 +25,11 @@ Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/d
 | Scenarios, comparison, report figure (PNG/SVG) | ✓ | | |
 | Network 3D view | ✓ (2D / 3D toggle) | | |
 | Reference image (place, opacity, rotate, move, scale from a known distance) | ✓ | | |
-| Online map background (street / imagery basemaps, place search) | | ✓ (junction only) | `/network` |
-| Parallel / frontage corridors, frontage seeds | | | `/network` |
-| Auxiliary-lane proposals between junctions, station components | | | `/network` |
+| Online map background (street / imagery basemaps, place search, drag to line up) | ✓ | ✓ | |
+| Parallel / frontage corridors, frontage seeds | — | | dropped for now (owner 2026-10-20); migration reports these relations as not carried over |
+| Auxiliary-lane proposals between junctions, editing station components | — | | dropped for now (owner 2026-10-20); existing station components are kept in the road data and still drawn |
 | Design Summary (HTML report) | ✓ (ส่งออกรูป → รายงานสรุปแบบ) | | |
-| Detailed road section dock with stations | | | `/network` |
+| Road section by station (per segment between junctions) | ✓ (หน้าตัด → ตามระยะทาง) | | |
 
-Next (slice 6b and later): bring the "only in earlier pages" rows into `/design` (or decide to drop them), then remove
-`/network`, the legacy Network storage path and the `/junction` stand-alone mode.
+Next (slice 6c): with every row either in `/design` or dropped, remove `/network` and the `/junction` stand-alone mode;
+the junction editor stays only as the advanced editor opened from `/design`.
