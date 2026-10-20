@@ -2,6 +2,7 @@
 // edit the road section by number, undo/redo with readable labels, drag a road point, reload.
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
+import {deflateSync} from 'node:zlib';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {startSession} from './test-support/cdp-browser.mjs';
@@ -179,6 +180,35 @@ try{
   assert.equal(await b.evalValue(`localStorage.getItem('thai-street-network-project-v1')`),null,'earlier Network data untouched');
   // The home page is the road-first workspace.
   await b.goto('/');await b.waitFor(()=>b.count('[data-design-workspace]'),'home page is /design');
+
+  // Reference image (slice 6b-2): add, scale from a known distance, move, remove.
+  const png=(w,h)=>{const crc=buf=>{let c,crcTable=[];for(let n=0;n<256;n++){c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;crcTable[n]=c>>>0;}let x=0xffffffff;for(const v of buf)x=crcTable[(x^v)&255]^(x>>>8);return(x^0xffffffff)>>>0;};
+    const chunk=(type,data)=>{const len=Buffer.alloc(4);len.writeUInt32BE(data.length);const td=Buffer.concat([Buffer.from(type),data]);const c=Buffer.alloc(4);c.writeUInt32BE(crc(td));return Buffer.concat([len,td,c]);};
+    const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(w,0);ihdr.writeUInt32BE(h,4);ihdr[8]=8;ihdr[9]=2;
+    const raw=Buffer.alloc((w*3+1)*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const o=y*(w*3+1)+1+x*3;raw[o]=200;raw[o+1]=x%20<2?60:220;raw[o+2]=180;}
+    return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);};
+  writeFileSync('.test-build/reference.png',png(400,200));
+  await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y+canvas.h/2-60});
+  await b.waitFor(()=>b.count('[data-design-reference="none"]'),'reference panel');
+  const doc=await b.send('DOM.getDocument',{});const node=await b.send('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'[data-design-reference-input]'});
+  await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
+  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan');
+  await b.click('[data-design-action="calibrate-reference"]');
+  const ca={x:canvas.x-canvas.w/2+120,y:canvas.y+canvas.h/2-120},cb={x:ca.x+200,y:ca.y};
+  await b.clickAt(ca);await b.clickAt(cb);
+  await b.waitFor(()=>b.count('[data-design-field="reference-distance"]'),'distance field after A and B');
+  await b.click('[data-design-field="reference-distance"]');await b.evalValue(`document.querySelector('[data-design-field="reference-distance"]').select()`);
+  await b.type('50');await b.key('Enter');
+  await b.waitFor(()=>b.count('[data-design-reference="calibrated"]'),'image scaled from a known distance');
+  const stored=()=>b.evalValue(`JSON.parse(localStorage.getItem('thai-street-local-image-reference-v1'))`);
+  const scaled=await stored();assert.equal(scaled.calibrationDistance,50);
+  await b.screenshot('artifacts/design-browser-reference.png');
+  await b.click('[data-design-action="move-reference"]');
+  await b.drag({x:ca.x,y:ca.y+40},{x:ca.x+60,y:ca.y+40});
+  await b.waitFor(async()=>(await stored()).x>scaled.x,'image moved by dragging');
+  await b.click('[data-design-action="move-reference"]');
+  await b.click('[data-design-action="remove-reference"]');await b.click('[data-design-action="remove-reference"]');
+  await b.waitFor(()=>b.count('[data-design-reference="none"]'),'image removed');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove)`);
 }finally{b.close();}

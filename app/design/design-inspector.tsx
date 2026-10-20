@@ -1,6 +1,8 @@
 'use client';
 // Inspector for the road-first workspace: header → key properties → actions, destructive action last.
-import {useState} from 'react';
+import {useRef,useState} from 'react';
+import type {WorldPoint} from '@/core/network/network-project';
+import type {useReferenceImage} from './use-reference-image';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
@@ -9,7 +11,7 @@ import {parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
 import type {CommandOutcome} from './use-road-editor';
-import {DELTA_STYLE,type DesignSelection} from './design-canvas';
+import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
 
 type Run=(cmd:RoadFirstCommand)=>CommandOutcome;
@@ -155,6 +157,33 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   </>;
 }
 
+export type ReferencePanelProps={image:ReturnType<typeof useReferenceImage>;tool:DesignTool;onTool:(t:DesignTool)=>void;calibration:WorldPoint[];viewCenter:()=>WorldPoint};
+
+/** Reference image: add, show, opacity, rotation, move, scale from a known distance, remove. */
+function ReferencePanel({image,tool,onTool,calibration,viewCenter}:ReferencePanelProps){
+  const file=useRef<HTMLInputElement>(null),r=image.reference,[armed,setArmed]=useState(false);
+  const input=<input ref={file} type="file" accept="image/png,image/jpeg" hidden data-design-reference-input="true" onChange={e=>{const f=e.currentTarget.files?.[0];e.currentTarget.value='';if(f)void image.add(f,viewCenter());}}/>;
+  if(!image.has)return <section className="design-block" data-design-reference="none"><small className="design-block-title">ภาพอ้างอิง</small>
+    <button className="link" data-design-action="add-reference" onClick={()=>file.current?.click()}>+ ภาพอ้างอิง (JPG / PNG)</button>
+    <p className="design-meta">เช่น ผังบริเวณหรือภาพถ่ายทางอากาศที่มีสิทธิ์ใช้ เก็บไว้ในเบราว์เซอร์นี้เท่านั้น</p>{input}</section>;
+  return <section className="design-block" data-design-reference={r.calibrated?'calibrated':'placed'}>
+    <header><small className="design-block-title">ภาพอ้างอิง · {r.fileName}</small>
+      <label className="design-check"><input type="checkbox" checked={r.enabled} data-design-reference-visible="true" onChange={e=>image.update({enabled:e.currentTarget.checked})}/> แสดง</label></header>
+    <p className="design-meta">{r.calibrated?`ตั้งมาตราส่วนแล้ว (อ้างอิงระยะ ${r.calibrationDistance} ม.)`:'ยังไม่ได้ตั้งมาตราส่วน — ระยะบนภาพยังไม่ใช่ระยะจริง'}</p>
+    <div className="design-fields">
+      <NumberField field="reference-opacity" label="ความทึบ (%)" value={Math.round(r.opacity*100)} min={5} max={100} step={5} onCommit={v=>image.update({opacity:Math.max(.05,Math.min(1,v/100))})}/>
+      <NumberField field="reference-rotation" label="หมุน (°)" value={+r.rotation.toFixed(1)} step={.5} onCommit={v=>image.update({rotation:((v%360)+360)%360})}/>
+    </div>
+    <div className="design-reference-tools">
+      <button className={tool==='ref-move'?'active':''} data-design-action="move-reference" onClick={()=>onTool(tool==='ref-move'?'select':'ref-move')}>{tool==='ref-move'?'จบการย้ายภาพ':'ย้ายภาพ'}</button>
+      <button className={tool==='ref-calibrate'?'active':''} data-design-action="calibrate-reference" onClick={()=>onTool(tool==='ref-calibrate'?'select':'ref-calibrate')}>{tool==='ref-calibrate'?'ยกเลิกตั้งมาตราส่วน':'ตั้งมาตราส่วนจากระยะจริง'}</button>
+    </div>
+    {tool==='ref-calibrate'&&(calibration.length<2?<p className="design-meta" data-design-calibration-step={calibration.length}>คลิกจุด {calibration.length?'B':'A'} บนภาพ</p>
+      :<NumberField field="reference-distance" label="ระยะจริง A–B (ม.)" value={0} step={.1} min={.1} onCommit={v=>{if(image.calibrate(calibration[0],calibration[1],v))onTool('select');}}/>)}
+    <button className="link danger" data-design-action="remove-reference" onBlur={()=>setArmed(false)} onClick={()=>{if(!armed){setArmed(true);return;}void image.remove();onTool('select');}}>{armed?'กดอีกครั้งเพื่อลบภาพ':'ลบภาพอ้างอิง'}</button>
+  </section>;
+}
+
 export type ScenarioPanel={name:string;existing:boolean;count:number;reference:string|null;comparison:ScenarioDiff|null;onRename:(name:string)=>boolean;onRemove:()=>void};
 
 function ScenarioInspector({scenario}:{scenario:ScenarioPanel}){
@@ -181,8 +210,8 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
-  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;scenario:ScenarioPanel;
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
+  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
@@ -202,6 +231,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
+      <ReferencePanel {...reference}/>
       {scenario.comparison&&scenario.reference&&<ComparisonPanel diff={scenario.comparison} reference={scenario.reference} onSelect={onSelect}/>}
       {compiled.issues.length>0&&<div className="design-issues" data-design-issues={compiled.issues.length}><b>รายการที่ควรตรวจ</b>
         <ul>{compiled.issues.slice(0,12).map((s,i)=><li key={i}>{s}</li>)}</ul></div>}

@@ -13,18 +13,21 @@ import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
 import {approachInfo,cornerFromPoint,cornerHandles,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
+import type {LocalImageReference} from '@/core/network/local-reference';
 
 export const DELTA_STYLE:Record<DeltaStatus,{color:string;label:string}>={added:{color:'#1f8a4c',label:'เพิ่ม'},removed:{color:'#b3261e',label:'ตัดออก'},changed:{color:'#c47b12',label:'แก้ไข'}};
 
 /** approach: one road leg at a junction (id = junction candidate id, leg = road leg key). */
 export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
-export type DesignTool='select'|'pan'|'road';
+/** ref-move / ref-calibrate: place and scale the reference image (started from the inspector). */
+export type DesignTool='select'|'pan'|'road'|'ref-move'|'ref-calibrate';
+export type ReferenceImageView={reference:LocalImageReference;url:string|null};
 type View={x:number;y:number;scale:number};
 
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint}:{
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
   run:(cmd:RoadFirstCommand)=>CommandOutcome;finishGesture:()=>void;fitKey:number;
@@ -32,12 +35,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   onSnap:(snap:SnapResult|null)=>void;typedLength:string;
   /** Differences from the reference scenario, highlighted on the plan; svgRef: the plan, for figure export. */
   comparison:ScenarioDiff|null;svgRef:React.RefObject<SVGSVGElement|null>;
+  /** Reference image under the plan; calibration: points A, B picked for scaling it. */
+  referenceImage:ReferenceImageView|null;onReferenceMove:(at:WorldPoint)=>void;calibration:WorldPoint[];onCalibratePoint:(p:WorldPoint)=>void;
 }){
   const wrap=useRef<HTMLDivElement>(null),svg=svgRef;
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
-    |{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|null>(null);
+    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|null>(null);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -73,6 +78,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       e.preventDefault();e.stopPropagation();(e.currentTarget as Element).setPointerCapture(e.pointerId);
       drag.current={kind:'pan',from:{x:e.clientX,y:e.clientY},start:view};return;
     }
+    if(tool==='ref-calibrate'&&e.button===0){e.stopPropagation();onCalibratePoint(toWorld(e));return;}
+    if(tool==='ref-move'&&e.button===0&&referenceImage){
+      e.stopPropagation();(e.currentTarget as Element).setPointerCapture(e.pointerId);
+      drag.current={kind:'ref',from:toWorld(e),start:{x:referenceImage.reference.x,y:referenceImage.reference.y}};return;
+    }
     if(tool==='road'&&e.button===0){
       e.stopPropagation();
       // The second click of a double-click lands on the last point; it finishes the road instead of adding one.
@@ -86,6 +96,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(tool==='road'){const s=snapAt(e);setSnap(s);onSnap(s);}
     if(!d)return;
     if(d.kind==='pan'){setView({...d.start,x:d.start.x-(e.clientX-d.from.x)/d.start.scale,y:d.start.y-(e.clientY-d.from.y)/d.start.scale});return;}
+    if(d.kind==='ref'){const p=toWorld(e);onReferenceMove({x:+(d.start.x+p.x-d.from.x).toFixed(2),y:+(d.start.y+p.y-d.from.y).toFixed(2)});return;}
     if(d.kind==='corner'){
       const j=junctionOf(d.candidateId);if(!j)return;
       const corner=cornerFromPoint(j,d.corner,toWorld(e));
@@ -113,7 +124,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       previousHeading:from&&prev?((Math.atan2(from.y-prev.y,from.x-prev.x)*180/Math.PI)+360)%360:undefined});
   }
   function onPointerUp(){
-    if(drag.current&&drag.current.kind!=='pan')finishGesture();
+    if(drag.current&&drag.current.kind!=='pan'&&drag.current.kind!=='ref')finishGesture();
     drag.current=null;
   }
   function onWheel(e:React.WheelEvent<SVGSVGElement>){
@@ -144,6 +155,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
       onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}} onWheel={onWheel} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" onPointerDown={()=>{if(tool==='select')onSelect(null);}}/>
+      {referenceImage?.url&&referenceImage.reference.enabled&&(()=>{const r=referenceImage.reference,w=r.widthPx*r.metersPerPixel,h=r.heightPx*r.metersPerPixel;
+        return <g data-design-reference-image="true" transform={`translate(${r.x} ${r.y}) rotate(${r.rotation})`} opacity={r.opacity} pointerEvents="none">
+          <image href={referenceImage.url} x={-w/2} y={-h/2} width={w} height={h} preserveAspectRatio="none"/>
+          {tool==='ref-move'&&<rect x={-w/2} y={-h/2} width={w} height={h} fill="none" stroke="#0b7f86" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(5)}`}/>}
+        </g>;})()}
       <NetworkDrawing project={compiled.project} zoom={1} selection={selectedJunction?{kind:'junction',id:selectedJunction.id}:null}
         comparisonFocus={null} parallelCorridorId={null} parallelDraftMainlineId={null} selectedArm={selectedApproach?.armId??null} linkMode={false} pendingPort={null} selectedLinkVertex={null}
         onSelect={s=>{if(tool!=='select'||!s)return;onSelect(s.kind==='junction'?{kind:'junction',id:compiled.sources.junctions[s.id]}:{kind:'road',id:compiled.sources.links[s.id]});}}
@@ -199,6 +215,10 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           <circle data-design-pocket-handle={h.side} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"/>
           <circle cx={h.point.x} cy={h.point.y} r={px(6)} fill="#0b7f86" stroke="#fff" strokeWidth={px(2)} pointerEvents="none"/>
         </g>)}
+      </g>}
+      {tool==='ref-calibrate'&&calibration.length>0&&<g data-design-calibration={calibration.length} pointerEvents="none">
+        {calibration.length===2&&<line x1={calibration[0].x} y1={calibration[0].y} x2={calibration[1].x} y2={calibration[1].y} stroke="#c47b12" strokeWidth={px(2)}/>}
+        {calibration.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r={px(6)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)}/><text x={p.x+px(9)} y={p.y-px(8)} fontSize={px(13)} fontWeight="700" fill="#c47b12">{i?'B':'A'}</text></g>)}
       </g>}
       {tool==='road'&&snap&&<g data-design-snap={snap.kind} pointerEvents="none">
         {snap.kind==='angle'&&draft.length>0&&(()=>{const a=draft.at(-1)!,r=(snap.angle??0)*Math.PI/180,L=px(2000);
