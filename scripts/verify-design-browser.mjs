@@ -1,7 +1,7 @@
 // Browser acceptance for the road-first workspace (/design): draw two roads (junction created automatically),
 // edit the road section by number, undo/redo with readable labels, drag a road point, reload.
 import assert from 'node:assert/strict';
-import {mkdirSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {startSession} from './test-support/cdp-browser.mjs';
@@ -116,7 +116,34 @@ try{
   await b.click('[data-design-action="add-slip"]');
   await b.waitFor(()=>b.count('[data-design-slip]'),'Slip lane added in place');
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ตั้ง Slip lane/);
+  // Scenarios (slice 5): copy as an alternative, change it, see the difference highlighted, switch back, export a figure.
+  await act('+ ทางเลือก',()=>b.click('[data-design-scenario-add]'));
+  await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','alternative created and active');
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-compare]')?.dataset.designCompare`)==='0','comparison on, nothing differs yet');
+  await b.clickAt({x:jc.x+14,y:jc.y});
+  await b.click('[data-design-action="add-left-pocket"]');
+  await b.waitFor(async()=>await b.count('[data-design-delta="changed"]')===1,'changed junction highlighted on the plan');
+  await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y+canvas.h/2-60});
+  await b.waitFor(async()=>(await b.text('[data-design-comparison]'))?.includes('เลนเลี้ยว'),'comparison list names what changed');
+  assert.match(await b.text("[data-design-comparison]"),/เลนเลี้ยว\s*1 → 2/,"turn-lane count 1 → 2");
+  // Existing is untouched and has nothing to compare with.
+  await b.click('[data-design-scenario="existing"]');
+  await b.waitFor(async()=>await b.count('[data-design-compare-toggle]')===0&&await b.count('[data-design-compare]')===0,'Existing shown without comparison');
+  await b.click('[data-design-scenario="alt-1"]');
+  await b.waitFor(async()=>await b.count('[data-design-delta="changed"]')===1,'back on the alternative with its change');
+  // Report figure (PNG) of the comparison.
+  // Capture the download (headless has no download folder) and keep the figure as evidence.
+  await b.evalValue(`(()=>{const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){if(this.download.endsWith('.png'))window.__figure=fetch(this.href).then(r=>r.blob()).then(b=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(b);}));else click.call(this);};})()`);
+  await b.click('[data-design-export]');
+  await b.click('[data-design-export-format="png"]');
+  await b.waitFor(async()=>/ส่งออกรูป .*\.png แล้ว/.test(await b.text('[data-design-notice]')??''),'figure exported');
+  const figure=await b.evalValue('window.__figure');
+  assert.match(figure,/^data:image\/png;base64,/,'figure is a PNG');
+  writeFileSync('artifacts/design-figure-comparison.png',Buffer.from(figure.split(',')[1],'base64'));
   await b.screenshot('artifacts/design-browser.png');
+  // Scenarios survive a reload.
+  await sleep(300);await b.goto('/design');
+  await b.waitFor(async()=>await b.count('[data-design-scenario]')===2,'both scenarios restored after reload');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload)`);
 }finally{b.close();}

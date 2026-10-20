@@ -67,3 +67,18 @@
 .design-block>header{display:flex;align-items:center;justify-content:space-between}
 .design-inspector button.link{border:0;background:none;color:var(--d-accent);padding:0;cursor:pointer;font-size:12px;text-align:left;align-self:flex-start}
 .design-inspector>button{text-align:left;border:1px dashed #9fc7c4;background:#fff;color:var(--d-accent);border-radius:6px;padding:7px 10px;cursor:pointer;font-weight:700}
+.design-scenarios{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;flex:1;justify-content:center}
+.design-scenarios button{display:flex;align-items:center;gap:4px;border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 10px;font-size:12.5px;cursor:pointer;white-space:nowrap;color:var(--d-muted)}
+.design-scenarios button:hover{background:#eef3f2}
+.design-scenarios button.active{background:var(--d-accent-soft);color:var(--d-accent);font-weight:700;border-color:#b9dcd9}
+.design-scenarios button.compare{border-color:var(--d-line);color:var(--d-ink)}.design-scenarios button.compare.active{background:#fff4e0;border-color:#e7c58d;color:var(--d-warn)}
+.design-export{position:relative}
+.design-export-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:10;display:flex;flex-direction:column;background:#fff;border:1px solid var(--d-line);border-radius:8px;box-shadow:0 8px 20px #0002;padding:4px;min-width:150px}
+.design-export-menu button{border:0!important;text-align:left;justify-content:flex-start;max-width:none}
+.design-compare{display:flex;flex-direction:column;gap:6px}
+.design-compare-counts{display:flex;gap:8px;font-size:12px}.design-compare-counts b{font-size:14px}
+.design-compare ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.design-compare li button{width:100%;text-align:left;border:1px solid var(--d-line);border-left-width:4px;background:#fff;border-radius:6px;padding:6px 8px;cursor:pointer;font-size:12px}
+.design-compare li small{display:block;color:var(--d-muted)}
+.design-compare table{width:100%;border-collapse:collapse;font-size:12px}.design-compare td{padding:3px 4px;border-bottom:1px solid var(--d-line)}.design-compare td:not(:first-child){text-align:right;white-space:nowrap}
+.design-block-title{font-size:11px;letter-spacing:.04em;color:var(--d-muted)}
