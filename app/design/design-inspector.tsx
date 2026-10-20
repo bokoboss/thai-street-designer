@@ -42,6 +42,20 @@ export function PresetPicker({value,onPick,label}:{value:RoadPresetId|null;onPic
   </div>;
 }
 
+const BAND_TYPES=[['bike','ช่องจักรยาน',1.5],['motorcycle','ช่องรถจักรยานยนต์',2],['shoulder','ไหล่ทาง',1.5],['buffer','แถบคั่น',.5]] as const;
+/** Bands between the lanes and the sidewalk, the same on both sides of the road. Starting widths are tool defaults. */
+function BandsEditor({bands,onChange}:{bands:NonNullable<RoadSection['bands']>;onChange:(b:NonNullable<RoadSection['bands']>)=>void}){
+  const label=(type:string)=>BAND_TYPES.find(b=>b[0]===type)?.[1]??type;
+  return <section className="design-block" data-design-bands={bands.length}>
+    <small className="design-block-title">แถบริมทาง (ระหว่างช่องจราจรกับทางเท้า ทั้งสองฝั่ง)</small>
+    {bands.map((b,i)=><div key={b.id} className="design-band-row">
+      <NumberField field={`band-${i}`} label={`${label(b.type)} (ม.)`} value={b.width} step={.25} min={.25} max={4.5} onCommit={width=>onChange(bands.map((x,k)=>k===i?{...x,width}:x))}/>
+      <button className="link danger" data-design-action={`remove-band-${i}`} onClick={()=>onChange(bands.filter((_,k)=>k!==i))}>ลบ</button>
+    </div>)}
+    {bands.length<6&&<div className="design-reference-tools">{BAND_TYPES.map(([type,name,width])=><button key={type} data-design-action={`add-band-${type}`} onClick={()=>{const ids=new Set(bands.map(x=>x.id));let n=1;while(ids.has(`${type}-${n}`))n++;onChange([...bands,{id:`${type}-${n}`,type,width}]);}}>+ {name}</button>)}</div>}
+  </section>;
+}
+
 function RoadInspector({road,run,onDeleted}:{road:Road;run:Run;onDeleted:()=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
@@ -56,6 +70,7 @@ function RoadInspector({road,run,onDeleted}:{road:Road;run:Run;onDeleted:()=>voi
       <NumberField field="median" label="เกาะกลาง (ม.)" value={s.median} step={.5} min={0} max={12} onCommit={v=>set({median:v})}/>
       <NumberField field="walk" label="ทางเท้า ทั้งสองข้าง (ม.)" value={s.walk} step={.25} min={0} max={8} onCommit={v=>set({walk:v})}/>
     </div>
+    <BandsEditor bands={s.bands??[]} onChange={bands=>set({bands})}/>
     <p className="design-meta">ยาว {length.toFixed(1)} ม. · {road.points.length} จุดแนว · ดับเบิลคลิกบนแนวถนนเพื่อเพิ่มจุด</p>
     <div className="design-actions">
       <button className="danger" data-design-action="delete-road" onClick={()=>{if(!armed){setArmed(true);return;}if(run({type:'road.remove',roadId:road.id}).ok)onDeleted();}}>{armed?'กดอีกครั้งเพื่อลบถนน':'ลบถนน'}</button>
@@ -152,7 +167,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
       {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
     </div>
     <div className="design-fields">
-      <NumberField field="corner" label="รัศมีมุมขอบทาง (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
+      <NumberField field="corner" label="รัศมีมุมขอบทาง ทุกมุม (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
     </div>
     <div className="design-actions">
       <button data-design-action="advanced-junction" title="3 มิติ ทางข้าม สัญญาณไฟ เส้นหยุด วงเวียน ช่องเปิดเกาะกลาง ลูกศร และ Slip lane ขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (3 มิติ ทางข้าม สัญญาณไฟ วงเวียน …)</button>

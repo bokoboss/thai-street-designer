@@ -30,10 +30,11 @@ export function useReferenceImage(onMessage:(text:string,kind?:'info'|'error')=>
     if(!['image/png','image/jpeg'].includes(file.type)||file.size>REFERENCE_IMAGE_LIMIT){onMessage('รองรับภาพ JPG หรือ PNG ขนาดไม่เกิน 50 MB','error');return;}
     try{
       const size=await readLocalImageDimensions(file);
-      await saveLocalImageBlob(file);show(file);
-      setReference(initialLocalImageReference(file.name,size.width,size.height,center));
+      // Show the image right away; keeping it for the next visit happens in the background.
+      show(file);setReference(initialLocalImageReference(file.name,size.width,size.height,center));
       onMessage(`เพิ่มภาพอ้างอิง ${file.name} แล้ว · ตั้งมาตราส่วนจากระยะจริงก่อนใช้วัดหรือวาดตาม`);
-    }catch{onMessage('อ่านหรือบันทึกภาพไม่สำเร็จ ลองใช้ไฟล์ JPG หรือ PNG อื่น','error');}
+      saveLocalImageBlob(file).catch(()=>onMessage('แสดงภาพได้ แต่เก็บภาพไว้ในเบราว์เซอร์ไม่ได้ · เมื่อเปิดหน้าใหม่ต้องเพิ่มภาพอีกครั้ง','error'));
+    }catch{onMessage('อ่านภาพไม่สำเร็จ ลองใช้ไฟล์ JPG หรือ PNG อื่น','error');}
   },[onMessage,show]);
   const remove=useCallback(async()=>{
     try{await clearLocalImageBlob();}catch{/* the reference is cleared either way */}

@@ -27,6 +27,7 @@ export type MapState=ReturnType<typeof useMapReference>;
 
 export function MapPanel({map,tool,onTool,center,onMessage}:{map:MapState;tool:DesignTool;onTool:(t:DesignTool)=>void;center:()=>WorldPoint;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const r=map.reference,kind=basemapKind(r.basemap),key=basemapCredentialKey(r.basemap);
+  const [host]=useState(()=>typeof window==='undefined'?'':window.location.host);
   const [query,setQuery]=useState(''),[places,setPlaces]=useState<MapPlace[]>([]),[busy,setBusy]=useState(false);
   async function find(){
     if(query.trim().length<2)return;setBusy(true);
@@ -57,7 +58,7 @@ export function MapPanel({map,tool,onTool,center,onMessage}:{map:MapState;tool:D
         <button className={tool==='map-move'?'active':''} disabled={r.locked} data-design-action="move-map" onClick={()=>onTool(tool==='map-move'?'select':'map-move')}>{tool==='map-move'?'จบการย้ายแผนที่':'ย้ายแผนที่'}</button>
         <label className="design-check"><input type="checkbox" checked={r.locked} onChange={e=>{map.update({locked:e.currentTarget.checked});if(e.currentTarget.checked&&tool==='map-move')onTool('select');}}/> ล็อกตำแหน่ง</label>
       </div>
-      <p className="design-meta">แผนที่ใช้มาตราส่วนเดียวกับแบบ (1 หน่วย = 1 ม.) · ตรวจสิทธิ์การใช้ภาพของผู้ให้บริการก่อนนำไปใช้ในรายงาน · คีย์เก็บในเบราว์เซอร์นี้เท่านั้น</p>
+      <p className="design-meta">แผนที่ใช้มาตราส่วนเดียวกับแบบ (1 หน่วย = 1 ม.) · ตรวจสิทธิ์การใช้ภาพของผู้ให้บริการก่อนนำไปใช้ในรายงาน · คีย์เก็บในเบราว์เซอร์นี้เท่านั้น ควรจำกัดคีย์ให้ใช้ได้เฉพาะโดเมน {host||'ของเว็บนี้'}</p>
     </>}
   </section>;
 }

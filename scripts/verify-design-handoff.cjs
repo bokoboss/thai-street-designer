@@ -40,4 +40,8 @@ assert.ok(stale.cmd);assert.ok(stale.issues.some(s=>s.includes('ถนนถู�
 // Junction removed meanwhile: nothing applied.
 step({type:'crossing.decide',candidateId:cid,decision:'grade-separated'});
 assert.equal(h.handoffCommand(h.readHandoff(JSON.stringify(stored)),ed.project).cmd,null);
+// Road-owned values are guarded in the advanced editor: the check sees lane counts, widths and arms, not junction settings.
+const lb=T('core/road-first/leg-binding.cjs'),dz=rp.compileRoadFirstProject(ed.project).project.junctions[0]?.design??ctx.junction.design;
+const lanes=structuredClone(dz);lanes.arms[lanes.enabled.indexOf(true)].incoming+=1;assert.deepEqual(lb.roadOwnedChanges(dz,lanes),['incoming']);
+const sig=structuredClone(dz);sig.arms[sig.enabled.indexOf(true)].signal=!sig.arms[sig.enabled.indexOf(true)].signal;sig.corner=12;assert.deepEqual(lb.roadOwnedChanges(dz,sig),[]);
 console.log('PASS advanced junction hand-off: storage round trip, edits back as one undoable command, unchanged/stale/removed cases');
