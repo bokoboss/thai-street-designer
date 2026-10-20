@@ -9,7 +9,7 @@ import {startSession} from './test-support/cdp-browser.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));process.chdir(root);mkdirSync('artifacts',{recursive:true});
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-design-acceptance'});
-const actions=[];const act=(label,fn)=>{actions.push(label);return fn();};
+const actions=[],diag={};const act=(label,fn)=>{actions.push(label);return fn();};
 try{
   await b.waitFor(()=>b.count('[data-design-notice]'),'workspace loaded');
   assert.match(await b.text('.design-inspector'),/วาดถนน/,'empty project explains how to start');
@@ -55,7 +55,7 @@ try{
   await b.waitFor(async()=>(await b.text('[data-design-section]'))?.includes('2.50'),'redo re-applies');
 
   // Road ids are opaque and never reused; find them in drawing order.
-  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);
+  const roadId=i=>b.evalValue(`document.querySelectorAll('[data-design-road]')[${i}].dataset.designRoad`),R1=await roadId(0),R2=await roadId(1);diag.roads=[R1,R2];
   // Drag the first road's start point: one undo step.
   const point=await b.rect(`[data-design-road-point="${R1}:0"]`);
   await b.drag(point,{x:point.x,y:point.y+40});
@@ -281,7 +281,8 @@ try{
   console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept)`);
 }catch(error){
   // On CI the message becomes a check annotation, so a failure can be read without the job log.
-  if(process.env.GITHUB_ACTIONS){const msg=String(error?.message??error).replace(/\r?\n/g,' ').slice(0,900);console.log(`::error title=design browser acceptance::${msg}`);}
+  if(process.env.GITHUB_ACTIONS){let state='';try{state=JSON.stringify({...diag,path:await b.evalValue('location.pathname'),active:await b.text('[data-design-scenario][aria-selected="true"]'),tabs:await b.evalValue(`[...document.querySelectorAll('[data-design-scenario]')].map(x=>x.dataset.designScenario+'='+x.textContent).join('|')`),roads:await b.evalValue(`[...document.querySelectorAll('[data-design-road]')].map(x=>x.dataset.designRoad).join(',')`),notice:await b.text('[data-design-notice]')});}catch{}
+    const msg=(String(error?.message??error)+' · '+state).replace(/\r?\n/g,' ').slice(0,1500);console.log(`::error title=design browser acceptance::${msg}`);}
   try{await b.screenshot('artifacts/design-browser-failure.png');}catch{}
   throw error;
 }finally{b.close();}
