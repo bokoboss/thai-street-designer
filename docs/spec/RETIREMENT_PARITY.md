@@ -3,7 +3,7 @@
 Roadmap Phase 3 slice 6 is staged (owner decision 2026-10-20): `/design` becomes the home page first; the earlier
 pages are removed only when everything below is available from `/design`.
 
-Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/design`):
+Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/design`; 6b-2 the reference image):
 
 - `/` opens `/design`.
 - `/junction` is the **advanced junction editor**, opened from the junction inspector in `/design` ("แก้ทางแยกขั้นสูง").
@@ -24,7 +24,8 @@ Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/d
 | Junction 3D view | | ✓ | |
 | Scenarios, comparison, report figure (PNG/SVG) | ✓ | | |
 | Network 3D view | ✓ (2D / 3D toggle) | | |
-| Reference image / map background | | | `/network`, `/junction` |
+| Reference image (place, opacity, rotate, move, scale from a known distance) | ✓ | | |
+| Online map background (street / imagery basemaps, place search) | | ✓ (junction only) | `/network` |
 | Parallel / frontage corridors, frontage seeds | | | `/network` |
 | Auxiliary-lane proposals between junctions, station components | | | `/network` |
 | Design Summary (HTML report) | ✓ (ส่งออกรูป → รายงานสรุปแบบ) | | |
