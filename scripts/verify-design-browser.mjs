@@ -137,13 +137,23 @@ try{
   await b.waitFor(async()=>await b.count('[data-design-delta="changed"]')===1,'back on the alternative with its change');
   // Report figure (PNG) of the comparison.
   // Capture the download (headless has no download folder) and keep the figure as evidence.
-  await b.evalValue(`(()=>{const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){if(this.download.endsWith('.png'))window.__figure=fetch(this.href).then(r=>r.blob()).then(b=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(b);}));else click.call(this);};})()`);
+  await b.evalValue(`(()=>{const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){if(this.download.endsWith('.html'))window.__report=fetch(this.href).then(r=>r.text());else if(this.download.endsWith('.png'))window.__figure=fetch(this.href).then(r=>r.blob()).then(b=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(b);}));else click.call(this);};})()`);
   await b.click('[data-design-export]');
   await b.click('[data-design-export-format="png"]');
   await b.waitFor(async()=>/ส่งออกรูป .*\.png แล้ว/.test(await b.text('[data-design-notice]')??''),'figure exported');
   const figure=await b.evalValue('window.__figure');
   assert.match(figure,/^data:image\/png;base64,/,'figure is a PNG');
   writeFileSync('artifacts/design-figure-comparison.png',Buffer.from(figure.split(',')[1],'base64'));
+  // Design Summary report of the scenario being edited.
+  await b.click('[data-design-export]');await b.click('[data-design-export-format="report"]');
+  const report=await b.waitFor(()=>b.evalValue('window.__report'),'report exported');
+  assert.match(report,/Junction Register/);assert.match(report,/ทางเลือก A/);
+  // 3D view of the same compiled design.
+  await b.click('[data-design-view="3d"]');
+  await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-junction-surfaces]')?.dataset.networkSceneJunctionSurfaces??0`))>0,'3D view shows the junction');
+  await sleep(300);await b.screenshot('artifacts/design-browser-3d.png');
+  await b.click('[data-design-view="2d"]');
+  await b.waitFor(async()=>await b.count('.network-scene3d')===0,'back to the plan');
   await b.screenshot('artifacts/design-browser.png');
   // Scenarios survive a reload.
   await sleep(300);await b.goto('/design');
@@ -170,5 +180,5 @@ try{
   // The home page is the road-first workspace.
   await b.goto('/');await b.waitFor(()=>b.count('[data-design-workspace]'),'home page is /design');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view)`);
 }finally{b.close();}
