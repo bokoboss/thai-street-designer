@@ -3,6 +3,7 @@
 import {useRef,useState} from 'react';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {useReferenceImage} from './use-reference-image';
+import {MapPanel,type MapState} from './map-panel';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
@@ -210,8 +211,8 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
-  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;scenario:ScenarioPanel;
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
+  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
@@ -231,6 +232,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
+      <MapPanel map={map} tool={tool as DesignTool} onTool={reference.onTool} center={reference.viewCenter} onMessage={onMessage}/>
       <ReferencePanel {...reference}/>
       {scenario.comparison&&scenario.reference&&<ComparisonPanel diff={scenario.comparison} reference={scenario.reference} onSelect={onSelect}/>}
       {compiled.issues.length>0&&<div className="design-issues" data-design-issues={compiled.issues.length}><b>รายการที่ควรตรวจ</b>

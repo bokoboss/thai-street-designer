@@ -64,6 +64,8 @@ try{
   await b.waitFor(async()=>await b.count('[data-design-road]')===2&&await b.count('[data-network-junction-hit]')>0,'project restored after reload');
   // Drawing aids (slice 3): continue a road from its end, typed length, Shift turns snapping off.
   const move=(p,modifiers=0)=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
+  // Let the plan finish fitting after the reload before picking a road by position.
+  await sleep(500);
   await b.clickAt(at(-250,0));
   const endPt=await b.waitFor(()=>b.rect('[data-design-road-point="R-1:1"]'),'road 1 end handle');
   const near={x:endPt.x+4,y:endPt.y+4},up={x:endPt.x+1,y:endPt.y-160};
@@ -190,9 +192,13 @@ try{
   writeFileSync('.test-build/reference.png',png(400,200));
   await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y+canvas.h/2-60});
   await b.waitFor(()=>b.count('[data-design-reference="none"]'),'reference panel');
-  const doc=await b.send('DOM.getDocument',{});const node=await b.send('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'[data-design-reference-input]'});
-  await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
-  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan');
+  // Choose the file through the real input (retried once in case the panel re-rendered between lookup and upload).
+  for(let attempt=0;attempt<3&&!await b.count('[data-design-reference-image]');attempt++){
+    const doc=await b.send('DOM.getDocument',{depth:-1}),node=await b.send('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'[data-design-reference-input]'});
+    if(node.nodeId)await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
+    await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image',5000).catch(()=>null);
+  }
+  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'));throw e;});
   await b.click('[data-design-action="calibrate-reference"]');
   const ca={x:canvas.x-canvas.w/2+120,y:canvas.y+canvas.h/2-120},cb={x:ca.x+200,y:ca.y};
   await b.clickAt(ca);await b.clickAt(cb);
@@ -209,6 +215,26 @@ try{
   await b.click('[data-design-action="move-reference"]');
   await b.click('[data-design-action="remove-reference"]');await b.click('[data-design-action="remove-reference"]');
   await b.waitFor(()=>b.count('[data-design-reference="none"]'),'image removed');
+
+  // Section by station (slice 6b-3): the selected road's segment through the same resolver as the earlier page.
+  await b.waitFor(()=>b.count('[data-network-junction-hit]'),'plan');
+  const r1=await b.rect('[data-design-road="R-2"] path');
+  await b.clickAt({x:r1.x,y:r1.y-r1.h*.35});
+  await b.click('[data-design-section-mode="station"]');
+  await b.waitFor(async()=>await b.count('[data-design-section-station]')===1&&await b.count('.network-section-components')===1,'section at a station');
+  await b.click('[data-design-section-mode="road"]');
+  // Online map under the plan (no network here, so only placement is checked): show, drag to line up, hide.
+  await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y-canvas.h/2+150});
+  await b.waitFor(()=>b.count('[data-design-map-visible]'),'map panel');
+  await b.evalValue(`document.querySelector('[data-design-map-visible]').click()`);
+  await b.waitFor(async()=>await b.count('.design-canvas>.map-reference-layer')===1,'map layer under the plan');
+  await b.click('[data-design-action="move-map"]');
+  const mapRef=()=>b.evalValue(`JSON.parse(localStorage.getItem('thai-street-map-reference-v1'))`),mapBefore=await mapRef();
+  await b.drag({x:canvas.x-canvas.w/2+200,y:canvas.y},{x:canvas.x-canvas.w/2+260,y:canvas.y+30});
+  await b.waitFor(async()=>{const m=await mapRef();return m.offsetX>mapBefore.offsetX&&m.offsetY>mapBefore.offsetY;},'map moved by dragging');
+  await b.click('[data-design-action="move-map"]');
+  await b.evalValue(`document.querySelector('[data-design-map-visible]').click()`);
+  await b.waitFor(async()=>await b.count('.map-reference-layer')===0,'map hidden');
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement)`);
 }finally{b.close();}
