@@ -1,6 +1,6 @@
 # Consolidation Roadmap
 
-Updated: 2026-10-21
+Updated: 2026-10-21 (Phase 3 accepted)
 Decision: [ADR-0001](decisions/ADR-0001-consolidation.md)
 Status: **active plan** — replaces `docs/POST_V1_ROADMAP.md` as the source of next work.
 
@@ -109,12 +109,21 @@ Not adopted from the research for now: usage telemetry (no backend; privacy firs
 Status: slice 1 merged 2026-10-18 (T3 in 5 actions, baseline 17). Slice 2 merged 2026-10-19 (PR #16). Slice 3 merged 2026-10-19 (PR #17). Slice 4 merged 2026-10-20 (PR #18). Slice 5 on `phase3/scenarios` (2026-10-20): scenario tabs, "+ ทางเลือก", comparison highlights by road/crossing identity, report figure PNG/SVG, workspace file with every scenario; earlier Network files migrate every scenario.
 Slice 5 merged 2026-10-20 (PR #19); fix PR #20 (left-turn pocket and Slip lane not on the same approach). Slice 6 staged (owner decision 2026-10-20): 6a on `phase3/one-workspace` — `/` opens `/design`, `/junction` becomes the advanced junction editor with a round trip, `/network` kept by URL as the earlier page; parity register in `docs/spec/RETIREMENT_PARITY.md`. 6b-1..3 merged (PR #22–#24): 3D, Design Summary, reference image, online map, section by station; parallel/frontage corridors and auxiliary proposals dropped for now (owner). 6c on `phase3/retire-network`: `/network` redirects to `/design`, import of earlier work as alternatives, Network browser test reduced to the junction golden suite.
 Independent review 2026-10-20 (ChatGPT): P0 fixes merged — topology integrity (PR #26), data safety (PR #27). P1/P2 listed in the review follow.
+P1 merged (PR #29). P2 merged: road join (PR #30), per-corner radius (PR #31), per-object migration report (PR #33); preview of the outcome while drawing and right-click step back (PR #34).
+
+**Accepted by the owner on 2026-10-21.** Deviation from the exit rule above, by owner decision: the hands-on run of GW-01/GW-02
+by the owner is replaced by a usability review by the maintainer agent and ChatGPT, to be done during Phase 4; its
+findings are handled as fixes. Carried forward, not blocking:
+- Merge the advanced junction editor (`/junction`) into `/design` in place — separate track alongside Phase 4,
+  starting with what still needs the advanced editor (crossings, signals, roundabout, median openings, markings).
+- Station-based lane transitions — moved to Phase 4C.
+- One-click junction ↔ roundabout conversion; OSM/GeoJSON start — unchanged in "Later" of slice 7.
 
 ---
 
 ## Phase 4 — Grade separation and engineering depth
 
-Starts only after the owner accepts Phase 3 (feature freeze in `AGENTS.md`).
+Phase 3 accepted 2026-10-21; Phase 4 is the current phase, starting with 4A.
 Source for 4A–4E: [game-UX and interchange research, 2026-10-21](research/2026-10-21-GAME-UX-INTERCHANGE-RESEARCH.md).
 Its action-count targets are the researcher's proposals, not industry standards; they are re-measured here
 against `docs/spec/UX_BASELINE_RESULTS.md` as each slice lands.
