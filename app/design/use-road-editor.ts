@@ -51,7 +51,7 @@ function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string;error?:b
 export type CommandOutcome={ok:boolean;message:string};
 /** autoJunctions: crossings that became junctions in the last step, offered for Undo / grade separation. */
 /** restorable: name of an alternative just removed, offered for restore. */
-export type EditorNotice={text:string;kind:'info'|'error';autoJunctions?:string[];restorable?:string};
+export type EditorNotice={text:string;kind:'info'|'error';autoJunctions?:string[];autoSeparated?:string[];restorable?:string};
 
 /** Each scenario keeps its own editor, so its undo history survives switching between scenarios. */
 type Book={workspace:RoadFirstWorkspace;editors:Record<string,RoadFirstEditor>};
@@ -126,7 +126,7 @@ export function useRoadEditor(){
     if(result.error){setNotice({text:result.error,kind:'error'});return{ok:false,message:result.error};}
     const next=opts?.gesture?stepped:endGesture(stepped);
     setEditor(next);
-    setNotice({text:result.openCrossings.length||result.blocked.length?`${result.label} · ${result.warnings.at(-1)}`:result.label,kind:'info',autoJunctions:result.autoJunctions.length?result.autoJunctions:undefined});
+    setNotice({text:result.openCrossings.length||result.blocked.length?`${result.label} · ${result.warnings.at(-1)}`:result.label,kind:'info',autoJunctions:result.autoJunctions.length?result.autoJunctions:undefined,autoSeparated:result.autoSeparated.length?result.autoSeparated:undefined});
     // A project access does not change the section used for the next ordinary road.
     if(cmd.type==='road.add'&&cmd.road.role!=='access')setLastSection(structuredClone(cmd.road.section));
     if(cmd.type==='road.setSection'){const r=next.project.roads.find(x=>x.id===cmd.roadId);if(r&&r.role!=='access')setLastSection(structuredClone(r.section));}

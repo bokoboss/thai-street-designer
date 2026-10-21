@@ -9,6 +9,7 @@ import {applyApproach,applyLegTreatment,legKey,parseLegKey,type ApproachOverride
 import {isJunctionPort,type JunctionInstance,type LinkEndRef,type LinkSectionProfile,type LinkStationLaneComponent,type LinkStationWidthComponent,type NetworkProject,type RoadEnd,type RoadEndSection,type RoadLink,type WorldPoint} from '../network/network-project';
 import {proposalId} from '../network/junction-auxiliary-proposal';
 import type {Direction} from '../junction/model';
+import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -27,7 +28,9 @@ export type RoadRole='access';
 export type RoadOpening={id:string;station:number;length:number;type?:'opening'|'uturn'};
 export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[];
   /** Trees / street lights along both sidewalks, on the links and on this road's junction arms (engine roadside defaults). */
-  roadside?:{trees:boolean;lights:boolean}};
+  roadside?:{trees:boolean;lights:boolean};
+  /** Vertical points (station, z) — Phase 4A; absent = level 0. */
+  profile?:Profile};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
@@ -37,7 +40,8 @@ export type JunctionTreatments={slips?:LegSlip[];corner?:number;cornerRadii?:Par
 /** roads: the roads that join at this junction; any other road through the same point passes over or under it. */
 /** at: last known position of the crossing, used to re-attach the decision after road edits. */
 /** excluded: roads that reach the junction point but were deliberately left out of it (not reported, never auto-joined). */
-export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';name?:string;roads?:string[];excluded?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
+/** over: on a grade-separated crossing, the road that passes over (absent = from the levels). */
+export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';over?:string;name?:string;roads?:string[];excluded?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
 export type CompileOptions={approachLength?:number;tolerance?:number};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 /** sources: which crossing each compiled junction comes from and which road each RoadLink belongs to (for selection in the editor). */
@@ -48,7 +52,9 @@ export type CompileSources={junctions:Record<string,string>;links:Record<string,
  */
 /** shortfalls: arms that need more length than the straight part of their road gives (stretched off the alignment). */
 export type ArmShortfall={candidateId:string;junctionId:string;armId:number;roadId:string;side:'ahead'|'behind';room:number;required:number};
-export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[]};
+/** A grade-separated crossing (Phase 4A): relation, the two roads and the measured level gap (over minus under). */
+export type CompiledCrossing={candidateId:string;roads:string[];point:WorldPoint;relation:'over'|'unresolved';over?:string;under?:string;gap:number;name:string};
+export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[]};
 
 /** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
 const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
@@ -235,10 +241,14 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       }
       armLength.set(`${id}:${leg.armId}`,design.arms[leg.armId].length);
     }
-    junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design});sources.junctions[id]=d.candidateId;
+    // Junction level: its roads should meet at one level; a difference is reported, not hidden (Phase 4A).
+    const zs=c.roads.map(r=>levelAt(roadById.get(r.roadId)?.profile,r.station)),zMin=Math.min(...zs),zMax=Math.max(...zs);
+    if(zMax-zMin>LEVEL_TOLERANCE)issues.push(`${d.name??id}: ระดับถนนต่างกัน ${(zMax-zMin).toFixed(1)} ม. ที่ทางแยก — เปลี่ยนเป็นทางต่างระดับ หรือปรับแนวดิ่งให้เท่ากัน`);
+    const jz=round(zs.reduce((t,v)=>t+v,0)/(zs.length||1),3);
+    junctions.push({id,name:d.name??`ทางแยก ${jIndex+1}`,x:round(c.point.x),y:round(c.point.y),rotation:0,design,...(jz?{z:jz}:{})});sources.junctions[id]=d.candidateId;
   });
 
-  const links:RoadLink[]=[],roadEnds:RoadEnd[]=[];
+  const links:RoadLink[]=[],roadEnds:RoadEnd[]=[],linkRanges:{id:string;roadId:string;from:number;to:number}[]=[];
   const addEnd=(road:Road,atStart:boolean):LinkEndRef=>{
     const pts=road.points,p=atStart?pts[0]:pts[pts.length-1],q=atStart?pts[1]:pts[pts.length-2],data=road.ends?.[atStart?'start':'end'];
     const end:RoadEnd={id:`E-${roadEnds.length+1}`,name:data?.name??`${road.name} (${atStart?'ต้นทาง':'ปลายทาง'})`,x:round(p.x),y:round(p.y),
@@ -290,6 +300,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       if(inside.length&&road.section.median>0)built.medianOpenings=inside.map(o=>({id:o.id,start:round(Math.max(0,o.station-from.station),3),length:o.length,...(o.type?{type:o.type}:{})}));
       for(const o of inside)placed.add(o.id);
       if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
+      const levels=profileSlice(road.profile,from.station,to.station);if(levels)built.levels=levels;
+      linkRanges.push({id:built.id,roadId:road.id,from:from.station,to:to.station});
       links.push(built);
       span++;
     }
@@ -297,5 +309,22 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     else for(const o of road.openings??[])if(!placed.has(o.id))issues.push(`${road.name}: ช่องเปิดเกาะกลางที่ ${round(o.station,1)} ม. อยู่ในช่วงเข้าทางแยกหรือเลยปลายถนน จึงไม่ได้สร้าง — ย้ายออกจากช่วงเข้าทางแยก หรือใช้ช่องเปิดของปากทางแทน`);
     if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues,sources,unjoined,overflow,shortfalls};
+  // Grade-separated crossings: relation and measured gap (Phase 4A). Not judged against any standard here.
+  const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[];
+  for(const d of decisions.filter(x=>x.decision==='grade-separated')){
+    const c=byId.get(d.candidateId);if(!c||c.roads.length<2)continue;
+    const [a,b]=c.roads,ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)continue;
+    const za=levelAt(ra.profile,a.station),zb=levelAt(rb.profile,b.station);
+    const over=d.over===ra.id||d.over===rb.id?d.over:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
+    const top=over===ra.id?{r:ra,ref:a,z:za}:over===rb.id?{r:rb,ref:b,z:zb}:null,bottom=top?(top.r===ra?{r:rb,ref:b,z:zb}:{r:ra,ref:a,z:za}):null;
+    const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
+    const name=top&&bottom?`${top.r.name} ข้าม ${bottom.r.name}`:`${ra.name} × ${rb.name}`;
+    crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name});
+    const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
+    const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
+      return{a:pointAt(top.r.points,sa),b:pointAt(top.r.points,sb),half:sectionWidth(top.r.section)/2};})():undefined;
+    networkCrossings.push({id:d.candidateId,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,
+      ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
+  }
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings};
 }

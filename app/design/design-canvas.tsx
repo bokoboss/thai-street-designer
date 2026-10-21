@@ -252,7 +252,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           </g>;})}
       </g>}
       <g data-design-roads="true">
-        {project.roads.map(road=>{
+        {/* Higher roads last, so a click at a grade separation picks the road on top. */}
+        {[...project.roads].sort((a,b)=>Math.max(0,...(a.profile??[]).map(q=>q.z))-Math.max(0,...(b.profile??[]).map(q=>q.z))).map(road=>{
           const d=road.points.map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id;
           return <g key={road.id} data-design-road={road.id}>
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}
@@ -290,7 +291,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
               <text x={c.point.x+px(18)} y={c.point.y-px(18)} dy={px(4.5)} textAnchor="middle" fontSize={px(13)} fontWeight="800" fill="#a35f00" pointerEvents="none">!</text>
             </g>;
           }
-          const state=d?.decision??'open',selected=selection?.kind==='crossing'&&selection.id===c.id;
+          const unresolved=d?.decision==='grade-separated'&&compiled.crossings.find(x=>x.candidateId===c.id)?.relation==='unresolved';
+          const state=unresolved?'open':d?.decision??'open',selected=selection?.kind==='crossing'&&selection.id===c.id;
           return <g key={c.id} data-design-candidate={c.id} data-design-candidate-state={state} style={{cursor:'pointer'}}
             onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'crossing',id:c.id});}}>
             <circle cx={c.point.x} cy={c.point.y} r={px(13)} fill={state==='open'?'#fff7e6':'#ffffffcc'} stroke={state==='open'?'#c47b12':'#8a9599'} strokeWidth={px(selected?3:1.6)} strokeDasharray={state==='open'?undefined:`${px(4)} ${px(3)}`}/>

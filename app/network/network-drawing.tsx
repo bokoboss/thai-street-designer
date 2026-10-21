@@ -7,7 +7,7 @@ import {
   activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,portKey
 } from '@/core/network/network-project';
-import {medianIslandStrips,resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
+import {linksInDrawOrder,medianIslandStrips,resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
 
 export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
@@ -213,7 +213,10 @@ export function NetworkDrawing({
       return id===parallelDraftMainlineId?'draft-mainline':undefined;
     };
   return <g>
-    {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
+    {linksInDrawOrder(project).map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
+    {/* Grade separation (Phase 4A): the road that passes over is drawn on top, with its deck edges marked across the road below. */}
+    {project.crossings?.map(c=>c.deck&&c.relation==='over'?<g key={c.id} data-network-crossing-deck={c.id} pointerEvents="none">{[1,-1].map(s=>{const dx=c.deck!.b.x-c.deck!.a.x,dy=c.deck!.b.y-c.deck!.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*c.deck!.half*s,ny=dx/l*c.deck!.half*s;
+      return <path key={s} d={`M${c.deck!.a.x+nx-dx/l*1.2} ${c.deck!.a.y+ny-dy/l*1.2}L${c.deck!.a.x+nx} ${c.deck!.a.y+ny}L${c.deck!.b.x+nx} ${c.deck!.b.y+ny}L${c.deck!.b.x+nx+dx/l*1.2} ${c.deck!.b.y+ny+dy/l*1.2}`} fill="none" stroke="#1f2d33" strokeWidth=".55"/>;})}</g>:null)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} armHandles={armHandles} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

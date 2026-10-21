@@ -218,8 +218,13 @@ export default function DesignWorkspace(){
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
-          <button data-design-toast-action="grade-separated" onClick={()=>{for(const id of ed.notice.autoJunctions??[])ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});}}>เป็นทางต่างระดับ</button>
+          <button data-design-toast-action="grade-separated" onClick={()=>{const ids=ed.notice.autoJunctions??[];for(const id of ids)ed.run({type:'crossing.decide',candidateId:id,decision:'grade-separated'});if(ids[0]){setTool('select');setSelection({kind:'crossing',id:ids[0]});}}}>เป็นทางต่างระดับ</button>
           <button data-design-toast-action="select" onClick={()=>{const id=ed.notice.autoJunctions?.[0];if(id){setTool('select');setSelection({kind:'junction',id});}}}>ดูทางแยก</button>
+        </div>}
+        {ed.notice.autoSeparated&&<div className="design-toast" role="status" data-design-auto-separated={ed.notice.autoSeparated.length}>
+          <span>ถนนอยู่ต่างระดับกัน ทำเป็นทางต่างระดับให้ {ed.notice.autoSeparated.length} แห่ง</span>
+          <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
+          <button data-design-toast-action="select-crossing" onClick={()=>{const id=ed.notice.autoSeparated?.[0];if(id){setTool('select');setSelection({kind:'crossing',id});}}}>ดูจุดตัด</button>
         </div>}
         {ed.notice.restorable&&<div className="design-toast" role="status" data-design-removed-toast="true">
           <span>ลบ {ed.notice.restorable} แล้ว</span>
