@@ -23,7 +23,9 @@ export type RoadLinkComponent=LinkStationWidthComponent|(Omit<LinkStationLaneCom
 export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;components?:RoadLinkComponent[]};
 /** access: a project access (driveway). Where it meets a road, that road keeps flowing (see compileRoadNetwork). */
 export type RoadRole='access';
-export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[]};
+/** Mid-block median opening: station = start from the road start (road stations). */
+export type RoadOpening={id:string;station:number;length:number;type?:'opening'|'uturn'};
+export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[]};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
@@ -273,15 +275,22 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const reach=toJunction?last!.station+armLength.get(`${toJunction.junctionId}:${toJunction.armId}`)!:total;
       if(!last||reach<total-EPS)nodes.push({behind:{ref:addEnd(road,false),station:total}});
     }
-    let span=0;
+    let span=0;const placed=new Set<string>();
     for(let k=0;k<nodes.length-1;k++){
       const from=nodes[k].ahead,to=nodes[k+1].behind;
       if(!from||!to){issues.push(`${road.name}: ต่อช่วงถนนไม่ได้`);continue;}
       const via=road.points.filter((_,i)=>s[i]>from.station+EPS&&s[i]<to.station-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
       sources.links[`L-${links.length+1}`]=road.id;
-      links.push(linkData(road,{id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]},road.links?.[span]));
+      const built=linkData(road,{id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]},road.links?.[span]);
+      // Mid-block openings that fall wholly inside this link, in link-local stations.
+      const inside=(road.openings??[]).filter(o=>o.station>=from.station-EPS&&o.station+o.length<=to.station+EPS);
+      if(inside.length&&road.section.median>0)built.medianOpenings=inside.map(o=>({id:o.id,start:round(Math.max(0,o.station-from.station),3),length:o.length,...(o.type?{type:o.type}:{})}));
+      for(const o of inside)placed.add(o.id);
+      links.push(built);
       span++;
     }
+    if(road.openings?.length&&road.section.median<=0)issues.push(`${road.name}: ไม่มีเกาะกลาง จึงไม่มีช่องเปิดเกาะกลาง ${road.openings.length} แห่งที่ตั้งไว้`);
+    else for(const o of road.openings??[])if(!placed.has(o.id))issues.push(`${road.name}: ช่องเปิดเกาะกลางที่ ${round(o.station,1)} ม. อยู่ในช่วงเข้าทางแยกหรือเลยปลายถนน จึงไม่ได้สร้าง — ย้ายออกจากช่วงเข้าทางแยก หรือใช้ช่องเปิดของปากทางแทน`);
     if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds},legs,issues,sources,unjoined,overflow,shortfalls};

@@ -40,7 +40,10 @@ export type RoadLink={
   via:LinkVia[];
   sectionProfile:LinkSectionProfile;
   components:LinkStationComponent[];
+  /** Mid-block median openings, link-local stations (start from the link's start). Optional; absent in older files. */
+  medianOpenings?:LinkMedianOpening[];
 };
+export type LinkMedianOpening={id:string;start:number;length:number;type?:'opening'|'uturn'};
 export type ParallelCorridorSide='left'|'right';
 export type ParallelFrontageChain={side:ParallelCorridorSide;linkIds:string[];seedReviewJunctionIds?:string[]};
 export type ParallelCorridor={
@@ -775,6 +778,13 @@ export function validateNetworkProject(project:NetworkProject){
     if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||nodeId(l.from)===nodeId(l.to)||!linkEndExists(project,l.from)||!linkEndExists(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
+    }
+    if(l.medianOpenings!==undefined){
+      const list=l.medianOpenings,total=linkLength(project,l);
+      if(!Array.isArray(list)||list.length>12||list.some(o=>!o||typeof o.id!=='string'||!o.id||o.id.length>40||(o.type!==undefined&&!['opening','uturn'].includes(o.type))||!Number.isFinite(o.start)||o.start<0||!Number.isFinite(o.length)||o.length<2||o.length>40))return`${l.name}: ช่องเปิดเกาะกลางไม่ถูกต้อง`;
+      const sorted=[...list].sort((a,b)=>a.start-b.start);
+      if(sorted.some(o=>o.start+o.length>total+.01))return`${l.name}: ช่องเปิดเกาะกลางเกินความยาวช่วงถนน`;
+      for(let k=1;k<sorted.length;k++)if(sorted[k].start<sorted[k-1].start+sorted[k-1].length+1)return`${l.name}: ช่องเปิดเกาะกลางซ้อนหรือชิดกันเกินไป`;
     }
   }
   const groupedLinks=new Set<string>();

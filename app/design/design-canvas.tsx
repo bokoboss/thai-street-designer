@@ -13,6 +13,7 @@ import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
 import {approachInfo,cornerFromPoint,cornerHandles,openingHandle,openingStartFromPoint,openingsOf,openingsPatch,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
+import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/road-openings';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
 import MapBackground,{type MapProviderCredentials,type MapReference} from '../junction/map-background';
@@ -51,7 +52,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
-    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|null>(null);
+    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|null>(null);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -122,6 +123,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       if(!h||!leg)return;
       const radius=cornerFromPoint(j,d.corner,toWorld(e));
       if(radius!==h.radius)run({type:'junction.setCornerAt',candidateId:d.candidateId,leg:legKey(leg.roadId,leg.side),radius},{gesture:true});return;
+    }
+    if(d.kind==='road-opening'){
+      const r=project.roads.find(x=>x.id===d.roadId),o=r?.openings?.find(x=>x.id===d.id);if(!r||!o)return;
+      const station=roadOpeningStationFromPoint(r,o,toWorld(e));
+      if(station!==o.station)run({type:'road.setOpenings',roadId:r.id,openings:r.openings!.map(x=>x.id===o.id?{...x,station}:x)},{gesture:true});return;
     }
     if(d.kind==='opening'){
       const info=approachInfo(compiled,d.candidateId,d.leg),list=info&&openingsOf(info.arm),o=list?.find(x=>x.id===d.id);if(!info||!list||!o)return;
@@ -227,6 +233,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}
               onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'road',id:road.id});}} onDoubleClick={e=>insertPoint(e,road)}/>
             <path d={d} fill="none" stroke={selected?'#0b7f86':'#5f7f86'} strokeWidth={px(selected?2:1)} strokeDasharray={`${px(8)} ${px(5)}`} pointerEvents="none" opacity={selected?1:.55}/>
+            {selected&&(road.openings??[]).map(o=>{const p=roadOpeningHandle(road,o);
+              return <g key={'o-'+o.id} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'road-opening',roadId:road.id,id:o.id})}>
+                <circle data-design-road-opening-handle={o.id} cx={p.x} cy={p.y} r={px(13)} fill="transparent"><title>{`ช่องเปิด เริ่ม ${o.station} ม. จากต้นถนน · ลากเพื่อย้าย`}</title></circle>
+                <rect x={p.x-px(6)} y={p.y-px(4)} width={px(12)} height={px(8)} rx={px(2)} fill="#fff" stroke="#6d6a8f" strokeWidth={px(2)} pointerEvents="none"/>
+              </g>;})}
             {selected&&road.points.map((p,i)=><g key={i} style={{cursor:'move'}} onPointerDown={e=>startPointDrag(e,road,i)}>
               {/* Large invisible target around a small visible handle. */}
               <circle data-design-road-point={`${road.id}:${i}`} cx={p.x} cy={p.y} r={px(14)} fill="transparent"/>

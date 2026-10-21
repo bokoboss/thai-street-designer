@@ -1,5 +1,5 @@
 import {profiledParallel} from '../common/alignment';
-import {resolveLinkSectionGeometry} from './network-link-geometry';
+import {medianIslandStrips,resolveLinkSectionGeometry} from './network-link-geometry';
 import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
@@ -63,12 +63,13 @@ export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkScen
       points:strip(g.points,g.right.map(v=>-v),g.left),
       z:.03
     });
-    if(g.medianHalf.some(v=>v>.01))out.push({
-      id:link.id+':median',
+    // Median island pieces (a mid-block opening cuts the island; one piece keeps the original id).
+    medianIslandStrips(g).forEach((m,i)=>out.push({
+      id:i?`${link.id}:median:${i}`:link.id+':median',
       kind:'median',
-      points:strip(g.points,g.medianHalf.map(v=>-v),g.medianHalf),
+      points:strip(m.points,m.half.map(v=>-v),m.half),
       z:.16
-    });
+    }));
     g.forwardBands.forEach((band,index)=>out.push({
       id:`${link.id}:forward-band:${index}`,
       kind:bandKind(band.type),
