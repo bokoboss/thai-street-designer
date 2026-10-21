@@ -2,8 +2,8 @@
 // These helpers turn approach edits (turn pockets, Slip lane, corner radius) into the existing
 // leg.setTreatment / slip.set / junction.setCorner commands, and place the plan handles that edit
 // the same values as the inspector fields. Default sizes are tool starting values, not standards.
-import {emptyPockets,type Arm,type Pocket,type Pockets} from '../junction/model';
-import {activeIds,angleGap,armTreatmentOrigins,bounds,cornerArc,cornerRadius} from '../junction/geometry';
+import {emptyPockets,type Arm,type MedianOpening,type Pocket,type Pockets} from '../junction/model';
+import {activeIds,angleGap,armMouth,armTreatmentOrigins,bounds,cornerArc,cornerRadius,suggestedMedianOpeningStart} from '../junction/geometry';
 import {pocketOriginFor} from '../junction/allocation';
 import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {portHeading,type JunctionInstance,type WorldPoint} from '../network/network-project';
@@ -104,4 +104,32 @@ export function pocketHandle(j:JunctionInstance,armId:number,side:PocketSide):Wo
 export function pocketLengthFromPoint(j:JunctionInstance,armId:number,side:PocketSide,p:WorldPoint):number{
   const origin=pocketOriginFor(armTreatmentOrigins(j.design,armId),'incoming',side);
   return Math.max(5,Math.min(140,Math.round(toLocal(j,armId,p).x-origin)));
+}
+
+// Median openings on an approach (UX closure 2026-10-21: created in /design, not only in the advanced editor).
+// Start is measured from the junction mouth along the approach. Lengths are the advanced editor's starting values,
+// not standards; a U-turn opening is a concept placeholder (the engine review asks for a design-vehicle check).
+export type OpeningType=NonNullable<MedianOpening['type']>;
+export const OPENING_START_LENGTH:Record<OpeningType,number>={opening:6,uturn:8};
+export const openingsOf=(arm:Arm)=>structuredClone(arm.medianOpenings??[]);
+export const openingsPatch=(openings:MedianOpening[]):LegTreatment=>({medianOpenings:openings});
+export function newOpening(info:ApproachInfo,type:OpeningType):{opening:MedianOpening}|{error:string}{
+  const a=info.arm;
+  if(a.median<=0)return{error:'ต้องมีเกาะกลางก่อนเพิ่มช่องเปิด'};
+  if(type==='uturn'&&!a.incoming)return{error:'ช่องกลับรถต้องมีช่องจราจรขาเข้าในปากทางนี้'};
+  const ids=new Set((a.medianOpenings??[]).map(o=>o.id));let n=1;while(ids.has(`${type}-${n}`))n++;
+  const length=OPENING_START_LENGTH[type];
+  // Start at the engine's suggestion, then step past existing openings (at least 1 m apart, as the engine requires).
+  let start=suggestedMedianOpeningStart(info.junction.design,info.armId,type,length);
+  for(const o of [...(a.medianOpenings??[])].sort((x,y)=>x.start-y.start))if(start<o.start+o.length+1&&start+length+1>o.start)start=o.start+o.length+1;
+  return{opening:{id:`${type}-${n}`,type,length,start}};
+}
+/** Middle of an opening, on the median line (plan handle). */
+export function openingHandle(j:JunctionInstance,armId:number,o:MedianOpening):WorldPoint{
+  return toWorld(j,armId,{x:armMouth(j.design,armId)+o.start+o.length/2,y:0});
+}
+/** Opening start for its handle dragged to p, in 0.5 m steps, never before the mouth. */
+export function openingStartFromPoint(j:JunctionInstance,armId:number,o:MedianOpening,p:WorldPoint):number{
+  const x=toLocal(j,armId,p).x-armMouth(j.design,armId)-o.length/2;
+  return Math.max(0,Math.round(x*2)/2);
 }

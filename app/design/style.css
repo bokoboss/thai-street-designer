@@ -149,3 +149,5 @@
   .design-phone-note{display:block!important}
 }
 .design-phone-note{display:none;font-size:11.5px;color:var(--d-muted);background:var(--d-accent-soft);border-radius:6px;padding:6px 8px;margin:0}
+.design-opening{border-top:1px solid var(--d-line);padding-top:6px;display:flex;flex-direction:column;gap:6px}
+.design-opening header{display:flex;justify-content:space-between;align-items:baseline}

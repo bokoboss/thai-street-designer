@@ -7,7 +7,7 @@ import {MapPanel,type MapState} from './map-panel';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
-import {approachInfo,cornerHandles,junctionApproaches,newSlip,pocketTreatment,slipPatch,type ApproachInfo,type PocketSide} from '@/core/road-first/approach-edit';
+import {approachInfo,cornerHandles,junctionApproaches,newOpening,newSlip,openingsOf,openingsPatch,pocketTreatment,slipPatch,type ApproachInfo,type OpeningType,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
@@ -117,6 +117,32 @@ function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;ru
   </section>;
 }
 
+const OPENING_LABEL:Record<OpeningType,string>={opening:'ช่องเปิดเกาะกลาง',uturn:'ช่องกลับรถ'};
+/** Median openings on this approach: add, type, position from the mouth, length, remove; the plan handle moves the same start. */
+function OpeningBlock({info,run,onMessage}:{info:ApproachInfo;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
+  const list=openingsOf(info.arm),set=(next:typeof list)=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:openingsPatch(next)});
+  const add=(type:OpeningType)=>{const r=newOpening(info,type);if('error' in r){onMessage(r.error,'error');return;}set([...list,r.opening]);};
+  const edit=(id:string,patch:Partial<(typeof list)[number]>)=>set(list.map(o=>o.id===id?{...o,...patch}:o));
+  if(info.arm.median<=0)return <p className="design-meta" data-design-blocked="opening">ช่องเปิดเกาะกลาง: ถนนช่วงนี้ไม่มีเกาะกลาง</p>;
+  return <section className="design-block" data-design-openings={list.length}>
+    <small className="design-block-title">ช่องเปิดเกาะกลาง</small>
+    {list.map((o,i)=><div key={o.id} className="design-opening" data-design-opening={o.id}>
+      <header><b>{OPENING_LABEL[o.type??'opening']}</b><button className="link" data-design-action={`remove-opening-${i}`} onClick={()=>set(list.filter(x=>x.id!==o.id))}>ลบ</button></header>
+      <label className="design-select"><span>ชนิด</span><select value={o.type??'opening'} data-design-field={`opening-${i}-type`} onChange={e=>edit(o.id,{type:e.currentTarget.value as OpeningType})}>
+        {(Object.keys(OPENING_LABEL) as OpeningType[]).map(t=><option key={t} value={t}>{OPENING_LABEL[t]}</option>)}</select></label>
+      <div className="design-fields">
+        <NumberField field={`opening-${i}-start`} label="ระยะจากปากทาง (ม.)" value={o.start} step={.5} min={0} max={500} onCommit={start=>edit(o.id,{start})}/>
+        <NumberField field={`opening-${i}-length`} label="ความยาวช่องเปิด (ม.)" value={o.length} step={.5} min={2} max={40} onCommit={length=>edit(o.id,{length})}/>
+      </div>
+    </div>)}
+    {list.length<8&&<div className="design-reference-tools">
+      <button data-design-action="add-opening" onClick={()=>add('opening')}>+ ช่องเปิดเกาะกลาง</button>
+      <button data-design-action="add-uturn" onClick={()=>add('uturn')}>+ ช่องกลับรถ</button>
+    </div>}
+    {list.some(o=>o.type==='uturn')&&<p className="design-meta">ช่องกลับรถเป็นแนวคิดเบื้องต้น · ตรวจรถออกแบบและแนวกวาดเมื่อทำแบบรายละเอียด</p>}
+  </section>;
+}
+
 function SlipBlock({info,project,run}:{info:ApproachInfo;project:RoadFirstProject;run:Run}){
   if(!info.slipTo)return null;
   const target=legLabel(project,info.slipTo),s=info.slip;
@@ -142,7 +168,7 @@ function SlipBlock({info,project,run}:{info:ApproachInfo;project:RoadFirstProjec
   </section>;
 }
 
-function ApproachInspector({candidateId,leg,project,compiled,run,onSelect}:{candidateId:string;leg:LegKey;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void}){
+function ApproachInspector({candidateId,leg,project,compiled,run,onSelect,onMessage}:{candidateId:string;leg:LegKey;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const info=approachInfo(compiled,candidateId,leg),d=project.decisions.find(x=>x.candidateId===candidateId);
   if(!info)return <p className="design-meta">ไม่พบปากทางนี้แล้ว</p>;
   return <>
@@ -151,7 +177,8 @@ function ApproachInspector({candidateId,leg,project,compiled,run,onSelect}:{cand
     <PocketBlock info={info} side="right" run={run} title="เลนเลี้ยวขวา"/>
     <PocketBlock info={info} side="left" run={run} title="เลนเลี้ยวซ้าย"/>
     <SlipBlock info={info} project={project} run={run}/>
-    <p className="design-meta">ลากจุดบนแบบเพื่อปรับระยะเก็บรถและรัศมีมุมได้ · ขนาดเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน ควรตรวจกับแนวทางออกแบบที่ใช้</p>
+    <OpeningBlock info={info} run={run} onMessage={onMessage}/>
+    <p className="design-meta">ลากจุดบนแบบเพื่อปรับระยะเก็บรถ ตำแหน่งช่องเปิด และรัศมีมุมได้ · ขนาดเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน ควรตรวจกับแนวทางออกแบบที่ใช้</p>
     <div className="design-actions">
       <button data-design-action="reset-approach" onClick={()=>run({type:'leg.reset',candidateId,leg})}>คืนค่าเริ่มต้นของปากทางนี้</button>
     </div>
@@ -303,7 +330,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
     {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced}/>
-    :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
+    :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>

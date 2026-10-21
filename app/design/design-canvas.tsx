@@ -11,7 +11,7 @@ import type {RoadFirstProject} from '@/core/road-first/project';
 import type {CommandOutcome} from './use-road-editor';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
-import {approachInfo,cornerFromPoint,cornerHandles,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
+import {approachInfo,cornerFromPoint,cornerHandles,openingHandle,openingStartFromPoint,openingsOf,openingsPatch,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
@@ -51,7 +51,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
-    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|null>(null);
+    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|null>(null);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -122,6 +122,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       if(!h||!leg)return;
       const radius=cornerFromPoint(j,d.corner,toWorld(e));
       if(radius!==h.radius)run({type:'junction.setCornerAt',candidateId:d.candidateId,leg:legKey(leg.roadId,leg.side),radius},{gesture:true});return;
+    }
+    if(d.kind==='opening'){
+      const info=approachInfo(compiled,d.candidateId,d.leg),list=info&&openingsOf(info.arm),o=list?.find(x=>x.id===d.id);if(!info||!list||!o)return;
+      const start=openingStartFromPoint(info.junction,info.armId,o,toWorld(e));
+      if(start!==o.start)run({type:'leg.setTreatment',candidateId:d.candidateId,leg:d.leg,patch:openingsPatch(list.map(x=>x.id===o.id?{...x,start}:x))},{gesture:true});return;
     }
     if(d.kind==='pocket'){
       const info=approachInfo(compiled,d.candidateId,d.leg);if(!info)return;
@@ -266,6 +271,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"><title>{`รัศมีมุมนี้ ${h.radius} ม. · ลากเพื่อปรับเฉพาะมุมนี้`}</title></circle>
           <rect x={h.point.x-px(5)} y={h.point.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
         </g>)}
+        {selectedApproach&&openingsOf(selectedApproach.arm).map(o=>{const p=openingHandle(selectedApproach.junction,selectedApproach.armId,o);
+          return <g key={o.id} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'opening',candidateId:selectedApproach.candidateId,leg:selectedApproach.leg,id:o.id})}>
+            <circle data-design-opening-handle={o.id} cx={p.x} cy={p.y} r={px(13)} fill="transparent"><title>{`ช่องเปิด ${o.start} ม. จากปากทาง · ลากเพื่อย้าย`}</title></circle>
+            <rect x={p.x-px(6)} y={p.y-px(4)} width={px(12)} height={px(8)} rx={px(2)} fill="#fff" stroke="#6d6a8f" strokeWidth={px(2)} pointerEvents="none"/>
+          </g>;})}
         {pocketHandles.map(h=><g key={h.side} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'pocket',candidateId:h.candidateId,leg:h.leg,side:h.side})}>
           <circle data-design-pocket-handle={h.side} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"/>
           <circle cx={h.point.x} cy={h.point.y} r={px(6)} fill="#0b7f86" stroke="#fff" strokeWidth={px(2)} pointerEvents="none"/>

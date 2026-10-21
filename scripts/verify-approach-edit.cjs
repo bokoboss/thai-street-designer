@@ -90,3 +90,32 @@ console.log('PASS approach editing in place: right-turn pocket add/size/remove, 
   assert.equal(e.project.decisions[0].treatments.cornerRadii,undefined);
   console.log('PASS per-corner radius: one corner at a time, default for the rest, reset, advanced editor round trip');
 }
+
+// Median openings on an approach, edited in /design (UX closure 2026-10-21).
+{
+  const fresh=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},
+    roads:[{id:'R1',name:'ถนนหลัก',points:[{x:-200,y:0},{x:200,y:0}],section:sec},{id:'R2',name:'ถนนรอง',points:[{x:0,y:-200},{x:0,y:200}],section:sec}]});
+  let e=c.runCommand(fresh,{type:'road.add',road:{id:'R3',name:'tmp',points:[{x:500,y:500},{x:600,y:500}],section:sec}}).editor;
+  e=c.runCommand(e,{type:'road.remove',roadId:'R3'}).editor;
+  const id=e.project.decisions[0].candidateId,comp=()=>rp.compileRoadFirstProject(e.project),L='R1:behind';
+  let inf=ae.approachInfo(comp(),id,L);
+  const made=ae.newOpening(inf,'opening');assert.ok(made.opening,'opening proposed');
+  assert.deepEqual([made.opening.type,made.opening.length],['opening',6]);assert.ok(made.opening.start>=0);
+  let x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg:L,patch:ae.openingsPatch([made.opening])});assert.equal(x.result.error,null);e=c.endGesture(x.editor);
+  inf=ae.approachInfo(comp(),id,L);assert.equal(inf.arm.medianOpenings.length,1,'opening on the compiled arm');
+  // Handle ↔ start round trip; dragged before the mouth clamps to 0.
+  const o=inf.arm.medianOpenings[0],hp=ae.openingHandle(inf.junction,inf.armId,o);
+  assert.equal(ae.openingStartFromPoint(inf.junction,inf.armId,o,hp),o.start,'handle ↔ field round trip');
+  assert.equal(ae.openingStartFromPoint(inf.junction,inf.armId,o,{x:inf.junction.x,y:inf.junction.y}),0);
+  // A second, U-turn opening does not overlap the first.
+  const u=ae.newOpening(inf,'uturn').opening;assert.equal(u.type,'uturn');assert.equal(u.id,'uturn-1');
+  x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg:L,patch:ae.openingsPatch([...ae.openingsOf(inf.arm),u])});assert.equal(x.result.error,null,x.result.error);e=c.endGesture(x.editor);
+  // Overlapping openings are refused by the engine with its own reason.
+  inf=ae.approachInfo(comp(),id,L);const bad=ae.openingsOf(inf.arm);bad[1].start=bad[0].start;
+  assert.match(c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg:L,patch:ae.openingsPatch(bad)}).result.error??'',/ซ้อน/);
+  // No median: refused before any command.
+  const noMed={...inf,arm:{...inf.arm,median:0}};assert.match(ae.newOpening(noMed,'opening').error,/เกาะกลาง/);
+  // Undo removes the U-turn opening in one step (the editor closes the step after each command, as /design does).
+  e=c.undo(e).editor;assert.equal(ae.approachInfo(comp(),id,L).arm.medianOpenings.length,1);
+  console.log('PASS median openings on an approach: proposed start, handle round trip, overlap refused, needs a median, one undo step');
+}
