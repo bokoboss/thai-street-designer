@@ -5,7 +5,7 @@
 import {designError} from '../junction/design-validation';
 import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
 import {validateNetworkProject,type WorldPoint} from '../network/network-project';
-import {detectCandidates,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadRole,type RoadSection} from './derive';
+import {detectCandidates,stations,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadOpening,type RoadRole,type RoadSection} from './derive';
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
@@ -24,6 +24,7 @@ export type RoadFirstCommand=
   |{type:'road.setPointRadius';roadId:string;index:number;radius:number}
   |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
   |{type:'road.setRole';roadId:string;role:RoadRole|null}
+  |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
   |{type:'junction.setRoads';candidateId:string;roads:string[]}
@@ -114,7 +115,10 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(!cmd.points.length)return fail('ไม่มีจุดให้ต่อถนน',`ต่อถนน ${r.name}`);
       const added=cmd.points.map(q=>({x:q.x,y:q.y}));
+      const oldLength=stations(r.points).at(-1)??0;
       r.points=cmd.atStart?[...added.reverse(),...r.points]:[...r.points,...added];
+      // Openings are measured from the road start: extending the start moves them along by the added length.
+      if(cmd.atStart&&r.openings){const grown=(stations(r.points).at(-1)??0)-oldLength;r.openings=r.openings.map(o=>({...o,station:Math.round((o.station+grown)*1000)/1000}));}
       label=`ต่อถนน ${r.name}`;roadsChanged=true;break;
     }
     case 'road.join':{
@@ -142,6 +146,11 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.role)r.role=cmd.role;else delete r.role;
       label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+    }
+    case 'road.setOpenings':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.openings.length)r.openings=structuredClone(cmd.openings);else delete r.openings;
+      label=`แก้ช่องเปิดเกาะกลาง ${r.name}`;group=`road.openings:${r.id}`;break;
     }
     case 'road.setSection':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

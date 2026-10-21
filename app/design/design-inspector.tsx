@@ -14,6 +14,7 @@ import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/cor
 import {stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
+import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
@@ -71,7 +72,31 @@ function BandsEditor({bands,onChange}:{bands:NonNullable<RoadSection['bands']>;o
   </section>;
 }
 
-function RoadInspector({road,run,onDeleted,roads}:{road:Road;run:Run;onDeleted:()=>void;roads:Road[]}){
+/** Mid-block median openings / U-turns along the road (between junction approaches). */
+function RoadOpeningBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileResult;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
+  const list=road.openings??[],set=(openings:typeof list)=>run({type:'road.setOpenings',roadId:road.id,openings});
+  const add=(type:OpeningType)=>{const r=newRoadOpening(road,compiled,type);if('error' in r){onMessage(r.error,'error');return;}set([...list,r.opening].sort((a,b)=>a.station-b.station));};
+  const edit=(id:string,patch:Partial<(typeof list)[number]>)=>set(list.map(o=>o.id===id?{...o,...patch}:o));
+  if(road.section.median<=0)return null;
+  return <Fold id="road-openings" title="ช่องเปิดเกาะกลางกลางช่วงถนน" summary={list.length?list.map(o=>`${OPENING_LABEL[o.type??'opening']} ${Math.round(o.station)} ม.`).join(' · '):'ยังไม่มี'} data="road-openings">
+    {list.map((o,i)=><div key={o.id} className="design-opening" data-design-road-opening={o.id}>
+      <header><b>{OPENING_LABEL[o.type??'opening']}</b><button className="link" data-design-action={`remove-road-opening-${i}`} onClick={()=>set(list.filter(x=>x.id!==o.id))}>ลบ</button></header>
+      <label className="design-select"><span>ชนิด</span><select value={o.type??'opening'} data-design-field={`road-opening-${i}-type`} onChange={e=>edit(o.id,{type:e.currentTarget.value as OpeningType})}>
+        {(Object.keys(OPENING_LABEL) as OpeningType[]).map(t=><option key={t} value={t}>{OPENING_LABEL[t]}</option>)}</select></label>
+      <div className="design-fields">
+        <NumberField field={`road-opening-${i}-station`} label="เริ่มที่ระยะจากต้นถนน (ม.)" value={o.station} step={.5} min={0} max={roadLength(road)} onCommit={station=>edit(o.id,{station})}/>
+        <NumberField field={`road-opening-${i}-length`} label="ความยาวช่องเปิด (ม.)" value={o.length} step={.5} min={2} max={40} onCommit={length=>edit(o.id,{length})}/>
+      </div>
+    </div>)}
+    {list.length<12&&<div className="design-reference-tools">
+      <button data-design-action="add-road-opening" onClick={()=>add('opening')}>+ ช่องเปิดเกาะกลาง</button>
+      <button data-design-action="add-road-uturn" onClick={()=>add('uturn')}>+ ช่องกลับรถ</button>
+    </div>}
+    <p className="design-meta">อยู่นอกช่วงเข้าทางแยก · ลากจุดบนแบบเพื่อย้าย · ช่องกลับรถเป็นแนวคิดเบื้องต้น ตรวจรถออกแบบและแนวกวาดเมื่อทำแบบรายละเอียด</p>
+  </Fold>;
+}
+
+function RoadInspector({road,run,onDeleted,roads,compiled,onMessage}:{road:Road;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
@@ -87,6 +112,7 @@ function RoadInspector({road,run,onDeleted,roads}:{road:Road;run:Run;onDeleted:(
       <NumberField field="walk" label="ทางเท้า ทั้งสองข้าง (ม.)" value={s.walk} step={.25} min={0} max={8} onCommit={v=>set({walk:v})}/>
     </div>
     <BandsEditor bands={s.bands??[]} onChange={bands=>set({bands})}/>
+    <RoadOpeningBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
     {endJoins(roads).filter(j=>j.a===road.id||j.b===road.id).map(j=>{const other=roads.find(r=>r.id===(j.a===road.id?j.b:j.a));if(!other)return null;
       return <div key={other.id} className="design-issues" data-design-join-offer={other.id}><b>ปลายถนนชนกับ {other.name}</b>
         <p className="design-meta">ตอนนี้เป็นถนนคนละเส้นแม้จะดูต่อกัน · เชื่อมแล้วจะใช้ชื่อและหน้าตัดของ {road.name}</p>
@@ -405,7 +431,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
-    {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} onDeleted={()=>onSelect(null)}/>
+    {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>

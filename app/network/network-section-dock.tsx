@@ -43,7 +43,7 @@ function LinkSection({project,link}:{project:NetworkProject;link:RoadLink}){
       ...(backwardWalk>.01?[{key:'bw',label:'ทางเท้า',width:backwardWalk,kind:'walk'}]:[]),
       ...[...backwardBands].reverse(),
       ...[...lanePieces(backwardCount,bw,'backward')].reverse(),
-      ...(median>.01?[{key:'median',label:'เกาะกลาง',width:median,kind:'median'}]:[]),
+      ...(median>.01?[resolved.openings.some(o=>s>o.start&&s<o.end)?{key:'median',label:'ช่องเปิดเกาะกลาง',width:median,kind:'lane opening'}:{key:'median',label:'เกาะกลาง',width:median,kind:'median'}]:[]),
       ...lanePieces(forwardCount,fw,'forward'),
       ...forwardBands,
       ...(forwardWalk>.01?[{key:'fw',label:'ทางเท้า',width:forwardWalk,kind:'walk'}]:[])

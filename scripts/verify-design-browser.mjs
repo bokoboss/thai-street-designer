@@ -71,6 +71,27 @@ try{
     await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the access');
   }
 
+  // Mid-block median opening on a road (GW-04), outside the junction approaches: cuts the median, handle moves it.
+  {
+    await b.key('Escape');
+    const medians=()=>b.count('[data-network-link-median]');const m0=await medians();
+    const pts=await b.evalValue(`(()=>{const q=document.querySelector('[data-design-road] path').getAttribute('d').match(/-?[0-9.]+/g).map(Number),svg=document.querySelector('[data-design-plan]'),m=svg.getScreenCTM();
+      const a=new DOMPoint(q[0],q[1]).matrixTransform(m),z=new DOMPoint(q[q.length-2],q[q.length-1]).matrixTransform(m);return{a:{x:a.x,y:a.y},z:{x:z.x,y:z.y}};})()`);
+    await b.clickAt({x:pts.a.x+(pts.z.x-pts.a.x)*.15,y:pts.a.y+(pts.z.y-pts.a.y)*.15});
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`))==='road','road selected');
+    await openFold('road-openings');
+    await b.click('[data-design-action="add-road-uturn"]');
+    await b.waitFor(async()=>await b.count('[data-design-road-opening]')===1&&await medians()===m0+1,'U-turn opening cuts the median in two');
+    const st=()=>b.evalValue(`Number(document.querySelector('[data-design-field="road-opening-0-station"]').value)`),s0=await st();
+    const hh=await b.waitFor(()=>b.rect('[data-design-road-opening-handle]'),'opening handle');
+    const dir={x:(pts.z.x-pts.a.x),y:(pts.z.y-pts.a.y)},dl=Math.hypot(dir.x,dir.y);
+    await b.drag(hh,{x:hh.x-dir.x/dl*30,y:hh.y-dir.y/dl*30});
+    await b.waitFor(async()=>await st()!==s0,'dragging the handle moves the opening');
+    await b.screenshot('artifacts/design-browser-midblock-opening.png');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(async()=>await b.count('[data-design-road-opening]')===0&&await medians()===m0,'undo removes the opening');
+    await b.key('Escape');
+  }
   // Before a road is finished, the preview says what would happen (here: it cannot join the 4-leg junction); right-click steps back.
   {
     const move=p=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,button:'none'});

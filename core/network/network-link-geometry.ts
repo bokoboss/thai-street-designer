@@ -28,6 +28,8 @@ export type ResolvedLinkSectionGeometry={
   forwardBands:LinkBandProfile[];
   backwardBands:LinkBandProfile[];
   forwardWalk:{inner:number[];outer:number[]}|null;
+  /** Mid-block median openings clipped to the link: station intervals with no median island. */
+  openings:{start:number;end:number}[];
   backwardWalk:{inner:number[];outer:number[]}|null;
 };
 
@@ -161,5 +163,27 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
       ...lineProfiles('backward',backwardLaneSet,backwardLaneSamples,stationList,medianHalf,backwardLaneWidth)
     ]:[];
 
-  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk};
+  const openings=(link.medianOpenings??[]).map(o=>({start:Math.max(0,o.start),end:Math.min(total,o.start+o.length)})).filter(o=>o.end-o.start>.01).sort((a,b)=>a.start-b.start);
+  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings};
+}
+
+/**
+ * Median island pieces of a resolved link: the whole strip when there is no opening (unchanged output), otherwise one
+ * strip per stretch between openings, cut exactly at the opening stations. Used by 2D, 3D and export alike.
+ */
+export function medianIslandStrips(g:ResolvedLinkSectionGeometry):{points:WorldPoint[];half:number[]}[]{
+  if(!g.medianHalf.some(v=>v>.01))return[];
+  if(!g.openings.length)return[{points:g.points,half:g.medianHalf}];
+  const at=(s:number)=>{
+    let k=0;while(k<g.stations.length-2&&g.stations[k+1]<s)k++;
+    const s0=g.stations[k],s1=g.stations[k+1],t=s1>s0?Math.max(0,Math.min(1,(s-s0)/(s1-s0))):0,p=g.points[k],q=g.points[k+1];
+    return{point:{x:p.x+(q.x-p.x)*t,y:p.y+(q.y-p.y)*t},half:g.medianHalf[k]+(g.medianHalf[k+1]-g.medianHalf[k])*t};
+  };
+  const pieces:{start:number;end:number}[]=[];let from=0;
+  for(const o of g.openings){if(o.start>from+.01)pieces.push({start:from,end:o.start});from=Math.max(from,o.end);}
+  if(g.total>from+.01)pieces.push({start:from,end:g.total});
+  return pieces.map(({start,end})=>{
+    const a=at(start),b=at(end),inner=g.stations.map((s,i)=>({s,i})).filter(({s})=>s>start+1e-6&&s<end-1e-6);
+    return{points:[a.point,...inner.map(({i})=>g.points[i]),b.point],half:[a.half,...inner.map(({i})=>g.medianHalf[i]),b.half]};
+  });
 }

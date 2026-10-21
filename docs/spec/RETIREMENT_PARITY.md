@@ -21,7 +21,7 @@ Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/d
 | Roundabout entry/exit radii, splitter, apron | | ✓ | |
 | Median openings, U-turn at a junction approach | ✓ (add, type, position, length, plan handle) | ✓ | |
 | Median trees | | ✓ | |
-| Mid-block median opening / U-turn | — | — | not in the engine yet (UX closure 4.0-5) |
+| Mid-block median opening / U-turn (road stations, outside approaches; cuts the median in 2D, 3D, export; station section labels it) | ✓ | | |
 | Project access (driveway) | ✓ (road role) | | |
 | Incoming lane arrows (main and turn lanes), incoming divider mode and solid length | ✓ | ✓ | |
 | Outgoing divider, arrow position overrides | | ✓ | |
