@@ -261,9 +261,25 @@ try{
   // 3D view of the same compiled design.
   await b.click('[data-design-view="3d"]');
   await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-junction-surfaces]')?.dataset.networkSceneJunctionSurfaces??0`))>0,'3D view shows the junction');
+  // Lane lines, arrows, crossings and stop lines from the 2D drawing reach the 3D view (review 2026-10-21, P1-01).
+  await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-network-scene-detail-texture]')?.dataset.networkSceneDetailTexture`))==='true','3D shows the 2D lane markings');
   await sleep(300);await b.screenshot('artifacts/design-browser-3d.png');
+  // Top looks straight down; the camera is kept when leaving and coming back; the workspace fit button fits the 3D view.
+  const cam=attr=>b.evalValue(`document.querySelector('[data-network-camera-${attr}]')?.dataset['networkCamera'+'${attr}'.charAt(0).toUpperCase()+'${attr}'.slice(1)]`);
+  await b.click('[data-network-camera-control="top"]');
+  await b.waitFor(async()=>Number(await cam('pitch'))===0,'Top view looks straight down');
+  await b.click('[data-network-camera-control="zoom-in"]');await b.click('[data-network-camera-control="zoom-in"]');
+  const zoomed=await cam('zoom');
   await b.click('[data-design-view="2d"]');
   await b.waitFor(async()=>await b.count('.network-scene3d')===0,'back to the plan');
+  await b.click('[data-design-view="3d"]');
+  await b.waitFor(async()=>await cam('zoom')===zoomed&&Number(await cam('pitch'))===0,'3D camera kept after switching views');
+  await b.click('[data-design-fit]');
+  await b.waitFor(async()=>await cam('zoom')==='0.9200','fit button fits the 3D view');
+  await b.click('[data-design-view="2d"]');
+  await b.waitFor(async()=>await b.count('.network-scene3d')===0,'back to the plan');
+  // In /design an approach has no arm drag grip (its geometry follows the roads).
+  assert.equal(await b.count('[data-network-arm-handle]'),0,'no inert arm grips');
   await b.screenshot('artifacts/design-browser.png');
   // Scenarios survive a reload.
   await sleep(300);await b.goto('/design');await ready();

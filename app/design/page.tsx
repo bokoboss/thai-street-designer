@@ -51,7 +51,7 @@ export default function DesignWorkspace(){
   // Work saved by the earlier Network page in this browser can be brought in as extra alternatives.
   const [hasEarlier,setHasEarlier]=useState(false);
   // On narrow screens the inspector is a drawer: it opens when something is selected and can be toggled.
-  const [inspectorOpen,setInspectorOpen]=useState(false);
+  const [inspectorOpen,setInspectorOpen]=useState(false),[fit3d,setFit3d]=useState(0);
   /** The next road drawn is a project access (driveway). */
   const [newAccess,setNewAccess]=useState(false);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
@@ -193,7 +193,7 @@ export default function DesignWorkspace(){
         <button data-design-undo="true" disabled={!ed.undoText} title={ed.undoText?`ย้อนกลับ: ${ed.undoText}`:'ไม่มีขั้นตอนให้ย้อน'} onClick={ed.undo}><Undo2 size={15}/><span>{ed.undoText??'ย้อนกลับ'}</span></button>
         <button data-design-redo="true" disabled={!ed.redoText} title={ed.redoText?`ทำซ้ำ: ${ed.redoText}`:'ไม่มีขั้นตอนให้ทำซ้ำ'} onClick={ed.redo}><Redo2 size={15}/></button>
         <button className="design-inspector-toggle" data-design-inspector-toggle="true" aria-expanded={inspectorOpen} onClick={()=>setInspectorOpen(v=>!v)} title="แผงตั้งค่า"><PanelRight size={15}/><span>{inspectorOpen?'ซ่อนแผง':'แผงตั้งค่า'}</span></button>
-        <button data-design-fit="true" onClick={()=>setFitKey(k=>k+1)} title="ดูทั้งแบบ"><Maximize2 size={15}/></button>
+        <button data-design-fit="true" onClick={()=>{if(view==='3d')setFit3d(k=>k+1);else setFitKey(k=>k+1);}} title="ดูทั้งแบบ"><Maximize2 size={15}/></button>
         <span className="design-export">
           <button data-design-export="true" aria-expanded={exportOpen} onClick={()=>setExportOpen(v=>!v)} onBlur={e=>{if(!e.currentTarget.parentElement?.contains(e.relatedTarget))setExportOpen(false);}} title="ส่งออกรูปสำหรับรายงาน"><ImageDown size={15}/><span>ส่งออกรูป</span></button>
           {exportOpen&&<span className="design-export-menu" role="menu">
@@ -228,7 +228,7 @@ export default function DesignWorkspace(){
           onImage={f=>{void image.add(f,{x:0,y:0});setSelection(null);setInspectorOpen(true);}}
           onBlank={()=>{chooseTool('road');document.querySelector<HTMLElement>('[data-design-workspace]')?.focus();}}/>}
         {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled}/>}
-        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active/>}
+        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d}/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>

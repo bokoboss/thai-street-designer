@@ -11,17 +11,21 @@ import {
 
 type Size={w:number;h:number};
 type CameraMode='pan'|'orbit';
+/** The camera survives leaving and re-entering 3D within this visit (review 2026-10-21: 3D reset every time). */
+let rememberedCamera:{yaw:number;pitch:number;zoom:number;pan:{x:number;y:number}}|null=null;
+/** Zoom is relative to fitting the whole design; the range reaches lane detail on a large network. */
+const ZOOM_MIN=.1,ZOOM_MAX=40;
 type DragState={action:'pan'|'rotate';point:{x:number;y:number};screen:{x:number;y:number}}|null;
 
 export default function NetworkScene3D({
-  project,mapReference,mapCredentials,active
-}:{project:NetworkProject;mapReference:MapReference;mapCredentials:MapProviderCredentials;active:boolean}){
+  project,mapReference,mapCredentials,active,fitKey=0
+}:{project:NetworkProject;mapReference:MapReference;mapCredentials:MapProviderCredentials;active:boolean;fitKey?:number}){
   const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),modeRef=useRef<CameraMode>('pan'),
-    [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(-35),[pitch,setPitch]=useState(52),[zoom,setZoom]=useState(.92),
-    [pan,setPan]=useState({x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
+    [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(rememberedCamera?.yaw??-35),[pitch,setPitch]=useState(rememberedCamera?.pitch??52),[zoom,setZoom]=useState(rememberedCamera?.zoom??.92),
+    [pan,setPan]=useState(rememberedCamera?.pan??{x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
     [mapTexture,setMapTexture]=useState<{key:string;image:HTMLCanvasElement|null}|null>(null),[detailImage,setDetailImage]=useState<HTMLImageElement|null>(null);
   const camera=useRef({yaw,pitch,zoom,pan});
-  useEffect(()=>{camera.current={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
+  useEffect(()=>{camera.current={yaw,pitch,zoom,pan};rememberedCamera={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
 
   const scene=useMemo(()=>{
       if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
@@ -52,7 +56,8 @@ export default function NetworkScene3D({
 
   useEffect(()=>{
     if(!active)return;
-    const source=document.querySelector<SVGSVGElement>('svg[data-network-plan="true"]');
+    // Lane lines, arrows, crossings and stop lines come from the same 2D drawing (network page or /design plan).
+    const source=document.querySelector<SVGSVGElement>('svg[data-design-plan="true"],svg[data-network-plan="true"]');
     if(!source)return;
     let stale=false,url='';
     const copy=source.cloneNode(true) as SVGSVGElement,details=[...copy.querySelectorAll('[data-scene-detail="true"]')];
@@ -92,9 +97,14 @@ export default function NetworkScene3D({
   const resetGestures=()=>{gestures.current.clear();drag.current=null;};
   const setCameraMode=(next:CameraMode)=>{modeRef.current=next;resetGestures();setMode(next);};
   const fitView=()=>applyCamera({...camera.current,zoom:.92,pan:{x:0,y:0}});
+  // The workspace "fit" button fits the view that is open (fitKey changes on each press).
+  const firstFit=useRef(fitKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(()=>{if(fitKey!==firstFit.current)fitView();},[fitKey]);
   const isoView=()=>applyCamera({yaw:-35,pitch:52,zoom:.92,pan:{x:0,y:0}});
-  const topView=()=>applyCamera({yaw:0,pitch:78,zoom:.92,pan:{x:0,y:0}});
-  const zoomBy=(factor:number)=>applyCamera({...camera.current,zoom:clampZoom(camera.current.zoom*factor,.25,5)});
+  // Pitch 0 looks straight down (the projection compresses depth by cos(pitch)).
+  const topView=()=>applyCamera({yaw:0,pitch:0,zoom:.92,pan:{x:0,y:0}});
+  const zoomBy=(factor:number)=>applyCamera({...camera.current,zoom:clampZoom(camera.current.zoom*factor,ZOOM_MIN,ZOOM_MAX)});
 
   useEffect(()=>{
     if(!active)return;
@@ -137,7 +147,8 @@ export default function NetworkScene3D({
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'
-      ?(e.button===1||e.shiftKey?'rotate':e.button===0?(modeRef.current==='orbit'?'rotate':'pan'):'none')
+      // Same as the 2D plan: middle button pans; right button or Shift+drag orbits; left follows the Pan/Orbit choice.
+      ?(e.button===1?'pan':e.button===2||e.shiftKey?'rotate':e.button===0?(modeRef.current==='orbit'?'rotate':'pan'):'none')
       :(modeRef.current==='orbit'?'rotate':'pan');
     if(action==='none')return;
     e.preventDefault();
@@ -152,7 +163,7 @@ export default function NetworkScene3D({
     if(g.count===1&&drag.current?.action==='rotate'){
       applyCamera(orbitGround(current,v,drag.current.point,drag.current.screen,g.dx,g.dy));return;
     }
-    const nextZoom=clampZoom(current.zoom*g.factor,.25,5),ratio=nextZoom/current.zoom,
+    const nextZoom=clampZoom(current.zoom*g.factor,ZOOM_MIN,ZOOM_MAX),ratio=nextZoom/current.zoom,
       nextPan={
         x:(g.after.x-r.x-r.width/2-(g.before.x-r.x-r.width/2-current.pan.x*r.width)*ratio)/r.width,
         y:(g.after.y-r.y-r.height/2-(g.before.y-r.y-r.height/2-current.pan.y*r.height)*ratio)/r.height
@@ -167,7 +178,7 @@ export default function NetworkScene3D({
     e.preventDefault();
     const r=e.currentTarget.getBoundingClientRect(),v=viewport(r),screen={x:e.clientX-r.x,y:e.clientY-r.y},current=camera.current,
       point=groundAt(current,v,screen),delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?r.height:1),
-      nextZoom=clampZoom(current.zoom*Math.exp(-Math.max(-500,Math.min(500,delta))*.002),.25,5);
+      nextZoom=clampZoom(current.zoom*Math.exp(-Math.max(-500,Math.min(500,delta))*.002),ZOOM_MIN,ZOOM_MAX);
     applyCamera(anchorGround({...current,zoom:nextZoom},v,point,screen));
   }
 
@@ -179,8 +190,8 @@ export default function NetworkScene3D({
       data-network-camera-mode={mode} data-network-camera-yaw={yaw.toFixed(3)} data-network-camera-pitch={pitch.toFixed(3)}
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
-      onAuxClick={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>มุมมอง 3D ของโครงข่าย</b><span>ซ้ายลาก = {mode==='pan'?'Pan':'Orbit'} · กลางลากหรือ Shift+ลาก = Orbit · Wheel = Zoom</span>{mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}</div>
+      onAuxClick={e=>e.preventDefault()} onContextMenu={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
+    <div className="network-scene-note"><b>มุมมอง 3D ของโครงข่าย</b><span>ลากซ้าย = {mode==='pan'?'เลื่อน':'หมุน'} · ลากปุ่มกลาง = เลื่อน · ลากขวาหรือ Shift+ลาก = หมุน · ล้อเมาส์ = ซูม</span>{mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}</div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>

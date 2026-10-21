@@ -82,8 +82,10 @@ export function RoadLinkDrawing({
 }
 
 export function JunctionInstanceDrawing({
-  project,zoom,junction,selected,comparisonFocused,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort
+  project,zoom,junction,selected,comparisonFocused,selectedArm,linkMode,occupiedPorts,pendingPort,onSelect,onArmSelect,onMoveStart,onArmMoveStart,onPort,armHandles=true
 }:{
+  /** false where arm geometry follows the roads (/design): no drag grip that would do nothing. */
+  armHandles?:boolean;
   project:NetworkProject;
   zoom:number;
   junction:JunctionInstance;
@@ -114,7 +116,7 @@ export function JunctionInstanceDrawing({
           onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelect();onArmSelect(armId);}} style={{cursor:linkMode?undefined:'pointer'}}/>
         {armSelected&&<line data-network-arm-selection={`${junction.id}:${armId}`} x1={junction.x} y1={junction.y} x2={p.x} y2={p.y}
           stroke="#0eabb8" strokeWidth={1.15*interactionScale} strokeDasharray={`${2.4*interactionScale} ${1.5*interactionScale}`} pointerEvents="none"/>}
-        {armSelected&&!linkMode&&<>
+        {armSelected&&!linkMode&&armHandles&&<>
           <circle data-network-arm-handle-visible={`${junction.id}:${armId}`} cx={p.x} cy={p.y} r={gripVisible} fill="#ffffff" stroke="#0e8995" strokeWidth={.75*interactionScale} pointerEvents="none"/>
           <circle data-network-arm-handle={`${junction.id}:${armId}`} data-network-arm-hit-radius={gripHit.toFixed(2)} cx={p.x} cy={p.y} r={gripHit} fill="transparent" stroke="transparent"
             onPointerDown={e=>{e.preventDefault();e.stopPropagation();onArmMoveStart(armId,e);}} style={{cursor:'grab'}}>
@@ -177,8 +179,9 @@ export function NetworkComparisonGhost({project,focus}:{project:NetworkProject;f
 }
 
 export function NetworkDrawing({
-  project,zoom,selection,comparisonFocus,parallelCorridorId,parallelDraftMainlineId,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
+  armHandles=true,project,zoom,selection,comparisonFocus,parallelCorridorId,parallelDraftMainlineId,selectedArm,linkMode,pendingPort,selectedLinkVertex,onSelect,onArmSelect,onJunctionMoveStart,onArmMoveStart,onLinkInsertVertex,onLinkVertexMoveStart,onLinkVertexSelect,onPort
 }:{
+  armHandles?:boolean;
   project:NetworkProject;
   zoom:number;
   selection:NetworkSelection;
@@ -207,6 +210,6 @@ export function NetworkDrawing({
     };
   return <g>
     {project.links.map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
-    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
+    {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} armHandles={armHandles} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
   </g>;
 }

@@ -159,10 +159,19 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(drag.current&&drag.current.kind!=='pan'&&drag.current.kind!=='ref'&&drag.current.kind!=='map')finishGesture();
     drag.current=null;
   }
-  function onWheel(e:React.WheelEvent<SVGSVGElement>){
-    const at=toWorld(e),k=Math.exp(-e.deltaY*.0015),scale=Math.min(40,Math.max(.05,view.scale*k));
+  // Wheel zooms toward the pointer; line/page wheel units are normalised like the 3D view, and the page never scrolls.
+  const wheelRef=useRef<(e:WheelEvent)=>void>(()=>{});
+  useEffect(()=>{wheelRef.current=(e:WheelEvent)=>{
+    e.preventDefault();
+    const rect=svg.current?.getBoundingClientRect(),delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?(rect?.height??600):1);
+    const at=toWorld(e),k=Math.exp(-Math.max(-500,Math.min(500,delta))*.0015),scale=Math.min(40,Math.max(.05,view.scale*k));
     setView({scale,x:at.x-(at.x-view.x)*view.scale/scale,y:at.y-(at.y-view.y)*view.scale/scale});
-  }
+  };});
+  useEffect(()=>{
+    const el=svg.current;if(!el)return;
+    const handler=(e:WheelEvent)=>wheelRef.current(e);
+    el.addEventListener('wheel',handler,{passive:false});return()=>el.removeEventListener('wheel',handler);
+  },[svg]);
   function startPointDrag(e:React.PointerEvent,road:Road,index:number){
     if(tool!=='select'||e.button!==0)return;
     e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);
@@ -193,7 +202,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   return <div className="design-canvas" ref={wrap} data-design-tool={tool} data-design-map={map.reference.enabled?'on':'off'}>
     <MapBackground reference={map.reference} credentials={map.credentials} view={mapView}/>
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
-      onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}} onWheel={onWheel}
+      onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}}
       onContextMenu={e=>{if(tool!=='road')return;e.preventDefault();onDraftBack();}} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" onPointerDown={()=>{if(tool==='select')onSelect(null);}}/>
       {referenceImage?.url&&referenceImage.reference.enabled&&(()=>{const r=referenceImage.reference,w=r.widthPx*r.metersPerPixel,h=r.heightPx*r.metersPerPixel;
@@ -201,7 +210,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           <image href={referenceImage.url} x={-w/2} y={-h/2} width={w} height={h} preserveAspectRatio="none"/>
           {tool==='ref-move'&&<rect x={-w/2} y={-h/2} width={w} height={h} fill="none" stroke="#0b7f86" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(5)}`}/>}
         </g>;})()}
-      <NetworkDrawing project={compiled.project} zoom={1} selection={selectedJunction?{kind:'junction',id:selectedJunction.id}:null}
+      {/* zoom = screen px per metre, so hit areas keep their on-screen size; arm geometry follows the roads (no arm grips). */}
+      <NetworkDrawing project={compiled.project} zoom={view.scale} armHandles={false} selection={selectedJunction?{kind:'junction',id:selectedJunction.id}:null}
         comparisonFocus={null} parallelCorridorId={null} parallelDraftMainlineId={null} selectedArm={selectedApproach?.armId??null} linkMode={false} pendingPort={null} selectedLinkVertex={null}
         onSelect={s=>{if(tool!=='select'||!s)return;onSelect(s.kind==='junction'?{kind:'junction',id:compiled.sources.junctions[s.id]}:{kind:'road',id:compiled.sources.links[s.id]});}}
         onArmSelect={(j,armId)=>{
