@@ -12,6 +12,30 @@ export type MapCredentialKey=keyof MapProviderCredentials;
 /** Label of the key field for each provider that needs the user's own key (keys stay in this browser). */
 export const MAP_CREDENTIAL_LABEL:Record<MapCredentialKey,string>={esri:'คีย์ ArcGIS / Esri',maptiler:'คีย์ MapTiler',carto:'คีย์ CARTO',mapbox:'Access token ของ Mapbox'};
 export type MapBasemapMeta={label:string;kind:MapLayerKind;provider:string;credential:MapCredentialKey|null;access:string;description:string};
+/**
+ * Whether drawing over a basemap is allowed, as stated by the provider (checked 2026-10-21; see
+ * docs/research/2026-10-21-MAP-PROVIDERS.md and 2026-10-21-UX-WORKFLOW-REVIEW.md). Not legal advice; the user checks their case.
+ * osm: OpenStreetMap data (ODbL) · open: open licence with attribution · limited: only for some uses · no: not allowed · verify: unconfirmed.
+ */
+export type TraceStatus='osm'|'open'|'limited'|'no'|'verify';
+export const TRACE_TEXT:Record<TraceStatus,string>={
+  osm:'ข้อมูล OpenStreetMap (ODbL) · ใช้อ้างอิงตำแหน่งได้ ข้อมูลที่คัดลอกจากแผนที่ต้องเป็นไปตาม ODbL',
+  open:'สัญญาอนุญาตเปิด · วาดตามได้โดยระบุแหล่งที่มา',
+  limited:'วาดตามได้เฉพาะบางกรณี',
+  no:'ห้ามสร้างงานดัดแปลงจากแผนที่ · ใช้ดูอ้างอิงเท่านั้น',
+  verify:'ยังไม่ยืนยันสิทธิ์การวาดตาม · ตรวจเงื่อนไขของผู้ให้บริการก่อน',
+};
+export const BASEMAP_TRACE:Record<MapBasemap,{status:TraceStatus;note?:string}>={
+  positron:{status:'osm'},bright:{status:'osm'},liberty:{status:'osm'},dark:{status:'osm'},'versatiles-colorful':{status:'osm'},
+  'osm-raster':{status:'osm'},'opentopo-raster':{status:'osm'},
+  'carto-positron':{status:'no'},'carto-voyager':{status:'no'},
+  'esri-streets':{status:'verify'},'esri-imagery':{status:'verify',note:'ภาพมาจากหลายแหล่ง แต่ละแหล่งอาจมีเงื่อนไขเพิ่ม'},
+  'oam-global':{status:'open',note:'CC BY 4.0 · ความครอบคลุมแล้วแต่พื้นที่'},
+  'satellite-eox-2016':{status:'open',note:'CC BY 4.0 · ความละเอียดไม่พอสำหรับวาดแนวถนน'},
+  'maptiler-satellite':{status:'limited',note:'เฉพาะงานไม่เชิงพาณิชย์หรือ OpenStreetMap'},
+  'mapbox-satellite':{status:'limited',note:'วาดเพื่อ OpenStreetMap ได้ · งานเชิงพาณิชย์ต้องมี Commercial Satellite license'},
+};
+export const basemapTraceText=(basemap:MapBasemap)=>{const t=BASEMAP_TRACE[basemap]??{status:'verify' as const};return{status:t.status,text:[TRACE_TEXT[t.status],t.note].filter(Boolean).join(' · ')};};
 
 export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
   positron:{label:'OpenFreeMap · Positron',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · clean engineering background'},
@@ -28,7 +52,7 @@ export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
   'satellite-eox-2016':{label:'EOX · Sentinel-2 Cloudless 2016',kind:'imagery',provider:'EOX',credential:null,access:'OPEN · NO KEY',description:'Global satellite context · ~10 m source resolution'},
   'esri-imagery':{label:'Esri · World Imagery',kind:'imagery',provider:'Esri',credential:'esri',access:'FREE QUOTA · API KEY',description:'High-resolution satellite/aerial imagery · ArcGIS Location Platform free quota available'},
   'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',access:'FREE TIER · API KEY',description:'High-resolution satellite/aerial imagery · Free plan is primarily for testing/personal/non-commercial use'},
-  'mapbox-satellite':{label:'Mapbox · Satellite',kind:'imagery',provider:'Mapbox',credential:'mapbox',access:'FREE QUOTA · ACCESS TOKEN',description:'High-resolution satellite imagery · free quota 750,000 raster tiles/month · check Mapbox terms before tracing'}
+  'mapbox-satellite':{label:'Mapbox · Satellite',kind:'imagery',provider:'Mapbox',credential:'mapbox',access:'FREE QUOTA · ACCESS TOKEN',description:'High-resolution satellite imagery · free quota 750,000 raster tiles/month'}
 };
 export const BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).map(([id,m])=>[id,m.label])) as Record<MapBasemap,string>;
 export const STREET_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='street').map(([id,m])=>[id,m.label])) as Record<string,string>;

@@ -123,3 +123,14 @@
 .band.band-bike{background:#467d70;color:#fff}.band.band-motorcycle{background:#6d6a8f;color:#fff}.band.band-shoulder{background:#7d8a8f;color:#fff}.band.band-buffer{background:#d9dfd2;color:#2e3c40}
 .design-export-note{display:block;max-width:220px;padding:4px 8px 2px;color:var(--d-muted);font-size:11px;line-height:1.4}
 .design-band-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px}
+.design-trace{font-size:11.5px;line-height:1.45;margin:0;padding:5px 8px;border-radius:6px;border-left:3px solid var(--d-line);background:#f6f8f8;color:var(--d-ink)}
+.design-trace.no{border-left-color:var(--d-danger)}.design-trace.limited,.design-trace.verify{border-left-color:#c47b12}.design-trace.open,.design-trace.osm{border-left-color:var(--d-accent)}
+.design-start{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:4;padding:16px}
+.design-start-card{pointer-events:auto;background:#fff;border:1px solid var(--d-line);border-radius:10px;box-shadow:0 6px 24px #1f2d3314;padding:18px 18px 14px;max-width:560px;width:100%}
+.design-start-card h2{margin:0 0 4px;font-size:16px}.design-start-card>p{margin:0 0 12px;color:var(--d-muted);font-size:12.5px}
+.design-start-options{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.design-start-options button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:1px solid var(--d-line);background:#fff;border-radius:8px;padding:10px;cursor:pointer;font:inherit;color:var(--d-ink)}
+.design-start-options button:hover,.design-start-options button:focus-visible{border-color:var(--d-accent);background:var(--d-accent-soft)}
+.design-start-options b{font-size:13px}.design-start-options small{color:var(--d-muted);font-size:11.5px;line-height:1.4}
+.design-start-card footer{margin-top:10px;font-size:11.5px;color:var(--d-muted)}
+@media (max-width:600px){.design-start-options{grid-template-columns:1fr}}

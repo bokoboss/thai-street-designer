@@ -14,6 +14,7 @@ import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
 import type {MigrationTarget} from '@/core/road-first/migrate';
+import {StartChooser} from './start-chooser';
 import {compareScenarios} from '@/core/road-first/compare';
 import {newRoadId,nextRoadName} from '@/core/road-first/ids';
 import {DESIGN_HANDOFF_STORAGE,createHandoff} from '@/core/road-first/junction-handoff';
@@ -219,6 +220,10 @@ export default function DesignWorkspace(){
           <span>ลบ {ed.notice.restorable} แล้ว</span>
           <button data-design-toast-action="restore-scenario" onClick={ed.restoreRemoved}>เรียกคืน</button>
         </div>}
+        {ed.loaded&&view==='2d'&&tool!=='road'&&!ed.project.roads.length&&!image.has&&!map.reference.enabled&&<StartChooser
+          onMap={()=>{map.update({enabled:true});setSelection(null);setInspectorOpen(true);setTimeout(()=>document.querySelector<HTMLInputElement>('[data-design-map-query]')?.focus(),0);}}
+          onImage={f=>{void image.add(f,{x:0,y:0});setSelection(null);setInspectorOpen(true);}}
+          onBlank={()=>{chooseTool('road');document.querySelector<HTMLElement>('[data-design-workspace]')?.focus();}}/>}
         {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled}/>}
         {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
