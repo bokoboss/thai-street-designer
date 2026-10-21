@@ -10,5 +10,5 @@ export function anchorGround(c:Camera3,v:Viewport3,point:{x:number;y:number},scr
  const x=point.x*Math.cos(a)-point.y*Math.sin(a),y=point.x*Math.sin(a)+point.y*Math.cos(a);
  return {...c,pan:{x:(screen.x-v.width/2-x*scale)/v.width,y:(screen.y-v.height/2-y*Math.cos(p)*scale)/v.height}};
 }
-export function orbitGround(c:Camera3,v:Viewport3,point:{x:number;y:number},screen:{x:number;y:number},dx:number,dy:number){return anchorGround({...c,yaw:c.yaw-dx*.4,pitch:Math.max(10,Math.min(78,c.pitch+dy*.25))},v,point,screen);}
+export function orbitGround(c:Camera3,v:Viewport3,point:{x:number;y:number},screen:{x:number;y:number},dx:number,dy:number){return anchorGround({...c,yaw:c.yaw-dx*.4,pitch:Math.max(0,Math.min(78,c.pitch+dy*.25))},v,point,screen);}
 export function pointerAction(pointerType:string,button:number,touchMode:string){return pointerType==='mouse'?(button===0?'pan':button===1?'rotate':'none'):touchMode;}
