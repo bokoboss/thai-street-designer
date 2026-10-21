@@ -21,6 +21,8 @@ export type JunctionInstance={
   y:number;
   rotation:number;
   design:Design;
+  /** Level of the junction (m); absent = 0 (Phase 4A). */
+  z?:number;
 };
 export type LinkVia=WorldPoint&{radius:number};
 export type LinkDirection='forward'|'backward';
@@ -42,6 +44,8 @@ export type RoadLink={
   components:LinkStationComponent[];
   /** Trees and street lights along both sidewalks (engine roadside defaults for spacing and sizes). */
   roadside?:{trees:boolean;lights:boolean};
+  /** Vertical points along the link, link-local stations (Phase 4A). Linear between points; absent = level 0. */
+  levels?:{station:number;z:number}[];
   /** Mid-block median openings, link-local stations (start from the link's start). Optional; absent in older files. */
   medianOpenings?:LinkMedianOpening[];
 };
@@ -66,7 +70,15 @@ export type NetworkProject={
   links:RoadLink[];
   parallelCorridors:ParallelCorridor[];
   roadEnds:RoadEnd[];
+  /** Grade-separated crossings (Phase 4A), from the road-first compile; read by 2D, 3D, export and report. */
+  crossings?:NetworkCrossing[];
 };
+/**
+ * relation: over = one road passes over the other; unresolved = levels equal or contradicting the chosen over road.
+ * gap = level of the over road minus the under road at the crossing (measured only; no clearance check here).
+ * deck: the over road across the crossing (for the plan's structure cue).
+ */
+export type NetworkCrossing={id:string;name:string;point:WorldPoint;relation:'over'|'unresolved';overLink?:string;underLink?:string;gap:number;deck?:{a:WorldPoint;b:WorldPoint;half:number}};
 export type LinkEndSection={
   forwardLanes:number;
   backwardLanes:number;
@@ -781,6 +793,7 @@ export function validateNetworkProject(project:NetworkProject){
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
+    if(l.levels!==undefined&&(!Array.isArray(l.levels)||l.levels.length>66||!l.levels.every(q=>q&&Number.isFinite(q.station)&&q.station>=0&&Number.isFinite(q.z)&&Math.abs(q.z)<=200)))return`${l.name}: ระดับตามแนวถนนไม่ถูกต้อง`;
     if(l.roadside!==undefined&&(!l.roadside||typeof l.roadside.trees!=='boolean'||typeof l.roadside.lights!=='boolean'))return`${l.name}: ต้นไม้และเสาไฟไม่ถูกต้อง`;
     if(l.medianOpenings!==undefined){
       const list=l.medianOpenings,total=linkLength(project,l);

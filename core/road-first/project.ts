@@ -1,6 +1,7 @@
 // Road-first project file (ADR-0002, Phase 2): roads own alignment and section; junction decisions
 // own approaches, corners, treatments and junction-wide settings. Compiles to a NetworkProject.
 import {validateNetworkProject} from '../network/network-project';
+import {profileError} from './elevation';
 import {compileRoadNetwork,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
 export const ROAD_FIRST_SCHEMA_VERSION=1;
@@ -23,6 +24,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(!s||!lanes(s.forwardLanes)||!lanes(s.backwardLanes)||s.forwardLanes+s.backwardLanes<1||!finite(s.laneWidth,2.5,4.5)||!finite(s.median,0,12)||!finite(s.walk,0,8))return `หน้าตัดถนน ${r.name} ไม่ถูกต้อง`;
     if(r.links!==undefined&&!Array.isArray(r.links))return `ช่วงถนนของ ${r.name} ไม่ถูกต้อง`;
     if(r.role!==undefined&&r.role!=='access')return `ชนิดถนน ${r.name} ไม่ถูกต้อง`;
+    const pe=profileError(r.profile);if(pe)return `แนวดิ่งของ ${r.name}: ${pe}`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }
@@ -30,6 +32,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
   for(const d of p.decisions){
     if(!d||typeof d.candidateId!=='string'||candidates.has(d.candidateId))return 'การยืนยันจุดตัดซ้ำหรือว่าง';candidates.add(d.candidateId);
     if(!['junction','grade-separated','ignore'].includes(d.decision))return 'ประเภทการยืนยันจุดตัดไม่ถูกต้อง';
+    if(d.over!==undefined&&(typeof d.over!=='string'||!ids.has(d.over)))return 'ถนนที่อยู่บนของทางต่างระดับไม่ถูกต้อง';
     if(d.treatments!==undefined&&(typeof d.treatments!=='object'||d.treatments===null))return 'การตั้งค่าทางแยกไม่ถูกต้อง';
   }
   return null;

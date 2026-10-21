@@ -9,6 +9,7 @@ import {detectCandidates,stations,type Candidate,type Decision,type JunctionTrea
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
+import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
@@ -25,6 +26,9 @@ export type RoadFirstCommand=
   |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
   |{type:'road.setRole';roadId:string;role:RoadRole|null}
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
+  |{type:'road.setProfile';roadId:string;profile:Profile|null}
+  /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
+  |{type:'crossing.setOver';candidateId:string;over:string;profiles:Record<string,Profile|null>;label:string}
   |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
@@ -47,7 +51,8 @@ export type RoadFirstCommand=
  * autoJunctions: crossings that became junctions automatically in this step; openCrossings: crossings that could not (with the reason).
  * joined: roads that now reach an existing junction and were connected to it; blocked: roads that reach one but could not be connected.
  */
-export type CommandResult={project:RoadFirstProject;error:string|null;label:string;warnings:string[];group?:string;autoJunctions:string[];openCrossings:{candidateId:string;reason:string}[];
+/** autoSeparated: new crossings of roads at different levels, made grade-separated (higher road over) instead of junctions. */
+export type CommandResult={project:RoadFirstProject;error:string|null;label:string;warnings:string[];group?:string;autoJunctions:string[];autoSeparated:string[];openCrossings:{candidateId:string;reason:string}[];
   joined:{candidateId:string;roads:string[]}[];blocked:{candidateId:string;roads:string[];reason:string}[]};
 
 const SECTION_LABEL:Record<keyof RoadSection,string>={forwardLanes:'ช่องขาไป',backwardLanes:'ช่องขากลับ',laneWidth:'ความกว้างช่อง',median:'เกาะกลาง',walk:'ทางเท้า',bands:'แถบริมทาง'};
@@ -94,7 +99,7 @@ function dropRoad(p:RoadFirstProject,roadId:string):RoadFirstProject{
 }
 
 export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):CommandResult{
-  const fail=(error:string,label='แก้ไข'):CommandResult=>({project,error,label,warnings:[],autoJunctions:[],openCrossings:[],joined:[],blocked:[]});
+  const fail=(error:string,label='แก้ไข'):CommandResult=>({project,error,label,warnings:[],autoJunctions:[],autoSeparated:[],openCrossings:[],joined:[],blocked:[]});
   const p=structuredClone(project);
   const road=(id:string)=>p.roads.find(r=>r.id===id);
   const decision=(id:string)=>p.decisions.find(d=>d.candidateId===id);
@@ -147,6 +152,19 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.role)r.role=cmd.role;else delete r.role;
       label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+    }
+    case 'road.setProfile':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.profile?.length)r.profile=structuredClone(cmd.profile).sort((a,b)=>a.station-b.station);else delete r.profile;
+      label=`แก้แนวดิ่ง ${r.name}`;group=`road.profile:${r.id}`;roadsChanged=true;break;
+    }
+    case 'crossing.setOver':{
+      const c=detectCandidates(p.roads).find(x=>x.id===cmd.candidateId);if(!c)return fail('ไม่พบจุดตัดที่เลือก');
+      if(!c.roads.some(x=>x.roadId===cmd.over))return fail('ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้');
+      for(const [id,profile] of Object.entries(cmd.profiles)){const r=road(id);if(!r)return fail('ไม่พบถนนที่เลือก');if(profile?.length)r.profile=structuredClone(profile);else delete r.profile;}
+      const d=decision(c.id),next:Decision={...d,candidateId:c.id,decision:'grade-separated',over:cmd.over,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
+      delete next.treatments;delete next.name;
+      p.decisions=[...p.decisions.filter(x=>x!==d),next];label=cmd.label;break;
     }
     case 'road.setRoadside':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -251,25 +269,32 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const structural=validateRoadFirstProject(p);if(structural)return fail(structural,label);
   const invalid=newOverflow(p,overflowBefore)??engineError(p);if(invalid)return fail(invalid,label);
   // New crossings become junctions automatically (owner decision 2026-10-19); one that cannot be built stays open with its reason.
-  const autoJunctions:string[]=[],openCrossings:{candidateId:string;reason:string}[]=[];
+  const autoJunctions:string[]=[],autoSeparated:string[]=[],openCrossings:{candidateId:string;reason:string}[]=[];
   // A junction with a project access is named after the access ("ทางเข้า 1").
   const accessName=(ids:string[])=>p.roads.find(r=>ids.includes(r.id)&&r.role==='access')?.name;
   if(roadsChanged){
     const known=new Set(p.decisions.map(d=>d.candidateId));
     for(const c of detectCandidates(p.roads).filter(x=>!known.has(x.id))){
       const names=c.roads.map(r=>road(r.roadId)?.name??r.roadId);
+      // Roads at different levels cross without a junction: the higher one passes over (Phase 4A).
+      const levels=c.roads.map(r=>({id:r.roadId,z:levelAt(road(r.roadId)?.profile,r.station)})).sort((a,b)=>b.z-a.z);
+      if(levels.length===2&&levels[0].z-levels[1].z>LEVEL_TOLERANCE){
+        p.decisions=[...p.decisions,{candidateId:c.id,decision:'grade-separated',over:levels[0].id,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
+        autoSeparated.push(c.id);continue;
+      }
       const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:accessName(c.roads.map(r=>r.roadId))??`แยก ${names.join(' × ')}`,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
       const reason=newOverflow({...p,decisions:trial},overflowBefore)??engineError({...p,decisions:trial});
       if(reason)openCrossings.push({candidateId:c.id,reason});else{p.decisions=trial;autoJunctions.push(c.id);}
     }
     if(autoJunctions.length)label+=` · สร้างทางแยก ${autoJunctions.length} แห่ง`;
+    if(autoSeparated.length)label+=` · ทางต่างระดับ ${autoSeparated.length} แห่ง`;
   }
   const roadNames=(ids:string[])=>ids.map(id=>road(id)?.name??id).join(', ');
   for(const j of joined)label+=` · ${roadNames(j.roads)} เข้าทางแยก ${jname(decision(j.candidateId))}`;
   const compiled=compileRoadFirstProject(p);
   const warnings=[...compiled.issues,...openCrossings.map(o=>`จุดตัดนี้ยังเป็นทางแยกไม่ได้ · ${o.reason}`),
     ...blocked.map(b=>`${roadNames(b.roads)} ถึง${jname(decision(b.candidateId))}แต่เชื่อมเข้าไม่ได้ · ${b.reason}`)];
-  return{project:p,error:null,label,warnings,group,autoJunctions,openCrossings,joined,blocked};
+  return{project:p,error:null,label,warnings,group,autoJunctions,autoSeparated,openCrossings,joined,blocked};
 }
 
 /** A junction that now has more legs than supported (and did not before) is refused instead of losing legs. */

@@ -33,6 +33,8 @@ export type NetworkDesignReport={
   findings:DesignReportFinding[];counts:{error:number;warning:number;note:number;total:number};
   junctions:JunctionReportRow[];roadLinks:RoadLinkReportRow[];
   comparison?:{referenceName:string;comparison:ScenarioComparison};
+  /** Grade-separated crossings (Phase 4A): relation and measured level gap; no clearance check. */
+  crossings:{name:string;relation:'over'|'unresolved';gap:number}[];
 };
 
 const rounded=(value:number,decimals=1)=>{const factor=10**decimals;return Math.round(value*factor)/factor;};
@@ -97,7 +99,8 @@ export function buildNetworkDesignReport(project:NetworkProject,scenarioName:str
   for(const row of junctions)row.findings=findings.filter(item=>item.objectKind==='junction'&&item.objectId===row.id).length;
   for(const row of roadLinks)row.findings=findings.filter(item=>item.objectKind==='roadlink'&&item.objectId===row.id).length;
   const counts={error:findings.filter(v=>v.level==='error').length,warning:findings.filter(v=>v.level==='warning').length,note:findings.filter(v=>v.level==='note').length,total:findings.length};
-  const report:NetworkDesignReport={projectTitle:project.title,scenarioName,metrics:networkDesignMetrics(project),findings,counts,junctions,roadLinks};
+  const crossings=(project.crossings??[]).map(c=>({name:c.name,relation:c.relation,gap:c.gap}));
+  const report:NetworkDesignReport={projectTitle:project.title,scenarioName,metrics:networkDesignMetrics(project),findings,counts,junctions,roadLinks,crossings};
   if(reference)report.comparison={referenceName:reference.name,comparison:compareNetworkProjects(reference.project,project)};
   return report;
 }
@@ -119,6 +122,7 @@ export function networkDesignReportHtml(report:NetworkDesignReport){
   ].join('')}</div></section>
   <section><h2>Junction Register</h2><table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Arms</th><th>Main lanes</th><th>Pocket</th><th>Receiving</th><th>Slip</th><th>Signal/Cross/Stop</th><th>Findings</th></tr></thead><tbody>${junctionRows||'<tr><td colspan="10">No Junction</td></tr>'}</tbody></table></section>
   <section><h2>RoadLink Register</h2><table><thead><tr><th>ID</th><th>Name</th><th>Endpoints</th><th>Length</th><th>Section mode</th><th>Components</th><th>Parallel role</th><th>Findings</th></tr></thead><tbody>${linkRows||'<tr><td colspan="8">No RoadLink</td></tr>'}</tbody></table></section>
+  <section><h2>Crossings / จุดตัด</h2><p class="muted">ทางแยกระดับเดียวกันอยู่ใน Junction Register · ทางต่างระดับแสดงระยะต่างระดับที่วัดจากแนวดิ่ง (ยังไม่ได้ตรวจระยะช่องลอดตามมาตรฐาน — TO_VERIFY)</p><table><thead><tr><th>Crossing</th><th>Relation</th><th>Level gap</th></tr></thead><tbody>${report.junctions.map(j=>`<tr><td>${escapeHtml(j.name)}</td><td>at grade · ทางแยกระดับเดียวกัน</td><td>—</td></tr>`).join('')}${report.crossings.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${c.relation==='over'?'grade-separated · ทางต่างระดับ':'unresolved · ยังไม่กำหนดบน/ล่าง'}</td><td>${c.relation==='over'?`${c.gap.toFixed(1)} ม.`:'—'}</td></tr>`).join('')||''}</tbody></table></section>
   <section><h2>Engineering Review Findings</h2><p class="muted">Findings reuse the same Junction review, RoadLink continuity and handoff-integrity logic used by the editor.</p><table><thead><tr><th>Level</th><th>Object</th><th>Category</th><th>Finding</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No current review findings.</td></tr>'}</tbody></table></section>
   ${comparisonHtml}<div class="scope"><b>Scope limitation</b><p>This document is a concept-design summary. Dimensions and geometry must be verified against survey/control data and applicable project standards before detailed engineering or construction use.</p></div><div class="footer">Thai Street Designer · Concept design · Thailand left-hand traffic</div></body></html>`;
 }

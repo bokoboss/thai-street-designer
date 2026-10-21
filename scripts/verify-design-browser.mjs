@@ -51,6 +51,21 @@ try{
   await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===0,'turned into a grade separation');
   await b.click('[data-design-undo]');
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo brings the junction back');
+  // Grade separation with a chosen upper road (Phase 4A): the junction becomes a crossing, road 2 rises over road 1.
+  {
+    const c0=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
+    await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
+    await b.click('[data-design-action="to-grade-separated"]');
+    await b.waitFor(()=>b.count('[data-design-crossing-relation="unresolved"]'),'same level: which road is over is asked');
+    const r2=await b.evalValue(`document.querySelectorAll('[data-design-over]')[1].dataset.designOver`);
+    await b.click(`[data-design-over="${r2}"]`);
+    await b.waitFor(async()=>await b.count('[data-design-crossing-relation="over"]')&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'upper road over the lower one, deck drawn, no junction');
+    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.0 ม\./);
+    await b.screenshot('artifacts/design-browser-grade-separation.png');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'two undos bring the junction back');
+    await b.key('Escape');
+  }
   // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
   {
     const before=await b.count('[data-design-road]');

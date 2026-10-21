@@ -13,6 +13,18 @@ import {
   type ResolvedLaneLifecycleSet,type SampledLaneLifecycle
 } from './lane-lifecycle';
 
+/** Level along a link: linear between its level points, constant outside, 0 without them. */
+export function linkLevelAt(link:RoadLink,s:number):number{
+  const p=link.levels;if(!p?.length)return 0;
+  if(s<=p[0].station)return p[0].z;
+  for(let i=1;i<p.length;i++)if(s<=p[i].station){const a=p[i-1],b=p[i],t=b.station>a.station?(s-a.station)/(b.station-a.station):1;return a.z+(b.z-a.z)*t;}
+  return p[p.length-1].z;
+}
+/** Links in drawing order for the plan: lower first, so a road that passes over is drawn on top. Stable otherwise. */
+export function linksInDrawOrder(project:NetworkProject):RoadLink[]{
+  const peak=(l:RoadLink)=>Math.max(0,...(l.levels??[]).map(q=>q.z));
+  return project.links.map((l,i)=>({l,i,z:peak(l)})).sort((a,b)=>a.z-b.z||a.i-b.i).map(x=>x.l);
+}
 export type LinkRoadObject={kind:'tree'|'light';station:number;offset:number;side:1|-1;x:number;y:number;angle:number};
 export type LinkLaneLineProfile={id:string;direction:LinkDirection;offsets:(number|null)[]};
 export type LinkBandProfile={type:string;inner:number[];outer:number[]};
@@ -34,6 +46,8 @@ export type ResolvedLinkSectionGeometry={
   openings:{start:number;end:number}[];
   /** Trees and street lights on the sidewalks (side +1 = forward/left offset side). */
   objects:LinkRoadObject[];
+  /** Level (m) at each station (Phase 4A); zeros without levels. */
+  z:number[];
   backwardWalk:{inner:number[];outer:number[]}|null;
 };
 
@@ -187,7 +201,8 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
       }
     }
   }
-  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings,objects};
+  const z=stationList.map(s=>linkLevelAt(link,s));
+  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings,objects,z};
 }
 
 /**
