@@ -158,6 +158,19 @@ try{
   await b.click('[data-design-action="add-slip"]');
   await b.waitFor(()=>b.count('[data-design-slip]'),'Slip lane added in place');
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ตั้ง Slip lane/);
+  // Median opening on the same approach, in /design: add, type its position, drag its handle (same value).
+  await b.click('[data-design-action="add-opening"]');
+  await b.waitFor(()=>b.count('[data-design-opening]'),'median opening added in place');
+  await b.click('[data-design-field="opening-0-start"]');await b.evalValue(`document.querySelector('[data-design-field="opening-0-start"]').select()`);
+  await b.type('30');await b.key('Enter');
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="opening-0-start"]').value`)==='30','opening position typed');
+  const oh=await b.waitFor(()=>b.rect('[data-design-opening-handle]'),'opening handle on the plan');
+  const ohAway=Math.hypot(oh.x-centre.x,oh.y-centre.y);
+  await b.drag(oh,{x:oh.x+(oh.x-centre.x)/ohAway*20,y:oh.y+(oh.y-centre.y)/ohAway*20});
+  await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-design-field="opening-0-start"]').value`))>30,'dragging the handle moves the same opening');
+  await b.screenshot('artifacts/design-browser-opening.png');
+  await b.click('[data-design-action="remove-opening-0"]');
+  await b.waitFor(async()=>await b.count('[data-design-opening]')===0,'opening removed');
   // Scenarios (slice 5): copy as an alternative, change it, see the difference highlighted, switch back, export a figure.
   await act('+ ทางเลือก',()=>b.click('[data-design-scenario-add]'));
   await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','alternative created and active');
