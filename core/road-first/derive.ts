@@ -21,7 +21,9 @@ export type RoadLinkSource={kind:'junction-auxiliary';end:'from'|'to';direction:
 export type RoadLinkComponent=LinkStationWidthComponent|(Omit<LinkStationLaneComponent,'source'>&{source?:RoadLinkSource});
 /** Settings of the k-th RoadLink along the road (between consecutive junctions / road ends), in road direction. */
 export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;components?:RoadLinkComponent[]};
-export type Road={id:string;name:string;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[]};
+/** access: a project access (driveway). Where it meets a road, that road keeps flowing (see compileRoadNetwork). */
+export type RoadRole='access';
+export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[]};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
@@ -180,6 +182,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const road=roadById.get(leg.roadId)!;
       const key=legKey(leg.roadId,leg.side),approachZone=d.treatments?.approaches?.[key];
       const derived=sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`);
+      // Access junction (concept defaults, overridable per leg): the through road keeps flowing; the access gives way.
+      if(found.some(l=>roadById.get(l.roadId)?.role==='access')){
+        derived.crossing=false;derived.signal=false;
+        if(road.role!=='access')derived.stop=false;
+      }
       arms.push(applyLegTreatment(applyApproach(derived,approachZone),d.treatments?.legs?.[key]??{}));
       enabled.push(true);
       // An authored approach length is kept as is; only a fit shortfall stretches it (and is reported).

@@ -52,6 +52,8 @@ export default function DesignWorkspace(){
   const [hasEarlier,setHasEarlier]=useState(false);
   // On narrow screens the inspector is a drawer: it opens when something is selected and can be toggled.
   const [inspectorOpen,setInspectorOpen]=useState(false);
+  /** The next road drawn is a project access (driveway). */
+  const [newAccess,setNewAccess]=useState(false);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
@@ -82,8 +84,9 @@ export default function DesignWorkspace(){
       return;
     }
     // Ids are never reused across scenarios, so the comparison never mistakes a new road for an old one.
-    const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads),points:draft,section:structuredClone(ed.lastSection)}});
-    if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id});}
+    const role=newAccess?'access' as const:undefined,section=newAccess?presetSection('access'):structuredClone(ed.lastSection);
+    const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads,role),...(role?{role}:{}),points:draft,section}});
+    if(r.ok){setNewAccess(false);clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
   /** Right-click or Backspace while drawing: drop the typed length, else the last point, else leave Draw Road. */
   function draftBack(){
@@ -232,7 +235,7 @@ export default function DesignWorkspace(){
       </div>
       <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
-          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))}/>
+          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newAccess={newAccess} onNewAccess={setNewAccess}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

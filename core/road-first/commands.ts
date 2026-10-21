@@ -5,7 +5,7 @@
 import {designError} from '../junction/design-validation';
 import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
 import {validateNetworkProject,type WorldPoint} from '../network/network-project';
-import {detectCandidates,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadSection} from './derive';
+import {detectCandidates,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadRole,type RoadSection} from './derive';
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
@@ -23,6 +23,7 @@ export type RoadFirstCommand=
   |{type:'road.removePoint';roadId:string;index:number}
   |{type:'road.setPointRadius';roadId:string;index:number;radius:number}
   |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
+  |{type:'road.setRole';roadId:string;role:RoadRole|null}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
   |{type:'junction.setRoads';candidateId:string;roads:string[]}
@@ -135,6 +136,11 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       else{r.points[i]={...r.points[i],radius:cmd.radius};label=`ปรับรัศมีโค้ง ${r.name} เป็น ${fmt(cmd.radius)} ม.`;group=`road.radius:${r.id}:${i}`;}
       roadsChanged=true;break;
     }
+    case 'road.setRole':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.role)r.role=cmd.role;else delete r.role;
+      label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+    }
     case 'road.setSection':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       r.section={...r.section,...structuredClone(cmd.patch)};
@@ -219,11 +225,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const invalid=newOverflow(p,overflowBefore)??engineError(p);if(invalid)return fail(invalid,label);
   // New crossings become junctions automatically (owner decision 2026-10-19); one that cannot be built stays open with its reason.
   const autoJunctions:string[]=[],openCrossings:{candidateId:string;reason:string}[]=[];
+  // A junction with a project access is named after the access ("ทางเข้า 1").
+  const accessName=(ids:string[])=>p.roads.find(r=>ids.includes(r.id)&&r.role==='access')?.name;
   if(roadsChanged){
     const known=new Set(p.decisions.map(d=>d.candidateId));
     for(const c of detectCandidates(p.roads).filter(x=>!known.has(x.id))){
       const names=c.roads.map(r=>road(r.roadId)?.name??r.roadId);
-      const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:`แยก ${names.join(' × ')}`,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
+      const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:accessName(c.roads.map(r=>r.roadId))??`แยก ${names.join(' × ')}`,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
       const reason=newOverflow({...p,decisions:trial},overflowBefore)??engineError({...p,decisions:trial});
       if(reason)openCrossings.push({candidateId:c.id,reason});else{p.decisions=trial;autoJunctions.push(c.id);}
     }
