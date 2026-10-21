@@ -124,6 +124,17 @@ findings are handled as fixes. Carried forward, not blocking:
 ## Phase 4 — Grade separation and engineering depth
 
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase, starting with 4A.
+
+### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
+
+1. First open offers: search a place on the map / use a site image / start blank. Map providers state trace rights.
+2. Phone widths: review first; the inspector does not cover the plan by default.
+3. Median opening at a junction approach, created and edited in `/design`.
+4. Project access (driveway) as a road role.
+5. Junction focus mode in `/design`: crossings, islands, stop lines, mid-block median opening; `/junction` retired after parity.
+
+Rule for every Phase 4 feature: created on the same canvas, preview before commit, handle and number edit the same value,
+one undo step, no page change, plan / section-profile / 3D / export read the same state.
 Source for 4A–4E: [game-UX and interchange research, 2026-10-21](research/2026-10-21-GAME-UX-INTERCHANGE-RESEARCH.md).
 Its action-count targets are the researcher's proposals, not industry standards; they are re-measured here
 against `docs/spec/UX_BASELINE_RESULTS.md` as each slice lands.

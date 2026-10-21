@@ -17,6 +17,18 @@ try{
   await ready();
   await b.waitFor(()=>b.count('[data-design-notice]'),'workspace loaded');
   assert.match(await b.text('.design-inspector'),/วาดถนน/,'empty project explains how to start');
+  // First open offers three ways to start, on the plan (not a modal).
+  await b.waitFor(()=>b.count('[data-design-start-option]'),'start chooser on first open');
+  assert.equal(await b.count('[data-design-start-option]'),3);
+  await b.click('[data-design-start-option="map"]');
+  await b.waitFor(async()=>await b.count('[data-design-start]')===0&&await b.count('[data-design-map="on"]')>0,'map chosen: map shown, chooser gone');
+  await b.waitFor(async()=>await b.evalValue(`document.activeElement?.matches('[data-design-map-query]')??false`),'place search focused');
+  assert.equal(await b.evalValue(`document.querySelector('[data-design-map-trace]')?.dataset.designMapTrace`),'osm','default map states its trace rights');
+  await b.evalValue(`document.querySelector('[data-design-map-visible]').click()`);
+  await b.waitFor(()=>b.count('[data-design-start]'),'chooser back when the map is turned off on an empty plan');
+  await b.click('[data-design-start-option="blank"]');
+  await b.waitFor(async()=>await b.count('[data-design-start]')===0&&(await b.evalValue(`document.querySelector('.design-canvas').dataset.designTool`))==='road','blank: Draw Road ready');
+  await b.key('Escape');await b.waitFor(()=>b.count('[data-design-start]'),'Esc returns to the chooser');
   const canvas=await b.rect('.design-canvas'),at=(dx,dy)=>({x:canvas.x+dx,y:canvas.y+dy});
 
   // Draw two crossing roads.
