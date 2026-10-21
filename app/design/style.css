@@ -94,6 +94,7 @@
 .design-compare ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .design-compare li button{width:100%;text-align:left;border:1px solid var(--d-line);border-left-width:4px;background:#fff;border-radius:6px;padding:6px 8px;cursor:pointer;font-size:12px}
 .design-compare li small{display:block;color:var(--d-muted)}
+.design-migration li button{display:block}.design-migration li small{margin-top:2px}
 .design-compare table{width:100%;border-collapse:collapse;font-size:12px}.design-compare td{padding:3px 4px;border-bottom:1px solid var(--d-line)}.design-compare td:not(:first-child){text-align:right;white-space:nowrap}
 .design-block-title{font-size:11px;letter-spacing:.04em;color:var(--d-muted)}
 .design-view-toggle{position:absolute;top:12px;right:12px;z-index:7;display:flex;background:#fff;border:1px solid var(--d-line);border-radius:7px;padding:2px;box-shadow:0 2px 8px #0001}

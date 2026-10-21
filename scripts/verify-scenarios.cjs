@@ -67,5 +67,16 @@ console.log('PASS scenarios: duplicate/rename/remove, comparison by road and cro
   let full=base;for(let i=0;i<5;i++)full=sc.duplicateScenario(full).workspace;
   const partial=sc.appendScenarios(full,mig.workspace,'(หน้าเดิม)');assert.equal(partial.workspace.scenarios.length,8);assert.match(partial.note,/ไม่ได้นำเข้า 1 รายการ/);
   full=sc.duplicateScenario(full).workspace;assert.match(sc.appendScenarios(full,mig.workspace,'x').error,/ครบ 8 รายการ/);
-  console.log('PASS earlier Network work imports as extra alternatives within the limit');
+  // The migration report follows the scenarios to their new ids; unknown ids and empty entries are dropped.
+  assert.deepEqual(add.ids,{[mig.workspace.scenarios[0].id]:add.workspace.scenarios[2].id,[mig.workspace.scenarios[1].id]:add.workspace.scenarios[3].id});
+  const item={severity:'lost',subject:'ทางขนาน',message:'x'};
+  const rep={source:'f.json',scenarios:[{scenarioId:mig.workspace.scenarios[1].id,items:[item]},{scenarioId:'gone',items:[item]},{scenarioId:mig.workspace.scenarios[0].id,items:[]}]};
+  const moved=sc.remapReport(rep,add.ids);
+  assert.deepEqual(moved.scenarios,[{scenarioId:add.workspace.scenarios[3].id,items:[item]}]);assert.equal(sc.reportCount(moved),1);
+  // Stored report: read back; junk and empty reports read as none.
+  assert.deepEqual(sc.readReport(JSON.stringify(moved)),moved);
+  assert.equal(sc.readReport('{oops'),null);assert.equal(sc.readReport(null),null);
+  assert.equal(sc.readReport(JSON.stringify({source:'x',scenarios:[{scenarioId:'a',items:[{severity:'bad',subject:'s',message:'m'}]}]})),null);
+  assert.equal(mig.report.scenarios.length,0,'the demo network migrates without findings');
+  console.log('PASS earlier Network work imports as extra alternatives within the limit; migration report remapped and stored');
 }

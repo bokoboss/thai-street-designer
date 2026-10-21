@@ -236,7 +236,7 @@ Checked against the code; three findings were reproduced with scripts before fix
 | Arm stretched beyond straight room | code | fixed — PR #29 (red mark with the shortfall on the plan) |
 | End-to-end roads not joined | code | fixed — PR #30 (marked on the plan, "เชื่อมเป็นถนนเดียว") |
 | Per-corner radius | code | fixed — PR #31 (each corner handle edits its own corner; default for the rest) |
-| Migration report detail | code | P2 — in progress |
+| Migration report detail | code | fixed — PR #33 (per object: not carried over / carried over differently / to check; click selects the road or junction; kept until dismissed) |
 | Station transitions | known limitation | moved to roadmap Phase 4C (lane runs), designed with the interchange model |
 | Performance on large networks | known limitation | roadmap "Later": benchmark first |
 | Merge /design and /junction into one editor (6.3) | agreed direction | P2 (large); direction from the 2026-10-21 research: refine in place on the plan, lane connector as the advanced view |

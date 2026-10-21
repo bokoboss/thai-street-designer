@@ -40,10 +40,18 @@ function reverseLinkData(link:RoadLink,total:number):{sectionProfile:LinkSection
   return{sectionProfile,components};
 }
 
-export type MigrationResult={project:RoadFirstProject;issues:string[]};
+/**
+ * One finding of the migration, per object (independent review 2026-10-20): what was not carried over, what was
+ * carried over differently, and what should be checked. `target` lets the plan select the object it concerns.
+ */
+export type MigrationSeverity='lost'|'changed'|'check';
+export type MigrationTarget={kind:'road';roadId:string}|{kind:'junction';candidateId:string};
+export type MigrationItem={severity:MigrationSeverity;subject:string;message:string;target?:MigrationTarget};
+export type MigrationResult={project:RoadFirstProject;issues:string[];items:MigrationItem[]};
+export const migrationText=(i:MigrationItem)=>`${i.subject}: ${i.message}`;
 
 export function migrateNetworkProject(net:NetworkProject):MigrationResult{
-  const issues:string[]=[],pairs=new Map(net.junctions.map(j=>[j.id,throughPairs(j)]));
+  const items:MigrationItem[]=[],add=(i:MigrationItem)=>{items.push(i);},pairs=new Map(net.junctions.map(j=>[j.id,throughPairs(j)]));
   const linkAt=new Map<string,RoadLink>();
   for(const l of net.links){linkAt.set(portKey(l.from),l);linkAt.set(portKey(l.to),l);}
   const visitedArms=new Set<string>(),visitedLinks=new Set<string>(),chains:Chain[]=[];
@@ -93,9 +101,10 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
     const c:Chain={points:[{...portPoint(j,a),radius:0},{x:j.x,y:j.y,radius:0}],legs:[{junction:j,armId:a,side:'behind'}],links:[]};leave(c,j,b);chains.push(c);
   }
   const loose=net.junctions.flatMap(j=>activeArmIds(j).filter(a=>!visitedArms.has(armKey(j,a))).map(()=>j.name));
-  if(loose.length)issues.push(`ถนนวงรอบปิดผ่าน ${[...new Set(loose)].join(', ')} ยังย้ายมาไม่ได้`);
+  if(loose.length)add({severity:'lost',subject:`ถนนวงรอบปิดผ่าน ${[...new Set(loose)].join(', ')}`,message:'ยังย้ายมาไม่ได้ ต้องวาดถนนช่วงนี้ใหม่'});
 
   // Roads, approach zones and leg treatments.
+  const roadOfLink=new Map<string,string>();
   const roads:Road[]=[],legOf=new Map<string,LegKey>(),approaches=new Map<string,Partial<Record<LegKey,ApproachOverride>>>(),legTreatments=new Map<string,Partial<Record<LegKey,LegTreatment>>>();
   const base=initial().arms[0];
   chains.forEach((c,n)=>{
@@ -104,6 +113,7 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
       ?{forwardLanes:first.side==='ahead'?arm.outgoing:arm.incoming,backwardLanes:first.side==='ahead'?arm.incoming:arm.outgoing,laneWidth:arm.width,median:arm.median,walk:arm.walk,bands:structuredClone(arm.bands)}
       :{forwardLanes:c.start!.section.outgoing,backwardLanes:c.start!.section.incoming,laneWidth:c.start!.section.width,median:c.start!.section.median,walk:c.start!.section.walk,bands:structuredClone(c.start!.section.bands)};
     const road:Road={id:`R-${n+1}`,name:c.links[0]?.link.name??(arm?`${first.junction.name} · ${arm.name}`:`ถนน ${n+1}`),points:c.points,section};
+    for(const {link} of c.links)roadOfLink.set(link.id,road.id);
     for(const leg of c.legs){
       const j=leg.junction,a=j.design.arms[leg.armId],key=legKey(road.id,leg.side);
       legOf.set(armKey(j,leg.armId),key);
@@ -133,7 +143,7 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
         if(comp.kind!=='lane'||!comp.source)return comp as RoadLinkComponent;
         const {source,...rest}=comp,ends=[['from',link.from],['to',link.to]] as const;
         const hit=ends.find(([,ref])=>isJunctionPort(ref)&&ref.junctionId===source.junctionId&&ref.armId===source.armId);
-        if(!hit){issues.push(`${link.name}: ช่องต่อเนื่องอ้างทางแยกที่ไม่ได้อยู่ปลายช่วงถนนนี้ จึงย้ายมาเป็นช่องธรรมดา`);return rest as RoadLinkComponent;}
+        if(!hit){add({severity:'changed',subject:link.name,message:'ช่องต่อเนื่องอ้างทางแยกที่ไม่ได้อยู่ปลายช่วงถนนนี้ จึงย้ายมาเป็นช่องธรรมดา',target:{kind:'road',roadId:road.id}});return rest as RoadLinkComponent;}
         const end=reversed?(hit[0]==='from'?'to':'from'):hit[0];
         return{...rest,source:{kind:'junction-auxiliary',end,direction:source.direction,side:source.side,lane:source.lane}} as RoadLinkComponent;
       });
@@ -163,14 +173,23 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
     const excluded=c.roads.map(r=>r.roadId).filter(id=>!joined.includes(id));
     decisions.push({candidateId:c.id,decision:'junction',name:j.name,roads:joined,...(excluded.length?{excluded}:{}),treatments});
   }
-  for(const j of net.junctions)if(!matched.has(j.id))issues.push(`${j.name}: หาจุดตัดของถนนที่ทางแยกนี้ไม่พบ`);
-  if(net.parallelCorridors.length)issues.push(`ความสัมพันธ์ถนนหลักและทางขนาน ${net.parallelCorridors.length} ชุดยังไม่ย้ายมาในรูปแบบใหม่`);
+  for(const j of net.junctions)if(!matched.has(j.id))add({severity:'lost',subject:j.name,message:'หาจุดตัดของถนนที่ทางแยกนี้ไม่พบ ค่าที่ตั้งไว้ในทางแยกนี้ไม่ได้ย้ายมา'});
+  for(const c of net.parallelCorridors){const roadId=roadOfLink.get(c.mainlineLinkIds[0]??'');add({severity:'lost',subject:c.name||'ทางขนาน',message:'ความสัมพันธ์ถนนหลักกับทางขนานยังไม่มีในรูปแบบใหม่ ถนนแต่ละเส้นย้ายมาแยกกัน',...(roadId?{target:{kind:'road' as const,roadId}}:{})});}
 
   const project:RoadFirstProject={kind:'road-first',schemaVersion:1,title:net.title,roads,decisions,options:{}};
   // Golden self-check: the migrated model must compile back to the same drawn geometry.
   const compiled=compileRoadNetwork(roads,decisions,{});
-  const engine=validateNetworkProject(compiled.project);if(engine)issues.push(`แบบที่ย้ายแล้วตรวจไม่ผ่าน · ${engine}`);
-  issues.push(...compiled.issues,...compareDigests(networkDigest(net),networkDigest(compiled.project)));
-  return{project,issues};
+  const engine=validateNetworkProject(compiled.project);if(engine)add({severity:'check',subject:'ทั้งแบบ',message:`แบบที่ย้ายแล้วตรวจไม่ผ่าน · ${engine}`});
+  for(const text of compiled.issues)add({severity:'check',subject:'ทั้งแบบ',message:text});
+  // Geometry that compiles back differently: name the junction or road it belongs to when one matches.
+  const byName=(text:string):MigrationTarget|undefined=>{
+    const d=decisions.find(x=>x.decision==='junction'&&x.name&&text.startsWith(`${x.name}:`));if(d)return{kind:'junction',candidateId:d.candidateId};
+    const r=roads.find(x=>x.links?.some(l=>text.startsWith(`${l.name}:`)));return r&&{kind:'road',roadId:r.id};
+  };
+  for(const text of compareDigests(networkDigest(net),networkDigest(compiled.project))){
+    const k=text.indexOf(': '),target=byName(text);
+    add({severity:'changed',subject:target&&k>0?text.slice(0,k):'รูปทรง',message:target&&k>0?`รูปทรงต่างจากเดิม · ${text.slice(k+2)}`:text,...(target?{target}:{})});
+  }
+  return{project,issues:items.map(migrationText),items};
 }
 
