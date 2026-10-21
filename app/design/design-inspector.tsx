@@ -295,7 +295,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
     <header className="design-inspector-head"><small>วาดถนน</small><b>ถนนใหม่</b></header>
     <PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>
     {!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
-    <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · Esc เพื่อยกเลิก · แก้หน้าตัดได้ภายหลัง</p>
+    <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;

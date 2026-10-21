@@ -75,8 +75,9 @@
 .design-toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;background:#1f2d33;color:#fff;border-radius:8px;padding:6px 8px 6px 12px;box-shadow:0 6px 18px #0003;font-size:12.5px;white-space:nowrap}
 .design-toast button{border:1px solid #ffffff40;background:transparent;color:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px}
 .design-toast button:hover{background:#ffffff1a}
-.design-readout{position:absolute;z-index:6;pointer-events:none;display:flex;gap:6px;align-items:baseline;background:#1f2d33e6;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap}
+.design-readout{position:absolute;z-index:6;pointer-events:none;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;background:#1f2d33e6;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap}
 .design-readout span{color:#cfe3e1}
+.design-readout em{color:#ffb4ab;font-style:normal;font-weight:700;white-space:normal;flex-basis:100%;max-width:320px}.design-readout em.warn{color:#ffd59a}
 .design-block{border:1px solid var(--d-line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:7px}
 .design-block>header{display:flex;align-items:center;justify-content:space-between}
 .design-inspector button.link{border:0;background:none;color:var(--d-accent);padding:0;cursor:pointer;font-size:12px;text-align:left;align-self:flex-start}

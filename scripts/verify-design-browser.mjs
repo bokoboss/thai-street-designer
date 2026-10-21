@@ -38,6 +38,27 @@ try{
   await b.click('[data-design-undo]');
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo brings the junction back');
 
+  // Before a road is finished, the preview says what would happen (here: it cannot join the 4-leg junction); right-click steps back.
+  {
+    const move=p=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,button:'none'});
+    const rightClick=async p=>{for(const type of ['mousePressed','mouseReleased'])await b.send('Input.dispatchMouseEvent',{type,x:p.x,y:p.y,button:'right',clickCount:1});};
+    // Screen point of the crossing of the two roads (first road horizontal, second vertical).
+    const J=await b.evalValue(`(()=>{const ps=[...document.querySelectorAll('[data-design-road] path')].map(p=>p.getAttribute('d').match(/-?[0-9.]+/g).map(Number));
+      const svg=document.querySelector('[data-design-plan]'),pt=new DOMPoint(ps[2][0],ps[0][1]).matrixTransform(svg.getScreenCTM());return{x:pt.x,y:pt.y};})()`),nearJ=(dx,dy)=>({x:J.x+dx,y:J.y+dy});
+    await b.click('[data-design-tool-button="road"]');await b.clickAt(nearJ(-200,-200));
+    await move(nearJ(150,150));await move(nearJ(200,200));
+    await b.waitFor(()=>b.count('[data-design-draft="warn"]'),'road through the 4-leg junction previews as not joining');
+    assert.match(await b.text('[data-design-draft-check="warn"]'),/ไม่เชื่อมเข้าทางแยก · .*เกิน 4 ขา/);
+    await b.screenshot('artifacts/design-browser-draft-check.png');
+    await move(nearJ(200,-150));
+    await b.waitFor(async()=>await b.count('[data-design-draft="true"]')===1,'away from the junction the preview is valid again');
+    await rightClick(nearJ(200,-150));
+    await b.waitFor(async()=>await b.count('[data-design-draft]')===0,'right-click removes the last point');
+    await rightClick(nearJ(200,-150));
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('.design-canvas').dataset.designTool`))==='select','right-click with nothing drawn leaves Draw Road');
+    assert.equal(await b.count('[data-design-road]'),2,'nothing was added');
+  }
+
   // Edit the first road's section by number (T3).
   const before=actions.length;
   await act('select road',()=>b.clickAt(at(-250,0)));
