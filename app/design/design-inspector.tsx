@@ -118,6 +118,21 @@ function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;ru
   </section>;
 }
 
+/** Pedestrian crossing, stop line and signal of one approach (leg treatment: crossing, crossOffset, stop, stopOffset, signal). */
+function ControlBlock({info,run}:{info:ApproachInfo;run:Run}){
+  const a=info.arm,set=(patch:Partial<Pick<typeof a,'crossing'|'crossOffset'|'stop'|'stopOffset'|'signal'>>)=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch});
+  return <section className="design-block" data-design-controls="true">
+    <small className="design-block-title">ทางม้าลาย เส้นหยุด และสัญญาณไฟ</small>
+    <label className="design-check"><input type="checkbox" checked={a.crossing} data-design-field="crossing" onChange={e=>set({crossing:e.currentTarget.checked})}/> ทางม้าลายข้ามปากทางนี้</label>
+    {a.crossing&&<NumberField field="cross-offset" label="ร่นทางม้าลายจากปากแยก (ม.)" value={a.crossOffset} step={.5} min={0} max={35} onCommit={crossOffset=>set({crossOffset})}/>}
+    {a.incoming>0?<>
+      <label className="design-check"><input type="checkbox" checked={a.stop} data-design-field="stop" onChange={e=>set({stop:e.currentTarget.checked})}/> เส้นหยุด</label>
+      {a.stop&&<NumberField field="stop-offset" label="ร่นเส้นหยุดจากปากแยก (ม.)" value={a.stopOffset} step={.5} min={0} max={35} onCommit={stopOffset=>set({stopOffset})}/>}
+      <label className="design-check"><input type="checkbox" checked={a.signal} data-design-field="signal" onChange={e=>set({signal:e.currentTarget.checked})}/> สัญญาณไฟจราจร</label>
+    </>:<p className="design-meta">ปากทางนี้ไม่มีช่องจราจรขาเข้า จึงไม่มีเส้นหยุดหรือสัญญาณไฟ</p>}
+  </section>;
+}
+
 const OPENING_LABEL:Record<OpeningType,string>={opening:'ช่องเปิดเกาะกลาง',uturn:'ช่องกลับรถ'};
 /** Median openings on this approach: add, type, position from the mouth, length, remove; the plan handle moves the same start. */
 function OpeningBlock({info,run,onMessage}:{info:ApproachInfo;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
@@ -178,6 +193,7 @@ function ApproachInspector({candidateId,leg,project,compiled,run,onSelect,onMess
     <PocketBlock info={info} side="right" run={run} title="เลนเลี้ยวขวา"/>
     <PocketBlock info={info} side="left" run={run} title="เลนเลี้ยวซ้าย"/>
     <SlipBlock info={info} project={project} run={run}/>
+    <ControlBlock info={info} run={run}/>
     <OpeningBlock info={info} run={run} onMessage={onMessage}/>
     <p className="design-meta">ลากจุดบนแบบเพื่อปรับระยะเก็บรถ ตำแหน่งช่องเปิด และรัศมีมุมได้ · ขนาดเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน ควรตรวจกับแนวทางออกแบบที่ใช้</p>
     <div className="design-actions">
@@ -202,6 +218,15 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
     <div className="design-presets" data-design-approaches={approaches.length}><span>ปากทาง {approaches.length} ด้าน — เลือกเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane</span>
       {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
     </div>
+    {(()=>{const arms=approaches.map(x=>j.design.arms[x.armId]).filter(a=>a.incoming>0),on=arms.filter(a=>a.signal).length;
+      return <section className="design-block" data-design-signals={on===arms.length?'all':on?'some':'none'}>
+        <small className="design-block-title">สัญญาณไฟจราจร</small>
+        <p className="design-meta">{on===arms.length?'มีสัญญาณไฟทุกปากทาง':on?`มีสัญญาณไฟ ${on} จาก ${arms.length} ปากทาง`:'ไม่มีสัญญาณไฟ'} · แก้รายปากทางได้ที่แต่ละปากทาง</p>
+        <div className="design-reference-tools">
+          <button data-design-action="signals-all" disabled={on===arms.length} onClick={()=>run({type:'junction.setAllLegs',candidateId,patch:{signal:true},label:'ติดสัญญาณไฟทุกปากทาง'})}>มีสัญญาณไฟทุกปากทาง</button>
+          <button data-design-action="signals-none" disabled={on===0} onClick={()=>run({type:'junction.setAllLegs',candidateId,patch:{signal:false},label:'เอาสัญญาณไฟออกทุกปากทาง'})}>ไม่มีสัญญาณไฟ</button>
+        </div>
+      </section>;})()}
     <section className="design-block" data-design-corners="true">
       <small className="design-block-title">รัศมีมุมขอบทาง</small>
       <NumberField field="corner" label="ค่าเริ่มต้นทุกมุม (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
