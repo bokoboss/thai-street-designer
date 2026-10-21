@@ -23,7 +23,8 @@ Status 2026-10-20 (slice 6a; 6b-1 adds the 3D view and the Design Summary to `/d
 | Median trees | | ✓ | |
 | Mid-block median opening / U-turn | — | — | not in the engine yet (UX closure 4.0-5) |
 | Project access (driveway) | ✓ (road role) | | |
-| Lane markings, arrows, divider modes | | ✓ | |
+| Incoming lane arrows (main and turn lanes), incoming divider mode and solid length | ✓ | ✓ | |
+| Outgoing divider, arrow position overrides | | ✓ | |
 | Slip departure (shared auxiliary, acceleration), Slip crossing | | ✓ | |
 | Junction 3D view | | ✓ | |
 | Scenarios, comparison, report figure (PNG/SVG) | ✓ | | |
