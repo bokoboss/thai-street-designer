@@ -119,3 +119,21 @@ console.log('PASS approach editing in place: right-turn pocket add/size/remove, 
   e=c.undo(e).editor;assert.equal(ae.approachInfo(comp(),id,L).arm.medianOpenings.length,1);
   console.log('PASS median openings on an approach: proposed start, handle round trip, overlap refused, needs a median, one undo step');
 }
+
+// Crossing, stop line and signal per approach, and signals on every approach at once (junction controls in /design).
+{
+  let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},
+    roads:[{id:'R1',name:'ถนนหลัก',points:[{x:-200,y:0},{x:200,y:0}],section:sec},{id:'R2',name:'ถนนรอง',points:[{x:0,y:-200},{x:0,y:200}],section:sec}]});
+  e=c.endGesture(c.runCommand(e,{type:'road.add',road:{id:'R3',name:'tmp',points:[{x:500,y:500},{x:600,y:500}],section:sec}}).editor);
+  e=c.endGesture(c.runCommand(e,{type:'road.remove',roadId:'R3'}).editor);
+  const id=e.project.decisions[0].candidateId,comp=()=>rp.compileRoadFirstProject(e.project),arm=L=>ae.approachInfo(comp(),id,L).arm;
+  let x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg:'R1:ahead',patch:{crossing:false,stopOffset:6}});assert.equal(x.result.error,null);e=c.endGesture(x.editor);
+  assert.deepEqual([arm('R1:ahead').crossing,arm('R1:ahead').stopOffset],[false,6]);assert.equal(arm('R1:behind').crossing,true,'other approaches untouched');
+  const had=arm('R1:behind').signal;
+  x=c.runCommand(e,{type:'junction.setAllLegs',candidateId:id,patch:{signal:!had},label:'สลับสัญญาณไฟทุกปากทาง'});assert.equal(x.result.error,null,x.result.error);
+  assert.match(x.result.label,/^สลับสัญญาณไฟทุกปากทาง ที่ /);e=c.endGesture(x.editor);
+  assert.ok(['R1:ahead','R1:behind','R2:ahead','R2:behind'].every(L=>arm(L).signal===!had),'signal set on every approach');
+  assert.equal(arm('R1:ahead').crossing,false,'earlier per-approach choice kept');
+  e=c.undo(e).editor;assert.ok(['R1:ahead','R1:behind','R2:ahead'].every(L=>arm(L).signal===had),'one undo restores every approach');
+  console.log('PASS junction controls: crossing / stop line offset per approach, signals on all approaches in one undo step');
+}

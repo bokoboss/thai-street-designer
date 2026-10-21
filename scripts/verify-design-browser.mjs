@@ -177,6 +177,13 @@ try{
   await b.click('[data-design-action="add-slip"]');
   await b.waitFor(()=>b.count('[data-design-slip]'),'Slip lane added in place');
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ตั้ง Slip lane/);
+  // Crossing, stop line and signal of the approach, in place.
+  await b.waitFor(()=>b.count('[data-design-controls]'),'approach controls');
+  const crossOn=await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`);
+  await b.click('[data-design-field="crossing"]');
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)!==crossOn,'crossing toggled in place');
+  await b.click('[data-design-undo]');
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)===crossOn,'undo restores the crossing');
   // Median opening on the same approach, in /design: add, type its position, drag its handle (same value).
   await b.click('[data-design-action="add-opening"]');
   await b.waitFor(()=>b.count('[data-design-opening]'),'median opening added in place');

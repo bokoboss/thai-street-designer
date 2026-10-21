@@ -35,6 +35,8 @@ export type RoadFirstCommand=
   |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined}
   |{type:'leg.setApproach';candidateId:string;leg:LegKey;patch:ApproachOverride}
   |{type:'leg.setTreatment';candidateId:string;leg:LegKey;patch:LegTreatment}
+  /** The same leg patch on every approach of a junction (e.g. signals on all approaches), one undo step. */
+  |{type:'junction.setAllLegs';candidateId:string;patch:LegTreatment;label:string}
   |{type:'leg.reset';candidateId:string;leg:LegKey}
   |{type:'slip.set';candidateId:string;slip:LegSlip}
   |{type:'slip.remove';candidateId:string;from:LegKey};
@@ -176,6 +178,16 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
         case 'leg.setApproach':{
           const a=t(d).approaches??={};a[cmd.leg]={...a[cmd.leg],...structuredClone(cmd.patch)};
           label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
+        }
+        case 'junction.setAllLegs':{
+          // Signals and stop lines apply only to approaches with incoming lanes.
+          const before=compileRoadFirstProject(project),needsIncoming='signal' in cmd.patch||'stop' in cmd.patch;
+          const keys=before.legs.filter(l=>before.sources.junctions[l.junctionId]===d.candidateId)
+            .filter(l=>!needsIncoming||(before.project.junctions.find(j=>j.id===l.junctionId)?.design.arms[l.armId]?.incoming??0)>0)
+            .map(l=>`${l.roadId}:${l.side}` as LegKey);
+          if(!keys.length)return fail('ไม่พบปากทางของทางแยกนี้');
+          const l=t(d).legs??={};for(const k of keys)l[k]={...l[k],...structuredClone(cmd.patch)};
+          label=`${cmd.label} ที่ ${jname(d)}`;break;
         }
         case 'leg.setTreatment':{
           // A Slip lane already takes the left turn; a left-turn pocket beside it gives a broken channel (use the deceleration lane of the Slip).
