@@ -79,6 +79,15 @@ try{
       const a=new DOMPoint(q[0],q[1]).matrixTransform(m),z=new DOMPoint(q[q.length-2],q[q.length-1]).matrixTransform(m);return{a:{x:a.x,y:a.y},z:{x:z.x,y:z.y}};})()`);
     await b.clickAt({x:pts.a.x+(pts.z.x-pts.a.x)*.15,y:pts.a.y+(pts.z.y-pts.a.y)*.15});
     await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`))==='road','road selected');
+    // Trees and street lights along the road: 2D symbols on the links, 3D furniture, one undo step each.
+    await b.click('[data-design-field="roadside-trees"]');await b.click('[data-design-field="roadside-lights"]');
+    await b.waitFor(async()=>(await b.count('[data-network-link-objects]'))>0&&(await b.count('[data-road-object="tree"]'))>0&&(await b.count('[data-road-object="light"]'))>0,'trees and lights drawn along the road');
+    await b.click('[data-design-view="3d"]');
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-furniture-faces]')?.dataset.networkSceneFurnitureFaces??0`))>0,'trees and lights in 3D');
+    await sleep(400);await b.screenshot('artifacts/design-browser-3d-roadside.png');
+    await b.click('[data-design-view="2d"]');await b.waitFor(async()=>await b.count('.network-scene3d')===0,'plan');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(async()=>await b.count('[data-network-link-objects]')===0,'undo removes them');
     await openFold('road-openings');
     await b.click('[data-design-action="add-road-uturn"]');
     await b.waitFor(async()=>await b.count('[data-design-road-opening]')===1&&await medians()===m0+1,'U-turn opening cuts the median in two');

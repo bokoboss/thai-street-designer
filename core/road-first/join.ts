@@ -75,6 +75,6 @@ export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:strin
   const used=new Set<string>();
   const openings=centres.map(({o,c})=>{let id=o.id,k=2;while(used.has(id))id=`${o.id}-${k++}`;used.add(id);
     return{...o,id,station:Math.max(0,Math.round((projectAlignment(finalPoints,c).station-o.length/2)*1000)/1000)};});
-  const joined:Road={id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(openings.length?{openings}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
+  const joined:Road={id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(A.roadside?{roadside:{...A.roadside}}:{}),...(openings.length?{openings}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
   return{roads:roads.filter(r=>r.id!==bId).map(r=>r.id===aId?joined:r),decisions:nextDecisions,notes};
 }

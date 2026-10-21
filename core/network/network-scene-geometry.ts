@@ -4,7 +4,8 @@ import {
   resolveJunctionSceneSurfaces as resolveLocalJunctionSceneSurfaces,
   type JunctionSceneSurfaceKind
 } from '../junction/scene-surfaces';
-import {furnitureFaces} from '../junction/furniture3d';
+import {furnitureFaces,objectFaces} from '../junction/furniture3d';
+import {roadsideDefaults} from '../junction/model';
 import {worldJunctionRotation,type JunctionInstance,type NetworkProject,type WorldPoint} from './network-project';
 
 export type NetworkSceneSurfaceKind=JunctionSceneSurfaceKind;
@@ -50,6 +51,16 @@ export function resolveJunctionSceneFaces(project:NetworkProject):NetworkSceneFa
       points:face.points.map(p=>({...transformPoint(junction,p),z:p.z}))
     }))
   ).filter(face=>face.points.length>=3&&face.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z)));
+}
+
+/** Trees and street lights along road links, with the engine's roadside sizes. */
+export function resolveRoadLinkSceneFaces(project:NetworkProject):NetworkSceneFace[]{
+  const rs=roadsideDefaults();
+  return project.links.flatMap(link=>{
+    const g=resolveLinkSectionGeometry(project,link);if(!g)return[];
+    return g.objects.flatMap((o,k)=>objectFaces({kind:o.kind,x:o.x,y:o.y,angle:o.angle,side:o.side,height:o.kind==='tree'?rs.treeHeight:rs.lightHeight,size:o.kind==='tree'?rs.treeSize:rs.lightSize,reach:rs.lightReach})
+      .map((face,index)=>({id:`${link.id}:object:${k}:${index}`,color:face.color,points:face.points})));
+  }).filter(face=>face.points.length>=3&&face.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z)));
 }
 
 export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{

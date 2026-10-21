@@ -40,6 +40,8 @@ export type RoadLink={
   via:LinkVia[];
   sectionProfile:LinkSectionProfile;
   components:LinkStationComponent[];
+  /** Trees and street lights along both sidewalks (engine roadside defaults for spacing and sizes). */
+  roadside?:{trees:boolean;lights:boolean};
   /** Mid-block median openings, link-local stations (start from the link's start). Optional; absent in older files. */
   medianOpenings?:LinkMedianOpening[];
 };
@@ -779,6 +781,7 @@ export function validateNetworkProject(project:NetworkProject){
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
+    if(l.roadside!==undefined&&(!l.roadside||typeof l.roadside.trees!=='boolean'||typeof l.roadside.lights!=='boolean'))return`${l.name}: ต้นไม้และเสาไฟไม่ถูกต้อง`;
     if(l.medianOpenings!==undefined){
       const list=l.medianOpenings,total=linkLength(project,l);
       if(!Array.isArray(list)||list.length>12||list.some(o=>!o||typeof o.id!=='string'||!o.id||o.id.length>40||(o.type!==undefined&&!['opening','uturn'].includes(o.type))||!Number.isFinite(o.start)||o.start<0||!Number.isFinite(o.length)||o.length<2||o.length>40))return`${l.name}: ช่องเปิดเกาะกลางไม่ถูกต้อง`;

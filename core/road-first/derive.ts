@@ -2,7 +2,7 @@
 // Roads own alignment + section. Crossings become explicit candidates. Confirmed
 // junctions compile to ordinary JunctionInstance/RoadLink objects, so every
 // existing geometry, Slip, review, 2D/3D and export path is reused unchanged.
-import {initial,markingsFor,type Arm,type Band,type Design} from '../junction/model';
+import {initial,markingsFor,roadsideDefaults,type Arm,type Band,type Design} from '../junction/model';
 import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {requiredArmLength} from '../junction/arm-fit';
 import {applyApproach,applyLegTreatment,legKey,parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
@@ -25,7 +25,9 @@ export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;compon
 export type RoadRole='access';
 /** Mid-block median opening: station = start from the road start (road stations). */
 export type RoadOpening={id:string;station:number;length:number;type?:'opening'|'uturn'};
-export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[]};
+export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[];
+  /** Trees / street lights along both sidewalks, on the links and on this road's junction arms (engine roadside defaults). */
+  roadside?:{trees:boolean;lights:boolean}};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
@@ -185,6 +187,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const key=legKey(leg.roadId,leg.side),approachZone=d.treatments?.approaches?.[key];
       const derived=sectionArm(base.arms[i],road,leg.side,leg.heading,leg.available,`${road.name}${leg.side==='ahead'?' →':' ←'}`);
       // Access junction (concept defaults, overridable per leg): the through road keeps flowing; the access gives way.
+      if(road.roadside){const side={...roadsideDefaults(),trees:road.roadside.trees,lights:road.roadside.lights};derived.roadside={incoming:{...side},outgoing:{...side}};}
       if(found.some(l=>roadById.get(l.roadId)?.role==='access')){
         derived.crossing=false;derived.signal=false;
         if(road.role!=='access')derived.stop=false;
@@ -286,6 +289,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const inside=(road.openings??[]).filter(o=>o.station>=from.station-EPS&&o.station+o.length<=to.station+EPS);
       if(inside.length&&road.section.median>0)built.medianOpenings=inside.map(o=>({id:o.id,start:round(Math.max(0,o.station-from.station),3),length:o.length,...(o.type?{type:o.type}:{})}));
       for(const o of inside)placed.add(o.id);
+      if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
       links.push(built);
       span++;
     }
