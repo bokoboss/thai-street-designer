@@ -6,7 +6,7 @@ import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/core/network/network-project';
 import {
-  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneFaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
+  ELEVATED,resolveElevatedLinkScene,resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneFaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
 } from '@/core/network/network-scene-geometry';
 
 type Size={w:number;h:number};
@@ -28,15 +28,16 @@ export default function NetworkScene3D({
   useEffect(()=>{camera.current={yaw,pitch,zoom,pan};rememberedCamera={yaw,pitch,zoom,pan};},[yaw,pitch,zoom,pan]);
 
   const scene=useMemo(()=>{
-      if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],bounds:{x:-80,y:-80,w:160,h:160}};
+      if(!active)return{junctionSurfaces:[],linkSurfaces:[],furnitureFaces:[],elevated:{faces:[],lines:[]},bounds:{x:-80,y:-80,w:160,h:160}};
       return{
         junctionSurfaces:resolveJunctionSceneSurfaces(project),
         linkSurfaces:resolveRoadLinkSceneSurfaces(project),
         furnitureFaces:[...resolveJunctionSceneFaces(project),...resolveRoadLinkSceneFaces(project)],
+        elevated:resolveElevatedLinkScene(project),
         bounds:projectBounds(project,45)
       };
     },[active,project]),
-    {junctionSurfaces,linkSurfaces,furnitureFaces,bounds}=scene,
+    {junctionSurfaces,linkSurfaces,furnitureFaces,elevated,bounds}=scene,
     junctionSurfaceCount=junctionSurfaces.length,linkSurfaceCount=linkSurfaces.length,furnitureFaceCount=furnitureFaces.length,
     center={x:bounds.x+bounds.w/2,y:bounds.y+bounds.h/2},extent=Math.max(80,Math.max(bounds.w,bounds.h)/2),
     mapKey=[mapReference.enabled,mapReference.basemap,mapReference.lat,mapReference.lng,mapReference.zoom,mapReference.offsetX,mapReference.offsetY,extent.toFixed(2),center.x.toFixed(2),center.y.toFixed(2)].join(':');
@@ -60,7 +61,10 @@ export default function NetworkScene3D({
     const source=document.querySelector<SVGSVGElement>('svg[data-design-plan="true"],svg[data-network-plan="true"]');
     if(!source)return;
     let stale=false,url='';
-    const copy=source.cloneNode(true) as SVGSVGElement,details=[...copy.querySelectorAll('[data-scene-detail="true"]')];
+    const copy=source.cloneNode(true) as SVGSVGElement;
+    // Raised links draw their own lines at their level; their flat markings would land on the ground.
+    copy.querySelectorAll('[data-network-link-elevated="true"] [data-scene-detail="true"]').forEach(n=>n.remove());
+    const details=[...copy.querySelectorAll('[data-scene-detail="true"]')];
     if(!details.length)return;
     const ancestors=new Set<Element>();
     for(const detail of details){
@@ -125,25 +129,43 @@ export default function NetworkScene3D({
     ctx.beginPath();ground.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle='#dfe7e9';ctx.fill();
     if(mapImage)drawPlane(mapImage,0,Math.max(.1,Math.min(1,mapReference.opacity)));
 
-    const surfaceFill:Record<NetworkSceneSurfaceKind,string>={road:'#3f4c56',median:'#83957a',bike:'#467d70',motorcycle:'#526c91',shoulder:'#66727c',buffer:'#899396',sidewalk:'#b9c5cc'},
-      depth=(item:{points:{x:number;y:number;z?:number}[]})=>item.points.reduce((sum,q)=>sum+(q.x-center.x)*Math.sin(a)+(q.y-center.y)*Math.cos(a)-(q.z??0)*.2,0)/(item.points.length||1),
+    const surfaceFill:Record<NetworkSceneSurfaceKind,string>={road:'#3f4c56',median:'#83957a',bike:'#467d70',motorcycle:'#526c91',shoulder:'#66727c',buffer:'#899396',sidewalk:'#b9c5cc','structure-walk':'#c9cfd2',barrier:'#d3d8da'},
+      depth=(item:{points:{x:number;y:number;z?:number}[];base?:number[]})=>item.points.reduce((sum,q,i)=>sum+(q.x-center.x)*Math.sin(a)+(q.y-center.y)*Math.cos(a)-((q.z??0)+(item.base?.[i]??0))*.2,0)/(item.points.length||1),
       drawSurface=(surface:(typeof sceneSurfaces)[number])=>{
-        const top=surface.points.map(q=>projectPoint(q.x,q.y,surface.z));
+        const top=surface.points.map((q,i)=>projectPoint(q.x,q.y,surface.z+(surface.base?.[i]??0)));
         if(surface.z>.08){
-          const bottom=surface.points.map(q=>projectPoint(q.x,q.y,0));
+          const bottom=surface.points.map((q,i)=>projectPoint(q.x,q.y,surface.base?.[i]??0));
           ctx.fillStyle='rgba(80,92,96,.28)';
           for(let i=0;i<top.length;i++){const j=(i+1)%top.length;ctx.beginPath();ctx.moveTo(bottom[i].x,bottom[i].y);ctx.lineTo(bottom[j].x,bottom[j].y);ctx.lineTo(top[j].x,top[j].y);ctx.lineTo(top[i].x,top[i].y);ctx.closePath();ctx.fill();}
         }
         ctx.beginPath();top.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=surfaceFill[surface.kind];ctx.fill();
         ctx.strokeStyle='rgba(245,248,249,.32)';ctx.lineWidth=.45;ctx.stroke();
       };
-    sceneSurfaces.filter(v=>v.z<.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    // Painter's order (Phase 4A): below-ground roads and trough walls, then the ground (which hides a tunnel under the crossing road)
+    // with the flat marking texture, then deck sides, raised roads and parapets.
+    const drawFace=(face:{points:{x:number;y:number;z:number}[];color:string})=>{const ps=face.points.map(q=>projectPoint(q.x,q.y,q.z));ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=face.color;ctx.fill();},
+      drawLine=(line:(typeof elevated.lines)[number])=>{ctx.beginPath();line.points.forEach((q,i)=>{const p2=projectPoint(q.x,q.y,q.z);if(i)ctx.lineTo(p2.x,p2.y);else ctx.moveTo(p2.x,p2.y);});
+        ctx.setLineDash(line.dashed?[6,8]:[]);ctx.strokeStyle='#e7ecef';ctx.lineWidth=line.dashed?1:1.3;ctx.stroke();ctx.setLineDash([]);},
+      levelOf=(v:{base?:number[]})=>{const b=v.base??[];return b.some(z=>z>ELEVATED)?1:b.some(z=>z< -ELEVATED)?-1:0;},
+      byLayer=(layer:string)=>elevated.faces.filter(f=>f.layer===layer).sort((u,v)=>depth(u)-depth(v)),
+      lineLevel=(l:(typeof elevated.lines)[number])=>l.points.some(q=>q.z>ELEVATED)?1:-1,
+      down=sceneSurfaces.filter(v=>levelOf(v)<0),ground0=sceneSurfaces.filter(v=>levelOf(v)===0),up=sceneSurfaces.filter(v=>levelOf(v)>0);
+    down.filter(v=>v.z<.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    down.filter(v=>v.z>=.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    elevated.lines.filter(l=>lineLevel(l)<0).forEach(drawLine);
+    byLayer('below').forEach(drawFace);
+    ground0.filter(v=>v.z<.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
     if(detailImage)drawPlane(detailImage,.082,1);
-    sceneSurfaces.filter(v=>v.z>=.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    ground0.filter(v=>v.z>=.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    byLayer('deck').forEach(drawFace);
+    up.filter(v=>v.z<.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    up.filter(v=>v.z>=.1).sort((u,v)=>depth(u)-depth(v)).forEach(drawSurface);
+    elevated.lines.filter(l=>lineLevel(l)>0).forEach(drawLine);
+    byLayer('top').forEach(drawFace);
     for(const face of [...furnitureFaces].sort((u,v)=>depth(u)-depth(v))){
       const ps=face.points.map(q=>projectPoint(q.x,q.y,q.z));ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=face.color;ctx.fill();
     }
-  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces]);
+  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces,elevated]);
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'
@@ -186,7 +208,7 @@ export default function NetworkScene3D({
   return <div className="network-scene3d">
     <canvas ref={canvas} tabIndex={0} aria-label="Network 3D overview" data-network-scene-mode="resolved"
       data-network-scene-junction-surfaces={junctionSurfaceCount} data-network-scene-link-surfaces={linkSurfaceCount}
-      data-network-scene-detail-texture={detailImage?'true':'false'} data-network-scene-furniture-faces={furnitureFaceCount}
+      data-network-scene-detail-texture={detailImage?'true':'false'} data-network-scene-furniture-faces={furnitureFaceCount} data-network-scene-raised={elevated.faces.filter(f=>f.layer!=="below").length} data-network-scene-below={elevated.faces.filter(f=>f.layer==="below").length}
       data-network-camera-mode={mode} data-network-camera-yaw={yaw.toFixed(3)} data-network-camera-pitch={pitch.toFixed(3)}
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}

@@ -38,6 +38,22 @@ check of clearance or grade (those are 4E, with referenced sources).
 - 2D: the upper road is drawn above the lower one at a grade separation with an edge cue; selection picks the upper road.
 - 3D: every surface follows z(s).
 
+## Structures and underpasses (owner decision 2026-10-21)
+
+- A stretch more than 0.5 m above ground is a **bridge**, more than 0.5 m below is a **trough**; both are computed from
+  the profile (`structures` on the link geometry), not stored.
+- Step 1 (this slice): the section keeps its widths; the treatment changes on the structure — sidewalks become concrete
+  service walkways, the planted median becomes a concrete barrier, trees and street lights are left off.
+  Bridges show deck sides and parapets; troughs show retaining walls from the road up to ground.
+- Underpass ("X ลอดใต้" in the crossing inspector): the chosen road dips 6.5 m at 4 % (tool starting values, not
+  standards; `DIP_DEFAULTS`), the ramps are an open trough, and the stretch under the crossing road is a tunnel box
+  with portals (`NetworkCrossing.tunnel`). Choosing it flattens a previous rise; one undo reverts it.
+- 2D: concrete finish and a dark outer line on bridges (dashed on troughs); the tunnel box is a dashed outline over the
+  crossing road. 3D draws below-ground roads first, then the ground that hides the tunnel, then decks and parapets.
+- Step 2 (Phase 4C): a custom structure section with width transitions between the at-grade and structure sections.
+- Not checked yet (TO_VERIFY): vertical clearance, parapet height, tunnel opening height and ramp grades against Thai
+  design standards. Display heights (`STRUCTURE_DISPLAY`) are for the picture only.
+
 ## Acceptance (regression tests)
 
 1. Two roads crossing in plan at different levels create no junction.
@@ -46,3 +62,5 @@ check of clearance or grade (those are 4E, with referenced sources).
 4. One undo reverts a grade-separation change completely (relation and profiles).
 5. Projects saved before 4A open with every profile at `z = 0`.
 6. The report lists each crossing as at grade / grade-separated (gap) / unresolved.
+7. Bridge stretches have the structure finish (service walk, barrier, parapets) and no trees or lights; at-grade ends keep theirs.
+8. An underpass dips the road, creates a trough with retaining walls and one tunnel with two portals, and one undo reverts it.
