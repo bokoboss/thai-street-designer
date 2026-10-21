@@ -22,6 +22,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     const s=r.section;
     if(!s||!lanes(s.forwardLanes)||!lanes(s.backwardLanes)||s.forwardLanes+s.backwardLanes<1||!finite(s.laneWidth,2.5,4.5)||!finite(s.median,0,12)||!finite(s.walk,0,8))return `หน้าตัดถนน ${r.name} ไม่ถูกต้อง`;
     if(r.links!==undefined&&!Array.isArray(r.links))return `ช่วงถนนของ ${r.name} ไม่ถูกต้อง`;
+    if(r.role!==undefined&&r.role!=='access')return `ชนิดถนน ${r.name} ไม่ถูกต้อง`;
   }
   const candidates=new Set<string>();
   for(const d of p.decisions){

@@ -49,6 +49,25 @@ try{
   await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===0,'turned into a grade separation');
   await b.click('[data-design-undo]');
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo brings the junction back');
+  // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
+  {
+    const before=await b.count('[data-design-road]');
+    await b.click('[data-design-tool-button="road"]');await b.click('[data-design-new-role="access"]');
+    await b.waitFor(()=>b.count('[data-design-new-access]'),'access drawing explained');
+    const pts=await b.evalValue(`(()=>{const q=document.querySelector('[data-design-road] path').getAttribute('d').match(/-?[0-9.]+/g).map(Number),svg=document.querySelector('[data-design-plan]'),m=svg.getScreenCTM();
+      const a=new DOMPoint(q[0],q[1]).matrixTransform(m),z=new DOMPoint(q[q.length-2],q[q.length-1]).matrixTransform(m);return{a:{x:a.x,y:a.y},z:{x:z.x,y:z.y}};})()`);
+    // A point a quarter of the way along the first road, then away from it at right angles.
+    const on={x:pts.a.x+(pts.z.x-pts.a.x)*.25,y:pts.a.y+(pts.z.y-pts.a.y)*.25},len=Math.hypot(pts.z.x-pts.a.x,pts.z.y-pts.a.y),off={x:on.x-(pts.z.y-pts.a.y)/len*120,y:on.y+(pts.z.x-pts.a.x)/len*120};
+    await b.clickAt(on);await b.clickAt(off,2);
+    await b.waitFor(async()=>await b.count('[data-design-road]')===before+1,'access drawn');
+    assert.equal(await b.evalValue(`document.querySelector('[data-design-road-role]')?.checked`),true,'new road is marked as a project access');
+    assert.match(await b.evalValue(`document.querySelector('[data-design-field="road-name"]').value`),/^ทางเข้า \d/);
+    await b.waitFor(()=>b.count('[data-design-auto-junction]'),'access junction created');
+    await b.click('[data-design-toast-action="select"]');
+    await b.waitFor(()=>b.count('[data-design-access-junction]'),'junction explains the access defaults');
+    await b.screenshot('artifacts/design-browser-access.png');
+    await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the access');
+  }
 
   // Before a road is finished, the preview says what would happen (here: it cannot join the 4-leg junction); right-click steps back.
   {

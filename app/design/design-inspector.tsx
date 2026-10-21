@@ -64,7 +64,8 @@ function RoadInspector({road,run,onDeleted,roads}:{road:Road;run:Run;onDeleted:(
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
   return <>
-    <header className="design-inspector-head"><small>ถนน</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
+    <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
+    <label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
     <div className="design-fields">
       <NumberField field="forward-lanes" label="ช่องจราจรตามทิศที่วาด" value={s.forwardLanes} min={0} max={4} onCommit={v=>set({forwardLanes:v})}/>
@@ -193,6 +194,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const approaches=junctionApproaches(compiled,candidateId);
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
+    {(d.roads??[]).some(id=>project.roads.find(r=>r.id===id)?.role==='access')&&<p className="design-meta" data-design-access-junction="true">ทางเข้าโครงการ: ถนนหลักไหลต่อเนื่อง ไม่มีเส้นหยุด ทางข้าม หรือสัญญาณไฟ · ทางเข้ามีเส้นหยุดให้ทาง (ค่าเริ่มต้นแนวคิด)</p>}
     {compiled.unjoined[candidateId]&&<div className="design-issues" data-design-unjoined-note={compiled.unjoined[candidateId].length}>
       <b>มีถนนถึงทางแยกนี้แต่ไม่ได้เชื่อม</b>
       <ul><li>{compiled.unjoined[candidateId].map(id=>project.roads.find(r=>r.id===id)?.name??id).join(', ')} — {compiled.overflow.includes(candidateId)||approaches.length>=4?'ทางแยกรองรับสูงสุด 4 ขา':'ถูกแยกออกจากทางแยกนี้'} · ถ้าต้องการเชื่อม ให้ปรับแนวถนนไปบรรจบที่จุดอื่น</li></ul>
@@ -314,14 +316,19 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset}:{
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newAccess,onNewAccess}:{
   selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
-  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;
+  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newAccess:boolean;onNewAccess:(v:boolean)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
-    <header className="design-inspector-head"><small>วาดถนน</small><b>ถนนใหม่</b></header>
-    <PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>
-    {!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
+    <header className="design-inspector-head"><small>วาดถนน</small><b>{newAccess?'ทางเข้าโครงการใหม่':'ถนนใหม่'}</b></header>
+    <div className="design-reference-tools" role="radiogroup" aria-label="ชนิดถนน">
+      <button role="radio" aria-checked={!newAccess} className={newAccess?'':'active'} data-design-new-role="road" onClick={()=>onNewAccess(false)}>ถนน</button>
+      <button role="radio" aria-checked={newAccess} className={newAccess?'active':''} data-design-new-role="access" onClick={()=>onNewAccess(true)}>ทางเข้าโครงการ</button>
+    </div>
+    {newAccess?<p className="design-meta" data-design-new-access="true">เริ่มคลิกบนแนวถนนหลัก แล้ววาดออกไปยังโครงการ · ถนนหลักไหลต่อเนื่อง ทางเข้ามีเส้นหยุดให้ทาง · หน้าตัดเริ่มต้น 1+1 ช่อง กว้าง 3 ม. (ค่าตั้งต้นของเครื่องมือ แก้ได้ภายหลัง)</p>
+    :<PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>}
+    {!newAccess&&!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
     <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;

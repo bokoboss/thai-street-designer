@@ -1,6 +1,6 @@
 // Object identity for roads (independent review 2026-10-20): ids are never reused, so a road deleted and a new road
 // drawn later are different objects in every scenario and in the scenario comparison. Names stay short and readable.
-import type {Road} from './derive';
+import type {Road,RoadRole} from './derive';
 
 const ALPHABET='0123456789abcdefghijklmnopqrstuvwxyz';
 function randomPart(length=8){
@@ -14,8 +14,8 @@ export function newRoadId(roads:Road[]):string{
   let id=`R-${randomPart()}`;while(used.has(id))id=`R-${randomPart()}`;
   return id;
 }
-/** "ถนน n" with the first n not used by a road name in this scenario. */
-export function nextRoadName(roads:Road[]):string{
-  const names=new Set(roads.map(r=>r.name));let n=1;while(names.has(`ถนน ${n}`))n++;
-  return `ถนน ${n}`;
+/** "ถนน n" (or "ทางเข้า n" for a project access) with the first n not used by a road name in this scenario. */
+export function nextRoadName(roads:Road[],role?:RoadRole):string{
+  const stem=role==='access'?'ทางเข้า':'ถนน',names=new Set(roads.map(r=>r.name));let n=1;while(names.has(`${stem} ${n}`))n++;
+  return `${stem} ${n}`;
 }

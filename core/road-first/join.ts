@@ -69,6 +69,6 @@ export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:strin
   if(A.links?.length||B.links?.length)notes.push('ล้างช่วงเปลี่ยนหน้าตัดของสองเส้นเดิม');
   const farEnd=bEnd==='end'?B.ends?.start:B.ends?.end,ownEnd=aEnd==='end'?A.ends?.start:A.ends?.end;
   const ends=backToA?{start:farEnd,end:ownEnd}:{start:ownEnd,end:farEnd};
-  const joined:Road={id:A.id,name:A.name,section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
+  const joined:Road={id:A.id,name:A.name,...(A.role?{role:A.role}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
   return{roads:roads.filter(r=>r.id!==bId).map(r=>r.id===aId?joined:r),decisions:nextDecisions,notes};
 }
