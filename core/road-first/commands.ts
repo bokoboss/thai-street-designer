@@ -32,7 +32,7 @@ export type RoadFirstCommand=
   |{type:'junction.setCornerAt';candidateId:string;leg:LegKey;radius:number|null}
   |{type:'junction.setDesign';candidateId:string;patch:DesignSettings}
   /** Every junction-owned setting at once (edits brought back from the advanced junction editor). */
-  |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined}
+  |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined;label?:string}
   |{type:'leg.setApproach';candidateId:string;leg:LegKey;patch:ApproachOverride}
   |{type:'leg.setTreatment';candidateId:string;leg:LegKey;patch:LegTreatment}
   /** The same leg patch on every approach of a junction (e.g. signals on all approaches), one undo step. */
@@ -174,7 +174,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
           group=`junction.cornerAt:${d.candidateId}:${cmd.leg}`;break;
         }
         case 'junction.setDesign':t(d).design={...t(d).design,...structuredClone(cmd.patch)};label=`ปรับการตั้งค่า ${jname(d)}`;group=`junction.design:${d.candidateId}:${Object.keys(cmd.patch).join(',')}`;break;
-        case 'junction.setTreatments':d.treatments=cmd.treatments?structuredClone(cmd.treatments):undefined;label=`แก้ทางแยกขั้นสูง ${jname(d)}`;break;
+        case 'junction.setTreatments':d.treatments=cmd.treatments?structuredClone(cmd.treatments):undefined;label=`${cmd.label??'แก้ทางแยกขั้นสูง'} ${jname(d)}`;break;
         case 'leg.setApproach':{
           const a=t(d).approaches??={};a[cmd.leg]={...a[cmd.leg],...structuredClone(cmd.patch)};
           label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;
