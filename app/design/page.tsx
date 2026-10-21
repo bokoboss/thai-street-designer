@@ -2,7 +2,7 @@
 // Road-first workspace (roadmap Phase 3): one shell — top bar, tool rail, plan, inspector, section strip, status bar.
 import './style.css';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
+import {Crosshair,Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
 import {DesignInspector} from './design-inspector';
 import {SectionStrip} from './section-strip';
@@ -51,7 +51,7 @@ export default function DesignWorkspace(){
   // Work saved by the earlier Network page in this browser can be brought in as extra alternatives.
   const [hasEarlier,setHasEarlier]=useState(false);
   // On narrow screens the inspector is a drawer: it opens when something is selected and can be toggled.
-  const [inspectorOpen,setInspectorOpen]=useState(false),[fit3d,setFit3d]=useState(0);
+  const [inspectorOpen,setInspectorOpen]=useState(false),[fit3d,setFit3d]=useState(0),[focusKey,setFocusKey]=useState(0);
   /** The next road drawn is a project access (driveway). */
   const [newAccess,setNewAccess]=useState(false);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
@@ -109,6 +109,7 @@ export default function DesignWorkspace(){
     const k=e.key.toLowerCase();
     if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();if(e.shiftKey)ed.redo();else ed.undo();return;}
     if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();ed.redo();return;}
+    if(k==='z'&&!e.ctrlKey&&!e.metaKey&&selection&&view==='2d'){setFocusKey(n=>n+1);return;}
     if(e.key==='Escape'){if(typedLength)setTypedLength('');else if(draft.length)clearDraft();else{chooseTool('select');setSelection(null);}return;}
     // Typed length while drawing: digits build a length, Enter places the point at that distance along the cursor direction.
     if(tool==='road'&&draft.length&&/^[0-9.]$/.test(e.key)){setTypedLength(t=>(t+e.key).slice(0,8));return;}
@@ -193,6 +194,7 @@ export default function DesignWorkspace(){
         <button data-design-undo="true" disabled={!ed.undoText} title={ed.undoText?`ย้อนกลับ: ${ed.undoText}`:'ไม่มีขั้นตอนให้ย้อน'} onClick={ed.undo}><Undo2 size={15}/><span>{ed.undoText??'ย้อนกลับ'}</span></button>
         <button data-design-redo="true" disabled={!ed.redoText} title={ed.redoText?`ทำซ้ำ: ${ed.redoText}`:'ไม่มีขั้นตอนให้ทำซ้ำ'} onClick={ed.redo}><Redo2 size={15}/></button>
         <button className="design-inspector-toggle" data-design-inspector-toggle="true" aria-expanded={inspectorOpen} onClick={()=>setInspectorOpen(v=>!v)} title="แผงตั้งค่า"><PanelRight size={15}/><span>{inspectorOpen?'ซ่อนแผง':'แผงตั้งค่า'}</span></button>
+        <button data-design-focus="true" disabled={!selection||view!=='2d'} onClick={()=>setFocusKey(k=>k+1)} title="ซูมไปที่สิ่งที่เลือก (Z)"><Crosshair size={15}/></button>
         <button data-design-fit="true" onClick={()=>{if(view==='3d')setFit3d(k=>k+1);else setFitKey(k=>k+1);}} title="ดูทั้งแบบ"><Maximize2 size={15}/></button>
         <span className="design-export">
           <button data-design-export="true" aria-expanded={exportOpen} onClick={()=>setExportOpen(v=>!v)} onBlur={e=>{if(!e.currentTarget.parentElement?.contains(e.relatedTarget))setExportOpen(false);}} title="ส่งออกรูปสำหรับรายงาน"><ImageDown size={15}/><span>ส่งออกรูป</span></button>
@@ -212,7 +214,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
