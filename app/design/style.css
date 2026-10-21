@@ -134,3 +134,18 @@
 .design-start-options b{font-size:13px}.design-start-options small{color:var(--d-muted);font-size:11.5px;line-height:1.4}
 .design-start-card footer{margin-top:10px;font-size:11.5px;color:var(--d-muted)}
 @media (max-width:600px){.design-start-options{grid-template-columns:1fr}}
+/* Phones (UX review 2026-10-21): review first. The plan stays visible; the inspector is a bottom sheet over its lower half. */
+@media (max-width:600px){
+  .design-workspace{grid-template-rows:auto minmax(0,1fr) 28px}
+  .design-top{flex-wrap:wrap;row-gap:4px;padding:4px 6px}
+  .design-brand{display:none}
+  .design-top-actions{flex:1 1 auto;justify-content:flex-end;flex-wrap:nowrap;overflow-x:auto}
+  .design-scenarios{order:3;flex:1 1 100%;justify-content:flex-start}
+  .design-body{grid-template-columns:48px minmax(0,1fr)}
+  .design-tools button{width:42px;min-height:44px;font-size:10px}
+  .design-inspector{top:auto;left:0;right:0;bottom:28px;width:auto;height:min(52dvh,460px);border-left:0;border-top:1px solid var(--d-line);border-radius:12px 12px 0 0;box-shadow:0 -8px 24px #0002;transform:translateY(105%)}
+  .design-hint,.design-status-right>span:last-child{display:none}
+  .design-status{padding:0 8px}
+  .design-phone-note{display:block!important}
+}
+.design-phone-note{display:none;font-size:11.5px;color:var(--d-muted);background:var(--d-accent-soft);border-radius:6px;padding:6px 8px;margin:0}
