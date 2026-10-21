@@ -160,6 +160,7 @@ ordinary editable road, ramp or lane run; nothing is an opaque block. No score o
   - One undo reverts a grade-separation change completely.
   - Projects saved before 4A open with every profile at `z = 0`.
   - The report lists each crossing as at grade / bridge / unresolved.
+  - Structure stretches (bridge / trough / tunnel) are drawn with a structure finish in 2D and 3D, and an underpass can be chosen per crossing.
 
 ### 4B — Diamond interchange (first template)
 
@@ -172,6 +173,7 @@ ordinary editable road, ramp or lane run; nothing is an opaque block. No score o
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".
+- Custom structure section for bridges and underpasses, with width transitions to the at-grade section (step 2 of the owner decision 2026-10-21; step 1 — same widths, structure finish — is in 4A).
 - Automatic lane mapping at junctions and merges; an advanced lane connector for overrides only.
 
 ### 4D — More templates

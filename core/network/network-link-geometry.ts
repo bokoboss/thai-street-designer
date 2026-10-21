@@ -25,6 +25,44 @@ export function linksInDrawOrder(project:NetworkProject):RoadLink[]{
   const peak=(l:RoadLink)=>Math.max(0,...(l.levels??[]).map(q=>q.z));
   return project.links.map((l,i)=>({l,i,z:peak(l)})).sort((a,b)=>a.z-b.z||a.i-b.i).map(x=>x.l);
 }
+/** Above or below this level (m) a stretch is on a structure (tool tolerance, same as the junction level tolerance). */
+export const STRUCTURE_LEVEL=.5;
+export type LinkStructure={kind:'bridge'|'trough';start:number;end:number};
+/** Stretches of a link above (bridge) or below (trough) ground, cut where the level crosses ±STRUCTURE_LEVEL. */
+export function structureRuns(stations:number[],z:number[]):LinkStructure[]{
+  const kindAt=(v:number)=>v>STRUCTURE_LEVEL?'bridge' as const:v<-STRUCTURE_LEVEL?'trough' as const:null;
+  const out:LinkStructure[]=[];let cur:LinkStructure|null=null;
+  const cross=(i:number,level:number)=>{const s0=stations[i-1],s1=stations[i],z0=z[i-1],z1=z[i];return z1===z0?s1:s0+(s1-s0)*(level-z0)/(z1-z0);};
+  for(let i=0;i<stations.length;i++){
+    const k=kindAt(z[i]);
+    if(i===0){if(k)cur={kind:k,start:stations[0],end:stations[0]};continue;}
+    const prev=kindAt(z[i-1]);
+    if(prev!==k){
+      if(cur&&prev){cur.end=cross(i,prev==='bridge'?STRUCTURE_LEVEL:-STRUCTURE_LEVEL);out.push(cur);cur=null;}
+      if(k)cur={kind:k,start:cross(i,k==='bridge'?STRUCTURE_LEVEL:-STRUCTURE_LEVEL),end:stations[i]};
+    }
+    if(cur)cur.end=stations[i];
+  }
+  if(cur)out.push(cur);
+  return out.map(r=>({...r,start:Math.round(r.start*1000)/1000,end:Math.round(r.end*1000)/1000})).filter(r=>r.end-r.start>.01);
+}
+/** The part of a resolved link between two stations: points and the given per-station series, cut exactly at both ends. */
+export function sliceLink(g:ResolvedLinkSectionGeometry,start:number,end:number,series:number[][]):{points:WorldPoint[];series:number[][]}{
+  const at=(s:number)=>{
+    let k=0;while(k<g.stations.length-2&&g.stations[k+1]<s)k++;
+    const s0=g.stations[k],s1=g.stations[k+1]??s0,t=s1>s0?Math.max(0,Math.min(1,(s-s0)/(s1-s0))):0,p=g.points[k],q=g.points[k+1]??p;
+    return{point:{x:p.x+(q.x-p.x)*t,y:p.y+(q.y-p.y)*t},values:series.map(v=>v[k]+((v[k+1]??v[k])-v[k])*t)};
+  };
+  const a=at(start),b=at(end),inner=g.stations.map((s,i)=>({s,i})).filter(({s})=>s>start+1e-6&&s<end-1e-6);
+  return{points:[a.point,...inner.map(({i})=>g.points[i]),b.point],series:series.map((v,j)=>[a.values[j],...inner.map(({i})=>v[i]),b.values[j]])};
+}
+/** The link cut into ground / bridge / trough pieces covering its whole length. */
+export function linkPieces(g:ResolvedLinkSectionGeometry):{kind:'ground'|'bridge'|'trough';start:number;end:number}[]{
+  const out:{kind:'ground'|'bridge'|'trough';start:number;end:number}[]=[];let from=0;
+  for(const r of g.structures){if(r.start>from+.01)out.push({kind:'ground',start:from,end:r.start});out.push(r);from=r.end;}
+  if(g.total>from+.01)out.push({kind:'ground',start:from,end:g.total});
+  return out;
+}
 export type LinkRoadObject={kind:'tree'|'light';station:number;offset:number;side:1|-1;x:number;y:number;angle:number};
 export type LinkLaneLineProfile={id:string;direction:LinkDirection;offsets:(number|null)[]};
 export type LinkBandProfile={type:string;inner:number[];outer:number[]};
@@ -48,6 +86,8 @@ export type ResolvedLinkSectionGeometry={
   objects:LinkRoadObject[];
   /** Level (m) at each station (Phase 4A); zeros without levels. */
   z:number[];
+  /** Stretches on a structure: bridge (above ground) or trough (below ground), from the levels. */
+  structures:LinkStructure[];
   backwardWalk:{inner:number[];outer:number[]}|null;
 };
 
@@ -134,13 +174,15 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
     forwardLaneSet=resolveLinkLaneLifecycles(project,link,'forward',total,linear),
     backwardLaneSet=resolveLinkLaneLifecycles(project,link,'backward',total,linear),
     widthProfiles=linear?link.components.filter((component):component is LinkStationWidthComponent=>component.kind==='width').map(component=>widthComponentWindow(component,total)):[],
-    stationList=linear?mergeStations(total,[
+    // Level points (Phase 4A) are sampled too, so a rise between two vertices is not lost.
+    levelStations=(link.levels??[]).map(q=>q.station).filter(v=>v>0&&v<total),sampled=linear||levelStations.length>0,
+    stationList=sampled?mergeStations(total,[levelStations,
       baseStations,
       ...forwardLaneSet.lifecycles.map(lifecycle=>profileSampleStations(lifecycle.profile)),
       ...backwardLaneSet.lifecycles.map(lifecycle=>profileSampleStations(lifecycle.profile)),
       ...widthProfiles.map(profile=>profileSampleStations(profile))
     ]):baseStations,
-    points=linear?stationList.map(value=>{const p=station(basePoints,value);return{x:p.x,y:p.y};}):basePoints,
+    points=sampled?stationList.map(value=>{const p=station(basePoints,value);return{x:p.x,y:p.y};}):basePoints,
     forwardLaneSamples=sampleLaneLifecycles(forwardLaneSet,stationList),
     backwardLaneSamples=sampleLaneLifecycles(backwardLaneSet,stationList),
     widthComponents=resolvedWidthComponents(link,total,stationList,linear),
@@ -201,27 +243,29 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
       }
     }
   }
-  const z=stationList.map(s=>linkLevelAt(link,s));
-  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings,objects,z};
+  const z=stationList.map(s=>linkLevelAt(link,s)),structures=structureRuns(stationList,z);
+  // No trees or street lights on a bridge or in a trough.
+  const onGround=objects.filter(o=>!structures.some(r=>o.station>=r.start-1&&o.station<=r.end+1));
+  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings,objects:onGround,z,structures};
 }
 
 /**
  * Median island pieces of a resolved link: the whole strip when there is no opening (unchanged output), otherwise one
  * strip per stretch between openings, cut exactly at the opening stations. Used by 2D, 3D and export alike.
  */
-export function medianIslandStrips(g:ResolvedLinkSectionGeometry):{points:WorldPoint[];half:number[]}[]{
+export function medianIslandStrips(g:ResolvedLinkSectionGeometry):{points:WorldPoint[];half:number[];z:number[]}[]{
   if(!g.medianHalf.some(v=>v>.01))return[];
-  if(!g.openings.length)return[{points:g.points,half:g.medianHalf}];
+  if(!g.openings.length)return[{points:g.points,half:g.medianHalf,z:g.z}];
   const at=(s:number)=>{
     let k=0;while(k<g.stations.length-2&&g.stations[k+1]<s)k++;
     const s0=g.stations[k],s1=g.stations[k+1],t=s1>s0?Math.max(0,Math.min(1,(s-s0)/(s1-s0))):0,p=g.points[k],q=g.points[k+1];
-    return{point:{x:p.x+(q.x-p.x)*t,y:p.y+(q.y-p.y)*t},half:g.medianHalf[k]+(g.medianHalf[k+1]-g.medianHalf[k])*t};
+    return{point:{x:p.x+(q.x-p.x)*t,y:p.y+(q.y-p.y)*t},half:g.medianHalf[k]+(g.medianHalf[k+1]-g.medianHalf[k])*t,z:g.z[k]+(g.z[k+1]-g.z[k])*t};
   };
   const pieces:{start:number;end:number}[]=[];let from=0;
   for(const o of g.openings){if(o.start>from+.01)pieces.push({start:from,end:o.start});from=Math.max(from,o.end);}
   if(g.total>from+.01)pieces.push({start:from,end:g.total});
   return pieces.map(({start,end})=>{
     const a=at(start),b=at(end),inner=g.stations.map((s,i)=>({s,i})).filter(({s})=>s>start+1e-6&&s<end-1e-6);
-    return{points:[a.point,...inner.map(({i})=>g.points[i]),b.point],half:[a.half,...inner.map(({i})=>g.medianHalf[i]),b.half]};
+    return{points:[a.point,...inner.map(({i})=>g.points[i]),b.point],half:[a.half,...inner.map(({i})=>g.medianHalf[i]),b.half],z:[a.z,...inner.map(({i})=>g.z[i]),b.z]};
   });
 }

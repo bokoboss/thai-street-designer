@@ -10,6 +10,8 @@ export type Profile=ProfilePoint[];
 export const LEVEL_TOLERANCE=0.5;
 /** Starting values of the automatic rise over another road (tool values, editable, not standards). */
 export const RISE_DEFAULTS={height:6,grade:.04,margin:10};
+/** Starting depth of a trough under another road (tool value, editable, not a standard). */
+export const DIP_DEFAULTS={depth:6.5};
 
 export const sortedProfile=(p?:Profile)=>[...(p??[])].sort((a,b)=>a.station-b.station);
 
@@ -39,12 +41,13 @@ export function flattenAround(profile:Profile|undefined,station:number,extent:nu
  * margin each side), down again; the rest of the existing profile is kept outside the rise.
  */
 export function riseProfile(profile:Profile|undefined,station:number,base:number,top:number,height=RISE_DEFAULTS.height,grade=RISE_DEFAULTS.grade,length=Infinity):Profile{
-  const run=height/grade,half=top/2,extent=half+run;
+  // A negative height makes a dip (a trough under the other road) with the same shape.
+  const run=Math.abs(height)/grade,half=top/2,extent=half+run,dir=Math.sign(height)||1;
   const r=(v:number)=>Math.round(v*1000)/1000;
   const kept=flattenAround(profile,station,extent);
   const peak=base+height,ground=(s:number)=>levelAt(kept,s);
   // Level along the rise (ramp up, flat top, ramp down), cut at the road's ends: a rise near an end starts part-way up.
-  const along=(s:number)=>{const d=Math.abs(s-station);return d<=half?peak:d>=extent?ground(s):peak-(d-half)*grade;};
+  const along=(s:number)=>{const d=Math.abs(s-station);return d<=half?peak:d>=extent?ground(s):peak-dir*(d-half)*grade;};
   const at=(s:number)=>({station:r(Math.max(0,Math.min(length,s))),z:r(along(Math.max(0,Math.min(length,s))))});
   const pts=[at(station-extent),at(station-half),at(station+half),at(station+extent)].filter((q,i,all)=>all.findIndex(o=>Math.abs(o.station-q.station)<.01)===i);
   return [...kept.filter(q=>q.station>=0&&q.station<=length),...pts].sort((a,b)=>a.station-b.station);

@@ -14,8 +14,8 @@ import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/cor
 import {stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
-import {overCommand} from '@/core/road-first/grade-separation';
-import {RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
+import {overCommand,underCommand} from '@/core/road-first/grade-separation';
+import {DIP_DEFAULTS,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
@@ -168,6 +168,12 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
           {candidate.roads.map(r=><button key={r.roadId} role="radio" aria-checked={x?.over===r.roadId} className={x?.over===r.roadId&&x.relation==='over'?'active':''} data-design-over={r.roadId}
             onClick={()=>{const o=overCommand(project,candidate.id,r.roadId);if('error' in o)onMessage(o.error,'error');else run(o.cmd);}}>{name(r.roadId)} อยู่บน</button>)}
         </div>
+        <small className="design-block-title">หรือกดถนนลงเป็นทางลอด</small>
+        <div className="design-reference-tools" aria-label="กดถนนลงเป็นทางลอด">
+          {candidate.roads.map(r=><button key={r.roadId} data-design-under={r.roadId}
+            onClick={()=>{const o=underCommand(project,candidate.id,r.roadId);if('error' in o)onMessage(o.error,'error');else run(o.cmd);}}>{name(r.roadId)} ลอดใต้</button>)}
+        </div>
+        <p className="design-meta">ทางลอด: กดถนนลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน)</p>
         <p className="design-meta">ถ้าถนนที่เลือกยังไม่สูงกว่า ระบบยกให้ {RISE_DEFAULTS.height} ม. ลาด {RISE_DEFAULTS.grade*100}% (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน · แก้ได้ที่แนวดิ่งของถนน)</p>
       </section>;})()}
     <p className="design-meta">{d?'จุดนี้ถนนข้ามกันโดยไม่มีทางแยก':'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>

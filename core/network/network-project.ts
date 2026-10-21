@@ -78,7 +78,9 @@ export type NetworkProject={
  * gap = level of the over road minus the under road at the crossing (measured only; no clearance check here).
  * deck: the over road across the crossing (for the plan's structure cue).
  */
-export type NetworkCrossing={id:string;name:string;point:WorldPoint;relation:'over'|'unresolved';overLink?:string;underLink?:string;gap:number;deck?:{a:WorldPoint;b:WorldPoint;half:number}};
+export type NetworkCrossing={id:string;name:string;point:WorldPoint;relation:'over'|'unresolved';overLink?:string;underLink?:string;gap:number;deck?:{a:WorldPoint;b:WorldPoint;half:number};
+  /** The lower road below ground under the upper one: a tunnel box over this stretch of the lower road. */
+  tunnel?:{a:WorldPoint;b:WorldPoint;half:number;z:number}};
 export type LinkEndSection={
   forwardLanes:number;
   backwardLanes:number;

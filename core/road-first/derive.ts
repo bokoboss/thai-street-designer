@@ -323,7 +323,9 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
     const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
       return{a:pointAt(top.r.points,sa),b:pointAt(top.r.points,sb),half:sectionWidth(top.r.section)/2};})():undefined;
-    networkCrossings.push({id:d.candidateId,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,
+    const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const half=sectionWidth(top.r.section)/2+2;
+      return{a:pointAt(bottom.r.points,Math.max(0,bottom.ref.station-half)),b:pointAt(bottom.r.points,bottom.ref.station+half),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3)};})():undefined;
+    networkCrossings.push({id:d.candidateId,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
   }
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings};

@@ -7,7 +7,7 @@ import {
   activeArmIds,assessPortConnection,junctionDisplayDesign,linkEndSection,linkIssues,linkLinearTransitionPossible,linkPoints,portPoint,worldJunctionRotation,
   type JunctionInstance,type NetworkProject,type PortRef,type RoadLink,portKey
 } from '@/core/network/network-project';
-import {linksInDrawOrder,medianIslandStrips,resolveLinkSectionGeometry} from '@/core/network/network-link-geometry';
+import {linksInDrawOrder,medianIslandStrips,resolveLinkSectionGeometry,sliceLink} from '@/core/network/network-link-geometry';
 
 export type NetworkSelection={kind:'junction'|'link';id:string}|null;
 export type NetworkComparisonFocus={kind:'junction'|'roadlink';id:string}|null;
@@ -65,11 +65,21 @@ export function RoadLinkDrawing({
     from.backwardBands.forEach((band,index)=>{edgePieces.push(<path key={'b-'+index} data-network-link-band={band.type} data-link-side="backward" d={variableStripPath(ps,b0,b0,b0-band.width,b0-band.width)} fill={bandFill[band.type]}/>);b0-=band.width;});
     if(from.backwardWalk>0)edgePieces.push(<path key="b-walk" data-network-link-sidewalk="backward" d={variableStripPath(ps,b0,b0,b0-from.backwardWalk,b0-from.backwardWalk)} fill="#b9c5cc"/>);
   }
-  return <g data-network-link={link.id} data-network-comparison-active-focus={comparisonFocused?'true':undefined} onPointerDown={e=>{e.stopPropagation();onSelect();}} onDoubleClick={e=>{e.stopPropagation();onInsertVertex(e);}} style={{cursor:'pointer'}}>
+  return <g data-network-link={link.id} data-network-link-elevated={resolved?.z.some(v=>Math.abs(v)>.5)?'true':undefined} data-network-comparison-active-focus={comparisonFocused?'true':undefined} onPointerDown={e=>{e.stopPropagation();onSelect();}} onDoubleClick={e=>{e.stopPropagation();onInsertVertex(e);}} style={{cursor:'pointer'}}>
     {edgePieces}
     {selected&&<path d={roadSurface} stroke="#1c7974" strokeWidth="1.2" fill="#35424e" strokeLinejoin="round"/>}
     {!selected&&<path d={roadSurface} stroke="#9aa8ae" strokeWidth=".35" fill="#35424e" strokeLinejoin="round"/>}
     {from&&to&&(from.median>0||to.median>0)&&(resolved?medianIslandStrips(resolved).map((m,i)=><path key={'median-'+i} data-network-link-median="true" d={profiledStripPath(m.points,m.half.map(v=>-v),m.half)} fill="#83957a"/>):<path data-network-link-median="true" d={variableStripPath(ps,-from.median/2,-from.median/2,from.median/2,from.median/2)} fill="#83957a"/>)}
+    {resolved?.structures.length?<g data-network-link-structure={resolved.structures.map(x=>x.kind).join(' ')} pointerEvents="none">{resolved.structures.map((st,i)=>{
+      // Bridge or trough stretch (Phase 4A): concrete walkways and barrier instead of the at-grade finish; dark outer line = parapet or retaining wall.
+      const walks=[resolved.forwardWalk,resolved.backwardWalk].filter((w):w is {inner:number[];outer:number[]}=>!!w),
+        outerL=resolved.forwardWalk?.outer??resolved.left,outerR=resolved.backwardWalk?.outer??resolved.right.map(v=>-v),
+        sl=sliceLink(resolved,st.start,st.end,[resolved.medianHalf,outerL,outerR,...walks.flatMap(w=>[w.inner,w.outer])]),[half,oL,oR,...ws]=sl.series;
+      return <g key={i} data-network-structure-piece={st.kind}>
+        {walks.map((_,k)=><path key={'w'+k} d={profiledStripPath(sl.points,ws[k*2],ws[k*2+1])} fill="#cfd4d6"/>)}
+        {half.some(v=>v>.01)&&<path d={profiledStripPath(sl.points,half.map(v=>-v),half)} fill="#d6dadc" stroke="#7d8a90" strokeWidth=".12"/>}
+        {[oL,oR].map((o,k)=><path key={'e'+k} d={path(profiledParallel(sl.points,o))} fill="none" stroke={st.kind==='bridge'?'#1f2d33':'#5b6a71'} strokeWidth=".6" strokeDasharray={st.kind==='trough'?'2.2 1':undefined}/>)}
+      </g>;})}</g>:null}
     {resolved?.openings.length?<g data-network-link-openings={resolved.openings.length} pointerEvents="none"/>:null}
     {resolved?.objects.length?<g data-network-link-objects={resolved.objects.length} pointerEvents="none">{resolved.objects.map((o,i)=><g key={i} data-road-object={o.kind} transform={`translate(${o.x} ${o.y}) rotate(${o.angle})`}>
       {o.kind==='tree'?<><circle r={roadsideDefaults().treeSize/2} fill="#609b73" stroke="#397a51" strokeWidth=".15"/><circle r=".18" fill="#8b6c4e"/></>
@@ -215,6 +225,9 @@ export function NetworkDrawing({
   return <g>
     {linksInDrawOrder(project).map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
     {/* Grade separation (Phase 4A): the road that passes over is drawn on top, with its deck edges marked across the road below. */}
+    {/* Tunnel (Phase 4A): the lower road's box under the crossing road, dashed over the road that hides it. */}
+    {project.crossings?.map(c=>c.tunnel&&c.relation==='over'?<g key={'t'+c.id} data-network-crossing-tunnel={c.id} pointerEvents="none">{(()=>{const t=c.tunnel!,dx=t.b.x-t.a.x,dy=t.b.y-t.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*t.half,ny=dx/l*t.half;
+      return <path d={`M${t.a.x+nx} ${t.a.y+ny}L${t.b.x+nx} ${t.b.y+ny}L${t.b.x-nx} ${t.b.y-ny}L${t.a.x-nx} ${t.a.y-ny}Z`} fill="none" stroke="#1f2d33" strokeWidth=".5" strokeDasharray="2 1.2"/>;})()}</g>:null)}
     {project.crossings?.map(c=>c.deck&&c.relation==='over'?<g key={c.id} data-network-crossing-deck={c.id} pointerEvents="none">{[1,-1].map(s=>{const dx=c.deck!.b.x-c.deck!.a.x,dy=c.deck!.b.y-c.deck!.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*c.deck!.half*s,ny=dx/l*c.deck!.half*s;
       return <path key={s} d={`M${c.deck!.a.x+nx-dx/l*1.2} ${c.deck!.a.y+ny-dy/l*1.2}L${c.deck!.a.x+nx} ${c.deck!.a.y+ny}L${c.deck!.b.x+nx} ${c.deck!.b.y+ny}L${c.deck!.b.x+nx+dx/l*1.2} ${c.deck!.b.y+ny+dy/l*1.2}`} fill="none" stroke="#1f2d33" strokeWidth=".55"/>;})}</g>:null)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} armHandles={armHandles} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}

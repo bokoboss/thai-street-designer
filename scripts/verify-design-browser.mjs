@@ -62,8 +62,23 @@ try{
     await b.waitFor(async()=>await b.count('[data-design-crossing-relation="over"]')&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'upper road over the lower one, deck drawn, no junction');
     assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.0 ม\./);
     await b.screenshot('artifacts/design-browser-grade-separation.png');
-    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
-    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'two undos bring the junction back');
+    await b.click('[data-design-view="3d"]');
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-raised]')?.dataset.networkSceneRaised??0`))>0,'3D shows the raised road');
+    await sleep(400);await b.screenshot('artifacts/design-browser-grade-separation-3d.png');
+    await b.click('[data-design-view="2d"]');await b.waitFor(async()=>await b.count('.network-scene3d')===0,'plan');
+    assert.ok(await b.count('[data-network-structure-piece="bridge"]')>0,'bridge stretch drawn with its structure finish');
+    // Underpass: the other road dips into a trough and a tunnel under the crossing road.
+    const r1=await b.evalValue(`[...document.querySelectorAll('[data-design-under]')].map(x=>x.dataset.designUnder).find(id=>id!==${JSON.stringify(r2)})`);
+    await b.click(`[data-design-under="${r1}"]`);
+    await b.waitFor(async()=>await b.count('[data-network-crossing-tunnel]')===1&&await b.count('[data-network-structure-piece="trough"]')>0&&await b.count('[data-network-junction-hit]')===0,'tunnel and trough drawn, still no junction');
+    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./);
+    await b.screenshot('artifacts/design-browser-underpass.png');
+    await b.click('[data-design-view="3d"]');
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-below]')?.dataset.networkSceneBelow??0`))>0,'3D shows trough walls and portals');
+    await sleep(400);await b.screenshot('artifacts/design-browser-underpass-3d.png');
+    await b.click('[data-design-view="2d"]');await b.waitFor(async()=>await b.count('.network-scene3d')===0,'plan');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'three undos bring the junction back');
     await b.key('Escape');
   }
   // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
