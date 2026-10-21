@@ -336,6 +336,13 @@ try{
   await b.waitFor(open,'inspector drawer open with a selection');
   await b.click('[data-design-inspector-toggle]');await b.waitFor(async()=>!(await open()),'drawer closes');
   await b.click('[data-design-inspector-toggle]');await b.waitFor(open,'drawer opens again');
+  // Phone: review first — the inspector is a bottom sheet, the plan stays visible above it, nothing overflows sideways.
+  await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await sleep(400);
+  diag.phone=await b.evalValue(`(()=>{const i=document.querySelector('.design-inspector').getBoundingClientRect(),c=document.querySelector('.design-canvas').getBoundingClientRect();
+    return{sheetTop:i.top,sheetH:i.height,canvasTop:c.top,width:document.documentElement.scrollWidth,inner:innerWidth,note:getComputedStyle(document.querySelector('[data-design-phone-note]')??document.body).display};})()`);
+  assert.ok(diag.phone.sheetH<=844*0.55&&diag.phone.sheetTop-diag.phone.canvasTop>=250,'plan visible above the sheet: '+JSON.stringify(diag.phone));
+  assert.ok(diag.phone.width<=diag.phone.inner+1,'no sideways scroll on a phone: '+JSON.stringify(diag.phone));
+  await b.screenshot('artifacts/design-browser-phone.png');
   await b.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await sleep(300);
   await b.click('[data-design-scenario="alt-1"]');await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','back to the alternative');
   // Leaving the advanced editor waits for a successful save.

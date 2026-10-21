@@ -307,6 +307,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
+      <p className="design-phone-note" data-design-phone-note="true">จอเล็กเหมาะสำหรับดูและตรวจแบบ การวาดและแก้แบบละเอียดทำได้สะดวกกว่าบนจอคอมพิวเตอร์</p>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
       {scenario.migration&&<MigrationReportPanel m={scenario.migration}/>}
       <MapPanel map={map} tool={tool as DesignTool} onTool={reference.onTool} center={reference.viewCenter} onMessage={onMessage}/>
