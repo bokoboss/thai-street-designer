@@ -1,6 +1,6 @@
 # Consolidation Roadmap
 
-Updated: 2026-10-13
+Updated: 2026-10-21
 Decision: [ADR-0001](decisions/ADR-0001-consolidation.md)
 Status: **active plan** — replaces `docs/POST_V1_ROADMAP.md` as the source of next work.
 
@@ -112,7 +112,53 @@ Independent review 2026-10-20 (ChatGPT): P0 fixes merged — topology integrity 
 
 ---
 
-## Phase 4 — Engineering depth
+## Phase 4 — Grade separation and engineering depth
+
+Starts only after the owner accepts Phase 3 (feature freeze in `AGENTS.md`).
+Source for 4A–4E: [game-UX and interchange research, 2026-10-21](research/2026-10-21-GAME-UX-INTERCHANGE-RESEARCH.md).
+Its action-count targets are the researcher's proposals, not industry standards; they are re-measured here
+against `docs/spec/UX_BASELINE_RESULTS.md` as each slice lands.
+
+Principle: *sketch as fast as a game, inspect as clearly as an engineering tool.* Every generated object stays an
+ordinary editable road, ramp or lane run; nothing is an opaque block. No score or fake simulation visuals.
+
+### 4A — Elevation and crossings (foundation)
+
+- Vertical profile per road (`z` by station; Line + circular arc in plan first), structure runs (at grade / bridge / underpass).
+- Crossing relation per road pair: at grade (junction) / A over B / B over A / unresolved.
+- 2D draws the upper road over the lower one; 3D, section and export read the same profile.
+- Exit criteria (all as regression tests):
+  - Two roads crossing in plan at different levels create no junction.
+  - Flipping A over B ↔ B over A updates 2D, 3D, selection and export together.
+  - Moving an alignment recomputes crossing stations and levels deterministically.
+  - One undo reverts a grade-separation change completely.
+  - Projects saved before 4A open with every profile at `z = 0`.
+  - The report lists each crossing as at grade / bridge / unresolved.
+
+### 4B — Diamond interchange (first template)
+
+- Ramps attached end-to-side to a road (builds on road join and end handling from P2).
+- Merge/diverge anchors; ramp preview shown red with the reason when it cannot be placed.
+- Diamond generator: preview → commit as one undoable step → ramps, anchors and profiles stay editable.
+- Generated objects keep their origin (`template`, `version`, parameters); regenerating is an explicit action.
+
+### 4C — Lane runs and lane connections
+
+- Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
+- Replaces the deferred P2 item "station-based lane transitions".
+- Automatic lane mapping at junctions and merges; an advanced lane connector for overrides only.
+
+### 4D — More templates
+
+- Trumpet, roundabout interchange, selected cloverleaf variants; mirror / rotate; parameter presets.
+
+### 4E — Rule-referenced checks
+
+- Three states for every check: geometry invalid / needs standards check / checked against a referenced rule.
+- A referenced rule shows design value, criterion, source and status. Nothing reads "meets standard" while the source is `TO_VERIFY`.
+- Depends on the deferred Thai guideline research (`docs/standards/STANDARDS_POLICY.md`).
+
+### 4F — Engineering depth (earlier Phase 4 list)
 
 - Project access / driveway.
 - U-turn treatment built on median opening + general pocket lifecycle.
@@ -135,6 +181,7 @@ Independent review 2026-10-20 (ChatGPT): P0 fixes merged — topology integrity 
 - Parallel / frontage transfer topology (former Phase 8B).
 - Before/after slider, side-by-side compare, saved views.
 - Desktop wrapper.
+- Large-network rendering (WebGL / deck.gl layers, workers, level of detail) once a benchmark project shows SVG is too slow (research 2026-10-21).
 - Natural-language commands that resolve to the typed command layer.
 
 ## Explicitly out of scope
