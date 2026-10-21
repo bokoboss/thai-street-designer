@@ -3,7 +3,7 @@
 // Place search sets the map so the found place sits at the middle of the design; "ย้ายแผนที่" drags the map
 // (its offset) to line it up with the roads. Provider keys stay in this browser and are never saved to the file.
 import {useEffect,useState} from 'react';
-import {IMAGERY_BASEMAP_OPTIONS,MAP_PROVIDER_CREDENTIALS_STORAGE,MAP_REFERENCE_STORAGE,STREET_BASEMAP_OPTIONS,basemapAccessLabel,basemapCredentialKey,basemapDescription,basemapKind,mapProviderCredentialsDefaults,mapReferenceDefaults,restoreMapProviderCredentials,restoreMapReference,searchMapPlaces,type MapBasemap,type MapPlace,type MapProviderCredentials,type MapReference} from '../junction/map-background';
+import {IMAGERY_BASEMAP_OPTIONS,MAP_CREDENTIAL_LABEL,MAP_PROVIDER_CREDENTIALS_STORAGE,MAP_REFERENCE_STORAGE,STREET_BASEMAP_OPTIONS,basemapAccessLabel,basemapCredentialKey,basemapDescription,basemapKind,mapProviderCredentialsDefaults,mapReferenceDefaults,restoreMapProviderCredentials,restoreMapReference,searchMapPlaces,type MapBasemap,type MapPlace,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {DesignTool} from './design-canvas';
 
@@ -51,7 +51,7 @@ export function MapPanel({map,tool,onTool,center,onMessage}:{map:MapState;tool:D
       <label className="design-select"><span>ผู้ให้บริการ</span><select value={r.basemap} onChange={e=>map.update({basemap:e.target.value as MapBasemap})}>
         {Object.entries(kind==='street'?STREET_BASEMAP_OPTIONS:IMAGERY_BASEMAP_OPTIONS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
       <p className="design-meta">{basemapAccessLabel(r.basemap)} · {basemapDescription(r.basemap)}</p>
-      {key&&<label className="design-select"><span>{key==='esri'?'คีย์ ArcGIS / Esri':'คีย์ MapTiler'}</span>
+      {key&&<label className="design-select"><span>{MAP_CREDENTIAL_LABEL[key]}</span>
         <input type="password" autoComplete="off" value={map.credentials[key]} placeholder="ใส่คีย์ของคุณ" onChange={e=>{const v=e.currentTarget.value;map.setCredentials(c=>({...c,[key]:v}));}}/></label>}
       <label className="design-select"><span>ความทึบ</span><input type="range" min="10" max="100" step="5" value={Math.round(r.opacity*100)} onChange={e=>map.update({opacity:Number(e.currentTarget.value)/100})}/></label>
       <div className="design-reference-tools">
