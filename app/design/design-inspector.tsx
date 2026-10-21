@@ -11,6 +11,7 @@ import {approachInfo,junctionApproaches,newSlip,pocketTreatment,slipPatch,type A
 import {parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
+import {endJoins} from '@/core/road-first/join';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
@@ -56,7 +57,7 @@ function BandsEditor({bands,onChange}:{bands:NonNullable<RoadSection['bands']>;o
   </section>;
 }
 
-function RoadInspector({road,run,onDeleted}:{road:Road;run:Run;onDeleted:()=>void}){
+function RoadInspector({road,run,onDeleted,roads}:{road:Road;run:Run;onDeleted:()=>void;roads:Road[]}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
@@ -71,6 +72,10 @@ function RoadInspector({road,run,onDeleted}:{road:Road;run:Run;onDeleted:()=>voi
       <NumberField field="walk" label="ทางเท้า ทั้งสองข้าง (ม.)" value={s.walk} step={.25} min={0} max={8} onCommit={v=>set({walk:v})}/>
     </div>
     <BandsEditor bands={s.bands??[]} onChange={bands=>set({bands})}/>
+    {endJoins(roads).filter(j=>j.a===road.id||j.b===road.id).map(j=>{const other=roads.find(r=>r.id===(j.a===road.id?j.b:j.a));if(!other)return null;
+      return <div key={other.id} className="design-issues" data-design-join-offer={other.id}><b>ปลายถนนชนกับ {other.name}</b>
+        <p className="design-meta">ตอนนี้เป็นถนนคนละเส้นแม้จะดูต่อกัน · เชื่อมแล้วจะใช้ชื่อและหน้าตัดของ {road.name}</p>
+        <button className="link" data-design-action="join-road" onClick={()=>run({type:'road.join',roadId:road.id,otherId:other.id})}>เชื่อมเป็นถนนเดียว</button></div>;})}
     <p className="design-meta">ยาว {length.toFixed(1)} ม. · {road.points.length} จุดแนว · ดับเบิลคลิกบนแนวถนนเพื่อเพิ่มจุด</p>
     <div className="design-actions">
       <button className="danger" data-design-action="delete-road" onClick={()=>{if(!armed){setArmed(true);return;}if(run({type:'road.remove',roadId:road.id}).ok)onDeleted();}}>{armed?'กดอีกครั้งเพื่อลบถนน':'ลบถนน'}</button>
@@ -252,7 +257,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
-    {road?<RoadInspector key={road.id} road={road} run={run} onDeleted={()=>onSelect(null)}/>
+    {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect}/>
