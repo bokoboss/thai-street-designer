@@ -137,3 +137,19 @@ console.log('PASS approach editing in place: right-turn pocket add/size/remove, 
   e=c.undo(e).editor;assert.ok(['R1:ahead','R1:behind','R2:ahead'].every(L=>arm(L).signal===had),'one undo restores every approach');
   console.log('PASS junction controls: crossing / stop line offset per approach, signals on all approaches in one undo step');
 }
+
+// Lane arrows on an approach, edited in /design; a later lane-count change keeps the stored arrows valid.
+{
+  const mk=T('core/junction/model.cjs');
+  let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},
+    roads:[{id:'R1',name:'ถนนหลัก',points:[{x:-200,y:0},{x:200,y:0}],section:sec},{id:'R2',name:'ถนนรอง',points:[{x:0,y:-200},{x:0,y:200}],section:sec}]});
+  e=c.endGesture(c.runCommand(e,{type:'road.add',road:{id:'R3',name:'tmp',points:[{x:500,y:500},{x:600,y:500}],section:sec}}).editor);
+  e=c.endGesture(c.runCommand(e,{type:'road.remove',roadId:'R3'}).editor);
+  const id=e.project.decisions[0].candidateId,arm=()=>ae.approachInfo(rp.compileRoadFirstProject(e.project),id,'R1:behind').arm;
+  const x=c.runCommand(e,{type:'leg.setTreatment',candidateId:id,leg:'R1:behind',patch:{laneMarkings:mk.withLaneArrow(arm(),'incoming','main',0,'ru')}});
+  assert.equal(x.result.error,null,x.result.error);e=c.endGesture(x.editor);
+  assert.equal(mk.laneArrowFor(arm(),'incoming','main',0),'ru');
+  const y=c.runCommand(e,{type:'road.setSection',roadId:'R1',patch:{forwardLanes:3,backwardLanes:3}});assert.equal(y.result.error,null,'lane count change with stored arrows: '+y.result.error);e=c.endGesture(y.editor);
+  assert.equal(arm().incoming,3);assert.equal(mk.laneArrowFor(arm(),'incoming','main',0),'ru','arrow of lane 1 kept');
+  console.log('PASS lane arrows on an approach: edited in place, kept when the road gains a lane');
+}

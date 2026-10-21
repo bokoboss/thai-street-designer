@@ -7,6 +7,7 @@ import {MapPanel,type MapState} from './map-panel';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
+import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} from '@/core/junction/model';
 import {approachInfo,cornerHandles,junctionApproaches,newOpening,newSlip,openingsOf,openingsPatch,pocketTreatment,slipPatch,type ApproachInfo,type OpeningType,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
@@ -134,6 +135,28 @@ function ControlBlock({info,run}:{info:ApproachInfo;run:Run}){
   </section>;
 }
 
+/** Arrow of each incoming lane on this approach (main lanes from the median side, then turn-pocket lanes). */
+function ArrowBlock({info,run}:{info:ApproachInfo;run:Run}){
+  const a=info.arm;if(!a.incoming)return null;
+  const set=(role:'main'|'aux-left'|'aux-right',i:number,code:LaneArrowCode)=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:{laneMarkings:withLaneArrow(a,'incoming',role,i,code)}});
+  const lanes:{role:'main'|'aux-left'|'aux-right';i:number;label:string}[]=[
+    ...Array.from({length:a.incoming},(_,i)=>({role:'main' as const,i,label:`ช่อง ${i+1}${i===0?' (ชิดเกาะกลาง)':''}`})),
+    ...Array.from({length:a.incomingPockets?.right.lanes??0},(_,i)=>({role:'aux-right' as const,i,label:`เลนเลี้ยวขวา ${i+1}`})),
+    ...Array.from({length:a.incomingPockets?.left.lanes??0},(_,i)=>({role:'aux-left' as const,i,label:`เลนเลี้ยวซ้าย ${i+1}`})),
+  ];
+  const mode=a.dividerMode??'solid',solid=a.solidLength??36;
+  return <section className="design-block" data-design-arrows={lanes.length}>
+    <small className="design-block-title">เส้นแบ่งเลนและลูกศรขาเข้า</small>
+    {a.incoming>1&&<><label className="design-select"><span>เส้นแบ่งเลน</span>
+      <select value={mode} data-design-field="divider-mode" onChange={e=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:{dividerMode:e.currentTarget.value as 'solid'|'dashed'}})}>
+        <option value="solid">เส้นทึบ ต่อด้วยเส้นประ</option><option value="dashed">เส้นประตลอด</option></select></label>
+      {mode==='solid'&&<NumberField field="solid-length" label="ความยาวเส้นทึบ (ม.)" value={solid} min={1} max={100} onCommit={solidLength=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:{solidLength}})}/>}</>}
+    {lanes.map(l=><label key={l.role+l.i} className="design-select"><span>{l.label}</span>
+      <select value={laneArrowFor(a,'incoming',l.role,l.i)} data-design-field={`arrow-${l.role}-${l.i}`} onChange={e=>set(l.role,l.i,e.currentTarget.value as LaneArrowCode)}>
+        {(Object.entries(ARROW_OPTIONS) as [LaneArrowCode,string][]).map(([code,name])=><option key={code} value={code}>{name}</option>)}</select></label>)}
+  </section>;
+}
+
 const OPENING_LABEL:Record<OpeningType,string>={opening:'ช่องเปิดเกาะกลาง',uturn:'ช่องกลับรถ'};
 /** Median openings on this approach: add, type, position from the mouth, length, remove; the plan handle moves the same start. */
 function OpeningBlock({info,run,onMessage}:{info:ApproachInfo;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
@@ -195,6 +218,7 @@ function ApproachInspector({candidateId,leg,project,compiled,run,onSelect,onMess
     <PocketBlock info={info} side="left" run={run} title="เลนเลี้ยวซ้าย"/>
     <SlipBlock info={info} project={project} run={run}/>
     <ControlBlock info={info} run={run}/>
+    <ArrowBlock info={info} run={run}/>
     <OpeningBlock info={info} run={run} onMessage={onMessage}/>
     <p className="design-meta">ลากจุดบนแบบเพื่อปรับระยะเก็บรถ ตำแหน่งช่องเปิด และรัศมีมุมได้ · ขนาดเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน ควรตรวจกับแนวทางออกแบบที่ใช้</p>
     <div className="design-actions">
@@ -256,7 +280,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
         </div>;})}
     </section>}
     <div className="design-actions">
-      <button data-design-action="advanced-junction" title="ลูกศรและเครื่องหมายรายช่อง แบบเส้นแบ่งช่อง ต้นไม้บนเกาะกลาง ทางออก Slip lane และค่าวงเวียนขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (ลูกศรรายช่อง เส้นแบ่งช่อง …)</button>
+      <button data-design-action="advanced-junction" title="ตำแหน่งลูกศร เส้นแบ่งเลนขาออก ต้นไม้บนเกาะกลาง ทางออก Slip lane และค่าวงเวียนขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (ตำแหน่งลูกศร ทางออก Slip lane …)</button>
       <button data-design-action="to-grade-separated" onClick={()=>run({type:'crossing.decide',candidateId,decision:'grade-separated'})}>เปลี่ยนเป็นทางต่างระดับ</button>
       <button className="danger" data-design-action="unconfirm" onClick={()=>{if(!armed){setArmed(true);return;}run({type:'crossing.decide',candidateId,decision:'ignore'});}}>{armed?'กดอีกครั้งเพื่อยกเลิกทางแยก':'ยกเลิกทางแยก'}</button>
     </div>

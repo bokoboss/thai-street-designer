@@ -184,6 +184,10 @@ try{
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)!==crossOn,'crossing toggled in place');
   await b.click('[data-design-undo]');
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)===crossOn,'undo restores the crossing');
+  // Lane arrow of the first incoming lane, in place.
+  await b.waitFor(()=>b.count('[data-design-arrows]'),'lane arrows');
+  await b.evalValue(`(()=>{const s=document.querySelector('[data-design-field="arrow-main-0"]');s.value='ru';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-undo]').title`)).startsWith('ย้อนกลับ: แก้ขา')&&await b.evalValue(`document.querySelector('[data-design-field="arrow-main-0"]').value`)==='ru','lane arrow changed in place');
   // Median opening on the same approach, in /design: add, type its position, drag its handle (same value).
   await b.click('[data-design-action="add-opening"]');
   await b.waitFor(()=>b.count('[data-design-opening]'),'median opening added in place');
