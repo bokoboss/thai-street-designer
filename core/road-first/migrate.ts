@@ -155,6 +155,9 @@ export function migrateNetworkProject(net:NetworkProject):MigrationResult{
     const legs=legTreatments.get(j.id);if(legs)treatments.legs=legs;
     if(slips.length)treatments.slips=slips;
     if(j.design.corner!==designBase.corner)treatments.corner=j.design.corner;
+    const radii:Partial<Record<LegKey,number>>={};
+    (j.design.cornerRadii??[]).forEach((r,armId)=>{const key=legOf.get(armKey(j,armId));if(r!==null&&r!==undefined&&key)radii[key]=r;});
+    if(Object.keys(radii).length)treatments.cornerRadii=radii;
     if(Object.keys(settings).length)treatments.design=settings;
     const joined=[...new Set([...legOf].filter(([arm])=>arm.startsWith(`${j.id}:`)).map(([,leg])=>parseLegKey(leg)!.roadId))];
     const excluded=c.roads.map(r=>r.roadId).filter(id=>!joined.includes(id));

@@ -27,6 +27,8 @@ export type RoadFirstCommand=
   |{type:'junction.rename';candidateId:string;name:string}
   |{type:'junction.setRoads';candidateId:string;roads:string[]}
   |{type:'junction.setCorner';candidateId:string;corner:number}
+  /** One corner's radius (null: back to the junction's radius); leg = the road leg the corner starts from. */
+  |{type:'junction.setCornerAt';candidateId:string;leg:LegKey;radius:number|null}
   |{type:'junction.setDesign';candidateId:string;patch:DesignSettings}
   /** Every junction-owned setting at once (edits brought back from the advanced junction editor). */
   |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined}
@@ -156,6 +158,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
           d.roads=[...cmd.roads];if(out.length)d.excluded=out;else delete d.excluded;label=`กำหนดถนนที่บรรจบที่ ${jname(d)}: ${cmd.roads.map(id=>road(id)!.name).join(', ')}`;break;
         }
         case 'junction.setCorner':t(d).corner=cmd.corner;label=`ปรับรัศมีมุม ${jname(d)} เป็น ${fmt(cmd.corner)} ม.`;group=`junction.corner:${d.candidateId}`;break;
+        case 'junction.setCornerAt':{
+          const r=t(d).cornerRadii??={};
+          if(cmd.radius===null)delete r[cmd.leg];else r[cmd.leg]=cmd.radius;
+          if(!Object.keys(r).length)delete t(d).cornerRadii;
+          label=cmd.radius===null?`ใช้รัศมีมุมเริ่มต้นที่มุม ${legName(cmd.leg)} · ${jname(d)}`:`ปรับรัศมีมุม ${legName(cmd.leg)} เป็น ${fmt(cmd.radius)} ม. · ${jname(d)}`;
+          group=`junction.cornerAt:${d.candidateId}:${cmd.leg}`;break;
+        }
         case 'junction.setDesign':t(d).design={...t(d).design,...structuredClone(cmd.patch)};label=`ปรับการตั้งค่า ${jname(d)}`;group=`junction.design:${d.candidateId}:${Object.keys(cmd.patch).join(',')}`;break;
         case 'junction.setTreatments':d.treatments=cmd.treatments?structuredClone(cmd.treatments):undefined;label=`แก้ทางแยกขั้นสูง ${jname(d)}`;break;
         case 'leg.setApproach':{

@@ -165,6 +165,6 @@ export function useRoadEditor(){
   return{
     project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
-    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,restoreRemoved,storage,unreadable,clearUnreadable,
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,restoreRemoved,storage,loaded,unreadable,clearUnreadable,
   };
 }

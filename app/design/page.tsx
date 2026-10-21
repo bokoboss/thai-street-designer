@@ -22,7 +22,7 @@ import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
 import NetworkScene3D from '../network/network-scene3d';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
 
-const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมใดก็ได้เพื่อปรับรัศมีทุกมุมพร้อมกัน · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
+const JUNCTION_HINT='ทางแยก: คลิกปากทางเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane · ลากจุดสี่เหลี่ยมที่มุมเพื่อปรับรัศมีเฉพาะมุมนั้น · ลากจุดกลมเพื่อปรับระยะเก็บรถ';
 const TOOL_HINT:Record<DesignTool,string>={
   select:'เลือก: คลิกถนน จุดตัด หรือทางแยก · ลากจุดแนวถนนเพื่อย้าย · ลากด้วยปุ่มกลางเพื่อเลื่อนมุมมอง',
   pan:'เลื่อนมุมมอง: ลากเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม',
@@ -152,7 +152,7 @@ export default function DesignWorkspace(){
     setNewArmed(false);ed.replaceWorkspace(createWorkspace(emptyRoadFirstProject()),'เริ่มโครงการใหม่แล้ว');setSelection(null);setCompare(false);setFitKey(k=>k+1);
   }
 
-  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true" data-inspector-open={inspectorOpen?'true':'false'}>
+  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true" data-design-ready={ed.loaded?"true":undefined} data-inspector-open={inspectorOpen?'true':'false'}>
     <header className="design-top">
       <div className="design-brand"><Route size={18}/><b>Thai Street Designer</b><span>{ed.project.title}</span></div>
       <div className="design-scenarios" role="tablist" aria-label="ทางเลือก">

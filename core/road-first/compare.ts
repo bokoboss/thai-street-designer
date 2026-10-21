@@ -42,7 +42,7 @@ function junctionChanges(a:Decision,b:Decision,roadsMoved:boolean){
   if(roadsMoved)out.push('รูปทรงตามถนน');
   if(pick(ta,['incomingPockets','outgoingPockets'])!==pick(tb,['incomingPockets','outgoingPockets']))out.push('เลนเลี้ยว');
   if(json(ta.slips)!==json(tb.slips))out.push('Slip lane');
-  if(json(ta.corner)!==json(tb.corner))out.push('รัศมีมุม');
+  if(json(ta.corner)!==json(tb.corner)||json(ta.cornerRadii)!==json(tb.cornerRadii))out.push('รัศมีมุม');
   if(json(ta.approaches)!==json(tb.approaches))out.push('ช่วงเข้าทางแยก');
   if(pick(ta,['crossing','signal','stop','crossOffset','stopOffset'])!==pick(tb,['crossing','signal','stop','crossOffset','stopOffset']))out.push('ทางข้าม / สัญญาณ / เส้นหยุด');
   if(a.name!==b.name)out.push('ชื่อ');

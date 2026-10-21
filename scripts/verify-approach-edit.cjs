@@ -66,3 +66,27 @@ console.log('PASS approach editing in place: right-turn pocket add/size/remove, 
   assert.equal(c.runCommand(e,{type:'slip.set',candidateId:id,slip:ae.newSlip(inf())}).result.error,c.SLIP_WITH_LEFT,'Slip refused beside a left pocket');
   console.log('PASS left-turn pocket and Slip lane on one approach are refused both ways; right pocket and Slip edits still allowed');
 }
+
+// Per-corner radius (P2): a handle edits only its corner; the junction radius stays the default for the others.
+{
+  let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'ก',points:[{x:-200,y:0},{x:200,y:0}],section:sec},{id:'B',name:'ข',points:[{x:0,y:-200},{x:0,y:200}],section:sec}]});
+  e=c.runCommand(e,{type:'road.add',road:{id:'Z',name:'z',points:[{x:500,y:500},{x:600,y:500}],section:sec}}).editor;
+  const id=e.project.decisions[0].candidateId,comp=()=>rp.compileRoadFirstProject(e.project);
+  const j0=comp().project.junctions[0],h0=ae.cornerHandles(j0);assert.ok(h0.every(h=>h.radius===j0.design.corner));
+  const first=comp().legs.find(l=>l.armId===h0[0].armId),key=first.roadId+':'+first.side;
+  let x=c.runCommand(e,{type:'junction.setCornerAt',candidateId:id,leg:key,radius:16});assert.equal(x.result.error,null);e=x.editor;
+  assert.match(x.result.label,/^ปรับรัศมีมุม .* เป็น 16 ม\./);
+  const j1=comp().project.junctions[0],h1=ae.cornerHandles(j1);
+  assert.equal(h1[0].radius,16);assert.ok(h1.slice(1).every(h=>h.radius===j1.design.corner),'other corners keep the default');
+  assert.equal(ae.cornerFromPoint(j1,0,h1[0].point),16,'handle ↔ value round trip on that corner');
+  // The default can change without touching the corner set on its own.
+  e=c.runCommand(e,{type:'junction.setCorner',candidateId:id,corner:12}).editor;
+  const h2=ae.cornerHandles(comp().project.junctions[0]);assert.equal(h2[0].radius,16);assert.ok(h2.slice(1).every(h=>h.radius===12));
+  // Back to the default; the advanced editor round trip keeps per-corner radii.
+  e=c.runCommand(e,{type:'junction.setCornerAt',candidateId:id,leg:key,radius:9}).editor;
+  const ho=T('core/road-first/junction-handoff.cjs').createHandoff(e.project,'existing',id);
+  const back=T('core/road-first/junction-handoff.cjs').handoffCommand(ho,e.project);assert.equal(back.cmd,null,'unchanged through the advanced editor');
+  e=c.runCommand(e,{type:'junction.setCornerAt',candidateId:id,leg:key,radius:null}).editor;
+  assert.equal(e.project.decisions[0].treatments.cornerRadii,undefined);
+  console.log('PASS per-corner radius: one corner at a time, default for the rest, reset, advanced editor round trip');
+}

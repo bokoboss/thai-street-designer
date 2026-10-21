@@ -40,6 +40,8 @@ export const path=(ps:P[],close=false)=>ps.map((p,i)=>`${i?'L':'M'}${p.x.toFixed
 const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
 const cubic=(a:P,b:P,c:P,e:P,n=40)=>Array.from({length:n+1},(_,i)=>{const t=i/n,s=1-t;return{x:s*s*s*a.x+3*s*s*t*b.x+3*s*t*t*c.x+t*t*t*e.x,y:s*s*s*a.y+3*s*s*t*b.y+3*s*t*t*c.y+t*t*t*e.y}});
 const join=(...arr:P[][])=>arr.flatMap((a,i)=>i?a.slice(1):a);
+/** Curb radius of the corner that starts at arm i (to the next arm by angle). */
+export const cornerRadius=(d:Pick<Design,'corner'|'cornerRadii'>,i:number)=>d.cornerRadii?.[i]??d.corner;
 export function cornerArc(hi:number,lo:number,g:number,r:number){
  const vx=(hi*Math.cos(g)-lo)/Math.sin(g),t=r/Math.tan(g/2),cx=vx+t,cy=hi+r,sweep=Math.PI-g;
  const polar=(rad:number,f:number)=>({x:cx-rad*Math.sin(f*sweep),y:cy-rad*Math.cos(f*sweep)});
@@ -51,8 +53,8 @@ export function armMouths(d:Design):number[]{
  if(d.type==='roundabout')return d.arms.map(()=>outerRadius(d));
  const mouths=d.arms.map(()=>0),ids=activeIds(d);
  ids.forEach((i,k)=>{const j=ids[(k+1)%ids.length],g=angleGap(d,i,j)*Math.PI/180,hi=bounds(d.arms[i])[1],lo=bounds(d.arms[j])[0];
- if(g>=Math.PI-.08){const reach=Math.max(hi,-lo)+d.corner;mouths[i]=Math.max(mouths[i],reach);mouths[j]=Math.max(mouths[j],reach);return;}
- const c=cornerArc(hi,lo,g,d.corner),end=rotate(c.points.at(-1)!,-g/(Math.PI/2));mouths[i]=Math.max(mouths[i],c.points[0].x);mouths[j]=Math.max(mouths[j],end.x);
+ if(g>=Math.PI-.08){const reach=Math.max(hi,-lo)+cornerRadius(d,i);mouths[i]=Math.max(mouths[i],reach);mouths[j]=Math.max(mouths[j],reach);return;}
+ const c=cornerArc(hi,lo,g,cornerRadius(d,i)),end=rotate(c.points.at(-1)!,-g/(Math.PI/2));mouths[i]=Math.max(mouths[i],c.points[0].x);mouths[j]=Math.max(mouths[j],end.x);
  });return mouths;
 }
 export const armMouth=(d:Design,i:number)=>armMouths(d)[i];
@@ -65,7 +67,7 @@ if(round){const settings=roundCfg,entry=roundFillet(core,hi,settings.entryRadius
  const arc=Array.from({length:81},(_,j)=>{const t=mix(ta,tb,j/80);return{x:core*Math.cos(t),y:core*Math.sin(t)}}),exitPoints=exit.points.map(p=>rotate({x:p.x,y:-p.y},gap)).reverse();
  base=join(lead(entry.points[0]),entry.points,arc,exitPoints,trail(exitPoints.at(-1)!));}
 
-else if(g<Math.PI-.08){const arc=cornerArc(hi,nlo,g,d.corner).points;base=join(lead(arc[0]),arc,trail(arc.at(-1)!));}
+else if(g<Math.PI-.08){const arc=cornerArc(hi,nlo,g,cornerRadius(d,i)).points;base=join(lead(arc[0]),arc,trail(arc.at(-1)!));}
 else {const p={x:mouths[i],y:hi},q=rotate({x:mouths[next],y:nlo},gap);base=join(lead(p),cubic(p,{x:0,y:hi},rotate({x:0,y:nlo},gap),q),trail(q));}
 const outer=base,island:P[]=[];
 const walk=offset(outer,sectionFor(a,'incoming').walk,sectionFor(b,'outgoing').walk,leadCount-1,outer.length-trailCount).map((p,k)=>{if(k>leadCount-1&&k<outer.length-trailCount)return p;const first=k<=leadCount-1,arm=first?a:b,side=first?1:-1,origins=first?originsA:{incoming:stopPosition(b,mouths[next]),outgoing:exitX},q=first?outer[k]:rotate(outer[k],-gap),idx=first?1:0,w=sectionFor(arm,direction(side)).walk,slope=(bounds(arm,q.x+.001,origins)[idx]-bounds(arm,q.x-.001,origins)[idx])/.002,n=Math.hypot(1,slope),v={x:q.x-side*slope*w/n,y:q.y+side*w/n};return first?v:rotate(v,gap);});return{entryX,exitX,i,next,base,outer,walk,island};});}

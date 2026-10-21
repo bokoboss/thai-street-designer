@@ -26,7 +26,8 @@ export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
 /** Junction-owned treatments keyed by road leg, so they survive recompiles and road edits. */
-export type JunctionTreatments={slips?:LegSlip[];corner?:number;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
+/** cornerRadii: per-corner curb radius keyed by the road leg the corner starts from (to the next leg by angle). */
+export type JunctionTreatments={slips?:LegSlip[];corner?:number;cornerRadii?:Partial<Record<LegKey,number>>;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
 /** roads: the roads that join at this junction; any other road through the same point passes over or under it. */
 /** at: last known position of the crossing, used to re-attach the decision after road edits. */
 /** excluded: roads that reach the junction point but were deliberately left out of it (not reported, never auto-joined). */
@@ -204,6 +205,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       slips.push(slip);
     }
     design={...design,slips};
+    const radii=Object.entries(d.treatments?.cornerRadii??{}) as [LegKey,number][];
+    if(radii.length){
+      const list:(number|null)[]=[null,null,null,null];
+      for(const [key,r] of radii){const arm=armOf(key);if(arm===undefined){issues.push(`${d.name??id}: รัศมีมุมอ้างขาถนน ${legLabel(key)} ที่ไม่มีแล้ว`);continue;}list[arm]=r;}
+      design={...design,cornerRadii:list};
+    }
     // Fit-based arm length: an arm needs only what it carries. A leg too short for that is stretched and reported.
     for(const leg of legs.filter(l=>l.junctionId===id)){
       const road=roadById.get(leg.roadId)!,arm=design.arms[leg.armId],required=Math.ceil(requiredArmLength(design,leg.armId)*1000)/1000;
