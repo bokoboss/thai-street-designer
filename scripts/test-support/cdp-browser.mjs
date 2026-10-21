@@ -41,7 +41,12 @@ export async function startSession({root,path='/',profile,width=1440,height=1000
   const rect=async(selector,index=0)=>evalValue(`(()=>{const e=document.querySelectorAll(${JSON.stringify(selector)})[${index}];if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height};})()`);
   const mouse=(type,p,extra={})=>send('Input.dispatchMouseEvent',{type,x:p.x,y:p.y,button:'left',...extra});
   const clickAt=async(p,count=1)=>{await mouse('mouseMoved',p);for(let c=1;c<=count;c++){await mouse('mousePressed',p,{clickCount:c});await mouse('mouseReleased',p,{clickCount:c});}};
-  const click=async(selector,index=0)=>clickAt(await waitFor(()=>rect(selector,index),selector));
+  // Scroll the element into view first (inspector panels scroll), then click its centre.
+  const click=async(selector,index=0)=>{
+    await waitFor(()=>rect(selector,index),selector);
+    await evalValue(`document.querySelectorAll(${JSON.stringify(selector)})[${index}]?.scrollIntoView({block:'nearest',inline:'nearest'})`);
+    return clickAt(await waitFor(()=>rect(selector,index),selector));
+  };
   const drag=async(from,to,steps=6)=>{await mouse('mouseMoved',from);await mouse('mousePressed',from,{clickCount:1});for(let i=1;i<=steps;i++)await mouse('mouseMoved',{x:from.x+(to.x-from.x)*i/steps,y:from.y+(to.y-from.y)*i/steps},{buttons:1});await mouse('mouseReleased',to,{clickCount:1});};
   const key=async(k,code=k,modifiers=0)=>{await send('Input.dispatchKeyEvent',{type:'keyDown',key:k,code,modifiers,windowsVirtualKeyCode:k==='Enter'?13:k==='Escape'?27:0});await send('Input.dispatchKeyEvent',{type:'keyUp',key:k,code,modifiers});};
   const type=async text=>send('Input.insertText',{text});
