@@ -32,6 +32,7 @@ function roadChanges(a:Road,b:Road){
   if(json(a.section)!==json(b.section))out.push('หน้าตัด');
   if((a.role??null)!==(b.role??null))out.push('ชนิดถนน');
   if(json(a.openings??[])!==json(b.openings??[]))out.push('ช่องเปิดเกาะกลาง');
+  if(json(a.roadside??null)!==json(b.roadside??null))out.push('ต้นไม้และเสาไฟ');
   if(json(a.ends)!==json(b.ends)||json(a.links)!==json(b.links))out.push('ช่วงเปลี่ยนหน้าตัด');
   if(a.name!==b.name)out.push('ชื่อ');
   return out;

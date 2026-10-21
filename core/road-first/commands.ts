@@ -25,6 +25,7 @@ export type RoadFirstCommand=
   |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
   |{type:'road.setRole';roadId:string;role:RoadRole|null}
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
+  |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
   |{type:'junction.setRoads';candidateId:string;roads:string[]}
@@ -146,6 +147,11 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.role)r.role=cmd.role;else delete r.role;
       label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+    }
+    case 'road.setRoadside':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.roadside&&(cmd.roadside.trees||cmd.roadside.lights))r.roadside={...cmd.roadside};else delete r.roadside;
+      label=`ต้นไม้และเสาไฟ ${r.name}: ${r.roadside?[r.roadside.trees?'ต้นไม้':'',r.roadside.lights?'เสาไฟ':''].filter(Boolean).join(' + '):'ไม่มี'}`;break;
     }
     case 'road.setOpenings':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

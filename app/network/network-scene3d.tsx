@@ -6,7 +6,7 @@ import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/core/network/network-project';
 import {
-  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
+  resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneFaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
 } from '@/core/network/network-scene-geometry';
 
 type Size={w:number;h:number};
@@ -32,7 +32,7 @@ export default function NetworkScene3D({
       return{
         junctionSurfaces:resolveJunctionSceneSurfaces(project),
         linkSurfaces:resolveRoadLinkSceneSurfaces(project),
-        furnitureFaces:resolveJunctionSceneFaces(project),
+        furnitureFaces:[...resolveJunctionSceneFaces(project),...resolveRoadLinkSceneFaces(project)],
         bounds:projectBounds(project,45)
       };
     },[active,project]),

@@ -12,11 +12,14 @@ export function signalFrame(d:Design,i:number,edgeSet=edges(d)){
  center=(innerEdge(a,1,x,origins)+carBounds(a,x,origins)[1])/2;
  return{x,post,center,origins};
 }
-export function furnitureFaces(d:Design):Face[]{const fs:Face[]=[],edgeSet=edges(d);
- for(const o of roadObjects(d)){
+/** 3D faces of one tree or street light (shared by junction arms and road links). */
+export function objectFaces(o:{kind:'tree'|'light';x:number;y:number;angle:number;side:number;height:number;size:number;reach:number}):Face[]{const fs:Face[]=[];
   if(o.kind==='tree'){const h=o.height,r=o.size/2;fs.push(...cylinder(o.x,o.y,.18,h*.55,Math.min(.35,o.size*.055),.09,['#826954','#6f5a46']),...cylinder(o.x,o.y,.18+h*.32,h*.4,r*.45,r,['#4c8b65','#54996c','#69a67b','#43845d']),...cylinder(o.x,o.y,.18+h*.72,h*.28,r,0,['#65a377','#579669','#72ad82','#4d8a63']));}
   else {const h=o.height+.18,t=o.size,end=-o.side*o.reach;const local=[...cylinder(0,0,.18,o.height,t/2,t*.32,['#536673','#728895']),...box(-t/2,Math.min(0,end),h-t/2,t,Math.abs(end),t,'#718895'),...box(-.24,end-.45,h-.16,.48,.9,.2,'#c3cdd1'),...box(-.2,end-.38,h-.17,.4,.76,.025,'#fff2ba')];fs.push(...transform(local,o.angle,o.x,o.y));}
- }
+ return fs;
+}
+export function furnitureFaces(d:Design):Face[]{const fs:Face[]=[],edgeSet=edges(d);
+ for(const o of roadObjects(d))fs.push(...objectFaces(o));
  for(const i of activeIds(d)){const a=d.arms[i];if(!a.signal||!a.incoming)continue;const {x,post,center}=signalFrame(d,i,edgeSet),h=6;
  const local=[...cylinder(x,post,.18,h,.16,.11,['#465b67','#71838d']),...box(x-.1,center-1.2,h,.2,post-center+1.2,.2,'#647a87'),...box(x-.2,center-1.25,h-.95,.4,2.5,.9,'#17262e')];
  // Incoming drivers face local -X: increasing local Y is their left.

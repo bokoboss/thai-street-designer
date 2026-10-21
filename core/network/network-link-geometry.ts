@@ -3,6 +3,7 @@ import {
   type LinkDirection,type LinkStationWidthComponent,type NetworkProject,type RoadLink,type WorldPoint
 } from './network-project';
 import {station,stationOffsets} from '../common/alignment';
+import {roadsideDefaults} from '../junction/model';
 import {
   endpointEnvelopeValues,endpointStationProfile,profileSampleStations,sampleStationProfile,
   windowStationProfile
@@ -12,6 +13,7 @@ import {
   type ResolvedLaneLifecycleSet,type SampledLaneLifecycle
 } from './lane-lifecycle';
 
+export type LinkRoadObject={kind:'tree'|'light';station:number;offset:number;side:1|-1;x:number;y:number;angle:number};
 export type LinkLaneLineProfile={id:string;direction:LinkDirection;offsets:(number|null)[]};
 export type LinkBandProfile={type:string;inner:number[];outer:number[]};
 export type ResolvedLinkSectionGeometry={
@@ -30,6 +32,8 @@ export type ResolvedLinkSectionGeometry={
   forwardWalk:{inner:number[];outer:number[]}|null;
   /** Mid-block median openings clipped to the link: station intervals with no median island. */
   openings:{start:number;end:number}[];
+  /** Trees and street lights on the sidewalks (side +1 = forward/left offset side). */
+  objects:LinkRoadObject[];
   backwardWalk:{inner:number[];outer:number[]}|null;
 };
 
@@ -164,7 +168,26 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
     ]:[];
 
   const openings=(link.medianOpenings??[]).map(o=>({start:Math.max(0,o.start),end:Math.min(total,o.start+o.length)})).filter(o=>o.end-o.start>.01).sort((a,b)=>a.start-b.start);
-  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings};
+  // Trees and lights: the engine's roadside defaults (spacing 15 m, 0.5 m from the sidewalk's inner edge, lights between trees),
+  // on sidewalks at least 0.75 m wide, clear of the link ends — the same rules as on junction arms.
+  const objects:LinkRoadObject[]=[];
+  if(link.roadside&&(link.roadside.trees||link.roadside.lights)){
+    const rs=roadsideDefaults(),sample=(values:number[],s:number)=>{let k=0;while(k<stationList.length-2&&stationList[k+1]<s)k++;const s0=stationList[k],s1=stationList[k+1]??s0,t=s1>s0?(s-s0)/(s1-s0):0;return values[k]+((values[k+1]??values[k])-values[k])*t;};
+    for(const [side,walk] of [[1,forwardWalk],[-1,backwardWalk]] as const){
+      if(!walk)continue;
+      for(const kind of ['tree','light'] as const){
+        if(!(kind==='tree'?link.roadside.trees:link.roadside.lights))continue;
+        const shift=kind==='light'&&link.roadside.trees?rs.spacing/2:0;
+        for(let s=5+shift;s<=total-3;s+=rs.spacing){
+          const inner=sample(walk.inner,s),outer=sample(walk.outer,s);if(Math.abs(outer-inner)<.75)continue;
+          const offset=inner+side*Math.max(.35,Math.min(Math.abs(outer-inner)-.35,rs.offset)),c=station(basePoints,s),ahead=station(basePoints,Math.min(total,s+.5)),behind=station(basePoints,Math.max(0,s-.5));
+          const h=Math.atan2(ahead.y-behind.y,ahead.x-behind.x),p={x:c.x-Math.sin(h)*offset,y:c.y+Math.cos(h)*offset};
+          objects.push({kind,station:Math.round(s*1000)/1000,offset:Math.round(offset*1000)/1000,side,x:p.x,y:p.y,angle:h*180/Math.PI});
+        }
+      }
+    }
+  }
+  return{points,stations:stationList,total,linear,left,right,medianHalf,forwardLaneWidth,backwardLaneWidth,laneLines,forwardBands,backwardBands,forwardWalk,backwardWalk,openings,objects};
 }
 
 /**

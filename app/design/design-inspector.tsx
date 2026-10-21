@@ -112,6 +112,14 @@ function RoadInspector({road,run,onDeleted,roads,compiled,onMessage}:{road:Road;
       <NumberField field="walk" label="ทางเท้า ทั้งสองข้าง (ม.)" value={s.walk} step={.25} min={0} max={8} onCommit={v=>set({walk:v})}/>
     </div>
     <BandsEditor bands={s.bands??[]} onChange={bands=>set({bands})}/>
+    <section className="design-block" data-design-roadside={road.roadside?'on':'off'}>
+      <small className="design-block-title">ต้นไม้และเสาไฟริมทางเท้า</small>
+      {road.section.walk<.75?<p className="design-meta">ทางเท้าแคบกว่า 0.75 ม. จึงไม่วางต้นไม้หรือเสาไฟ</p>:<div className="design-reference-tools">
+        {(['trees','lights'] as const).map(k=><label key={k} className="design-check"><input type="checkbox" data-design-field={`roadside-${k}`} checked={!!road.roadside?.[k]}
+          onChange={e=>run({type:'road.setRoadside',roadId:road.id,roadside:{trees:!!road.roadside?.trees,lights:!!road.roadside?.lights,[k]:e.currentTarget.checked}})}/> {k==='trees'?'ต้นไม้':'เสาไฟ'}</label>)}
+      </div>}
+      <p className="design-meta">ทั้งสองฝั่ง ทุก 15 ม. รวมช่วงเข้าทางแยกของถนนนี้ (ค่าตั้งต้นของเครื่องมือ)</p>
+    </section>
     <RoadOpeningBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
     {endJoins(roads).filter(j=>j.a===road.id||j.b===road.id).map(j=>{const other=roads.find(r=>r.id===(j.a===road.id?j.b:j.a));if(!other)return null;
       return <div key={other.id} className="design-issues" data-design-join-offer={other.id}><b>ปลายถนนชนกับ {other.name}</b>
