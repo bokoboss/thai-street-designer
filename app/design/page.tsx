@@ -1,7 +1,7 @@
 'use client';
 // Road-first workspace (roadmap Phase 3): one shell — top bar, tool rail, plan, inspector, section strip, status bar.
 import './style.css';
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
 import {DesignInspector} from './design-inspector';
@@ -19,6 +19,8 @@ import {newRoadId,nextRoadName} from '@/core/road-first/ids';
 import {DESIGN_HANDOFF_STORAGE,createHandoff} from '@/core/road-first/junction-handoff';
 import {parseNetworkProjectFile} from '@/core/network/network-project-file';
 import {NETWORK_PROJECT_STORAGE,projectBounds,type WorldPoint} from '@/core/network/network-project';
+import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
+import type {DraftCheck} from './design-canvas';
 import {exportFigure,safeFilePart,type FigureFormat} from './export-figure';
 import NetworkScene3D from '../network/network-scene3d';
 import {buildNetworkDesignReport,networkDesignReportHtml} from '@/core/network/network-design-report';
@@ -30,7 +32,7 @@ const TOOL_HINT:Record<DesignTool,string>={
   'map-move':'ย้ายแผนที่: ลากบนแบบเพื่อเลื่อนแผนที่ให้ตรงกับถนน · Esc เพื่อจบ',
   'ref-move':'ย้ายภาพอ้างอิง: ลากบนแบบเพื่อเลื่อนภาพ · Esc เพื่อจบ',
   'ref-calibrate':'ตั้งมาตราส่วนภาพ: คลิกจุด A และ B บนภาพที่รู้ระยะจริง แล้วพิมพ์ระยะทางด้านขวา · Esc เพื่อยกเลิก',
-  road:'วาดถนน: คลิกวางจุด (ดูดเข้าปลายถนน แนวถนน และมุมทุก 15°) · พิมพ์ตัวเลขแล้ว Enter = ความยาว · ดับเบิลคลิกหรือ Enter เพื่อจบ · Shift ค้าง = ไม่ดูด · Esc ยกเลิก',
+  road:'วาดถนน: คลิกวางจุด (ดูดเข้าปลายถนน แนวถนน และมุมทุก 15°) · พิมพ์ตัวเลขแล้ว Enter = ความยาว · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวา = ย้อนจุดล่าสุด · Shift ค้าง = ไม่ดูด · Esc ยกเลิก',
 };
 
 export default function DesignWorkspace(){
@@ -82,6 +84,22 @@ export default function DesignWorkspace(){
     const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads),points:draft,section:structuredClone(ed.lastSection)}});
     if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
+  /** Right-click or Backspace while drawing: drop the typed length, else the last point, else leave Draw Road. */
+  function draftBack(){
+    if(typedLength){setTypedLength('');return;}
+    if(draft.length){const next=draft.slice(0,-1);setDraft(next);if(!next.length)setExtend(null);return;}
+    chooseTool('select');
+  }
+  const checkDraft=useCallback((points:WorldPoint[]):DraftCheck=>{
+    if(points.length<2)return null;
+    const cmd:RoadFirstCommand=extend?{type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:points.slice(1)}
+      :{type:'road.add',road:{id:'R-preview',name:'ถนนใหม่',points,section:ed.lastSection}};
+    const r=executeCommand(ed.project,cmd);
+    if(r.error)return{kind:'error',text:`วางไม่ได้ · ${r.error}`};
+    if(r.blocked.length)return{kind:'warn',text:`ไม่เชื่อมเข้าทางแยก · ${r.blocked[0]!.reason}`};
+    if(r.openCrossings.length)return{kind:'warn',text:`จุดตัดต้องเลือกเอง · ${r.openCrossings[0]!.reason}`};
+    return null;
+  },[extend,ed.project,ed.lastSection]);
   function onKey(e:React.KeyboardEvent){
     if((e.target as HTMLElement).matches('input,select,textarea'))return;
     const k=e.key.toLowerCase();
@@ -91,6 +109,7 @@ export default function DesignWorkspace(){
     // Typed length while drawing: digits build a length, Enter places the point at that distance along the cursor direction.
     if(tool==='road'&&draft.length&&/^[0-9.]$/.test(e.key)){setTypedLength(t=>(t+e.key).slice(0,8));return;}
     if(tool==='road'&&e.key==='Backspace'&&typedLength){setTypedLength(t=>t.slice(0,-1));return;}
+    if(tool==='road'&&e.key==='Backspace'&&draft.length){draftBack();return;}
     if(e.key==='Enter'&&tool==='road'){
       const len=Number(typedLength),last=draft.at(-1),toward=snapRef.current?.point;
       if(typedLength&&len>0&&last&&toward){setDraft([...draft,pointAtLength(last,toward,len)]);setTypedLength('');return;}
@@ -189,7 +208,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>

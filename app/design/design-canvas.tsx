@@ -1,7 +1,7 @@
 'use client';
 // Plan view of the road-first workspace. The engineering drawing is the compiled network (same renderer as
 // before); roads, their points and crossing candidates are drawn on top as the editable layer.
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useDeferredValue,useEffect,useMemo,useRef,useState} from 'react';
 import {NetworkDrawing} from '../network/network-drawing';
 import {portHeading,projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {detectCandidates,stations,type Road} from '@/core/road-first/derive';
@@ -25,13 +25,17 @@ export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|{kind:
 export type DesignTool='select'|'pan'|'road'|'ref-move'|'ref-calibrate'|'map-move';
 export type ReferenceImageView={reference:LocalImageReference;url:string|null};
 type View={x:number;y:number;scale:number};
+/** Outcome of finishing the road drawn so far: error = cannot be placed; warn = placed, but not joined as drawn. */
+export type DraftCheck={kind:'error'|'warn';text:string}|null;
 
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove}:{
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
+  /** Right-click while drawing: one step back. checkDraft: what finishing the road drawn so far would do (see DraftCheck). */
+  onDraftBack:()=>void;checkDraft:(points:WorldPoint[])=>DraftCheck;
   /** gesture: part of a drag (one undo step until finishGesture); otherwise every call is its own step. */
   run:(cmd:RoadFirstCommand,opts?:{gesture?:boolean})=>CommandOutcome;finishGesture:()=>void;fitKey:number;
   /** Latest snapped cursor while drawing (used for typed length); typedLength: digits typed so far. */
@@ -168,12 +172,18 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const typed=Number(typedLength),last=draft.at(-1);
   const cursor=tool!=='road'||!snap?null:typedLength&&last&&typed>0?pointAtLength(last,snap.point,typed):snap.point;
   const preview=tool==='road'&&draft.length?[...draft,...(cursor?[cursor]:[])]:[];
+  // Checked as if finished now, so a road that cannot be placed shows red with the reason before the click.
+  const previewKey=preview.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),checkKey=useDeferredValue(previewKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const draftCheck=useMemo(()=>preview.length>1?checkDraft(preview):null,[checkKey,checkDraft]);
+  const draftColor=draftCheck?.kind==='error'?'#b3261e':draftCheck?'#c47b12':'#0b7f86';
   // The map component measures its view as a square span across the shorter side of the plan.
   const MAP_SPAN=600,mapView={zoom:MAP_SPAN*view.scale/Math.max(1,Math.min(size.w,size.h)),pan:{x:view.x,y:view.y},span:MAP_SPAN,minZoom:1e-6};
   return <div className="design-canvas" ref={wrap} data-design-tool={tool} data-design-map={map.reference.enabled?'on':'off'}>
     <MapBackground reference={map.reference} credentials={map.credentials} view={mapView}/>
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
-      onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}} onWheel={onWheel} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
+      onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}} onWheel={onWheel}
+      onContextMenu={e=>{if(tool!=='road')return;e.preventDefault();onDraftBack();}} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
       <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" onPointerDown={()=>{if(tool==='select')onSelect(null);}}/>
       {referenceImage?.url&&referenceImage.reference.enabled&&(()=>{const r=referenceImage.reference,w=r.widthPx*r.metersPerPixel,h=r.heightPx*r.metersPerPixel;
         return <g data-design-reference-image="true" transform={`translate(${r.x} ${r.y}) rotate(${r.rotation})`} opacity={r.opacity} pointerEvents="none">
@@ -247,9 +257,9 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           </g>;
         })}
       </g>
-      {preview.length>0&&<g data-design-draft="true" pointerEvents="none">
-        <polyline points={preview.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke="#0b7f86" strokeWidth={px(2)} strokeDasharray={`${px(6)} ${px(4)}`}/>
-        {draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={px(4)} fill="#0b7f86"/>)}
+      {preview.length>0&&<g data-design-draft={draftCheck?draftCheck.kind:'true'} pointerEvents="none">
+        <polyline points={preview.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={draftColor} strokeWidth={px(draftCheck?3:2)} strokeDasharray={`${px(6)} ${px(4)}`}/>
+        {draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={px(4)} fill={draftColor}/>)}
       </g>}
       {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
         {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
@@ -273,11 +283,12 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         <circle cx={snap.point.x} cy={snap.point.y} r={px(3)} fill="#0b7f86"/>
       </g>}
     </svg>
-    {tool==='road'&&snap&&<div className="design-readout" data-design-readout="true" style={{left:(snap.point.x-vb.x)*view.scale+16,top:(snap.point.y-vb.y)*view.scale+16}}>
+    {tool==='road'&&snap&&<div className="design-readout" data-design-readout="true" style={{left:Math.max(8,Math.min((snap.point.x-vb.x)*view.scale+16,size.w-(draftCheck?350:140))),top:Math.max(8,Math.min((snap.point.y-vb.y)*view.scale+16,size.h-(draftCheck?90:40)))}}>
       {typedLength?<b>{typedLength} ม. ↵</b>:snap.length!==undefined&&<b>{snap.length.toFixed(1)} ม.</b>}
       {snap.angle!==undefined&&<span>{snap.angle.toFixed(0)}°</span>}
       {snap.kind==='end'&&<span>{draft.length?'ปลายถนน':'ต่อจากปลายถนน'}</span>}
       {snap.kind==='road'&&<span>บนแนวถนน</span>}
+      {draftCheck&&<em data-design-draft-check={draftCheck.kind} className={draftCheck.kind}>{draftCheck.text}</em>}
     </div>}
     <div className="design-scale" aria-hidden="true"><span>{scaleLen} ม.</span><i style={{width:scaleLen*view.scale}}/></div>
   </div>;
