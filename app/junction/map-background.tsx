@@ -3,12 +3,14 @@ import './map-background.css';
 import {useEffect,useMemo,useRef,useState} from 'react';
 
 export type MapBasemap=
-  |'positron'|'bright'|'liberty'|'dark'
-  |'osm-raster'|'opentopo-raster'|'esri-streets'
-  |'oam-global'|'satellite-eox-2016'|'esri-imagery'|'maptiler-satellite';
+  |'positron'|'bright'|'liberty'|'dark'|'versatiles-colorful'
+  |'osm-raster'|'opentopo-raster'|'carto-positron'|'carto-voyager'|'esri-streets'
+  |'oam-global'|'satellite-eox-2016'|'esri-imagery'|'maptiler-satellite'|'mapbox-satellite';
 export type MapLayerKind='street'|'imagery';
-export type MapProviderCredentials={esri:string;maptiler:string};
+export type MapProviderCredentials={esri:string;maptiler:string;carto:string;mapbox:string};
 export type MapCredentialKey=keyof MapProviderCredentials;
+/** Label of the key field for each provider that needs the user's own key (keys stay in this browser). */
+export const MAP_CREDENTIAL_LABEL:Record<MapCredentialKey,string>={esri:'คีย์ ArcGIS / Esri',maptiler:'คีย์ MapTiler',carto:'คีย์ CARTO',mapbox:'Access token ของ Mapbox'};
 export type MapBasemapMeta={label:string;kind:MapLayerKind;provider:string;credential:MapCredentialKey|null;access:string;description:string};
 
 export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
@@ -16,25 +18,28 @@ export const MAP_BASEMAP_META:Record<MapBasemap,MapBasemapMeta>={
   bright:{label:'OpenFreeMap · Bright',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · brighter labels'},
   liberty:{label:'OpenFreeMap · Liberty',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector · detailed street style'},
   dark:{label:'OpenFreeMap · Dark',kind:'street',provider:'OpenFreeMap',credential:null,access:'FREE · NO KEY',description:'Vector dark style'},
+  'versatiles-colorful':{label:'VersaTiles · Colorful',kind:'street',provider:'VersaTiles',credential:null,access:'FREE · NO KEY',description:'Vector · open OSM tiles · no uptime guarantee, rate-limited per IP · backup when OpenFreeMap is unavailable'},
+  'carto-positron':{label:'CARTO · Positron',kind:'street',provider:'CARTO',credential:'carto',access:'FREE QUOTA · API KEY',description:'Light engineering background · free key: 5M tiles/month non-commercial, 1M commercial'},
+  'carto-voyager':{label:'CARTO · Voyager',kind:'street',provider:'CARTO',credential:'carto',access:'FREE QUOTA · API KEY',description:'Street map with clear labels · free key: 5M tiles/month non-commercial, 1M commercial'},
   'osm-raster':{label:'OpenStreetMap · Standard',kind:'street',provider:'OpenStreetMap',credential:null,access:'OPEN DATA · NO KEY',description:'Raster · public OSM tile service · best-effort / fair-use'},
   'opentopo-raster':{label:'OpenTopoMap · Topographic',kind:'street',provider:'OpenTopoMap',credential:null,access:'OPEN · NO KEY',description:'Raster topo map with terrain'},
   'esri-streets':{label:'Esri · Streets',kind:'street',provider:'Esri',credential:'esri',access:'FREE QUOTA · API KEY',description:'Commercial-quality streets · ArcGIS Location Platform free quota available'},
   'oam-global':{label:'OpenAerialMap · Local Open Imagery',kind:'imagery',provider:'OpenAerialMap',credential:null,access:'OPEN · NO KEY',description:'Community aerial/UAV/satellite imagery · detail varies by local coverage · z14+ shows available imagery'},
   'satellite-eox-2016':{label:'EOX · Sentinel-2 Cloudless 2016',kind:'imagery',provider:'EOX',credential:null,access:'OPEN · NO KEY',description:'Global satellite context · ~10 m source resolution'},
   'esri-imagery':{label:'Esri · World Imagery',kind:'imagery',provider:'Esri',credential:'esri',access:'FREE QUOTA · API KEY',description:'High-resolution satellite/aerial imagery · ArcGIS Location Platform free quota available'},
-  'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',access:'FREE TIER · API KEY',description:'High-resolution satellite/aerial imagery · Free plan is primarily for testing/personal/non-commercial use'}
+  'maptiler-satellite':{label:'MapTiler · Satellite',kind:'imagery',provider:'MapTiler',credential:'maptiler',access:'FREE TIER · API KEY',description:'High-resolution satellite/aerial imagery · Free plan is primarily for testing/personal/non-commercial use'},
+  'mapbox-satellite':{label:'Mapbox · Satellite',kind:'imagery',provider:'Mapbox',credential:'mapbox',access:'FREE QUOTA · ACCESS TOKEN',description:'High-resolution satellite imagery · free quota 750,000 raster tiles/month · check Mapbox terms before tracing'}
 };
 export const BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).map(([id,m])=>[id,m.label])) as Record<MapBasemap,string>;
 export const STREET_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='street').map(([id,m])=>[id,m.label])) as Record<string,string>;
 export const IMAGERY_BASEMAP_OPTIONS=Object.fromEntries(Object.entries(MAP_BASEMAP_META).filter(([,m])=>m.kind==='imagery').map(([id,m])=>[id,m.label])) as Record<string,string>;
 export const MAP_PROVIDER_CREDENTIALS_STORAGE='thai-street-map-provider-credentials-v1';
-export const mapProviderCredentialsDefaults=():MapProviderCredentials=>({esri:'',maptiler:''});
+export const mapProviderCredentialsDefaults=():MapProviderCredentials=>({esri:'',maptiler:'',carto:'',mapbox:''});
 export function restoreMapProviderCredentials(raw:string|null):MapProviderCredentials{
   const defaults=mapProviderCredentialsDefaults();if(!raw)return defaults;
-  try{const v=JSON.parse(raw) as Partial<MapProviderCredentials>;return{
-    esri:typeof v.esri==='string'&&v.esri.length<=1000?v.esri:'',
-    maptiler:typeof v.maptiler==='string'&&v.maptiler.length<=1000?v.maptiler:''
-  };}catch{return defaults;}
+  try{const v=JSON.parse(raw) as Partial<MapProviderCredentials>,text=(k:MapCredentialKey)=>typeof v[k]==='string'&&v[k].length<=1000?v[k]:'';
+    return{esri:text('esri'),maptiler:text('maptiler'),carto:text('carto'),mapbox:text('mapbox')};
+  }catch{return defaults;}
 }
 export const basemapKind=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.kind??'street';
 export const basemapCredentialKey=(basemap:MapBasemap)=>MAP_BASEMAP_META[basemap]?.credential??null;
@@ -96,7 +101,8 @@ const STYLE_URLS:Partial<Record<MapBasemap,string>>={
   positron:'https://tiles.openfreemap.org/styles/positron',
   bright:'https://tiles.openfreemap.org/styles/bright',
   liberty:'https://tiles.openfreemap.org/styles/liberty',
-  dark:'https://tiles.openfreemap.org/styles/dark'
+  dark:'https://tiles.openfreemap.org/styles/dark',
+  'versatiles-colorful':'https://tiles.versatiles.org/assets/styles/colorful/style.json'
 };
 const BASEMAPS=new Set<MapBasemap>(Object.keys(MAP_BASEMAP_META) as MapBasemap[]);
 function vectorStyleUrl(basemap:MapBasemap,credentials:MapProviderCredentials){
@@ -255,9 +261,12 @@ function rasterTileSpec(basemap:MapBasemap,credentials:MapProviderCredentials):R
   if(basemap==='satellite-eox-2016')return{template:'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg',minZoom:0,maxZoom:14,provider:'eox-sentinel-2-cloudless-2016'};
   if(basemap==='opentopo-raster')return{template:'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',minZoom:0,maxZoom:17,provider:'opentopomap'};
   if(basemap==='maptiler-satellite')return{template:'https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key='+encodeURIComponent(credentials.maptiler.trim()),minZoom:0,maxZoom:20,provider:'maptiler-satellite-v2'};
+  // CARTO as raster so the key is sent with every tile, as its terms count tile requests per key.
+  if(basemap==='carto-positron'||basemap==='carto-voyager')return{template:`https://basemaps.cartocdn.com/rastertiles/${basemap==='carto-positron'?'light_all':'voyager'}/{z}/{x}/{y}.png?key=`+encodeURIComponent(credentials.carto.trim()),minZoom:0,maxZoom:20,provider:basemap};
+  if(basemap==='mapbox-satellite')return{template:'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg90?access_token='+encodeURIComponent(credentials.mapbox.trim()),minZoom:0,maxZoom:20,provider:'mapbox-satellite'};
   return{template:process.env.NEXT_PUBLIC_MAP_TILE_URL||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',minZoom:0,maxZoom:19,provider:'osm-raster'};
 }
-function isRasterBasemap(basemap:MapBasemap){return ['osm-raster','opentopo-raster','oam-global','satellite-eox-2016','maptiler-satellite'].includes(basemap);}
+function isRasterBasemap(basemap:MapBasemap){return ['osm-raster','opentopo-raster','oam-global','satellite-eox-2016','maptiler-satellite','carto-positron','carto-voyager','mapbox-satellite'].includes(basemap);}
 function tileUrl(spec:RasterTileSpec,z:number,x:number,y:number){return spec.template.replace('{z}',String(z)).replace('{x}',String(x)).replace('{y}',String(y));}
 
 type MapWorkspaceView={zoom:number;pan:{x:number;y:number};span?:number;minZoom?:number};
@@ -405,6 +414,9 @@ function attributionFor(basemap:MapBasemap){
   if(basemap==='esri-streets')return <>© Esri and data providers</>;
   if(basemap==='maptiler-satellite')return <>© MapTiler · imagery providers</>;
   if(basemap==='osm-raster')return <>© OpenStreetMap contributors</>;
+  if(basemap==='carto-positron'||basemap==='carto-voyager')return <>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors · © <a href="https://carto.com/attribution/" target="_blank" rel="noreferrer">CARTO</a></>;
+  if(basemap==='mapbox-satellite')return <>© <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">Mapbox</a> · © OpenStreetMap contributors · imagery providers</>;
+  if(basemap==='versatiles-colorful')return <><a href="https://versatiles.org" target="_blank" rel="noreferrer">VersaTiles</a> · © OpenStreetMap contributors · ESA WorldCover</>;
   return <>OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors</>;
 }
 export default function MapBackground({reference,view,credentials}:{reference:MapReference;view:MapWorkspaceView;credentials:MapProviderCredentials}){
