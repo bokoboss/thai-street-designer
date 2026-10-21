@@ -133,6 +133,12 @@ Phase 3 accepted 2026-10-21; Phase 4 is the current phase, starting with 4A.
 4. Project access (driveway) as a road role.
 5. Junction focus mode in `/design`: crossings, islands, stop lines, mid-block median opening; `/junction` retired after parity.
 
+Status 2026-10-21: 1 (PR #37), 2 (#38), 3 (#39), 4 (#40) done. 5 in place in `/design`: crossing / stop line / signal
+(#41), junction ↔ roundabout (#42), lane arrows and divider (#43), folded inspector sections (#44), mid-block median
+opening / U-turn (#45). Still only in the advanced editor (`/junction`, reached from the junction inspector): median trees,
+Slip departure and Slip crossing, roundabout entry/exit radii, splitter and apron, arrow position overrides, outgoing
+divider. `/junction` is retired when these move (parity register `docs/spec/RETIREMENT_PARITY.md`).
+
 Rule for every Phase 4 feature: created on the same canvas, preview before commit, handle and number edit the same value,
 one undo step, no page change, plan / section-profile / 3D / export read the same state.
 Source for 4A–4E: [game-UX and interchange research, 2026-10-21](research/2026-10-21-GAME-UX-INTERCHANGE-RESEARCH.md).
