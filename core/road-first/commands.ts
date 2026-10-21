@@ -8,6 +8,7 @@ import {validateNetworkProject,type WorldPoint} from '../network/network-project
 import {detectCandidates,type Candidate,type Decision,type JunctionTreatments,type Road,type RoadSection} from './derive';
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
+import {joinRoads} from './join';
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
@@ -15,6 +16,8 @@ export type RoadFirstCommand=
   |{type:'road.remove';roadId:string}
   |{type:'road.rename';roadId:string;name:string}
   |{type:'road.extend';roadId:string;atStart:boolean;points:WorldPoint[]}
+  /** Make one road of two roads whose ends touch; roadId keeps its id, name and section. */
+  |{type:'road.join';roadId:string;otherId:string}
   |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.insertPoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.removePoint';roadId:string;index:number}
@@ -108,6 +111,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const added=cmd.points.map(q=>({x:q.x,y:q.y}));
       r.points=cmd.atStart?[...added.reverse(),...r.points]:[...r.points,...added];
       label=`ต่อถนน ${r.name}`;roadsChanged=true;break;
+    }
+    case 'road.join':{
+      const a=road(cmd.roadId),b=road(cmd.otherId);if(!a||!b)return fail('ไม่พบถนนที่จะเชื่อม');
+      const out=joinRoads(p.roads,p.decisions,cmd.roadId,cmd.otherId,p.options.tolerance??1);
+      if('error' in out)return fail(out.error,`เชื่อม ${a.name} กับ ${b.name}`);
+      p.roads=out.roads;p.decisions=out.decisions;
+      label=[`เชื่อม ${a.name} กับ ${b.name} เป็นถนนเดียว`,...out.notes].join(' · ');roadsChanged=true;break;
     }
     case 'road.rename':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

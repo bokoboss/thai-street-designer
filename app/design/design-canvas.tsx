@@ -5,6 +5,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {NetworkDrawing} from '../network/network-drawing';
 import {portHeading,projectBounds,type WorldPoint} from '@/core/network/network-project';
 import {detectCandidates,stations,type Road} from '@/core/road-first/derive';
+import {endJoins} from '@/core/road-first/join';
 import type {CompileResult} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {CommandOutcome} from './use-road-editor';
@@ -75,6 +76,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const px=(n:number)=>n/view.scale;
 
   const candidates=useMemo(()=>detectCandidates(project.roads),[project.roads]);
+  const joins=useMemo(()=>endJoins(project.roads),[project.roads]);
   const decisionOf=(id:string)=>project.decisions.find(d=>d.candidateId===id);
 
   function onPointerDownCapture(e:React.PointerEvent<SVGSVGElement>){
@@ -214,6 +216,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
             </g>)}
           </g>;
         })}
+      </g>
+      {/* Road ends that touch but are two separate roads: click to select, then join in the inspector. */}
+      <g data-design-end-joins={joins.length}>
+        {joins.map(j=><g key={`${j.a}:${j.b}`} data-design-end-join={`${j.a}|${j.b}`} style={{cursor:tool==='select'?'pointer':undefined}} onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'road',id:j.a});}}>
+          <title>ปลายถนนสองเส้นชนกันแต่ยังเป็นคนละเส้น · เลือกแล้วกด “เชื่อมเป็นถนนเดียว”</title>
+          <circle cx={j.point.x} cy={j.point.y} r={px(9)} fill="#fff" stroke="#6d6a8f" strokeWidth={px(2)} strokeDasharray={`${px(3)} ${px(2)}`}/>
+          <path d={`M${j.point.x-px(4)} ${j.point.y}h${px(8)}`} stroke="#6d6a8f" strokeWidth={px(2)} pointerEvents="none"/>
+        </g>)}
       </g>
       <g data-design-candidates="true">
         {candidates.map(c=>{

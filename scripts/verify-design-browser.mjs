@@ -273,6 +273,15 @@ try{
   await b.waitFor(()=>b.count('[data-design-action="add-band-bike"]'),'new road selected');
   await b.click('[data-design-action="add-band-bike"]');
   await b.waitFor(async()=>(await b.text('[data-design-section]'))?.includes('จักรยาน'),'bike band in the section strip');
+  // Roads drawn end to end (P2): marked on the plan and joined into one road from the inspector.
+  await b.click('[data-design-tool-button="road"]');await b.clickAt(at(380,-200));await b.clickAt(at(152,-201),2);
+  await b.waitFor(()=>b.count('[data-design-end-join]'),'touching ends marked');
+  const roadsBeforeJoin=await b.count('[data-design-road]');
+  await b.click('[data-design-end-join]');await b.click('[data-design-action="join-road"]');
+  await b.waitFor(async()=>await b.count('[data-design-road]')===roadsBeforeJoin-1&&await b.count('[data-design-end-join]')===0,'joined into one road');
+  assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: เชื่อม /);
+  await b.click(`[data-design-tool-button="select"]`);
+  await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y-canvas.h/2+150});await b.clickAt(at(0,-200));
   // Narrow screen (P1): the inspector is a drawer, open while something is selected, and can be closed.
   await b.send('Emulation.setDeviceMetricsOverride',{width:820,height:900,deviceScaleFactor:1,mobile:false});
   await b.waitFor(async()=>await b.evalValue(`getComputedStyle(document.querySelector('[data-design-inspector-toggle]')).display`)!=='none','drawer toggle on a narrow screen');
@@ -296,7 +305,7 @@ try{
   assert.equal(await b.evalValue(`localStorage.getItem('thai-street-road-first-v1-unreadable')`),'{broken','copy kept');
   assert.equal(await b.count('[data-design-notice="error"]'),1);
   assert.deepEqual(b.errors,[],'no runtime errors');
-  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept, bands, narrow-screen drawer)`);
+  console.log(`PASS design workspace browser acceptance (${actions.length} actions: draw two roads with automatic junction, section by number in 5 actions, labelled undo/redo, point drag, reload, continue road + typed length in ${aidActions} actions, right-turn pocket with typed storage in ${pocketActions} actions, storage/corner handles, Slip lane, alternative in 1 action with highlighted difference, figure export, scenarios after reload, advanced junction round trip, home page, Design Summary, 3D view, reference image scale/move/remove, section by station, online map placement, /network redirect + import of earlier work, save state, restore removed alternative, one undo per typed value, advanced editor waits for save, unreadable storage kept, bands, narrow-screen drawer, join roads drawn end to end)`);
 }catch(error){
   // On CI the message becomes a check annotation, so a failure can be read without the job log.
   if(process.env.GITHUB_ACTIONS){let state='';try{state=JSON.stringify({...diag,path:await b.evalValue('location.pathname'),active:await b.text('[data-design-scenario][aria-selected="true"]'),tabs:await b.evalValue(`[...document.querySelectorAll('[data-design-scenario]')].map(x=>x.dataset.designScenario+'='+x.textContent).join('|')`),roads:await b.evalValue(`[...document.querySelectorAll('[data-design-road]')].map(x=>x.dataset.designRoad).join(',')`),notice:await b.text('[data-design-notice]')});}catch{}
