@@ -79,6 +79,11 @@ try{
       const a=new DOMPoint(q[0],q[1]).matrixTransform(m),z=new DOMPoint(q[q.length-2],q[q.length-1]).matrixTransform(m);return{a:{x:a.x,y:a.y},z:{x:z.x,y:z.y}};})()`);
     await b.clickAt({x:pts.a.x+(pts.z.x-pts.a.x)*.15,y:pts.a.y+(pts.z.y-pts.a.y)*.15});
     await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`))==='road','road selected');
+    // Zoom to the selection: the selected road fills the view.
+    const vb0=await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`);
+    await b.click('[data-design-focus]');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`))!==vb0,'zoomed to the selected road');
+    await b.click('[data-design-fit]');
     // Trees and street lights along the road: 2D symbols on the links, 3D furniture, one undo step each.
     await b.click('[data-design-field="roadside-trees"]');await b.click('[data-design-field="roadside-lights"]');
     await b.waitFor(async()=>(await b.count('[data-network-link-objects]'))>0&&(await b.count('[data-road-object="tree"]'))>0&&(await b.count('[data-road-object="light"]'))>0,'trees and lights drawn along the road');

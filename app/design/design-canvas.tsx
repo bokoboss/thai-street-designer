@@ -32,7 +32,7 @@ export type DraftCheck={kind:'error'|'warn';text:string}|null;
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0}:{
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
   /** Right-click while drawing: one step back. checkDraft: what finishing the road drawn so far would do (see DraftCheck). */
@@ -47,6 +47,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   referenceImage:ReferenceImageView|null;onReferenceMove:(at:WorldPoint)=>void;calibration:WorldPoint[];onCalibratePoint:(p:WorldPoint)=>void;
   /** Online map under the plan; onMapMove: new map offset while dragging it. */
   map:{reference:MapReference;credentials:MapProviderCredentials};onMapMove:(offset:WorldPoint)=>void;
+  /** Changes each time "zoom to selection" is asked for. */
+  focusKey?:number;
 }){
   const wrap=useRef<HTMLDivElement>(null),svg=svgRef;
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
@@ -72,6 +74,19 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     setView({x:(minX+maxX)/2,y:(minY+maxY)/2,scale:Math.min(size.w/w,size.h/h)});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[fitKey,size.w>100]);
+  // Zoom to the selection (review 2026-10-21): a road shows whole; a junction, approach or crossing shows its surroundings.
+  useEffect(()=>{
+    if(!focusKey||!selection)return;
+    let pts:WorldPoint[]=[];
+    if(selection.kind==='road')pts=project.roads.find(r=>r.id===selection.id)?.points??[];
+    else{const c=detectCandidates(project.roads).find(x=>x.id===selection.id);if(c)pts=[{x:c.point.x-60,y:c.point.y-60},{x:c.point.x+60,y:c.point.y+60}];}
+    if(!pts.length)return;
+    const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+    const w=Math.max(40,maxX-minX+40),h=Math.max(40,maxY-minY+40);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setView({x:(minX+maxX)/2,y:(minY+maxY)/2,scale:Math.min(40,size.w/w,size.h/h)});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[focusKey]);
 
   const toWorld=useCallback((e:{clientX:number;clientY:number}):WorldPoint=>{
     const m=svg.current?.getScreenCTM();if(!m)return{x:0,y:0};
