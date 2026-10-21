@@ -12,6 +12,7 @@ import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
+import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
@@ -202,7 +203,7 @@ function ApproachInspector({candidateId,leg,project,compiled,run,onSelect,onMess
   </>;
 }
 
-function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void}){
+function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced,onMessage}:{candidateId:string;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const d=project.decisions.find(x=>x.candidateId===candidateId),jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
   const j=compiled.project.junctions.find(x=>x.id===jid);
   const [armed,setArmed]=useState(false);
@@ -218,7 +219,21 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
     <div className="design-presets" data-design-approaches={approaches.length}><span>ปากทาง {approaches.length} ด้าน — เลือกเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane</span>
       {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
     </div>
-    {(()=>{const arms=approaches.map(x=>j.design.arms[x.armId]).filter(a=>a.incoming>0),on=arms.filter(a=>a.signal).length;
+    {(()=>{const round=j.design.type==='roundabout',swap=(r:{cmd:RoadFirstCommand}|{error:string})=>{if('error' in r)onMessage(r.error,'error');else run(r.cmd);};
+      return <section className="design-block" data-design-junction-type={j.design.type}>
+        <small className="design-block-title">รูปแบบทางแยก</small>
+        <div className="design-reference-tools" role="radiogroup" aria-label="รูปแบบทางแยก">
+          <button role="radio" aria-checked={!round} className={round?'':'active'} data-design-action="to-junction" onClick={()=>{if(round)swap(toJunction(project,candidateId));}}>ทางแยกปกติ</button>
+          <button role="radio" aria-checked={round} className={round?'active':''} data-design-action="to-roundabout" onClick={()=>{if(!round)swap(toRoundabout(project,candidateId));}}>วงเวียน</button>
+        </div>
+        {round&&<div className="design-fields">
+          <NumberField field="ring-radius" label="รัศมีเกาะกลาง (ม.)" value={j.design.radius} min={10} max={30} onCommit={radius=>run({type:'junction.setDesign',candidateId,patch:{radius}})}/>
+          <NumberField field="ring-lanes" label="เลนในวงเวียน" value={j.design.ring} min={1} max={3} onCommit={ring=>run({type:'junction.setDesign',candidateId,patch:{ring:ring as 1|2|3}})}/>
+          <NumberField field="ring-width" label="กว้างผิวจราจรวงแหวน (ม.)" value={j.design.circulation} step={.25} min={3} max={22} onCommit={circulation=>run({type:'junction.setDesign',candidateId,patch:{circulation}})}/>
+        </div>}
+        {round&&<p className="design-meta">ค่าเริ่มต้นเป็นค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน · Slip lane ถูกนำออกเมื่อเปลี่ยนเป็นวงเวียน</p>}
+      </section>;})()}
+    {j.design.type!=='roundabout'&&(()=>{const arms=approaches.map(x=>j.design.arms[x.armId]).filter(a=>a.incoming>0),on=arms.filter(a=>a.signal).length;
       return <section className="design-block" data-design-signals={on===arms.length?'all':on?'some':'none'}>
         <small className="design-block-title">สัญญาณไฟจราจร</small>
         <p className="design-meta">{on===arms.length?'มีสัญญาณไฟทุกปากทาง':on?`มีสัญญาณไฟ ${on} จาก ${arms.length} ปากทาง`:'ไม่มีสัญญาณไฟ'} · แก้รายปากทางได้ที่แต่ละปากทาง</p>
@@ -227,7 +242,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
           <button data-design-action="signals-none" disabled={on===0} onClick={()=>run({type:'junction.setAllLegs',candidateId,patch:{signal:false},label:'เอาสัญญาณไฟออกทุกปากทาง'})}>ไม่มีสัญญาณไฟ</button>
         </div>
       </section>;})()}
-    <section className="design-block" data-design-corners="true">
+    {j.design.type!=='roundabout'&&<section className="design-block" data-design-corners="true">
       <small className="design-block-title">รัศมีมุมขอบทาง</small>
       <NumberField field="corner" label="ค่าเริ่มต้นทุกมุม (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
       {cornerHandles(j).map(h=>{
@@ -239,9 +254,9 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
           <NumberField field={`corner-${h.corner}`} label={`${legLabel(project,key)} / ${legLabel(project,legKey(next.roadId,next.side))}`} value={h.radius} step={1} min={4} max={20} onCommit={radius=>run({type:'junction.setCornerAt',candidateId,leg:key,radius})}/>
           {own?<button className="link" data-design-action={`reset-corner-${h.corner}`} title="ใช้ค่าเริ่มต้น" onClick={()=>run({type:'junction.setCornerAt',candidateId,leg:key,radius:null})}>ค่าเริ่มต้น</button>:<span/>}
         </div>;})}
-    </section>
+    </section>}
     <div className="design-actions">
-      <button data-design-action="advanced-junction" title="3 มิติ ทางข้าม สัญญาณไฟ เส้นหยุด วงเวียน ช่องเปิดเกาะกลาง ลูกศร และ Slip lane ขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (3 มิติ ทางข้าม สัญญาณไฟ วงเวียน …)</button>
+      <button data-design-action="advanced-junction" title="ลูกศรและเครื่องหมายรายช่อง แบบเส้นแบ่งช่อง ต้นไม้บนเกาะกลาง ทางออก Slip lane และค่าวงเวียนขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (ลูกศรรายช่อง เส้นแบ่งช่อง …)</button>
       <button data-design-action="to-grade-separated" onClick={()=>run({type:'crossing.decide',candidateId,decision:'grade-separated'})}>เปลี่ยนเป็นทางต่างระดับ</button>
       <button className="danger" data-design-action="unconfirm" onClick={()=>{if(!armed){setArmed(true);return;}run({type:'crossing.decide',candidateId,decision:'ignore'});}}>{armed?'กดอีกครั้งเพื่อยกเลิกทางแยก':'ยกเลิกทางแยก'}</button>
     </div>
@@ -361,7 +376,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
     {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
-    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced}/>
+    :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     :<>
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>

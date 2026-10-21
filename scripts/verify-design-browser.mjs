@@ -368,6 +368,19 @@ try{
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: เชื่อม /);
   await b.click(`[data-design-tool-button="select"]`);
   await b.clickAt({x:canvas.x-canvas.w/2+40,y:canvas.y-canvas.h/2+150});await b.clickAt(at(0,-200));
+  // Junction ↔ roundabout from the junction inspector, one undo step.
+  {
+    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction');
+    const c0=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
+    await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
+    await b.waitFor(()=>b.count('[data-design-junction-type="junction"]'),'junction type shown');
+    await b.click('[data-design-action="to-roundabout"]');
+    await b.waitFor(async()=>await b.count('[data-design-junction-type="roundabout"]')&&await b.count('[data-design-field="ring-radius"]'),'converted to a roundabout in place');
+    await b.screenshot('artifacts/design-browser-roundabout.png');
+    await b.click('[data-design-undo]');
+    await b.waitFor(()=>b.count('[data-design-junction-type="junction"]'),'undo restores the junction');
+    await b.key('Escape');
+  }
   // Narrow screen (P1): the inspector is a drawer, open while something is selected, and can be closed.
   await b.send('Emulation.setDeviceMetricsOverride',{width:820,height:900,deviceScaleFactor:1,mobile:false});
   await b.waitFor(async()=>await b.evalValue(`getComputedStyle(document.querySelector('[data-design-inspector-toggle]')).display`)!=='none','drawer toggle on a narrow screen');
