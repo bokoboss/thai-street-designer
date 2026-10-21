@@ -15,6 +15,8 @@ import {endJoins} from '@/core/road-first/join';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
+import type {MigrationSeverity,MigrationTarget} from '@/core/road-first/migrate';
+import {reportCount,type MigrationReport} from '@/core/road-first/scenarios';
 
 type Run=(cmd:RoadFirstCommand)=>CommandOutcome;
 
@@ -223,7 +225,38 @@ export type ScenarioPanel={name:string;existing:boolean;count:number;reference:s
   /** Present when work from the earlier Network page is stored in this browser. */
   onImportEarlier?:()=>void;
   /** Present when stored work could not be read and a copy was kept aside. */
-  unreadable?:{download:()=>void;clear:()=>void}};
+  unreadable?:{download:()=>void;clear:()=>void};
+  /** Findings of the last import from earlier work (per object), until dismissed. */
+  migration?:MigrationPanel};
+export type MigrationPanel={report:MigrationReport;names:Record<string,string>;active:string;dismiss:()=>void;show:(scenarioId:string,target?:MigrationTarget)=>void};
+
+const SEVERITY:Record<MigrationSeverity,{label:string;color:string}>={
+  lost:{label:'ไม่ได้ย้ายมา',color:'#b3261e'},changed:{label:'ย้ายมาแต่ต่างจากเดิม',color:'#c47b12'},check:{label:'ควรตรวจ',color:'#4d6461'},
+};
+const SEVERITY_ORDER:MigrationSeverity[]=['lost','changed','check'];
+
+function MigrationReportPanel({m}:{m:MigrationPanel}){
+  const [armed,setArmed]=useState(false);
+  const groups=m.report.scenarios.filter(s=>m.names[s.scenarioId]);
+  const total=reportCount({...m.report,scenarios:groups});
+  const counts=SEVERITY_ORDER.map(k=>[k,groups.reduce((n,g)=>n+g.items.filter(i=>i.severity===k).length,0)] as const).filter(([,n])=>n>0);
+  return <section className="design-compare design-migration" data-design-migration-report={total}>
+    <b>ผลการนำเข้า {m.report.source}</b>
+    <p className="design-meta">รายการที่ย้ายมาไม่ครบหรือไม่ตรงกับแบบเดิม · คลิกรายการเพื่อเลือกตำแหน่งบนแบบ</p>
+    <div className="design-compare-counts">{counts.map(([k,n])=><span key={k} style={{color:SEVERITY[k].color}}>{SEVERITY[k].label} <b>{n}</b></span>)}</div>
+    {total===0&&<p className="design-meta">ทางเลือกที่มีรายการถูกลบไปแล้ว</p>}
+    {groups.map(g=><div key={g.scenarioId} data-design-migration-scenario={g.scenarioId}>
+      {groups.length>1&&<small className="design-block-title">{m.names[g.scenarioId]}</small>}
+      <ul>{[...g.items].sort((a,b)=>SEVERITY_ORDER.indexOf(a.severity)-SEVERITY_ORDER.indexOf(b.severity)).map((i,k)=><li key={k}>
+        <button data-design-migration-item={i.severity} data-design-migration-target={i.target?.kind??'none'} style={{borderLeftColor:SEVERITY[i.severity].color}}
+          title={i.target?'เลือกบนแบบ':g.scenarioId!==m.active?`เปิด ${m.names[g.scenarioId]}`:undefined} disabled={!i.target&&g.scenarioId===m.active}
+          onClick={()=>m.show(g.scenarioId,i.target)}>
+          {SEVERITY[i.severity].label} · {i.subject}<small>{i.message}</small>
+        </button></li>)}</ul>
+    </div>)}
+    <button className="link" data-design-action="dismiss-migration" onBlur={()=>setArmed(false)} onClick={()=>{if(!armed){setArmed(true);return;}m.dismiss();}}>{armed?'กดอีกครั้งเพื่อปิดรายงานนี้ (ดูอีกไม่ได้)':'ตรวจครบแล้ว ปิดรายงาน'}</button>
+  </section>;
+}
 
 function ScenarioInspector({scenario}:{scenario:ScenarioPanel}){
   const [armed,setArmed]=useState(false);
@@ -275,6 +308,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
+      {scenario.migration&&<MigrationReportPanel m={scenario.migration}/>}
       <MapPanel map={map} tool={tool as DesignTool} onTool={reference.onTool} center={reference.viewCenter} onMessage={onMessage}/>
       <ReferencePanel {...reference}/>
       {scenario.comparison&&scenario.reference&&<ComparisonPanel diff={scenario.comparison} reference={scenario.reference} onSelect={onSelect}/>}

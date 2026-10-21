@@ -4,7 +4,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createEditor,endGesture,redo as redoEditor,runCommand,undo as undoEditor,type RoadFirstCommand,type RoadFirstEditor} from '@/core/road-first/commands';
 import {compileRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
-import {SCENARIO_LIMIT,activeScenario,appendScenarios,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
+import {SCENARIO_LIMIT,activeScenario,appendScenarios,readReport,remapReport,type MigrationReport,createWorkspace,duplicateScenario,migrateNetworkWorkspace,normalizeWorkspace,referenceScenario,removeScenario,renameScenario,switchScenario,type RoadFirstScenario,type RoadFirstWorkspace,type ScenarioEdit} from '@/core/road-first/scenarios';
 import {redoLabel,undoLabel} from '@/core/common/history';
 import {NETWORK_PROJECT_STORAGE} from '@/core/network/network-project';
 import {restoreNetworkScenarioWorkspace} from '@/core/network/network-scenarios';
@@ -18,13 +18,15 @@ export const emptyRoadFirstProject=():RoadFirstProject=>({kind:'road-first',sche
 /** Copy of stored work that could not be read; kept until the user downloads or clears it. */
 export const ROAD_FIRST_UNREADABLE_STORAGE='thai-street-road-first-v1-unreadable';
 export type StorageState='saved'|'error'|'blocked';
+/** Per-object findings of the last import from earlier work; kept until the user dismisses it. */
+export const MIGRATION_REPORT_STORAGE='thai-street-road-first-v1-migration-report';
 
 /**
  * First open: the saved workspace (or an earlier single saved project), else every scenario of the earlier Network page,
  * else an empty project. Stored work that cannot be read is copied aside first; if that copy fails, autosave stays off so
  * nothing overwrites it.
  */
-function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string;error?:boolean;blocked?:boolean}{
+function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string;error?:boolean;blocked?:boolean;report?:MigrationReport}{
   let saved:string|null=null;
   try{saved=localStorage.getItem(ROAD_FIRST_STORAGE);}catch{/* storage unavailable */}
   if(saved){
@@ -40,7 +42,7 @@ function initialWorkspace():{workspace:RoadFirstWorkspace;notice:string;error?:b
     const network=localStorage.getItem(NETWORK_PROJECT_STORAGE);
     if(network){
       const migrated=migrateNetworkWorkspace(restoreNetworkScenarioWorkspace(network));
-      return{workspace:migrated.workspace,notice:migrated.issues?`นำแบบเดิมมาแล้ว · มีรายการให้ตรวจ ${migrated.issues} รายการ`:'นำแบบจากหน้าจอเดิมมาแล้ว'};
+      return{workspace:migrated.workspace,report:migrated.report,notice:migrated.issues?`นำแบบเดิมมาแล้ว · มีรายการให้ตรวจ ${migrated.issues} รายการ ดูได้ที่แผงทางเลือก`:'นำแบบจากหน้าจอเดิมมาแล้ว'};
     }
   }catch{/* fall through to an empty project */}
   return{workspace:createWorkspace(emptyRoadFirstProject()),notice:'เลือกเครื่องมือวาดถนน แล้วคลิกบนแบบเพื่อเริ่ม'};
@@ -68,6 +70,11 @@ export function useRoadEditor(){
   const [loaded,setLoaded]=useState(false),bookRef=useRef(book);
   const setBook=useCallback((next:Book)=>{bookRef.current=next;setBookState(next);},[]);
   const activeId=book.workspace.activeScenarioId,editor=book.editors[activeId]!;
+  const [migration,setMigrationState]=useState<MigrationReport|null>(null);
+  const setMigration=useCallback((r:MigrationReport|null)=>{
+    const keep=r&&r.scenarios.some(s=>s.items.length)?r:null;setMigrationState(keep);
+    try{if(keep)localStorage.setItem(MIGRATION_REPORT_STORAGE,JSON.stringify(keep));else localStorage.removeItem(MIGRATION_REPORT_STORAGE);}catch{/* shown for this visit only */}
+  },[]);
   const setEditor=useCallback((next:RoadFirstEditor)=>{const b=bookRef.current;setBook({...b,editors:{...b.editors,[b.workspace.activeScenarioId]:next}});},[setBook]);
   const editorNow=()=>bookRef.current.editors[bookRef.current.workspace.activeScenarioId]!;
 
@@ -90,9 +97,12 @@ export function useRoadEditor(){
         }
       }
     }catch{/* storage unavailable: keep the loaded work */}
+    let report=first.report??null;
+    if(!report)try{report=readReport(localStorage.getItem(MIGRATION_REPORT_STORAGE));}catch{/* unavailable */}
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMigration(report);
     setBook(next);setNotice({text,kind:first.error?'error':'info'});setReturned(returnedId);if(first.blocked)setStorage('blocked');setLoaded(true);
-  },[setBook]);
+  },[setBook,setMigration]);
   const workspace=useMemo(()=>currentWorkspace(book),[book]);
   useEffect(()=>{
     if(!loaded||storage==='blocked')return;
@@ -124,7 +134,7 @@ export function useRoadEditor(){
   const finishGesture=useCallback(()=>setEditor(endGesture(editorNow())),[setEditor]);
   const undo=useCallback(()=>{const r=undoEditor(editorNow());if(!r)return;setEditor(r.editor);setNotice({text:`ย้อนกลับ: ${r.label}`,kind:'info'});},[setEditor]);
   const redo=useCallback(()=>{const r=redoEditor(editorNow());if(!r)return;setEditor(r.editor);setNotice({text:`ทำซ้ำ: ${r.label}`,kind:'info'});},[setEditor]);
-  const replaceWorkspace=useCallback((next:RoadFirstWorkspace,text:string)=>{setBook(bookOf(next));setNotice({text,kind:'info'});},[setBook]);
+  const replaceWorkspace=useCallback((next:RoadFirstWorkspace,text:string,report?:MigrationReport|null)=>{setBook(bookOf(next));setNotice({text,kind:'info'});setMigration(report??null);},[setBook,setMigration]);
 
   // Scenario edits keep every scenario's current project and editor.
   const applyScenario=useCallback((edit:(w:RoadFirstWorkspace)=>ScenarioEdit,ok:(e:ScenarioEdit)=>string)=>{
@@ -159,12 +169,15 @@ export function useRoadEditor(){
     let raw:string|null=null;try{raw=localStorage.getItem(NETWORK_PROJECT_STORAGE);}catch{/* unavailable */}
     if(!raw){setNotice({text:'ไม่พบงานจากหน้าจอเดิมในเบราว์เซอร์นี้',kind:'error'});return false;}
     const migrated=migrateNetworkWorkspace(restoreNetworkScenarioWorkspace(raw));
-    return applyScenario(w=>appendScenarios(w,migrated.workspace,'(หน้าเดิม)'),e=>[`นำเข้างานจากหน้าจอเดิมเป็นทางเลือกเพิ่มแล้ว (เริ่มที่ ${e.scenario!.name})`,e.note,migrated.issues?`มีรายการให้ตรวจ ${migrated.issues} รายการ`:''].filter(Boolean).join(' · '));
-  },[applyScenario]);
+    let ids:Record<string,string>={};
+    const done=applyScenario(w=>{const e=appendScenarios(w,migrated.workspace,'(หน้าเดิม)');ids=e.ids??{};return e;},e=>[`นำเข้างานจากหน้าจอเดิมเป็นทางเลือกเพิ่มแล้ว (เริ่มที่ ${e.scenario!.name})`,e.note,migrated.issues?`มีรายการให้ตรวจ ${migrated.issues} รายการ ดูได้ที่แผงทางเลือก`:''].filter(Boolean).join(' · '));
+    if(done)setMigration(remapReport(migrated.report,ids));
+    return done;
+  },[applyScenario,setMigration]);
   const reference=referenceScenario(workspace);
   return{
     project:editor.project,compiled,run,finishGesture,undo,redo,notice,setNotice,lastSection,setLastSection,
     undoText:undoLabel(editor.history),redoText:redoLabel(editor.history),
-    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,restoreRemoved,storage,loaded,unreadable,clearUnreadable,
+    workspace,active:activeScenario(workspace),reference,replaceWorkspace,duplicate,rename,remove,switchTo,returned,importEarlier,restoreRemoved,storage,loaded,unreadable,clearUnreadable,migration,dismissMigration:()=>setMigration(null),
   };
 }

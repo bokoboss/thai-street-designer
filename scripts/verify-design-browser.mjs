@@ -6,6 +6,7 @@ import {deflateSync} from 'node:zlib';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {startSession} from './test-support/cdp-browser.mjs';
+import {createRequire} from 'node:module';
 
 const root=fileURLToPath(new URL('../',import.meta.url));process.chdir(root);mkdirSync('artifacts',{recursive:true});
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-design-acceptance'});
@@ -246,12 +247,22 @@ try{
   await b.goto('/network');await ready();await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
   await sleep(300);diag.afterRedirect={notice:await b.text('[data-design-notice]'),tabs:await b.count('[data-design-scenario]'),unreadable:await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,80)`)};
   assert.equal(diag.afterRedirect.tabs,2,'saved work reopens after the redirect: '+JSON.stringify(diag.afterRedirect));
-  await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:{schemaVersion:5,title:'งานเดิม',junctions:[],links:[],parallelCorridors:[],roadEnds:[]}}]}))`);
+  // Earlier work with a parallel road: the relation is not carried over, so the import reports it per object.
+  const req=createRequire(import.meta.url);req('./test-support/build.cjs')();
+  const net=req(root+'.test-build/tree/core/network/network-project.cjs'),seedPf=req(root+'.test-build/tree/core/network/parallel-frontage-seed.cjs');
+  const seeded=seedPf.seedParallelFrontage(net.createNetworkProject(),{mainlineLinkIds:['L-1'],mainlineStartJunctionId:'J-1',side:'left',offset:40}).project;
+  const earlier=JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:seeded}]});
+  await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',${JSON.stringify(earlier)})`);
   await b.goto('/design');await ready();await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
   const scenariosBefore=await b.count('[data-design-scenario]');
   await b.click('[data-design-action="import-earlier"]');
   await b.waitFor(async()=>await b.count('[data-design-scenario]')===scenariosBefore+1,'earlier work added as an alternative');
   assert.equal(await b.text('[data-design-scenario][aria-selected="true"]'),'สภาพเดิม (หน้าเดิม)');
+  await b.waitFor(()=>b.count('[data-design-migration-item="lost"][data-design-migration-target="road"]'),'import report lists the parallel road relation');
+  await b.click('[data-design-migration-item="lost"]');
+  await b.waitFor(()=>b.count('[data-design-inspector="road"]'),'report item selects the road it concerns');
+  await b.goto('/design');await ready();await b.waitFor(()=>b.count('[data-design-migration-report]'),'report kept after reload until dismissed');
+  await b.screenshot('artifacts/design-browser-migration-report.png');
 
   // Data safety (P0, independent review): save state visible; a removed alternative can be restored.
   assert.equal(await b.count('[data-design-save-state="saved"]'),1,'autosave state shown');

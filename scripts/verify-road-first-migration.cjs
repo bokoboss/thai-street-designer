@@ -12,6 +12,8 @@ const m=T('core/junction/model.cjs'),sl=T('core/junction/slip-model.cjs'),v=T('c
 const golden=(name,net,{expectIssues=[]}={})=>{
   assert.equal(n.validateNetworkProject(net),null,`${name}: fixture is a valid network`);
   const r=mg.migrateNetworkProject(net);
+  assert(r.items.every(i=>['lost','changed','check'].includes(i.severity)&&i.subject&&i.message),`${name}: every finding has severity, subject and message`);
+  assert.deepEqual(r.issues,r.items.map(mg.migrationText),`${name}: issue text derived from items`);
   const unexpected=r.issues.filter(i=>!expectIssues.some(re=>re.test(i)));
   assert.deepEqual(unexpected,[],`${name}: migration issues`);
   for(const re of expectIssues)assert(r.issues.some(i=>re.test(i)),`${name}: expected issue ${re}`);
@@ -105,7 +107,16 @@ golden('v4 file',n.normalizeNetworkProject(v4));sum.push('v4 file');
 // G8. Parallel corridors are reported as not carried yet; geometry still matches.
 const g8=seed.seedParallelFrontage(n.createNetworkProject(),{mainlineLinkIds:['L-1'],mainlineStartJunctionId:'J-1',side:'left',offset:40});
 assert.equal(g8.error,null);
-golden('parallel corridor',g8.project,{expectIssues:[/ทางขนาน/]});sum.push('parallel corridor (reported)');
+const g8r=golden('parallel corridor',g8.project,{expectIssues:[/ทางขนาน/]});sum.push('parallel corridor (reported)');
+// Per-object report: the corridor is "not carried over" and points at the mainline road.
+assert.deepEqual(g8r.issues,g8r.items.map(mg.migrationText),'issue text is derived from the per-object items');
+{
+  const item=g8r.items.find(i=>/ทางขนาน/.test(i.message));
+  assert.equal(item.severity,'lost');assert.equal(item.target?.kind,'road');
+  assert(g8r.project.roads.some(r=>r.id===item.target.roadId),'target road exists in the migrated project');
+  assert(g8r.project.roads.find(r=>r.id===item.target.roadId).links.some(l=>l.name===g8.project.links.find(x=>x.id==='L-1').name),'target is the mainline road');
+}
+
 
 // File rules.
 assert.throws(()=>rp.normalizeRoadFirstProject({...demo.project,schemaVersion:2}),/รุ่นที่ใหม่กว่า/,'future road-first version rejected');
