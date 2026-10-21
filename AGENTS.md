@@ -11,7 +11,7 @@ Git branch / commit / PR content is the source of truth, not earlier conversatio
 
 ## Hard rules
 
-- **Feature freeze** until Phase 3 of the roadmap is accepted. Fixes and regressions only, plus the work listed in the current phase.
+- Work on the current phase only (Phase 4 since Phase 3 was accepted on 2026-10-21), plus fixes and regressions. Each slice still lands with tests and the gates below.
 - One semantic model → one resolver → many consumers (2D, section, 3D, export, review). Never add a parallel geometry path for a quick visual result.
 - Keep the Slip invariant: `edges(designWithSlip)` equals `edges(designWithoutSlip)`.
 - Schema changes require explicit, tested migration. Old files must open.
