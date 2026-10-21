@@ -29,7 +29,9 @@ export function readHandoff(raw:string|null):JunctionHandoff|null{
   }catch{return null;}
 }
 
-const same=(a:unknown,b:unknown)=>JSON.stringify(a??null)===JSON.stringify(b??null);
+/** Order-independent comparison (stored settings may list the same keys in a different order). */
+const canon=(v:unknown):unknown=>Array.isArray(v)?v.map(canon):v&&typeof v==='object'?Object.fromEntries(Object.keys(v as object).sort().map(k=>[k,canon((v as Record<string,unknown>)[k])])):v;
+const same=(a:unknown,b:unknown)=>JSON.stringify(canon(a??null))===JSON.stringify(canon(b??null));
 
 /**
  * The command that brings the junction editor's edits back into the scenario, or null with a message when

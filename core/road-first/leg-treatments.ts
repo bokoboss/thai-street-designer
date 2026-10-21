@@ -47,6 +47,9 @@ export function captureTreatments(roads:Road[],decisions:Decision[],edited:Netwo
     if(slips.length)treatments.slips=slips;
     const fresh=initial();
     if(mine.design.corner!==fresh.corner)treatments.corner=mine.design.corner;
+    const radii:Partial<Record<LegKey,number>>={};
+    (mine.design.cornerRadii??[]).forEach((r,armId)=>{const key=keyOf(armId);if(r!==null&&r!==undefined&&key)radii[key]=r;});
+    if(Object.keys(radii).length)treatments.cornerRadii=radii;
     const settings:DesignSettings={};
     for(const f of DESIGN_FIELDS)if(f!=='title'?!same(mine.design[f],fresh[f]):mine.design.title!==(d.name??base.design.title))(settings as Record<string,unknown>)[f]=structuredClone(mine.design[f]);
     if(Object.keys(settings).length)treatments.design=settings;

@@ -234,5 +234,7 @@ Checked against the code; three findings were reproduced with scripts before fix
 | Road-owned values edited in /junction not returned | code | fixed — PR #29: blocked in the advanced editor with "แก้ที่หน้าออกแบบ" |
 | Section strip ignores bands; corner handles change every corner; inspector hidden ≤ 900 px; SVG export references a session-only image; API-key domain hint | code | fixed — PR #29 (bands shown and editable; "ทุกมุม" wording; drawer; image embedded; hint uses the current domain) |
 | Arm stretched beyond straight room | code | fixed — PR #29 (red mark with the shortfall on the plan) |
-| End-to-end roads not joined; per-corner radius; station transitions; migration report detail; performance | known limitations | P1/P2 |
+| End-to-end roads not joined | code | fixed — PR #30 (marked on the plan, "เชื่อมเป็นถนนเดียว") |
+| Per-corner radius | code | fixed — PR #31 (each corner handle edits its own corner; default for the rest) |
+| Station transitions; migration report detail; performance | known limitations | P2 |
 | Merge /design and /junction into one editor (6.3) | agreed direction | P2 (large) |

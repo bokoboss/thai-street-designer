@@ -7,8 +7,8 @@ import {MapPanel,type MapState} from './map-panel';
 import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
-import {approachInfo,junctionApproaches,newSlip,pocketTreatment,slipPatch,type ApproachInfo,type PocketSide} from '@/core/road-first/approach-edit';
-import {parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
+import {approachInfo,cornerHandles,junctionApproaches,newSlip,pocketTreatment,slipPatch,type ApproachInfo,type PocketSide} from '@/core/road-first/approach-edit';
+import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
 import {stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
@@ -171,9 +171,19 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
     <div className="design-presets" data-design-approaches={approaches.length}><span>ปากทาง {approaches.length} ด้าน — เลือกเพื่อเพิ่มเลนเลี้ยวหรือ Slip lane</span>
       {approaches.map(a=><button key={a.leg} data-design-approach={a.leg} onClick={()=>onSelect({kind:'approach',id:candidateId,leg:a.leg})}>{legLabel(project,a.leg)}</button>)}
     </div>
-    <div className="design-fields">
-      <NumberField field="corner" label="รัศมีมุมขอบทาง ทุกมุม (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
-    </div>
+    <section className="design-block" data-design-corners="true">
+      <small className="design-block-title">รัศมีมุมขอบทาง</small>
+      <NumberField field="corner" label="ค่าเริ่มต้นทุกมุม (ม.)" value={j.design.corner} step={1} min={4} max={20} onCommit={corner=>run({type:'junction.setCorner',candidateId,corner})}/>
+      {cornerHandles(j).map(h=>{
+        const leg=compiled.legs.find(l=>l.junctionId===jid&&l.armId===h.armId),key=leg&&legKey(leg.roadId,leg.side);
+        const ids=approaches.map(a=>a.armId),next=compiled.legs.find(l=>l.junctionId===jid&&l.armId===ids[(ids.indexOf(h.armId)+1)%ids.length]);
+        if(!key||!next)return null;
+        const own=d.treatments?.cornerRadii?.[key]!==undefined;
+        return <div key={key} className="design-band-row" data-design-corner-row={key}>
+          <NumberField field={`corner-${h.corner}`} label={`${legLabel(project,key)} / ${legLabel(project,legKey(next.roadId,next.side))}`} value={h.radius} step={1} min={4} max={20} onCommit={radius=>run({type:'junction.setCornerAt',candidateId,leg:key,radius})}/>
+          {own?<button className="link" data-design-action={`reset-corner-${h.corner}`} title="ใช้ค่าเริ่มต้น" onClick={()=>run({type:'junction.setCornerAt',candidateId,leg:key,radius:null})}>ค่าเริ่มต้น</button>:<span/>}
+        </div>;})}
+    </section>
     <div className="design-actions">
       <button data-design-action="advanced-junction" title="3 มิติ ทางข้าม สัญญาณไฟ เส้นหยุด วงเวียน ช่องเปิดเกาะกลาง ลูกศร และ Slip lane ขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (3 มิติ ทางข้าม สัญญาณไฟ วงเวียน …)</button>
       <button data-design-action="to-grade-separated" onClick={()=>run({type:'crossing.decide',candidateId,decision:'grade-separated'})}>เปลี่ยนเป็นทางต่างระดับ</button>

@@ -3,7 +3,7 @@
 // leg.setTreatment / slip.set / junction.setCorner commands, and place the plan handles that edit
 // the same values as the inspector fields. Default sizes are tool starting values, not standards.
 import {emptyPockets,type Arm,type Pocket,type Pockets} from '../junction/model';
-import {activeIds,angleGap,armTreatmentOrigins,bounds,cornerArc} from '../junction/geometry';
+import {activeIds,angleGap,armTreatmentOrigins,bounds,cornerArc,cornerRadius} from '../junction/geometry';
 import {pocketOriginFor} from '../junction/allocation';
 import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {portHeading,type JunctionInstance,type WorldPoint} from '../network/network-project';
@@ -72,16 +72,16 @@ function cornerMid(j:JunctionInstance,i:number,next:number,r:number):WorldPoint|
   const c=cornerArc(bounds(d.arms[i])[1],bounds(d.arms[next])[0],g,r);
   return toWorld(j,i,c.polar(r,.5));
 }
-/** One handle per corner (straight-through corners have none); all edit the junction's single corner radius. */
-export function cornerHandles(j:JunctionInstance):{corner:number;point:WorldPoint}[]{
+/** One handle per corner (straight-through corners have none); armId: the arm the corner starts from; radius: that corner's radius. */
+export function cornerHandles(j:JunctionInstance):{corner:number;armId:number;radius:number;point:WorldPoint}[]{
   if(j.design.type==='roundabout')return[];
   const ids=activeIds(j.design);
-  return ids.flatMap((i,k)=>{const p=cornerMid(j,i,ids[(k+1)%ids.length],j.design.corner);return p?[{corner:k,point:p}]:[];});
+  return ids.flatMap((i,k)=>{const r=cornerRadius(j.design,i),p=cornerMid(j,i,ids[(k+1)%ids.length],r);return p?[{corner:k,armId:i,radius:r,point:p}]:[];});
 }
 /** Corner radius whose arc mid-point is nearest the pointer (0.5 m steps within the engine's range). */
 export function cornerFromPoint(j:JunctionInstance,corner:number,p:WorldPoint):number{
   const ids=activeIds(j.design),i=ids[corner],next=ids[(corner+1)%ids.length];
-  let best=j.design.corner,gap=Infinity;
+  let best=cornerRadius(j.design,i),gap=Infinity;
   for(let r=CORNER_RANGE[0];r<=CORNER_RANGE[1];r+=.5){const q=cornerMid(j,i,next,r);if(!q)continue;const g=Math.hypot(q.x-p.x,q.y-p.y);if(g<gap){gap=g;best=r;}}
   return best;
 }

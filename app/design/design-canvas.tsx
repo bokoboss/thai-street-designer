@@ -113,8 +113,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(d.kind==='ref'){const p=toWorld(e);onReferenceMove({x:+(d.start.x+p.x-d.from.x).toFixed(2),y:+(d.start.y+p.y-d.from.y).toFixed(2)});return;}
     if(d.kind==='corner'){
       const j=junctionOf(d.candidateId);if(!j)return;
-      const corner=cornerFromPoint(j,d.corner,toWorld(e));
-      if(corner!==j.design.corner)run({type:'junction.setCorner',candidateId:d.candidateId,corner},{gesture:true});return;
+      // Each corner handle edits only its own corner.
+      const h=cornerHandles(j).find(x=>x.corner===d.corner),jid=compiled.project.junctions.find(x=>x===j)?.id,leg=h&&compiled.legs.find(l=>l.junctionId===jid&&l.armId===h.armId);
+      if(!h||!leg)return;
+      const radius=cornerFromPoint(j,d.corner,toWorld(e));
+      if(radius!==h.radius)run({type:'junction.setCornerAt',candidateId:d.candidateId,leg:legKey(leg.roadId,leg.side),radius},{gesture:true});return;
     }
     if(d.kind==='pocket'){
       const info=approachInfo(compiled,d.candidateId,d.leg);if(!info)return;
@@ -250,7 +253,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       </g>}
       {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
         {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
-          <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"><title>รัศมีมุมขอบทาง (ทุกมุมของทางแยกนี้ใช้ค่าเดียวกัน)</title></circle>
+          <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"><title>{`รัศมีมุมนี้ ${h.radius} ม. · ลากเพื่อปรับเฉพาะมุมนี้`}</title></circle>
           <rect x={h.point.x-px(5)} y={h.point.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
         </g>)}
         {pocketHandles.map(h=><g key={h.side} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'pocket',candidateId:h.candidateId,leg:h.leg,side:h.side})}>

@@ -11,6 +11,9 @@ const root=fileURLToPath(new URL('../',import.meta.url));process.chdir(root);mkd
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-design-acceptance'});
 const actions=[],diag={};const act=(label,fn)=>{actions.push(label);return fn();};
 try{
+  // Interactive only after the saved work is loaded in the browser (the server-rendered page has no handlers yet).
+  const ready=()=>b.waitFor(()=>b.count('[data-design-ready="true"]'),'workspace ready');
+  await ready();
   await b.waitFor(()=>b.count('[data-design-notice]'),'workspace loaded');
   assert.match(await b.text('.design-inspector'),/วาดถนน/,'empty project explains how to start');
   const canvas=await b.rect('.design-canvas'),at=(dx,dy)=>({x:canvas.x+dx,y:canvas.y+dy});
@@ -62,7 +65,7 @@ try{
   await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-undo]').title`))==='ย้อนกลับ: ย้ายจุดแนวถนน ถนน 1','drag recorded as one step');
 
   // Work survives a reload.
-  await sleep(300);await b.goto('/design');
+  await sleep(300);await b.goto('/design');await ready();
   await b.waitFor(async()=>await b.count('[data-design-road]')===2&&await b.count('[data-network-junction-hit]')>0,'project restored after reload');
   // Drawing aids (slice 3): continue a road from its end, typed length, Shift turns snapping off.
   const move=(p,modifiers=0)=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
@@ -162,7 +165,7 @@ try{
   await b.waitFor(async()=>await b.count('.network-scene3d')===0,'back to the plan');
   await b.screenshot('artifacts/design-browser.png');
   // Scenarios survive a reload.
-  await sleep(300);await b.goto('/design');
+  await sleep(300);await b.goto('/design');await ready();
   await b.waitFor(async()=>await b.count('[data-design-scenario]')===2,'both scenarios restored after reload');
 
   // Advanced junction editing (slice 6, staged): hand the junction to the junction editor, add a median opening there,
@@ -184,7 +187,7 @@ try{
   assert.equal(await b.evalValue(`localStorage.getItem('thai-street-design-junction-handoff-v1')`),null,'hand-off consumed');
   assert.equal(await b.evalValue(`localStorage.getItem('thai-street-network-project-v1')`),null,'earlier Network data untouched');
   // The home page is the road-first workspace.
-  await b.goto('/');await b.waitFor(()=>b.count('[data-design-workspace]'),'home page is /design');
+  await b.goto('/');await ready();await b.waitFor(()=>b.count('[data-design-workspace]'),'home page is /design');
 
   // Reference image (slice 6b-2): add, scale from a known distance, move, remove.
   const png=(w,h)=>{const crc=buf=>{let c,crcTable=[];for(let n=0;n<256;n++){c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;crcTable[n]=c>>>0;}let x=0xffffffff;for(const v of buf)x=crcTable[(x^v)&255]^(x>>>8);return(x^0xffffffff)>>>0;};
@@ -201,7 +204,7 @@ try{
     if(node.nodeId)await b.send('DOM.setFileInputFiles',{nodeId:node.nodeId,files:[root+'.test-build/reference.png']});
     await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image',5000).catch(()=>null);
   }
-  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.text('[data-design-notice]'),await b.count('[data-design-scenario]'),await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,300)`),await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`));throw e;});
+  await b.waitFor(()=>b.count('[data-design-reference-image]'),'reference image under the plan').catch(async e=>{console.log('DBG',await b.evalValue(`document.querySelector('[data-design-reference-input]')?.files?.length??'no-input'`),await b.text('[data-design-notice]'),await b.count('[data-design-scenario]'),await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,300)`),await b.evalValue(`document.querySelector('[data-design-inspector]')?.dataset.designInspector`));throw e;});
   await b.click('[data-design-action="calibrate-reference"]');
   const ca={x:canvas.x-canvas.w/2+120,y:canvas.y+canvas.h/2-120},cb={x:ca.x+200,y:ca.y};
   await b.clickAt(ca);await b.clickAt(cb);
@@ -240,11 +243,11 @@ try{
   await b.waitFor(async()=>await b.count('.map-reference-layer')===0,'map hidden');
 
   // The earlier Network page is retired: its URL opens /design, and work it saved in this browser can be added as alternatives.
-  await b.goto('/network');await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
+  await b.goto('/network');await ready();await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/design'&&await b.count('[data-design-workspace]'),'/network opens /design');
   await sleep(300);diag.afterRedirect={notice:await b.text('[data-design-notice]'),tabs:await b.count('[data-design-scenario]'),unreadable:await b.evalValue(`(localStorage.getItem('thai-street-road-first-v1-unreadable')??'').slice(0,80)`)};
   assert.equal(diag.afterRedirect.tabs,2,'saved work reopens after the redirect: '+JSON.stringify(diag.afterRedirect));
   await b.evalValue(`localStorage.setItem('thai-street-network-project-v1',JSON.stringify({workspaceVersion:1,activeScenarioId:'existing',scenarios:[{id:'existing',name:'Existing',kind:'existing',project:{schemaVersion:5,title:'งานเดิม',junctions:[],links:[],parallelCorridors:[],roadEnds:[]}}]}))`);
-  await b.goto('/design');await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
+  await b.goto('/design');await ready();await b.waitFor(()=>b.count('[data-design-action="import-earlier"]'),'import offered when earlier work exists');
   const scenariosBefore=await b.count('[data-design-scenario]');
   await b.click('[data-design-action="import-earlier"]');
   await b.waitFor(async()=>await b.count('[data-design-scenario]')===scenariosBefore+1,'earlier work added as an alternative');
@@ -301,7 +304,7 @@ try{
   assert.match(await b.evalValue('document.body.innerText'),/อ่านข้อมูลที่ส่งมาจากหน้าออกแบบไม่ได้/);
   // Stored work that cannot be read is copied aside, never silently replaced.
   await b.evalValue(`localStorage.setItem('thai-street-road-first-v1','{broken')`);
-  await b.goto('/design');await b.waitFor(()=>b.count('[data-design-unreadable]'),'unreadable work reported');
+  await b.goto('/design');await ready();await b.waitFor(()=>b.count('[data-design-unreadable]'),'unreadable work reported');
   assert.equal(await b.evalValue(`localStorage.getItem('thai-street-road-first-v1-unreadable')`),'{broken','copy kept');
   assert.equal(await b.count('[data-design-notice="error"]'),1);
   assert.deepEqual(b.errors,[],'no runtime errors');

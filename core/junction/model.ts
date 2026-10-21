@@ -112,6 +112,8 @@ export type Design={
   showArrows:boolean;
   enabled:boolean[];
   corner:number;
+  /** Optional per-corner radius, indexed by the arm slot the corner starts from (corner from arm i to the next arm by angle); null or absent = corner. */
+  cornerRadii?:(number|null)[];
   circulation:number;
   type:string;
   arms:Arm[];
@@ -274,6 +276,7 @@ export function valid(d:unknown):d is Design{
     &&Array.isArray(v.arms)&&v.arms.length===4
     &&Array.isArray(v.enabled)&&v.enabled.length===4&&v.enabled.every(x=>typeof x==='boolean')&&v.enabled.filter(Boolean).length>=3
     &&Number.isFinite(v.corner)&&v.corner>=4&&v.corner<=20
+    &&(v.cornerRadii===undefined||(Array.isArray(v.cornerRadii)&&v.cornerRadii.length<=4&&v.cornerRadii.every(r=>r===null||(Number.isFinite(r)&&r>=4&&r<=20))))
     &&Number.isFinite(v.circulation)&&v.circulation>=3&&v.circulation<=22
     &&(v.display===undefined||Object.entries(v.display).every(([k,x])=>['grid','trees','lights','dimensions','reviews','handles'].includes(k)&&typeof x==='boolean'))
     &&v.arms.every(a=>
