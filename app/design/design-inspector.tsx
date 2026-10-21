@@ -47,6 +47,16 @@ export function PresetPicker({value,onPick,label}:{value:RoadPresetId|null;onPic
   </div>;
 }
 
+/** A section that can be folded away; open state is remembered in this browser (per section). */
+function Fold({id,title,summary,data,children}:{id:string;title:string;summary:string;data:string;children:React.ReactNode}){
+  const key=`thai-street-design-fold-${id}`;
+  const [open,setOpen]=useState(()=>{try{return localStorage.getItem(key)==='open';}catch{return false;}});
+  return <details className="design-block design-fold" data-design-fold={data} open={open} onToggle={e=>{const v=e.currentTarget.open;setOpen(v);try{localStorage.setItem(key,v?'open':'closed');}catch{/* per-visit only */}}}>
+    <summary data-design-fold-toggle={data}><span className="design-block-title">{title}</span>{!open&&summary&&<small>{summary}</small>}</summary>
+    {children}
+  </details>;
+}
+
 const BAND_TYPES=[['bike','ช่องจักรยาน',1.5],['motorcycle','ช่องรถจักรยานยนต์',2],['shoulder','ไหล่ทาง',1.5],['buffer','แถบคั่น',.5]] as const;
 /** Bands between the lanes and the sidewalk, the same on both sides of the road. Starting widths are tool defaults. */
 function BandsEditor({bands,onChange}:{bands:NonNullable<RoadSection['bands']>;onChange:(b:NonNullable<RoadSection['bands']>)=>void}){
@@ -123,8 +133,7 @@ function PocketBlock({info,side,run,title}:{info:ApproachInfo;side:PocketSide;ru
 /** Pedestrian crossing, stop line and signal of one approach (leg treatment: crossing, crossOffset, stop, stopOffset, signal). */
 function ControlBlock({info,run}:{info:ApproachInfo;run:Run}){
   const a=info.arm,set=(patch:Partial<Pick<typeof a,'crossing'|'crossOffset'|'stop'|'stopOffset'|'signal'>>)=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch});
-  return <section className="design-block" data-design-controls="true">
-    <small className="design-block-title">ทางม้าลาย เส้นหยุด และสัญญาณไฟ</small>
+  return <Fold id="controls" title="ทางม้าลาย เส้นหยุด และสัญญาณไฟ" summary={[a.crossing?'มีทางม้าลาย':'ไม่มีทางม้าลาย',a.incoming>0?(a.stop?'เส้นหยุด':'ไม่มีเส้นหยุด'):'',a.incoming>0?(a.signal?'สัญญาณไฟ':'ไม่มีสัญญาณไฟ'):''].filter(Boolean).join(' · ')} data="controls">
     <label className="design-check"><input type="checkbox" checked={a.crossing} data-design-field="crossing" onChange={e=>set({crossing:e.currentTarget.checked})}/> ทางม้าลายข้ามปากทางนี้</label>
     {a.crossing&&<NumberField field="cross-offset" label="ร่นทางม้าลายจากปากแยก (ม.)" value={a.crossOffset} step={.5} min={0} max={35} onCommit={crossOffset=>set({crossOffset})}/>}
     {a.incoming>0?<>
@@ -132,7 +141,7 @@ function ControlBlock({info,run}:{info:ApproachInfo;run:Run}){
       {a.stop&&<NumberField field="stop-offset" label="ร่นเส้นหยุดจากปากแยก (ม.)" value={a.stopOffset} step={.5} min={0} max={35} onCommit={stopOffset=>set({stopOffset})}/>}
       <label className="design-check"><input type="checkbox" checked={a.signal} data-design-field="signal" onChange={e=>set({signal:e.currentTarget.checked})}/> สัญญาณไฟจราจร</label>
     </>:<p className="design-meta">ปากทางนี้ไม่มีช่องจราจรขาเข้า จึงไม่มีเส้นหยุดหรือสัญญาณไฟ</p>}
-  </section>;
+  </Fold>;
 }
 
 /** Arrow of each incoming lane on this approach (main lanes from the median side, then turn-pocket lanes). */
@@ -145,8 +154,7 @@ function ArrowBlock({info,run}:{info:ApproachInfo;run:Run}){
     ...Array.from({length:a.incomingPockets?.left.lanes??0},(_,i)=>({role:'aux-left' as const,i,label:`เลนเลี้ยวซ้าย ${i+1}`})),
   ];
   const mode=a.dividerMode??'solid',solid=a.solidLength??36;
-  return <section className="design-block" data-design-arrows={lanes.length}>
-    <small className="design-block-title">เส้นแบ่งเลนและลูกศรขาเข้า</small>
+  return <Fold id="arrows" title="เส้นแบ่งเลนและลูกศรขาเข้า" summary={lanes.map(l=>ARROW_OPTIONS[laneArrowFor(a,'incoming',l.role,l.i)]).join(' | ')} data="arrows">
     {a.incoming>1&&<><label className="design-select"><span>เส้นแบ่งเลน</span>
       <select value={mode} data-design-field="divider-mode" onChange={e=>run({type:'leg.setTreatment',candidateId:info.candidateId,leg:info.leg,patch:{dividerMode:e.currentTarget.value as 'solid'|'dashed'}})}>
         <option value="solid">เส้นทึบ ต่อด้วยเส้นประ</option><option value="dashed">เส้นประตลอด</option></select></label>
@@ -154,7 +162,7 @@ function ArrowBlock({info,run}:{info:ApproachInfo;run:Run}){
     {lanes.map(l=><label key={l.role+l.i} className="design-select"><span>{l.label}</span>
       <select value={laneArrowFor(a,'incoming',l.role,l.i)} data-design-field={`arrow-${l.role}-${l.i}`} onChange={e=>set(l.role,l.i,e.currentTarget.value as LaneArrowCode)}>
         {(Object.entries(ARROW_OPTIONS) as [LaneArrowCode,string][]).map(([code,name])=><option key={code} value={code}>{name}</option>)}</select></label>)}
-  </section>;
+  </Fold>;
 }
 
 const OPENING_LABEL:Record<OpeningType,string>={opening:'ช่องเปิดเกาะกลาง',uturn:'ช่องกลับรถ'};
@@ -164,8 +172,7 @@ function OpeningBlock({info,run,onMessage}:{info:ApproachInfo;run:Run;onMessage:
   const add=(type:OpeningType)=>{const r=newOpening(info,type);if('error' in r){onMessage(r.error,'error');return;}set([...list,r.opening]);};
   const edit=(id:string,patch:Partial<(typeof list)[number]>)=>set(list.map(o=>o.id===id?{...o,...patch}:o));
   if(info.arm.median<=0)return <p className="design-meta" data-design-blocked="opening">ช่องเปิดเกาะกลาง: ถนนช่วงนี้ไม่มีเกาะกลาง</p>;
-  return <section className="design-block" data-design-openings={list.length}>
-    <small className="design-block-title">ช่องเปิดเกาะกลาง</small>
+  return <Fold id="openings" title="ช่องเปิดเกาะกลาง" summary={list.length?list.map(o=>`${OPENING_LABEL[o.type??'opening']} ${o.start} ม.`).join(' · '):'ยังไม่มี'} data="openings">
     {list.map((o,i)=><div key={o.id} className="design-opening" data-design-opening={o.id}>
       <header><b>{OPENING_LABEL[o.type??'opening']}</b><button className="link" data-design-action={`remove-opening-${i}`} onClick={()=>set(list.filter(x=>x.id!==o.id))}>ลบ</button></header>
       <label className="design-select"><span>ชนิด</span><select value={o.type??'opening'} data-design-field={`opening-${i}-type`} onChange={e=>edit(o.id,{type:e.currentTarget.value as OpeningType})}>
@@ -180,7 +187,7 @@ function OpeningBlock({info,run,onMessage}:{info:ApproachInfo;run:Run;onMessage:
       <button data-design-action="add-uturn" onClick={()=>add('uturn')}>+ ช่องกลับรถ</button>
     </div>}
     {list.some(o=>o.type==='uturn')&&<p className="design-meta">ช่องกลับรถเป็นแนวคิดเบื้องต้น · ตรวจรถออกแบบและแนวกวาดเมื่อทำแบบรายละเอียด</p>}
-  </section>;
+  </Fold>;
 }
 
 function SlipBlock({info,project,run}:{info:ApproachInfo;project:RoadFirstProject;run:Run}){

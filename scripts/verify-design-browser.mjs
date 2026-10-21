@@ -14,6 +14,8 @@ const actions=[],diag={};const act=(label,fn)=>{actions.push(label);return fn();
 try{
   // Interactive only after the saved work is loaded in the browser (the server-rendered page has no handlers yet).
   const ready=()=>b.waitFor(()=>b.count('[data-design-ready="true"]'),'workspace ready');
+  // Folded inspector sections open on demand (their state is remembered per browser).
+  const openFold=async name=>{await b.waitFor(()=>b.count(`[data-design-fold="${name}"]`),'section '+name);if(!await b.evalValue(`document.querySelector('[data-design-fold="${name}"]').open`))await b.click(`[data-design-fold-toggle="${name}"]`);await b.waitFor(()=>b.evalValue(`document.querySelector('[data-design-fold="${name}"]').open`),'open '+name);await sleep(250);};
   await ready();
   await b.waitFor(()=>b.count('[data-design-notice]'),'workspace loaded');
   assert.match(await b.text('.design-inspector'),/วาดถนน/,'empty project explains how to start');
@@ -178,17 +180,18 @@ try{
   await b.waitFor(()=>b.count('[data-design-slip]'),'Slip lane added in place');
   assert.match(await b.evalValue(`document.querySelector('[data-design-undo]').title`),/^ย้อนกลับ: ตั้ง Slip lane/);
   // Crossing, stop line and signal of the approach, in place.
-  await b.waitFor(()=>b.count('[data-design-controls]'),'approach controls');
+  await openFold('controls');
   const crossOn=await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`);
   await b.click('[data-design-field="crossing"]');
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)!==crossOn,'crossing toggled in place');
   await b.click('[data-design-undo]');
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-field="crossing"]').checked`)===crossOn,'undo restores the crossing');
   // Lane arrow of the first incoming lane, in place.
-  await b.waitFor(()=>b.count('[data-design-arrows]'),'lane arrows');
+  await openFold('arrows');
   await b.evalValue(`(()=>{const s=document.querySelector('[data-design-field="arrow-main-0"]');s.value='ru';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-undo]').title`)).startsWith('ย้อนกลับ: แก้ขา')&&await b.evalValue(`document.querySelector('[data-design-field="arrow-main-0"]').value`)==='ru','lane arrow changed in place');
   // Median opening on the same approach, in /design: add, type its position, drag its handle (same value).
+  await openFold('openings');
   await b.click('[data-design-action="add-opening"]');
   await b.waitFor(()=>b.count('[data-design-opening]'),'median opening added in place');
   await b.click('[data-design-field="opening-0-start"]');await b.evalValue(`document.querySelector('[data-design-field="opening-0-start"]').select()`);
