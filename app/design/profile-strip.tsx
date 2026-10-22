@@ -2,7 +2,7 @@
 // Long section of the selected road (Phase 4B-2): its levels along the road, the ground, the roads it crosses (at
 // their levels) and its junctions. Drag a level point to change station and level; double-click the line to add a
 // point, double-click a point to remove it. Each drag is one undo step; the typed list in the inspector edits the same points.
-import {useEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import type {Road} from '@/core/road-first/derive';
 import {detectCandidates,stations} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
@@ -16,7 +16,10 @@ const fmt=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)}`;
 
 export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project:RoadFirstProject;run:Run;finishGesture:()=>void}){
   const box=useRef<HTMLDivElement>(null),[w,setW]=useState(800),drag=useRef<number|null>(null);
-  useEffect(()=>{const el=box.current;if(!el)return;const o=new ResizeObserver(([e])=>setW(Math.max(320,e.contentRect.width)));o.observe(el);return()=>o.disconnect();},[]);
+  // The level scale holds still while a point is dragged, so the point stays under the pointer.
+  const [frozen,setFrozen]=useState<{zMin:number;zMax:number}|null>(null);
+  // Measured before the first paint, so points do not jump after the strip opens.
+  useLayoutEffect(()=>{const el=box.current;if(!el)return;setW(Math.max(320,el.getBoundingClientRect().width));const o=new ResizeObserver(([e])=>setW(Math.max(320,e.contentRect.width)));o.observe(el);return()=>o.disconnect();},[]);
   const total=stations(road.points).at(-1)??0,profile=sortedProfile(road.profile);
   // Other roads where this one crosses them: their level there; junctions on this road.
   type Mark={kind:'junction'|'road';station:number;z:number;name:string};
@@ -26,7 +29,7 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
     if(d?.decision==='junction'&&d.roads?.includes(road.id))return[{kind:'junction',station:me.station,z:levelAt(road.profile,me.station),name:d.name??'ทางแยก'}];
     return c.roads.filter(r=>r.roadId!==road.id).map(r=>{const o=project.roads.find(x=>x.id===r.roadId);return{kind:'road',station:me.station,z:levelAt(o?.profile,r.station),name:o?.name??r.roadId};});
   });
-  const zs=[0,...profile.map(q=>q.z),...marks.map(m=>m.z)],zMin=Math.min(...zs)-2,zMax=Math.max(...zs)+3;
+  const zs=[0,...profile.map(q=>q.z),...marks.map(m=>m.z)],zMin=frozen?.zMin??Math.min(...zs)-2,zMax=frozen?.zMax??Math.max(...zs)+3;
   const X=(s:number)=>PAD.l+(s/(total||1))*(w-PAD.l-PAD.r),Z=(z:number)=>PAD.t+(zMax-z)/(zMax-zMin)*(H-PAD.t-PAD.b);
   const S=(px:number)=>Math.max(0,Math.min(total,(px-PAD.l)/(w-PAD.l-PAD.r)*total)),ZofPx=(py:number)=>zMax-(py-PAD.t)/(H-PAD.t-PAD.b)*(zMax-zMin);
   const line=(profile.length?[{station:0,z:levelAt(profile,0)},...profile,{station:total,z:levelAt(profile,total)}]:[{station:0,z:0},{station:total,z:0}]).filter((q,i,a)=>i===0||q.station>a[i-1].station+1e-6);
@@ -43,7 +46,7 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
     set([...profile,{station:s,z:r1(levelAt(profile,s))}].sort((a,b)=>a.station-b.station));
   }
   return <div className="design-profile" ref={box} data-design-profile={road.id} data-design-profile-points={profile.length}>
-    <svg width={w} height={H} onPointerMove={move} onPointerUp={()=>{if(drag.current!==null){drag.current=null;finishGesture();}}} onDoubleClick={addAt}>
+    <svg width={w} height={H} onPointerMove={move} onPointerUp={()=>{if(drag.current!==null){drag.current=null;setFrozen(null);finishGesture();}}} onDoubleClick={addAt}>
       <rect x={PAD.l} y={PAD.t} width={w-PAD.l-PAD.r} height={H-PAD.t-PAD.b} fill="#f6f8f8"/>
       <line x1={PAD.l} x2={w-PAD.r} y1={Z(0)} y2={Z(0)} stroke="#8a9a8a" strokeDasharray="5 4"/>
       <text x={PAD.l-6} y={Z(0)+4} textAnchor="end" fontSize="11" fill="#5c676b">0</text>
@@ -54,8 +57,8 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
       <polyline points={line.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#1f2d33" strokeWidth="2.2"/>
       {line.slice(1).map((q,i)=>{const a=line[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;return Math.abs(g)>.05&&q.station-a.station>total*.06?<text key={'g'+i} x={(X(a.station)+X(q.station))/2} y={(Z(a.z)+Z(q.z))/2-6} textAnchor="middle" fontSize="10" fill="#0b6f69">{g.toFixed(1)}%</text>:null;})}
       {profile.map((q,i)=><g key={i}>
-        <circle data-design-profile-point={i} cx={X(q.station)} cy={Z(q.z)} r="9" fill="transparent" style={{cursor:'move'}}
-          onPointerDown={e=>{e.stopPropagation();(e.currentTarget as Element).closest('svg')!.setPointerCapture(e.pointerId);drag.current=i;}}
+        <circle data-design-profile-point={i} data-design-profile-z={q.z} cx={X(q.station)} cy={Z(q.z)} r="9" fill="transparent" style={{cursor:'move'}}
+          onPointerDown={e=>{e.stopPropagation();(e.currentTarget as Element).closest('svg')!.setPointerCapture(e.pointerId);drag.current=i;setFrozen({zMin,zMax});}}
           onDoubleClick={e=>{e.stopPropagation();set(profile.filter((_,k)=>k!==i));}}>
           <title>{`ระยะ ${q.station.toFixed(1)} ม. · ระดับ ${fmt(q.z)} ม. · ลากเพื่อย้าย · ดับเบิลคลิกเพื่อลบ`}</title></circle>
         <circle cx={X(q.station)} cy={Z(q.z)} r="4.5" fill="#fff" stroke="#0b7f86" strokeWidth="2" pointerEvents="none"/>
