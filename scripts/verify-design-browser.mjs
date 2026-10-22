@@ -172,12 +172,13 @@ try{
     assert.equal(await b.count('[data-network-junction-hit]'),junctions);
     await b.click('[data-design-section-mode="profile"]');
     await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-profile]')?.dataset.designProfilePoints`))==='4','long section with the drawn levels');
-    assert.ok(await b.count('[data-design-profile-crossing]')>0,'road crossed shown in the long section');
-    const pt=await b.rect('[data-design-profile-point="1"]');await b.drag({x:pt.x,y:pt.y},{x:pt.x,y:pt.y-25});
-    await b.waitFor(async()=>(await b.rect('[data-design-profile-point="1"]')).y<pt.y-10,'dragged level point');
+    assert.ok(await b.count('[data-design-profile-crossing]')>0,'road crossed shown in the long section');await sleep(300);
+    const pt=await b.rect('[data-design-profile-point="1"]'),z0=Number(await b.evalValue(`document.querySelector('[data-design-profile-point="1"]').dataset.designProfileZ`));
+    await b.drag({x:pt.x,y:pt.y},{x:pt.x,y:pt.y-25});
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-design-profile-point="1"]').dataset.designProfileZ`))>z0+1,'dragged level point up');
     await b.screenshot('artifacts/design-browser-profile.png');
     await b.click('[data-design-undo]');
-    await b.waitFor(async()=>Math.abs((await b.rect('[data-design-profile-point="1"]')).y-pt.y)<2,'one undo per drag');
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-design-profile-point="1"]').dataset.designProfileZ`))===z0,'one undo per drag');
     await b.click('[data-design-section-mode="road"]');
     await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===roads,'undo removes the raised road');
   }
