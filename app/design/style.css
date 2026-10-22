@@ -178,3 +178,5 @@
   /* Above the bottom sheet, under the view switch. */
   .design-draw-actions{top:52px;bottom:auto}}
 .design-crossing-row{padding:4px 0;border-top:1px solid var(--d-line)}.design-crossing-row:first-of-type{border-top:0}
+.design-criterion{display:grid;gap:4px;padding:6px 0;border-bottom:1px solid var(--d-line)}
+.design-criterion:last-of-type{border-bottom:0}

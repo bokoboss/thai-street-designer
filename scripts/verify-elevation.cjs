@@ -2,6 +2,7 @@
 const path=require('path'),assert=require('node:assert/strict');
 require('./test-support/build.cjs')();
 const T=p=>require(path.resolve('.test-build/tree/'+p));
+const lc=T('core/road-first/level-criteria.cjs'),K=lc.levelCriteria(),RISE=lc.bridgeRise(K),DIP=lc.tunnelDepth(K);
 const c=T('core/road-first/commands.cjs'),rp=T('core/road-first/project.cjs'),el=T('core/road-first/elevation.cjs'),lg=T('core/network/network-link-geometry.cjs'),rep=T('core/network/network-design-report.cjs'),n=T('core/network/network-project.cjs');
 const sec={forwardLanes:2,backwardLanes:2,laneWidth:3.25,median:3,walk:2};
 // Profile basics.
@@ -29,7 +30,7 @@ const sg=T('core/network/network-scene-geometry.cjs');
 const gs=T('core/road-first/grade-separation.cjs'),flip=gs.overCommand(e.project,dec.candidateId,'R1');assert.ok(flip.cmd,flip.error);
 const fr=run(flip.cmd);assert.match(fr.label,/ถนนล่าง ข้าม ถนนบน/);
 x=comp().crossings[0];assert.equal(x.over,'R1');
-{const r1=comp().project.links.filter(l=>comp().sources.links[l.id]==='R1');const peak=Math.max(...sg.resolveRoadLinkSceneSurfaces(comp().project).filter(v=>r1.some(l=>v.id.startsWith(l.id+':'))).flatMap(v=>v.base??[0]));assert.ok(Math.abs(peak-13)<.01,'flip: R1 raised to 13 m in 3D');}assert.ok(Math.abs(x.gap-el.RISE_DEFAULTS.height)<.01,'generated rise: default height above the lower road');
+{const r1=comp().project.links.filter(l=>comp().sources.links[l.id]==='R1');const peak=Math.max(...sg.resolveRoadLinkSceneSurfaces(comp().project).filter(v=>r1.some(l=>v.id.startsWith(l.id+':'))).flatMap(v=>v.base??[0]));assert.ok(Math.abs(peak-(7+RISE))<.01,'flip: R1 raised over R2 by clearance + structure depth in 3D');}assert.ok(Math.abs(x.gap-RISE)<.01,'generated rise: default height above the lower road');
 const order=lg.linksInDrawOrder(comp().project).map(l=>comp().sources.links[l.id]);assert.equal(order.at(-1),'R1','upper road drawn last');
 assert.ok(e.project.roads.find(q=>q.id==='R1').profile.length>=4,'R1 has a rise profile');
 // 4. One undo reverts relation and profile.
@@ -88,8 +89,8 @@ assert.match(html,/ทางต่างระดับ/);assert.match(html,/ถ
  u=c.endGesture(c.runCommand(u,{type:'road.add',road:{id:'tmp',name:'t',points:[{x:900,y:900},{x:950,y:900}],section:sec}}).editor);
  const cand=u.project.decisions[0].candidateId;u=c.endGesture(c.runCommand(u,{type:'crossing.decide',candidateId:cand,decision:'grade-separated'}).editor);
  const uc=gs.underCommand(u.project,cand,'A');assert.ok(uc.cmd,uc.error);const ur=c.runCommand(u,uc.cmd);assert.equal(ur.result.error,null);assert.match(ur.result.label,/ถนนลอด ลอดใต้ ถนนข้าม/);u=c.endGesture(ur.editor);
- const C=rp.compileRoadFirstProject(u.project);assert.equal(C.crossings[0].over,'B');assert.ok(Math.abs(C.crossings[0].gap-el.DIP_DEFAULTS.depth)<.01,'dip depth');
- assert.equal(C.project.junctions.length,0);const t=C.project.crossings[0].tunnel;assert.ok(t&&Math.abs(t.z+el.DIP_DEFAULTS.depth)<.01,'tunnel under the crossing road');
+ const C=rp.compileRoadFirstProject(u.project);assert.equal(C.crossings[0].over,'B');assert.ok(Math.abs(C.crossings[0].gap-DIP)<.01,'dip depth');
+ assert.equal(C.project.junctions.length,0);const t=C.project.crossings[0].tunnel;assert.ok(t&&Math.abs(t.z+DIP)<.01,'tunnel under the crossing road');
  const al=C.project.links.filter(l=>C.sources.links[l.id]==='A'),ag=al.map(l=>lg.resolveLinkSectionGeometry(C.project,l));
  assert.ok(ag.some(q=>q.structures.some(st=>st.kind==='trough')),'trough stretch');assert.ok(Math.min(...ag.flatMap(q=>q.z))<-6,'road below ground');
  const sc=sg.resolveElevatedLinkScene(C.project);assert.ok(sc.faces.filter(f=>/:wall:/.test(f.id)).length>0,'retaining walls');assert.equal(sc.faces.filter(f=>/:portal:/.test(f.id)).length,2,'two portals');

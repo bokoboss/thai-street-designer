@@ -12,6 +12,7 @@ import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
 import {taperPolygon,type RampAnchor} from './ramps';
 import {curveRanges,vertexCurve} from './curves';
+import {bridgeRise,gradeFor,hasSource,levelCriteria,tunnelDepth,type LevelCriteria} from './level-criteria';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -47,7 +48,8 @@ export type JunctionTreatments={slips?:LegSlip[];corner?:number;cornerRadii?:Par
 /** excluded: roads that reach the junction point but were deliberately left out of it (not reported, never auto-joined). */
 /** over: on a grade-separated crossing, the road that passes over (absent = from the levels). */
 export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';over?:string;name?:string;roads?:string[];excluded?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
-export type CompileOptions={approachLength?:number;tolerance?:number};
+/** levels: the project's level criteria (clearance, structure depth, grades); absent = tool starting values. */
+export type CompileOptions={approachLength?:number;tolerance?:number;levels?:Partial<LevelCriteria>};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
 /** sources: which crossing each compiled junction comes from and which road each RoadLink belongs to (for selection in the editor). */
 export type CompileSources={junctions:Record<string,string>;links:Record<string,string>};
@@ -326,7 +328,13 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   // Grade-separated crossings: relation and measured gap (Phase 4A). Not judged against any standard here.
   // A crossing of three or more roads at different levels (a stack) gives one crossing per pair of roads; a road that
   // passes over or under a junction gives one crossing with each road of the junction.
-  const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[];
+  const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[],criteria=levelCriteria(options.levels);
+  // Grades steeper than the project's maximum (ramps against the ramp maximum).
+  for(const road of roads){
+    const p=[...(road.profile??[])].sort((a,b)=>a.station-b.station),max=gradeFor(criteria,road);
+    for(let i=1;i<p.length;i++){const run=p[i].station-p[i-1].station,g=run>0?Math.abs(p[i].z-p[i-1].z)/run:0;
+      if(g>max+1e-6)issues.push(`${road.name}: ความชัน ${(g*100).toFixed(1)}% ช่วง ${p[i-1].station.toFixed(0)}–${p[i].station.toFixed(0)} ม. เกินที่ตั้งไว้ ${(max*100).toFixed(1)}%${hasSource(road.role==='ramp'?criteria.rampGrade:criteria.mainGrade)?'':' (ค่ายังไม่มีแหล่งอ้างอิง)'} — ต้องตรวจตามเกณฑ์`);}
+  }
   const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
   const pair=(d:Decision,c:Candidate,a:{roadId:string;station:number},b:{roadId:string;station:number},chosen:string|undefined)=>{
     const ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)return;
@@ -337,6 +345,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const name=top&&bottom?`${top.r.name} ข้าม ${bottom.r.name}`:`${ra.name} × ${rb.name}`;
     const id=networkCrossings.some(x=>x.id===d.candidateId)?`${d.candidateId}~${ra.id}~${rb.id}`:d.candidateId;
     crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name});
+    // Level difference against the project's criteria (a flag to check, never a pass / fail against a standard).
+    if(relation==='over'&&bottom){
+      const tunnel=bottom.z<-LEVEL_TOLERANCE,need=tunnel?tunnelDepth(criteria):bridgeRise(criteria);
+      if(gap<need-1e-6)issues.push(`${name}: ต่างระดับ ${gap.toFixed(2)} ม. น้อยกว่าที่ตั้งไว้ ${need.toFixed(2)} ม. (ช่องลอด ${criteria.clearance.value} + ${tunnel?'หลังคาอุโมงค์':'โครงสร้าง'} ${(tunnel?criteria.tunnelRoof:criteria.deckDepth).value} ม.${hasSource(criteria.clearance)?'':' · ค่ายังไม่มีแหล่งอ้างอิง'}) — ต้องตรวจตามเกณฑ์`);
+    }
     const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
       return{a:pointAt(top.r.points,sa),b:pointAt(top.r.points,sb),half:sectionWidth(top.r.section)/2};})():undefined;
     const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const half=sectionWidth(top.r.section)/2+2;

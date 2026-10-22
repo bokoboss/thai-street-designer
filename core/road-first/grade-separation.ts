@@ -2,7 +2,8 @@
 // One command sets the relation and the profiles together, so one undo reverts both.
 import type {RoadFirstCommand} from './commands';
 import {detectCandidates} from './derive';
-import {DIP_DEFAULTS,LEVEL_TOLERANCE,RISE_DEFAULTS,flattenAround,levelAt,riseProfile,sectionWidth,type Profile} from './elevation';
+import {LEVEL_TOLERANCE,RISE_DEFAULTS,flattenAround,levelAt,riseProfile,sectionWidth,type Profile} from './elevation';
+import {bridgeRise,gradeFor,levelCriteria,tunnelDepth} from './level-criteria';
 import type {RoadFirstProject} from './project';
 import {roadLength} from './road-openings';
 
@@ -15,15 +16,16 @@ export function overCommand(project:RoadFirstProject,candidateId:string,overId:s
   const overRef=c.roads.find(r=>r.roadId===overId),underRef=c.roads.find(r=>r.roadId!==overId);
   const over=project.roads.find(r=>r.id===overId),under=underRef&&project.roads.find(r=>r.id===underRef.roadId);
   if(!overRef||!over||!under||!underRef)return{error:'ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้'};
-  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={};
-  const zUnder=levelAt(under.profile,underRef.station),top=sectionWidth(under.section)+2*RISE_DEFAULTS.margin;
+  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={},k=levelCriteria(project.options.levels);
+  // Rise height and grade come from the project's level criteria (clearance + structure depth; road or ramp grade).
+  const height=bridgeRise(k),grade=gradeFor(k,over),zUnder=levelAt(under.profile,underRef.station),top=sectionWidth(under.section)+2*RISE_DEFAULTS.margin;
   // The previous over road loses its generated rise (points within the rise around this crossing).
   if(d?.over===under.id&&under.profile?.length){
-    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+RISE_DEFAULTS.height/RISE_DEFAULTS.grade;
+    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,under);
     const flat=flattenAround(under.profile,underRef.station,extent);profiles[under.id]=flat.length?flat:null;
   }
   const baseUnder=profiles[under.id]===undefined?zUnder:levelAt(profiles[under.id]??undefined,underRef.station);
-  if(levelAt(over.profile,overRef.station)-baseUnder<=LEVEL_TOLERANCE)profiles[over.id]=riseProfile(over.profile,overRef.station,baseUnder,top,RISE_DEFAULTS.height,RISE_DEFAULTS.grade,roadLength(over));
+  if(levelAt(over.profile,overRef.station)-baseUnder<=LEVEL_TOLERANCE)profiles[over.id]=riseProfile(over.profile,overRef.station,baseUnder,top,height,grade,roadLength(over));
   return{cmd:{type:'crossing.setOver',candidateId,over:over.id,profiles,label:`${over.name} ข้าม ${under.name}`}};
 }
 
@@ -36,21 +38,21 @@ export function underCommand(project:RoadFirstProject,candidateId:string,underId
   const underRef=c.roads.find(r=>r.roadId===underId),overRef=c.roads.find(r=>r.roadId!==underId);
   const under=project.roads.find(r=>r.id===underId),over=overRef&&project.roads.find(r=>r.id===overRef.roadId);
   if(!underRef||!under||!over||!overRef)return{error:'ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้'};
-  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={};
+  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={},k=levelCriteria(project.options.levels);
   // If the other road had been raised over this one here, take that rise away first.
   if(d?.over===under.id&&under.profile?.length){
-    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+RISE_DEFAULTS.height/RISE_DEFAULTS.grade;
+    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,under);
     const flat=flattenAround(under.profile,underRef.station,extent);profiles[under.id]=flat.length?flat:null;
   }
   if(d?.over===over.id||levelAt(over.profile,overRef.station)>LEVEL_TOLERANCE){
-    const extent=(sectionWidth(under.section)+2*RISE_DEFAULTS.margin)/2+RISE_DEFAULTS.height/RISE_DEFAULTS.grade;
+    const extent=(sectionWidth(under.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,over);
     const flat=flattenAround(over.profile,overRef.station,extent);if(over.profile?.length)profiles[over.id]=flat.length?flat:null;
   }
   const zOver=levelAt(profiles[over.id]===undefined?over.profile:profiles[over.id]??undefined,overRef.station);
   const current=profiles[under.id]===undefined?under.profile:profiles[under.id]??undefined;
   if(zOver-levelAt(current,underRef.station)<=LEVEL_TOLERANCE){
     const top=sectionWidth(over.section)+2*RISE_DEFAULTS.margin;
-    profiles[under.id]=riseProfile(current,underRef.station,zOver,top,-DIP_DEFAULTS.depth,RISE_DEFAULTS.grade,roadLength(under));
+    profiles[under.id]=riseProfile(current,underRef.station,zOver,top,-tunnelDepth(k),gradeFor(k,under),roadLength(under));
   }
   return{cmd:{type:'crossing.setOver',candidateId,over:over.id,profiles,label:`${under.name} ลอดใต้ ${over.name}`}};
 }

@@ -60,7 +60,7 @@ try{
     const r2=await b.evalValue(`document.querySelectorAll('[data-design-over]')[1].dataset.designOver`);
     await b.click(`[data-design-over="${r2}"]`);
     await b.waitFor(async()=>await b.count('[data-design-crossing-relation="over"]')&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'upper road over the lower one, deck drawn, no junction');
-    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.0 ม\./);
+    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./,'rise = clearance + structure depth (starting values)');
     await b.screenshot('artifacts/design-browser-grade-separation.png');
     await b.click('[data-design-view="3d"]');
     await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-raised]')?.dataset.networkSceneRaised??0`))>0,'3D shows the raised road');
@@ -98,6 +98,21 @@ try{
     await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'road raised over from its own panel');
     await b.click('[data-design-undo]');await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo');
     await b.key('Escape');
+  }
+  // Level criteria in the project panel: value + source; derived heights follow; drawing presets use them.
+  {
+    await b.key('Escape');await b.key('Escape');
+    await openFold('level-criteria');
+    assert.equal(await b.evalValue(`document.querySelector('[data-design-criterion="clearance"]').dataset.designCriterionStatus`),'to-verify');
+    await b.click('[data-design-field="criterion-clearance"]');await b.evalValue(`document.querySelector('[data-design-field="criterion-clearance"]').select()`);await b.type('5.5');await b.key('Enter');
+    await b.click('[data-design-field="criterion-source-clearance"]');await b.type('คู่มือโครงการ หน้า 12');await b.key('Enter');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-criterion="clearance"]').dataset.designCriterionStatus`))==='sourced','source recorded');
+    assert.match(await b.text('[data-design-level-derived]'),/สะพานชั้นที่ 1 ยก 7 ม\./);
+    await b.click('[data-design-tool-button="road"]');
+    assert.match(await b.text('[data-design-level-preset="bridge-1"]'),/\+7\.0/,'drawing preset from the criteria');
+    await b.key('Escape');await b.key('Escape');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-criterion="clearance"]')?.dataset.designCriterionStatus`))==='to-verify','undo back to starting values');
   }
   // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
   {
@@ -460,6 +475,8 @@ try{
   const jc2=await b.rect('[data-network-junction-hit]');
   await b.clickAt({x:jc2.x+14,y:jc2.y});
   await b.click('[data-design-action="back-to-junction"]');
+  // Folded sections open after mount (remembered per browser); let the panel settle before clicking low in it.
+  await sleep(300);
   await b.click('[data-design-action="advanced-junction"]');
   await b.waitFor(async()=>(await b.evalValue('location.pathname'))==='/junction'&&await b.count('[data-junction-back-to-design]')===1,'junction editor opened from /design');
   await b.evalValue(`document.querySelector('[title^="ค้นหาคำสั่ง"]').click()`);
@@ -619,7 +636,7 @@ try{
   await b.click('[data-design-scenario="alt-1"]');await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','back to the alternative');
   // Leaving the advanced editor waits for a successful save.
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction');const jc3=await b.rect('[data-network-junction-hit]');
-  await b.clickAt({x:jc3.x+14,y:jc3.y});await b.click('[data-design-action="back-to-junction"]');await b.click('[data-design-action="advanced-junction"]');
+  await b.clickAt({x:jc3.x+14,y:jc3.y});await b.click('[data-design-action="back-to-junction"]');await sleep(300);await b.click('[data-design-action="advanced-junction"]');
   await b.waitFor(()=>b.count('[data-junction-back-to-design]'),'advanced editor');
   await b.evalValue(`localStorage.setItem('thai-street-design-junction-handoff-v1','{broken')`);
   await b.click('[data-junction-back-to-design]');await sleep(400);

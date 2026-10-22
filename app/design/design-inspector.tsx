@@ -1,6 +1,6 @@
 'use client';
 // Inspector for the road-first workspace: header → key properties → actions, destructive action last.
-import {useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {useReferenceImage} from './use-reference-image';
 import {MapPanel,type MapState} from './map-panel';
@@ -15,7 +15,8 @@ import {detectCandidates,stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import {overCommand,underCommand} from '@/core/road-first/grade-separation';
-import {DIP_DEFAULTS,DRAW_LEVEL_STEP,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
+import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation';
+import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
@@ -40,11 +41,12 @@ export function NumberField({label,value,step=1,min,max,onCommit,field}:{label:s
       onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){setDraft(null);}}}/>
   </label>;
 }
-function TextField({label,value,onCommit,field}:{label:string;value:string;onCommit:(v:string)=>void;field:string}){
+/** allowEmpty: an emptied field commits '' (e.g. clearing a source); maxLength defaults to 60. */
+function TextField({label,value,onCommit,field,allowEmpty=false,maxLength=60}:{label:string;value:string;onCommit:(v:string)=>void;field:string;allowEmpty?:boolean;maxLength?:number}){
   const [draft,setDraft]=useState<string|null>(null),text=draft??value;
-  const commit=()=>{const v=text.trim();setDraft(null);if(!v||v===value)return;onCommit(v);};
+  const commit=()=>{const v=text.trim();setDraft(null);if((!v&&!allowEmpty)||v===value)return;onCommit(v);};
   return <label className="design-field design-field-text"><span>{label}</span>
-    <input value={text} maxLength={60} data-design-field={field} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape')setDraft(null);}}/>
+    <input value={text} maxLength={maxLength} data-design-field={field} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape')setDraft(null);}}/>
   </label>;
 }
 
@@ -57,7 +59,11 @@ export function PresetPicker({value,onPick,label}:{value:RoadPresetId|null;onPic
 /** A section that can be folded away; open state is remembered in this browser (per section). */
 function Fold({id,title,summary,data,children}:{id:string;title:string;summary:string;data:string;children:React.ReactNode}){
   const key=`thai-street-design-fold-${id}`;
-  const [open,setOpen]=useState(()=>{try{return localStorage.getItem(key)==='open';}catch{return false;}});
+  // Read before the first paint: the server render has no browser storage, so starting closed keeps hydration
+  // consistent, and a layout effect opens remembered sections before anything is shown (no jump under the pointer).
+  const [open,setOpen]=useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useLayoutEffect(()=>{try{if(localStorage.getItem(key)==='open')setOpen(true);}catch{/* per-visit only */}},[key]);
   return <details className="design-block design-fold" data-design-fold={data} open={open} onToggle={e=>{const v=e.currentTarget.open;setOpen(v);try{localStorage.setItem(key,v?'open':'closed');}catch{/* per-visit only */}}}>
     <summary data-design-fold-toggle={data}><span className="design-block-title">{title}</span>{!open&&summary&&<small>{summary}</small>}</summary>
     {children}
@@ -141,6 +147,33 @@ function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onP
 }
 
 /** Where this road meets other roads: junction or grade separation, with bridge / underpass in one step from here. */
+/** How high a generated bridge rises / how deep an underpass goes, from the project's level criteria, and whether they have sources. */
+function LevelBasis({project,note}:{project:RoadFirstProject;note?:string}){
+  const k=levelCriteria(project.options.levels),sourced=LEVEL_CRITERIA_KEYS.every(x=>hasSource(k[x]));
+  return <p className="design-meta" data-design-level-basis={sourced?'sourced':'to-verify'}>
+    สะพานยก {bridgeRise(k)} ม. (ช่องลอด {k.clearance.value} + โครงสร้าง {k.deckDepth.value}) · ทางลอดลึก {tunnelDepth(k)} ม. · ลาดถนนหลัก {k.mainGrade.value}% ทางลาด {k.rampGrade.value}%
+    {' · '}{sourced?'ตามเกณฑ์ของโครงการ':'บางค่ายังเป็นค่าตั้งต้นของเครื่องมือ ไม่มีแหล่งอ้างอิง (ตั้งได้ที่แผงโครงการ)'}{note?` · ${note}`:''}
+  </p>;
+}
+
+/** Project level criteria: value and source per criterion; what they give (heights, depths, ramp lengths). */
+function LevelCriteriaBlock({project,run}:{project:RoadFirstProject;run:Run}){
+  const k=levelCriteria(project.options.levels),stored=project.options.levels??{};
+  const missing=LEVEL_CRITERIA_KEYS.filter(x=>!hasSource(k[x])).length;
+  const set=(key:LevelCriteriaKey,patch:{value?:number;source?:string})=>run({type:'project.setLevelCriteria',patch:{[key]:{...k[key],...patch}}});
+  return <Fold id="level-criteria" title="เกณฑ์ระดับและความชัน" summary={missing?`ยังไม่มีแหล่งอ้างอิง ${missing} ค่า`:'ครบทุกค่า'} data="level-criteria">
+    {LEVEL_CRITERIA_KEYS.map(key=><div key={key} className="design-criterion" data-design-criterion={key} data-design-criterion-status={hasSource(k[key])?'sourced':'to-verify'}>
+      <NumberField field={`criterion-${key}`} label={LEVEL_CRITERIA_LABEL[key]} value={k[key].value} step={key.endsWith('Grade')?.5:.1} min={LEVEL_CRITERIA_RANGE[key][0]} max={LEVEL_CRITERIA_RANGE[key][1]} onCommit={value=>set(key,{value})}/>
+      <TextField label="แหล่งอ้างอิง" value={k[key].source??''} field={`criterion-source-${key}`} allowEmpty maxLength={200} onCommit={source=>set(key,{source})}/>
+      {!hasSource(k[key])&&<small className="design-warning">TO_VERIFY · ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน</small>}
+      {stored[key]&&<button className="link" data-design-criterion-reset={key} onClick={()=>run({type:'project.setLevelCriteria',patch:{[key]:null}})}>ค่าเริ่มต้น</button>}
+    </div>)}
+    <p className="design-meta" data-design-level-derived="true">สะพานชั้นที่ 1 ยก {bridgeRise(k)} ม. · ชั้นที่ 2 ประมาณ {(2*bridgeRise(k)).toFixed(1)} ม. · ทางลอดลึก {tunnelDepth(k)} ม.
+      · ทางลาดยก {bridgeRise(k)} ม. ยาวอย่างน้อย {rampLength(bridgeRise(k),k.rampGrade.value/100)} ม. ที่ {k.rampGrade.value}% (ถนนหลัก {rampLength(bridgeRise(k),k.mainGrade.value/100)} ม. ที่ {k.mainGrade.value}%) · ยังไม่รวมโค้งแนวดิ่ง</p>
+    <p className="design-meta">ระบบใช้ค่าเหล่านี้ตอนยกสะพาน ทำทางลอด และวาดตามระดับ และเตือนเมื่อแบบต่ำหรือชันกว่าที่ตั้งไว้ว่า “ต้องตรวจตามเกณฑ์” · ใส่ค่าและแหล่งอ้างอิงตามคู่มือที่โครงการใช้</p>
+  </Fold>;
+}
+
 function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road:Road;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const list=detectCandidates(project.roads).filter(c=>c.roads.some(r=>r.roadId===road.id));
   if(!list.length)return null;
@@ -160,7 +193,7 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
           <button data-design-road-under={c.id} disabled={x?.under===road.id} onClick={()=>go(underCommand(project,c.id,road.id),c.id)}>ลอดใต้</button>
         </div>}
       </div>;})}
-    <p className="design-meta">ยก {RISE_DEFAULTS.height} ม. / กดลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% เป็นค่าตั้งต้นของเครื่องมือ · กดย้อนกลับเพื่อคืนทางแยก</p>
+    <LevelBasis project={project} note="กดย้อนกลับเพื่อคืนทางแยก"/>
   </section>;
 }
 
@@ -236,8 +269,7 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
           {candidate.roads.map(r=><button key={r.roadId} data-design-under={r.roadId}
             onClick={()=>{const o=underCommand(project,candidate.id,r.roadId);if('error' in o)onMessage(o.error,'error');else run(o.cmd);}}>{name(r.roadId)} ลอดใต้</button>)}
         </div>
-        <p className="design-meta">ทางลอด: กดถนนลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน)</p>
-        <p className="design-meta">ถ้าถนนที่เลือกยังไม่สูงกว่า ระบบยกให้ {RISE_DEFAULTS.height} ม. ลาด {RISE_DEFAULTS.grade*100}% (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน · แก้ได้ที่แนวดิ่งของถนน)</p>
+        <LevelBasis project={project} note="ทางลอด: ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ · ถนนที่สูงหรือต่ำพออยู่แล้วไม่ถูกปรับ · แก้ต่อได้ที่แนวดิ่งของถนน"/>
       </section>;})()}
     <p className="design-meta">{d?'จุดนี้ถนนข้ามกันโดยไม่มีทางแยก':'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>
     <div className="design-actions">
@@ -387,7 +419,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
         {crossing!.roads.map(r=><button key={'o'+r.roadId} data-design-junction-over={r.roadId} onClick={()=>separate(overCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ข้าม (สะพาน)</button>)}
         {crossing!.roads.map(r=><button key={'u'+r.roadId} data-design-junction-under={r.roadId} onClick={()=>separate(underCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ลอดใต้</button>)}
       </div>
-      <p className="design-meta">ยก {RISE_DEFAULTS.height} ม. หรือกดลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน) · การตั้งค่าของทางแยกนี้จะไม่ใช้แล้ว กดย้อนกลับเพื่อคืนทางแยก · ยกหรือลดระดับถนนเองในแนวดิ่งก็ได้ ระบบจะเปลี่ยนเป็นทางต่างระดับให้</p>
+      <LevelBasis project={project} note="การตั้งค่าของทางแยกนี้จะไม่ใช้แล้ว กดย้อนกลับเพื่อคืนทางแยก · ยกหรือลดระดับถนนเองในแนวดิ่งก็ได้ ระบบจะเปลี่ยนเป็นทางต่างระดับให้"/>
     </Fold>}
     {(d.roads??[]).some(id=>project.roads.find(r=>r.id===id)?.role==='access')&&<p className="design-meta" data-design-access-junction="true">ทางเข้าโครงการ: ถนนหลักไหลต่อเนื่อง ไม่มีเส้นหยุด ทางข้าม หรือสัญญาณไฟ · ทางเข้ามีเส้นหยุดให้ทาง (ค่าเริ่มต้นแนวคิด)</p>}
     {compiled.unjoined[candidateId]&&<div className="design-issues" data-design-unjoined-note={compiled.unjoined[candidateId].length}>
@@ -554,6 +586,8 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
         <NumberField field="draw-level" label="ระดับ (ม.)" value={drawLevel} step={.5} min={-30} max={30} onCommit={onDrawLevel}/>
         <button data-design-level="up" title="PageUp" onClick={()=>onDrawLevel(drawLevel+DRAW_LEVEL_STEP)}>▲ ยก</button>
       </div>
+      {(()=>{const k=levelCriteria(project.options.levels),levels:[string,string,number][]=[['ground','ระดับพื้น',0],['bridge-1','สะพานชั้น 1',bridgeRise(k)],['bridge-2','ชั้น 2',2*bridgeRise(k)],['tunnel','ทางลอด',-tunnelDepth(k)]];
+        return <div className="design-reference-tools" aria-label="ระดับสำเร็จรูป">{levels.map(([id,label,z])=><button key={id} data-design-level-preset={id} className={Math.abs(drawLevel-z)<.01?'active':''} onClick={()=>onDrawLevel(z)}>{label} {z>0?'+':''}{z.toFixed(1)}</button>)}</div>;})()}
       <p className="design-meta">PageUp / PageDown ยกหรือลดทีละ {DRAW_LEVEL_STEP} ม. ระหว่างวาด · ถนนที่ข้ามกันต่างระดับจะเป็นทางต่างระดับเอง · เริ่มวาดบนถนนเดิมจะเริ่มที่ระดับของถนนนั้น</p>
     </section>
     <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · Tab สลับจุด snap ที่ซ้อนกัน · กด Space ค้างแล้วลากเพื่อเลื่อนแบบ · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
@@ -569,6 +603,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
       <p className="design-phone-note" data-design-phone-note="true">จอเล็กเหมาะสำหรับดูและตรวจแบบ การวาดและแก้แบบละเอียดทำได้สะดวกกว่าบนจอคอมพิวเตอร์</p>
+      <LevelCriteriaBlock project={project} run={run}/>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
       {scenario.migration&&<MigrationReportPanel m={scenario.migration}/>}
       <MapPanel map={map} tool={tool as DesignTool} onTool={reference.onTool} center={reference.viewCenter} onMessage={onMessage}/>
