@@ -123,7 +123,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ## Phase 4 — Grade separation and engineering depth
 
-Phase 3 accepted 2026-10-21; Phase 4 is the current phase, starting with 4A.
+Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); next is 4B-1.
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
 
@@ -162,12 +162,34 @@ ordinary editable road, ramp or lane run; nothing is an opaque block. No score o
   - The report lists each crossing as at grade / bridge / unresolved.
   - Structure stretches (bridge / trough / tunnel) are drawn with a structure finish in 2D and 3D, and an underpass can be chosen per crossing.
 
-### 4B — Diamond interchange (first template)
+### 4B — Free-form interchanges first, then the first template
 
-- Ramps attached end-to-side to a road (builds on road join and end handling from P2).
-- Merge/diverge anchors; ramp preview shown red with the reason when it cannot be placed.
-- Diamond generator: preview → commit as one undoable step → ramps, anchors and profiles stay editable.
+Owner decision 2026-10-22: free drawing before templates. Ramps, merge/diverge points and levels are built as ordinary
+editable pieces first; the diamond template only places those same pieces. Non-standard layouts (flyovers and
+underpasses at a junction, constrained urban ramps) are drawn by hand from 4B-1 on, without waiting for 4D.
+
+**4B-1 — Ramps drawn by hand**
+- Start a road from the side of another road (diverge) and end it on the side of another road (merge); the attachment
+  splits the main road at that station automatically (end-to-side, builds on road join and end handling from P2).
+- A ramp is a one-way road with a ramp role: same section, plan, 3D and export as any road.
+- Merge/diverge anchors stay attached when either road moves; dragging an anchor slides it along the main road.
+- A ramp that cannot attach (wrong direction, too close to a junction or another anchor, overlapping another ramp)
+  is previewed red with the reason; thresholds are tool values marked `TO_VERIFY` until 4E.
+- A ramp crossing another road uses the 4A crossing relation (over / under, bridge, trough, tunnel).
+- Exit criteria (regression tests): attach and detach in one undo step each; anchors follow a moved road
+  deterministically; red preview reasons; old files open unchanged.
+
+**4B-2 — Levels while drawing**
+- Raise / lower the road being drawn in steps (keys and buttons), with a cursor readout of length, radius, grade and Δz.
+- Profile strip under the plan: the selected road's long section; drag profile points; typed values edit the same points.
+- Stacked levels (three roads or a ramp over a ramp at one place) drawn and reported correctly.
+- Exit criteria: drawing at a level creates the same profile as typing it; one undo per gesture; stacked crossings
+  compile with the right over/under order in 2D and 3D.
+
+**4B-3 — Diamond interchange (first template)**
+- Built only from 4B-1 / 4B-2 pieces: preview → commit as one undoable step → each ramp, anchor and profile stays editable.
 - Generated objects keep their origin (`template`, `version`, parameters); regenerating is an explicit action.
+- Footprint preview red with the reason when it cannot be placed.
 
 ### 4C — Lane runs and lane connections
 
@@ -178,6 +200,7 @@ ordinary editable road, ramp or lane run; nothing is an opaque block. No score o
 
 ### 4D — More templates
 
+- Templates only place 4B pieces (ramps, anchors, profiles), never a separate object type.
 - Trumpet, roundabout interchange, selected cloverleaf variants; mirror / rotate; parameter presets.
 
 ### 4E — Rule-referenced checks
