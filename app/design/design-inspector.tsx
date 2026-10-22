@@ -1,6 +1,6 @@
 'use client';
 // Inspector for the road-first workspace: header → key properties → actions, destructive action last.
-import {useEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {useReferenceImage} from './use-reference-image';
 import {MapPanel,type MapState} from './map-panel';
@@ -59,10 +59,11 @@ export function PresetPicker({value,onPick,label}:{value:RoadPresetId|null;onPic
 /** A section that can be folded away; open state is remembered in this browser (per section). */
 function Fold({id,title,summary,data,children}:{id:string;title:string;summary:string;data:string;children:React.ReactNode}){
   const key=`thai-street-design-fold-${id}`;
-  // Read after mount: the server render has no browser storage, so starting closed keeps hydration consistent.
+  // Read before the first paint: the server render has no browser storage, so starting closed keeps hydration
+  // consistent, and a layout effect opens remembered sections before anything is shown (no jump under the pointer).
   const [open,setOpen]=useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(()=>{try{if(localStorage.getItem(key)==='open')setOpen(true);}catch{/* per-visit only */}},[key]);
+  useLayoutEffect(()=>{try{if(localStorage.getItem(key)==='open')setOpen(true);}catch{/* per-visit only */}},[key]);
   return <details className="design-block design-fold" data-design-fold={data} open={open} onToggle={e=>{const v=e.currentTarget.open;setOpen(v);try{localStorage.setItem(key,v?'open':'closed');}catch{/* per-visit only */}}}>
     <summary data-design-fold-toggle={data}><span className="design-block-title">{title}</span>{!open&&summary&&<small>{summary}</small>}</summary>
     {children}
