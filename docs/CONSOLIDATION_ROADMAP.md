@@ -123,7 +123,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ## Phase 4 — Grade separation and engineering depth
 
-Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1 and 4B-2 done; next is 4B-3 (diamond).
+Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1 and 4B-2 done; next 4B-2b (drawing quick wins), then 4B-3 (diamond).
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
 
@@ -171,7 +171,7 @@ underpasses at a junction, constrained urban ramps) are drawn by hand from 4B-1 
 Status 2026-10-22: 4B-1 done (spec `docs/spec/PHASE_4B_RAMPS.md`). Road curve editing in `/design` added before 4B-2
 (owner request): pick a road point, radius typed or dragged (capped by the straights and reported), back to a sharp
 corner, delete a point; arms keep clear of arcs; a crossing inside an arc is reported (crossings are still found on
-the straight lines between points). 4B-2 done (spec `docs/spec/PHASE_4B_LEVELS.md`). Next 4B-3.
+the straight lines between points). 4B-2 done (spec `docs/spec/PHASE_4B_LEVELS.md`). Next 4B-2b, then 4B-3.
 
 **4B-1 — Ramps drawn by hand**
 - Start a road from the side of another road (diverge) and end it on the side of another road (merge); the attachment
@@ -191,15 +191,42 @@ the straight lines between points). 4B-2 done (spec `docs/spec/PHASE_4B_LEVELS.m
 - Exit criteria: drawing at a level creates the same profile as typing it; one undo per gesture; stacked crossings
   compile with the right over/under order in 2D and 3D.
 
+Source for 4B-2b and the editing hub: [road drawing UX research, 2026-10-22](research/2026-10-22-ROAD-DRAWING-UX-RESEARCH.md)
+(claims about other products not yet re-checked; its TSD findings were checked against the code).
+
+**4B-2b — Drawing quick wins before the template** (small; each helps the template too)
+- Snap badge at the cursor (end / on road / straight on / 15° …) and `Tab` to cycle when targets overlap.
+- `Space`+drag pans in every tool (middle-drag stays).
+- Ramp anchors: traffic-direction arrows when selected or hovered.
+- Long section: plan-size hit targets for level points; labels kept from overlapping.
+- Keys: `Delete` deletes the selection; `Backspace` only steps back while drawing.
+- Touch / phone: visible ย้อนจุด / จบ / ยกเลิก / snap on-off while drawing; secondary top actions in a "เพิ่มเติม" menu;
+  toasts and readouts wrap instead of cutting long Thai messages.
+
 **4B-3 — Diamond interchange (first template)**
 - Built only from 4B-1 / 4B-2 pieces: preview → commit as one undoable step → each ramp, anchor and profile stays editable.
 - Generated objects keep their origin (`template`, `version`, parameters); regenerating is an explicit action.
-- Footprint preview red with the reason when it cannot be placed.
+- Footprint preview red with the reason when it cannot be placed: a reusable ghost (road / ramp envelope, anchors,
+  crossing relation, structure stretches), not diamond-only.
+- Orientation and mirror before commit, re-resolved for left-hand traffic and diverge / merge sides (not a picture flip).
+- Placement feedback: the main road it attaches to, the station and the level it inherits.
+- "Select the pieces of this template" after commit; pieces stay ordinary objects.
+
+**4B-4 — Select as the editing hub** (right after 4B-3)
+- Box select and `Shift`+click add / remove; move a selection as one gesture (junctions and ramps re-bound after).
+- Right-click menu in Select: join, split here, reverse, straighten, zoom, delete.
+- Straighten selected points; tangent curve between two straights ("เชื่อมด้วยโค้งสัมผัส").
+- One-shot guides after hovering a road: extension, perpendicular, parallel; temporary distance to a picked reference.
+
+Later in Phase 4 or after: parallel / offset road tool, saved templates, general rotate / mirror (4D), equalize grade,
+command search (`Ctrl/Cmd+K`), grid in three clicks, freehand sketch with a shown before / after. Not planned: Bezier
+road geometry, a full CAD constraint set, silent auto-clamping of drawn geometry.
 
 ### 4C — Lane runs and lane connections
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".
+- Replace / upgrade the section of a selected stretch of road, on the same station-range model as lane runs (research 2026-10-22).
 - Custom structure section for bridges and underpasses, with width transitions to the at-grade section (step 2 of the owner decision 2026-10-21; step 1 — same widths, structure finish — is in 4A).
 - Automatic lane mapping at junctions and merges; an advanced lane connector for overrides only.
 

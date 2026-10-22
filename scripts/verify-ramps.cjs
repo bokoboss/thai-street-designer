@@ -61,4 +61,19 @@ run({type:'road.remove',roadId:'M'});assert.equal(R('X1').anchors,undefined,'mai
 assert.equal(rp.validateRoadFirstProject({...e.project,roads:[...e.project.roads,ramp('Q',[{x:0,y:0},{x:1,y:-1}],{anchors:{start:{roadId:'none',station:0,side:1}}})]}),'จุดเชื่อมทางลาด Q ไม่ถูกต้อง');
 // 12. Draw order: a road below ground is drawn before the road at grade that passes over it.
 {const P={schemaVersion:5,title:'t',junctions:[],parallelCorridors:[],roadEnds:[],links:[{id:'A',levels:[{station:0,z:0}]},{id:'B',levels:[{station:0,z:-6}]}]};assert.deepEqual(lg.linksInDrawOrder(P).map(l=>l.id),['B','A']);}
-console.log('PASS 4B-1 ramps: diverge/merge anchors, no junction, follows the main road, level, slide/detach, refusals, steep end = junction, taper, draw order');
+// 13. Attachment matrix (research review 2026-10-22): diverge / merge × both sides × main road drawn either way.
+// Left-hand traffic on a y-down plan: eastbound on top (y < 0), westbound on the bottom (y > 0).
+for(const reversed of [false,true]){
+  const main=reversed?[{x:300,y:0},{x:-300,y:0}]:[{x:-300,y:0},{x:300,y:0}];
+  const cases=[['diverge eastbound',[{x:-100,y:0},{x:0,y:-40}],'start',-1],['merge eastbound',[{x:0,y:-40},{x:100,y:0}],'end',-1],
+    ['diverge westbound',[{x:100,y:0},{x:0,y:40}],'start',1],['merge westbound',[{x:0,y:40},{x:-100,y:0}],'end',1]];
+  for(const [name,points,end,ySign] of cases){
+    const x=c.runCommand(editor([{id:'M',name:'ถนนหลัก',points:main,section:sec}]),{type:'road.add',road:ramp('X',points)});
+    assert.equal(x.result.error,null,`${name} (${reversed?'reversed':'forward'})`);assert.equal(x.result.autoJunctions.length,0);
+    const r=x.editor.project.roads.find(q=>q.id==='X'),i=end==='start'?0:r.points.length-1;
+    assert.ok(r.anchors?.[end],`${name}: attached`);assert.equal(Math.sign(r.points[i].y),ySign,`${name}: on its traffic side`);
+  }
+  const wrong=c.runCommand(editor([{id:'M',name:'ถนนหลัก',points:main,section:sec}]),{type:'road.add',road:ramp('X',[{x:-100,y:0},{x:0,y:40}])});
+  assert.match(wrong.result.error,/สวนทิศ/,'eastbound ramp on the westbound side refused');
+}
+console.log('PASS 4B-1 ramps: attachment matrix (both sides, both directions), diverge/merge anchors, no junction, follows the main road, level, slide/detach, refusals, steep end = junction, taper, draw order');
