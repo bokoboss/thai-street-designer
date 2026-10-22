@@ -35,7 +35,12 @@ export type DraftCheck={kind:'error'|'warn';text:string}|null;
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0}:{
+/** Level label: +6.0 ม. / −3.5 ม. */
+const fmtLevel=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)} ม.`;
+
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[]}:{
+  /** Drawing at a level: the level of the next point and of each drawn point. */
+  drawLevel?:number;draftLevels?:number[];
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
   tool:DesignTool;draft:WorldPoint[];onDraftChange:(points:WorldPoint[],snap:SnapResult)=>void;onFinishDraft:()=>void;
   /** Right-click while drawing: one step back. checkDraft: what finishing the road drawn so far would do (see DraftCheck). */
@@ -321,6 +326,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       {preview.length>0&&<g data-design-draft={draftCheck?draftCheck.kind:'true'} pointerEvents="none">
         <polyline points={preview.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={draftColor} strokeWidth={px(draftCheck?3:2)} strokeDasharray={`${px(6)} ${px(4)}`}/>
         {draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={px(4)} fill={draftColor}/>)}
+        {draft.map((p,i)=>(draftLevels[i]??0)!==0&&<text key={'z'+i} data-design-draft-level={i} x={p.x+px(7)} y={p.y-px(7)} fontSize={px(11)} fontWeight="700" fill={draftColor}>{fmtLevel(draftLevels[i])}</text>)}
       </g>}
       {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
         {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
@@ -352,6 +358,9 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     {tool==='road'&&snap&&<div className="design-readout" data-design-readout="true" style={{left:Math.max(8,Math.min((snap.point.x-vb.x)*view.scale+16,size.w-(draftCheck?350:140))),top:Math.max(8,Math.min((snap.point.y-vb.y)*view.scale+16,size.h-(draftCheck?90:40)))}}>
       {typedLength?<b>{typedLength} ม. ↵</b>:snap.length!==undefined&&<b>{snap.length.toFixed(1)} ม.</b>}
       {snap.angle!==undefined&&<span>{snap.angle.toFixed(0)}°</span>}
+      {(drawLevel!==0||draftLevels.some(z=>z!==0))&&<span data-design-readout-level={drawLevel}>ระดับ {fmtLevel(drawLevel)}</span>}
+      {(()=>{const last=draft.at(-1),z0=draftLevels[draft.length-1]??0;if(!last||!cursor||z0===drawLevel)return null;const l=Math.hypot(cursor.x-last.x,cursor.y-last.y);
+        return l>.5?<span data-design-readout-grade="true">ลาด {((drawLevel-z0)/l*100).toFixed(1)}%</span>:null;})()}
       {snap.kind==='end'&&<span>{draft.length?'ปลายถนน':'ต่อจากปลายถนน'}</span>}
       {snap.kind==='road'&&<span>บนแนวถนน</span>}
       {draftCheck&&<em data-design-draft-check={draftCheck.kind} className={draftCheck.kind}>{draftCheck.text}</em>}

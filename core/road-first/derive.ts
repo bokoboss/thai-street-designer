@@ -324,23 +324,39 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     if((road.links?.length??0)>span)issues.push(`${road.name}: มีการตั้งค่าช่วงถนน ${road.links!.length} ช่วง แต่ถนนนี้มี ${span} ช่วง`);
   }
   // Grade-separated crossings: relation and measured gap (Phase 4A). Not judged against any standard here.
+  // A crossing of three or more roads at different levels (a stack) gives one crossing per pair of roads; a road that
+  // passes over or under a junction gives one crossing with each road of the junction.
   const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[];
-  for(const d of decisions.filter(x=>x.decision==='grade-separated')){
-    const c=byId.get(d.candidateId);if(!c||c.roads.length<2)continue;
-    const [a,b]=c.roads,ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)continue;
+  const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
+  const pair=(d:Decision,c:Candidate,a:{roadId:string;station:number},b:{roadId:string;station:number},chosen:string|undefined)=>{
+    const ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)return;
     const za=levelAt(ra.profile,a.station),zb=levelAt(rb.profile,b.station);
-    const over=d.over===ra.id||d.over===rb.id?d.over:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
+    const over=chosen===ra.id||chosen===rb.id?chosen:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
     const top=over===ra.id?{r:ra,ref:a,z:za}:over===rb.id?{r:rb,ref:b,z:zb}:null,bottom=top?(top.r===ra?{r:rb,ref:b,z:zb}:{r:ra,ref:a,z:za}):null;
     const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
     const name=top&&bottom?`${top.r.name} ข้าม ${bottom.r.name}`:`${ra.name} × ${rb.name}`;
+    const id=networkCrossings.some(x=>x.id===d.candidateId)?`${d.candidateId}~${ra.id}~${rb.id}`:d.candidateId;
     crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name});
-    const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
     const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
       return{a:pointAt(top.r.points,sa),b:pointAt(top.r.points,sb),half:sectionWidth(top.r.section)/2};})():undefined;
     const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const half=sectionWidth(top.r.section)/2+2;
       return{a:pointAt(bottom.r.points,Math.max(0,bottom.ref.station-half)),b:pointAt(bottom.r.points,bottom.ref.station+half),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3)};})():undefined;
-    networkCrossings.push({id:d.candidateId,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
+    networkCrossings.push({id,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
+  };
+  for(const d of decisions){
+    const c=byId.get(d.candidateId);if(!c||c.roads.length<2)continue;
+    if(d.decision==='grade-separated'){
+      if(c.roads.length===2){pair(d,c,c.roads[0],c.roads[1],d.over);continue;}
+      for(let i=0;i<c.roads.length;i++)for(let k=i+1;k<c.roads.length;k++)pair(d,c,c.roads[i],c.roads[k],undefined);
+    }else if(d.decision==='junction'&&d.excluded?.length){
+      const inJunction=c.roads.filter(r=>!d.excluded!.includes(r.roadId)),zj=inJunction.map(r=>levelAt(roadById.get(r.roadId)?.profile,r.station));
+      const mean=zj.reduce((t,v)=>t+v,0)/(zj.length||1);
+      for(const x of c.roads.filter(r=>d.excluded!.includes(r.roadId))){
+        if(Math.abs(levelAt(roadById.get(x.roadId)?.profile,x.station)-mean)<=LEVEL_TOLERANCE)continue;
+        for(const r of inJunction)pair(d,c,x,r,undefined);
+      }
+    }
   }
   // Ramp attachments (Phase 4B): a taper at each diverge / merge, at the main road level.
   const rampTapers:NonNullable<NetworkProject['rampTapers']>=[];

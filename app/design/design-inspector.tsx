@@ -15,7 +15,7 @@ import {stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import {overCommand,underCommand} from '@/core/road-first/grade-separation';
-import {DIP_DEFAULTS,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
+import {DIP_DEFAULTS,DRAW_LEVEL_STEP,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
@@ -498,9 +498,9 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole}:{
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole,drawLevel,onDrawLevel}:{
   selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
-  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newRole:NewRole;onNewRole:(v:NewRole)=>void;
+  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newRole:NewRole;onNewRole:(v:NewRole)=>void;drawLevel:number;onDrawLevel:(z:number)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
     <header className="design-inspector-head"><small>วาดถนน</small><b>{newRole==='access'?'ทางเข้าโครงการใหม่':newRole==='ramp'?'ทางลาดใหม่':'ถนนใหม่'}</b></header>
@@ -511,6 +511,15 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
     :newRole==='access'?<p className="design-meta" data-design-new-access="true">เริ่มคลิกบนแนวถนนหลัก แล้ววาดออกไปยังโครงการ · ถนนหลักไหลต่อเนื่อง ทางเข้ามีเส้นหยุดให้ทาง · หน้าตัดเริ่มต้น 1+1 ช่อง กว้าง 3 ม. (ค่าตั้งต้นของเครื่องมือ แก้ได้ภายหลัง)</p>
     :<PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>}
     {newRole==='road'&&!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
+    <section className="design-block" data-design-draw-level={drawLevel}>
+      <small className="design-block-title">ระดับที่วาด (จุดถัดไป)</small>
+      <div className="design-level-row">
+        <button data-design-level="down" title="PageDown" onClick={()=>onDrawLevel(drawLevel-DRAW_LEVEL_STEP)}>▼ ลด</button>
+        <NumberField field="draw-level" label="ระดับ (ม.)" value={drawLevel} step={.5} min={-30} max={30} onCommit={onDrawLevel}/>
+        <button data-design-level="up" title="PageUp" onClick={()=>onDrawLevel(drawLevel+DRAW_LEVEL_STEP)}>▲ ยก</button>
+      </div>
+      <p className="design-meta">PageUp / PageDown ยกหรือลดทีละ {DRAW_LEVEL_STEP} ม. ระหว่างวาด · ถนนที่ข้ามกันต่างระดับจะเป็นทางต่างระดับเอง · เริ่มวาดบนถนนเดิมจะเริ่มที่ระดับของถนนนั้น</p>
+    </section>
     <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;

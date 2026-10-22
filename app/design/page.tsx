@@ -11,7 +11,10 @@ import {useMapReference} from './map-panel';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
-import {RAMP_SECTION} from '@/core/road-first/ramps';
+import {RAMP_SECTION,project as projectOnRoad} from '@/core/road-first/ramps';
+import {DRAW_LEVEL_STEP,drawnProfile,levelAt} from '@/core/road-first/elevation';
+/** Profile field of a road drawn at levels (none when drawn at ground level). */
+const withProfile=(points:WorldPoint[],levels:number[])=>{const profile=drawnProfile(points,levels);return profile?{profile}:{};};
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
 import type {MigrationTarget} from '@/core/road-first/migrate';
@@ -55,6 +58,8 @@ export default function DesignWorkspace(){
   const [inspectorOpen,setInspectorOpen]=useState(false),[fit3d,setFit3d]=useState(0),[focusKey,setFocusKey]=useState(0);
   /** Kind of the next road drawn: ordinary road, project access (driveway) or ramp. */
   const [newRole,setNewRole]=useState<NewRole>('road');
+  /** Level the next drawn point gets, and the level of each drawn point (drawing at a level). */
+  const [level,setLevel]=useState(0),[draftLevels,setDraftLevels]=useState<number[]>([]);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
@@ -73,41 +78,50 @@ export default function DesignWorkspace(){
 
   /** Section of the road being drawn: the access and ramp starting sections, else the last section used. */
   function newDraftSection(){return newRole==='access'?presetSection('access'):newRole==='ramp'?structuredClone(RAMP_SECTION):structuredClone(ed.lastSection);}
-  function clearDraft(){setDraft([]);setExtend(null);setTypedLength('');setCalibration([]);}
+  function changeLevel(by:number){setLevel(z=>Math.max(-30,Math.min(30,Math.round((z+by)*10)/10)));}
+  function clearDraft(){setDraft([]);setDraftLevels([]);setLevel(0);setExtend(null);setTypedLength('');setCalibration([]);}
+  /** Draft points with their levels: kept points keep theirs, new points take the current level. */
+  function updateDraft(points:WorldPoint[],start?:number){setDraft(points);setDraftLevels(l=>points.map((_,i)=>i===0&&start!==undefined?start:l[i]??level));}
   function chooseTool(next:DesignTool){clearDraft();setTool(next);}
   function addDraftPoint(points:WorldPoint[],snap:SnapResult){
-    if(points.length===1)setExtend(snap.kind==='end'&&snap.roadId?{roadId:snap.roadId,atStart:snap.end==='start'}:null);
-    setDraft(points);setTypedLength('');
+    if(points.length===1){
+      setExtend(snap.kind==='end'&&snap.roadId?{roadId:snap.roadId,atStart:snap.end==='start'}:null);
+      // Starting on a road starts at that road's level there (so the new road meets it, not passes over it).
+      const on=snap.roadId?ed.project.roads.find(r=>r.id===snap.roadId):undefined,z=on?Math.round(levelAt(on.profile,projectOnRoad(on.points,points[0]).station)*10)/10:level;
+      setLevel(z);updateDraft(points,z);setTypedLength('');return;
+    }
+    updateDraft(points);setTypedLength('');
   }
   function finishDraft(){
     if(draft.length<2){ed.setNotice({text:'ถนนต้องมีอย่างน้อยสองจุด',kind:'error'});return;}
     if(extend){
-      const r=ed.run({type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:draft.slice(1)});
+      const r=ed.run({type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:draft.slice(1),levels:draftLevels.slice(1)});
       if(r.ok){clearDraft();setTool('select');setSelection({kind:'road',id:extend.roadId});}
       return;
     }
     // Ids are never reused across scenarios, so the comparison never mistakes a new road for an old one.
     const role=newRole==='road'?undefined:newRole,section=newDraftSection();
-    const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads,role),...(role?{role}:{}),points:draft,section}});
+    const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads,role),...(role?{role}:{}),points:draft,section,...withProfile(draft,draftLevels)}});
     if(r.ok){setNewRole('road');clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
   /** Right-click or Backspace while drawing: drop the typed length, else the last point, else leave Draw Road. */
   function draftBack(){
     if(typedLength){setTypedLength('');return;}
-    if(draft.length){const next=draft.slice(0,-1);setDraft(next);if(!next.length)setExtend(null);return;}
+    if(draft.length){const next=draft.slice(0,-1);updateDraft(next);if(!next.length){setExtend(null);setLevel(0);}return;}
     chooseTool('select');
   }
   const checkDraft=useCallback((points:WorldPoint[]):DraftCheck=>{
     if(points.length<2)return null;
-    const cmd:RoadFirstCommand=extend?{type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:points.slice(1)}
-      :{type:'road.add',road:{id:'R-preview',name:'ถนนใหม่',...(newRole==='road'?{}:{role:newRole}),points,section:newDraftSection()}};
+    const levels=points.map((_,i)=>draftLevels[i]??level);
+    const cmd:RoadFirstCommand=extend?{type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:points.slice(1),levels:levels.slice(1)}
+      :{type:'road.add',road:{id:'R-preview',name:'ถนนใหม่',...(newRole==='road'?{}:{role:newRole}),points,section:newDraftSection(),...withProfile(points,levels)}};
     const r=executeCommand(ed.project,cmd);
     if(r.error)return{kind:'error',text:`วางไม่ได้ · ${r.error}`};
     if(r.blocked.length)return{kind:'warn',text:`ไม่เชื่อมเข้าทางแยก · ${r.blocked[0]!.reason}`};
     if(r.openCrossings.length)return{kind:'warn',text:`จุดตัดต้องเลือกเอง · ${r.openCrossings[0]!.reason}`};
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[extend,ed.project,ed.lastSection,newRole]);
+  },[extend,ed.project,ed.lastSection,newRole,draftLevels,level]);
   function onKey(e:React.KeyboardEvent){
     if((e.target as HTMLElement).matches('input,select,textarea'))return;
     const k=e.key.toLowerCase();
@@ -117,11 +131,13 @@ export default function DesignWorkspace(){
     if(e.key==='Escape'){if(typedLength)setTypedLength('');else if(draft.length)clearDraft();else{chooseTool('select');setSelection(null);}return;}
     // Typed length while drawing: digits build a length, Enter places the point at that distance along the cursor direction.
     if(tool==='road'&&draft.length&&/^[0-9.]$/.test(e.key)){setTypedLength(t=>(t+e.key).slice(0,8));return;}
+    // Raise / lower the road being drawn (game style): the next point is placed at the new level.
+    if(tool==='road'&&(e.key==='PageUp'||e.key==='PageDown')){e.preventDefault();changeLevel(e.key==='PageUp'?DRAW_LEVEL_STEP:-DRAW_LEVEL_STEP);return;}
     if(tool==='road'&&e.key==='Backspace'&&typedLength){setTypedLength(t=>t.slice(0,-1));return;}
     if(tool==='road'&&e.key==='Backspace'&&draft.length){draftBack();return;}
     if(e.key==='Enter'&&tool==='road'){
       const len=Number(typedLength),last=draft.at(-1),toward=snapRef.current?.point;
-      if(typedLength&&len>0&&last&&toward){setDraft([...draft,pointAtLength(last,toward,len)]);setTypedLength('');return;}
+      if(typedLength&&len>0&&last&&toward){updateDraft([...draft,pointAtLength(last,toward,len)]);setTypedLength('');return;}
       finishDraft();return;
     }
     // A picked road point is deleted on its own; otherwise the whole road.
@@ -222,7 +238,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>
@@ -242,7 +258,7 @@ export default function DesignWorkspace(){
           onMap={()=>{map.update({enabled:true});setSelection(null);setInspectorOpen(true);setTimeout(()=>document.querySelector<HTMLInputElement>('[data-design-map-query]')?.focus(),0);}}
           onImage={f=>{void image.add(f,{x:0,y:0});setSelection(null);setInspectorOpen(true);}}
           onBlank={()=>{chooseTool('road');document.querySelector<HTMLElement>('[data-design-workspace]')?.focus();}}/>}
-        {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled}/>}
+        {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled} project={ed.project} run={ed.run} finishGesture={ed.finishGesture}/>}
         {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d}/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
@@ -250,7 +266,7 @@ export default function DesignWorkspace(){
       </div>
       <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
-          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole}/>
+          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole} drawLevel={level} onDrawLevel={z=>setLevel(Math.max(-30,Math.min(30,Math.round(z*10)/10)))}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

@@ -161,3 +161,7 @@
 /* Inline text action inside a meta line (e.g. unhook a ramp end). */
 .design-link{border:0;background:none;padding:0 2px;color:#0f6f69;font:inherit;text-decoration:underline;cursor:pointer}
 .design-warning{color:#8a4b00}
+.design-level-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:end}
+.design-level-row button{height:34px}
+.design-profile{overflow:hidden;width:100%}
+.design-profile svg{display:block;touch-action:none;user-select:none;-webkit-user-select:none}
