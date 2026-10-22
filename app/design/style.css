@@ -160,3 +160,4 @@
 
 /* Inline text action inside a meta line (e.g. unhook a ramp end). */
 .design-link{border:0;background:none;padding:0 2px;color:#0f6f69;font:inherit;text-decoration:underline;cursor:pointer}
+.design-warning{color:#8a4b00}

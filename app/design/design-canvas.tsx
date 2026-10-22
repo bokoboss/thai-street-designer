@@ -14,6 +14,8 @@ import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
 import {approachInfo,cornerFromPoint,cornerHandles,openingHandle,openingStartFromPoint,openingsOf,openingsPatch,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/road-openings';
+import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
+import {smoothAlignment} from '@/core/common/alignment';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
 import MapBackground,{type MapProviderCredentials,type MapReference} from '../junction/map-background';
@@ -21,7 +23,8 @@ import MapBackground,{type MapProviderCredentials,type MapReference} from '../ju
 export const DELTA_STYLE:Record<DeltaStatus,{color:string;label:string}>={added:{color:'#1f8a4c',label:'เพิ่ม'},removed:{color:'#b3261e',label:'ตัดออก'},changed:{color:'#c47b12',label:'แก้ไข'}};
 
 /** approach: one road leg at a junction (id = junction candidate id, leg = road leg key). */
-export type DesignSelection={kind:'road'|'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
+/** point: a road point picked on the plan (its curve radius, or delete it). */
+export type DesignSelection={kind:'road';id:string;point?:number}|{kind:'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
 /** ref-move / ref-calibrate: place and scale the reference image (started from the inspector). */
 export type DesignTool='select'|'pan'|'road'|'ref-move'|'ref-calibrate'|'map-move';
 export type ReferenceImageView={reference:LocalImageReference;url:string|null};
@@ -54,7 +57,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<SnapResult|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
-    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|null>(null);
+    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}|null>(null);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -139,6 +142,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       const radius=cornerFromPoint(j,d.corner,toWorld(e));
       if(radius!==h.radius)run({type:'junction.setCornerAt',candidateId:d.candidateId,leg:legKey(leg.roadId,leg.side),radius},{gesture:true});return;
     }
+    if(d.kind==='radius'){
+      const r=project.roads.find(x=>x.id===d.roadId);if(!r)return;
+      const radius=radiusFromPoint(r.points,d.index,toWorld(e));
+      if(radius!==null&&radius!==(r.points[d.index].radius??0))run({type:'road.setPointRadius',roadId:r.id,index:d.index,radius},{gesture:true});return;
+    }
     if(d.kind==='road-opening'){
       const r=project.roads.find(x=>x.id===d.roadId),o=r?.openings?.find(x=>x.id===d.id);if(!r||!o)return;
       const station=roadOpeningStationFromPoint(r,o,toWorld(e));
@@ -190,7 +198,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   function startPointDrag(e:React.PointerEvent,road:Road,index:number){
     if(tool!=='select'||e.button!==0)return;
     e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);
-    onSelect({kind:'road',id:road.id});drag.current={kind:'point',roadId:road.id,index};
+    onSelect({kind:'road',id:road.id,point:index});drag.current={kind:'point',roadId:road.id,index};
   }
   function insertPoint(e:React.MouseEvent,road:Road){
     if(tool!=='select')return;
@@ -254,7 +262,9 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       <g data-design-roads="true">
         {/* Higher roads last, so a click at a grade separation picks the road on top. */}
         {[...project.roads].sort((a,b)=>Math.max(0,...(a.profile??[]).map(q=>q.z))-Math.max(0,...(b.profile??[]).map(q=>q.z))).map(road=>{
-          const d=road.points.map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id;
+          // The centre line as drawn: arcs at curved points.
+          const d=smoothAlignment(road.points).map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id,
+            pointPicked=selected&&selection?.kind==='road'?selection.point:undefined,radiusAt=pointPicked!==undefined?curveHandle(road.points,pointPicked,px(28)):null;
           return <g key={road.id} data-design-road={road.id}>
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}
               onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'road',id:road.id});}} onDoubleClick={e=>insertPoint(e,road)}/>
@@ -266,9 +276,17 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
               </g>;})}
             {selected&&road.points.map((p,i)=><g key={i} style={{cursor:'move'}} onPointerDown={e=>startPointDrag(e,road,i)}>
               {/* Large invisible target around a small visible handle. */}
-              <circle data-design-road-point={`${road.id}:${i}`} cx={p.x} cy={p.y} r={px(14)} fill="transparent"/>
-              <circle cx={p.x} cy={p.y} r={px(6)} fill="#fff" stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+              <circle data-design-road-point={`${road.id}:${i}`} data-design-point-picked={pointPicked===i?'true':undefined} cx={p.x} cy={p.y} r={px(14)} fill="transparent"/>
+              <circle cx={p.x} cy={p.y} r={px(pointPicked===i?7:6)} fill={pointPicked===i?'#0b7f86':'#fff'} stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+              {(p.radius??0)>0&&vertexCurve(road.points,i)&&<text x={p.x+px(10)} y={p.y-px(10)} fontSize={px(12)} fontWeight="700" fill="#0b6f69" pointerEvents="none">R{Math.round(vertexCurve(road.points,i)!.radius)}</text>}
             </g>)}
+            {/* Curve radius handle of the picked point: drag towards the inside of the bend for a larger radius. */}
+            {radiusAt&&pointPicked!==undefined&&<g style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'radius',roadId:road.id,index:pointPicked})}>
+              <line x1={road.points[pointPicked].x} y1={road.points[pointPicked].y} x2={radiusAt.x} y2={radiusAt.y} stroke="#0b7f86" strokeWidth={px(1.2)} strokeDasharray={`${px(3)} ${px(3)}`} pointerEvents="none"/>
+              <circle data-design-radius-handle={`${road.id}:${pointPicked}`} cx={radiusAt.x} cy={radiusAt.y} r={px(13)} fill="transparent"><title>ลากเข้าด้านในโค้งเพื่อเพิ่มรัศมี · ลากกลับไปที่จุดเพื่อทำมุมตรง</title></circle>
+              <circle cx={radiusAt.x} cy={radiusAt.y} r={px(6)} fill="#fff" stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+              <path d={`M${radiusAt.x-px(3)} ${radiusAt.y}h${px(6)}M${radiusAt.x} ${radiusAt.y-px(3)}v${px(6)}`} stroke="#0b7f86" strokeWidth={px(1.5)} pointerEvents="none"/>
+            </g>}
           </g>;
         })}
       </g>

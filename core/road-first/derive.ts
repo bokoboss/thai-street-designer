@@ -11,6 +11,7 @@ import {proposalId} from '../network/junction-auxiliary-proposal';
 import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
 import {taperPolygon,type RampAnchor} from './ramps';
+import {curveRanges,vertexCurve} from './curves';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -157,6 +158,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     return true;
   });
   for(const c of candidates)if(!decisions.some(d=>d.candidateId===c.id))issues.push(`จุดตัด ${c.id} ยังไม่ได้ยืนยัน`);
+  // Crossings are found on the straight lines between road points; one inside an arc is reported, not moved.
+  for(const c of candidates)for(const ref of c.roads){
+    const road=roads.find(r=>r.id===ref.roadId);if(!road)continue;
+    const arc=curveRanges(road.points,stations(road.points)).find(a=>ref.station>a.from+EPS&&ref.station<a.to-EPS);
+    if(arc)issues.push(`${road.name}: จุดตัดอยู่ในช่วงโค้งที่จุดแนวถนนที่ ${arc.index+1} — ตำแหน่งจุดตัดคิดจากแนวเส้นตรง ลดรัศมีหรือย้ายจุดตัดออกจากช่วงโค้ง`);
+  }
   const roadById=new Map(roads.map(r=>[r.id,r]));
   // Junction stations per road, sorted.
   const onRoad=new Map<string,{station:number;jIndex:number}[]>();
@@ -164,13 +171,15 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   onRoad.forEach(list=>list.sort((a,b)=>a.station-b.station));
 
   /** Straight approach zone for a leg. A short straight tail is absorbed into the arm; otherwise the road continues as a link. */
-  const legLength=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>{
-    if(toNextJunction!==null)return Math.min(approach,(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toVertex:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
+  // A curved vertex keeps the arm clear of its arc too (clearance = the larger of the bend clearance and the arc's tangent).
+  const legLength=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean,clear=BEND_CLEARANCE)=>{
+    if(toNextJunction!==null)return Math.min(approach,(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toVertex:Math.max(toVertex-clear,toVertex/2));
     if(vertexIsRoadEnd&&toRoadEnd<=approach+SHORT_TAIL)return toRoadEnd;
-    return Math.min(approach,vertexIsRoadEnd?toRoadEnd:Math.max(toVertex-BEND_CLEARANCE,toVertex/2));
+    return Math.min(approach,vertexIsRoadEnd?toRoadEnd:Math.max(toVertex-clear,toVertex/2));
   };
-  const legRoom=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean)=>
-    Math.min(toNextJunction===null?Infinity:(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toRoadEnd:toVertex-BEND_CLEARANCE);
+  const legRoom=(toNextJunction:number|null,toRoadEnd:number,toVertex:number,vertexIsRoadEnd:boolean,clear=BEND_CLEARANCE)=>
+    Math.min(toNextJunction===null?Infinity:(toNextJunction-MIN_LINK)/2,vertexIsRoadEnd?toRoadEnd:toVertex-clear);
+  const clearAt=(road:Road,i:number)=>Math.max(BEND_CLEARANCE,vertexCurve(road.points,i)?.tangent??0);
   const sources:CompileSources={junctions:{},links:{}};
   const junctions:JunctionInstance[]=[],legs:LegBinding[]=[],armLength=new Map<string,number>();
   confirmed.forEach(({d,c},jIndex)=>{
@@ -179,12 +188,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const road=roadById.get(ref.roadId)!,s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)!,k=list.findIndex(v=>v.jIndex===jIndex);
       const next=list[k+1],prev=list[k-1];
       if(ref.station<total-tolerance){
-        const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1],toEnd=total-ref.station;
-        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS),room:legRoom(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS)});
+        const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1],toEnd=total-ref.station,clear=clearAt(road,seg+1);
+        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear),room:legRoom(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear)});
       }
       if(ref.station>tolerance){
-        const seg=segmentAt(road.points,ref.station,false),vertex=s[seg];
-        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS),room:legRoom(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS)});
+        const seg=segmentAt(road.points,ref.station,false),vertex=s[seg],clear=clearAt(road,seg);
+        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear),room:legRoom(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear)});
       }
     }
     if(found.length>4){issues.push(`${d.name??id}: มี ${found.length} ขา · ตอนนี้ทางแยกรองรับสูงสุด 4 ขา ขาที่เกินจึงไม่ได้สร้าง`);overflow.push(d.candidateId);found.length=4;}

@@ -18,6 +18,7 @@ import {overCommand,underCommand} from '@/core/road-first/grade-separation';
 import {DIP_DEFAULTS,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
+import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
 /** Kind of road the next drawing makes. */
 export type NewRole='road'|'access'|'ramp';
 import type {CommandOutcome} from './use-road-editor';
@@ -121,6 +122,24 @@ function RoadOpeningBlock({road,compiled,run,onMessage}:{road:Road;compiled:Comp
   </Fold>;
 }
 
+/** The picked road point: curve radius (typed; the plan handle edits the same value), sharp corner, delete. */
+function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onPoint:(point:number|undefined)=>void}){
+  const curve=vertexCurve(road.points,index),end=index===0||index===road.points.length-1,radius=road.points[index].radius??0;
+  return <section className="design-block" data-design-point-block={index}>
+    <small className="design-block-title">จุดแนวถนนที่ {index+1} จาก {road.points.length}{end?' (ปลายถนน)':''}</small>
+    {curve?<>
+      <NumberField field="point-radius" label="รัศมีโค้ง (ม.) · 0 = มุมตรง" value={radius} step={1} min={0} max={MAX_RADIUS} onCommit={v=>run({type:'road.setPointRadius',roadId:road.id,index,radius:v})}/>
+      <p className="design-meta" data-design-curve={curve.radius>0?'arc':'corner'}>หักมุม {curve.deflection.toFixed(0)}° · {curve.radius>0?`โค้งยาว ${(curve.radius*curve.deflection*Math.PI/180).toFixed(1)} ม.`:'มุมตรง'} · ช่วงตรงสองข้างรับรัศมีได้ถึง {Math.floor(curve.maxRadius*10+1e-6)/10} ม.</p>
+      {radius>curve.radius+.01&&<p className="design-meta design-warning" data-design-curve-capped="true">ใส่รัศมี {radius} ม. แต่ช่วงตรงสั้นเกิน จึงวาดได้ {Math.floor(curve.radius*10+1e-6)/10} ม. — ยืดช่วงตรงหรือลดรัศมี</p>}
+    </>:<p className="design-meta">{end?'ปลายถนนทำโค้งไม่ได้':'แนวถนนไม่หักมุมที่จุดนี้ หรือช่วงตรงสั้นเกินไป'}</p>}
+    <div className="design-actions">
+      {curve&&radius>0&&<button data-design-action="point-sharp" onClick={()=>run({type:'road.setPointRadius',roadId:road.id,index,radius:0})}>ทำเป็นมุมตรง</button>}
+      <button data-design-action="point-remove" disabled={road.points.length<=2} title={road.points.length<=2?'ถนนต้องมีอย่างน้อยสองจุด':'Delete'} onClick={()=>{if(run({type:'road.removePoint',roadId:road.id,index}).ok)onPoint(undefined);}}>ลบจุดนี้</button>
+    </div>
+    <p className="design-meta">ลากจุดจับ + บนแบบเข้าด้านในโค้งเพื่อปรับรัศมี · ดับเบิลคลิกบนถนนเพื่อเพิ่มจุด · รัศมีเป็นค่าที่วาด ยังไม่ได้ตรวจกับความเร็วออกแบบ</p>
+  </section>;
+}
+
 /** Ramp ends: where the ramp diverges from / merges into another road, with a way to unhook each end. */
 function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
   const name=(id:string)=>roads.find(r=>r.id===id)?.name??id;
@@ -135,12 +154,13 @@ function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
   </section>;
 }
 
-function RoadInspector({road,run,onDeleted,roads,compiled,onMessage}:{road:Road;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
+function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessage}:{road:Road;point?:number;onPoint:(point:number|undefined)=>void;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
   return <>
     <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
+    {point!==undefined&&point<road.points.length&&<PointBlock road={road} index={point} run={run} onPoint={onPoint}/>}
     {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
@@ -496,7 +516,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
-    {road?<RoadInspector key={road.id} road={road} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
+    {road?<RoadInspector key={road.id} road={road} point={selection?.kind==='road'?selection.point:undefined} onPoint={point=>onSelect({kind:'road',id:road.id,point})} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} compiled={compiled} onMessage={onMessage} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>

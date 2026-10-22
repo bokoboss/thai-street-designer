@@ -131,6 +131,29 @@ try{
     await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the ramp');
   }
 
+  // Road curves: pick a road point, type a radius, drag the radius handle, back to a sharp corner, delete the point.
+  {
+    await b.key('Escape');
+    const before=await b.count('[data-design-road]'),c=await b.rect('.design-canvas'),at=(x,y)=>({x:c.x+x,y:c.y+y});
+    await b.click('[data-design-tool-button="road"]');await b.click('[data-design-new-role="road"]');
+    await b.clickAt(at(-330,-230));await b.clickAt(at(-150,-230));await b.clickAt(at(-150,-110),2);
+    await b.waitFor(async()=>await b.count('[data-design-road]')===before+1,'L-shaped road drawn');
+    const id=await b.evalValue(`[...document.querySelectorAll('[data-design-road]')].at(-1).dataset.designRoad`);
+    await b.click(`[data-design-road-point="${id}:1"]`);
+    await b.waitFor(()=>b.count('[data-design-point-block="1"]'),'point picked');
+    await b.click('[data-design-field="point-radius"]');await b.evalValue(`document.querySelector('[data-design-field="point-radius"]').select()`);await b.type('20');await b.key('Enter');
+    await b.waitFor(()=>b.count('[data-design-curve="arc"]'),'typed radius draws an arc');
+    const h=await b.rect(`[data-design-radius-handle="${id}:1"]`),v=await b.rect(`[data-design-road-point="${id}:1"]`);
+    await b.drag({x:h.x,y:h.y},{x:h.x+(h.x-v.x)*.8,y:h.y+(h.y-v.y)*.8});
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-design-field="point-radius"]').value`))>20,'dragging the handle enlarges the radius');
+    await b.screenshot('artifacts/design-browser-curve.png');
+    await b.click('[data-design-action="point-sharp"]');await b.waitFor(()=>b.count('[data-design-curve="corner"]'),'back to a sharp corner');
+    await b.click(`[data-design-road-point="${id}:1"]`);await b.key('Delete');
+    await b.waitFor(async()=>await b.count(`[data-design-road-point^="${id}:"]`)===2,'Delete removes only the picked point');
+    for(let i=0;i<5&&await b.count('[data-design-road]')!==before;i++)await b.click('[data-design-undo]');
+    await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo back to before the road');
+  }
+
   // Mid-block median opening on a road (GW-04), outside the junction approaches: cuts the median, handle moves it.
   {
     await b.key('Escape');
