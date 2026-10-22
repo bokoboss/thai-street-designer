@@ -8,6 +8,7 @@ import {detectCandidates,stations} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {levelAt,sortedProfile,type Profile} from '@/core/road-first/elevation';
+import {gradeFor,levelCriteria} from '@/core/road-first/level-criteria';
 import type {CommandOutcome} from './use-road-editor';
 
 type Run=(cmd:RoadFirstCommand,opts?:{gesture?:boolean})=>CommandOutcome;
@@ -47,13 +48,16 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
   }
   // Labels placed greedily (crossings, then junctions, then grades); one that would overlap moves up a line or is
   // left to its hover tooltip, so a busy long section stays readable.
+  const maxGrade=gradeFor(levelCriteria(project.options.levels),road)*100;
   const crossingText=(m:Mark)=>`${m.name} ${fmt(m.z)} · ต่าง ${Math.abs(levelAt(road.profile,m.station)-m.z).toFixed(1)} ม.`;
   type Label={kind:string;text:string;x:number;y:number;anchor:'start'|'middle';color:string};
   const wanted:Label[]=[
     ...marks.filter(m=>m.kind==='road').map(m=>({kind:'crossing',text:crossingText(m),x:X(m.station)+7,y:Z(m.z)+4,anchor:'start' as const,color:'#4a565b'})),
     ...marks.filter(m=>m.kind==='junction').map(m=>({kind:'junction',text:m.name,x:X(m.station)+3,y:H-PAD.b-4,anchor:'start' as const,color:'#0b6f69'})),
     ...line.slice(1).flatMap((q,i)=>{const a=line[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;
-      return Math.abs(g)>.05?[{kind:'grade',text:`${g.toFixed(1)}%`,x:(X(a.station)+X(q.station))/2,y:(Z(a.z)+Z(q.z))/2-6,anchor:'middle' as const,color:'#0b6f69'}]:[];}),
+      // Steeper than the project's maximum: marked to check (orange), never judged here.
+      const steep=Math.abs(g)>maxGrade+1e-6;
+      return Math.abs(g)>.05?[{kind:steep?'grade-steep':'grade',text:`${g.toFixed(1)}%${steep?' !':''}`,x:(X(a.station)+X(q.station))/2,y:(Z(a.z)+Z(q.z))/2-6,anchor:'middle' as const,color:steep?'#b05a00':'#0b6f69'}]:[];}),
   ];
   const boxes:{x0:number;x1:number;y0:number;y1:number}[]=[],labels:Label[]=[];
   for(const l of wanted){

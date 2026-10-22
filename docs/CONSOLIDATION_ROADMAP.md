@@ -123,7 +123,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ## Phase 4 — Grade separation and engineering depth
 
-Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2 and 4B-2b done; next 4B-3 (diamond).
+Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b and level criteria done; next 4B-3 (diamond).
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
 
@@ -171,7 +171,7 @@ underpasses at a junction, constrained urban ramps) are drawn by hand from 4B-1 
 Status 2026-10-22: 4B-1 done (spec `docs/spec/PHASE_4B_RAMPS.md`). Road curve editing in `/design` added before 4B-2
 (owner request): pick a road point, radius typed or dragged (capped by the straights and reported), back to a sharp
 corner, delete a point; arms keep clear of arcs; a crossing inside an arc is reported (crossings are still found on
-the straight lines between points). 4B-2 done (spec `docs/spec/PHASE_4B_LEVELS.md`). 4B-2b done 2026-10-22. Next 4B-3.
+the straight lines between points). 4B-2 done (spec `docs/spec/PHASE_4B_LEVELS.md`). 4B-2b done 2026-10-22. Level criteria (spec `docs/spec/LEVEL_CRITERIA.md`) done before 4B-3: project values with sources drive bridge heights, underpass depths, ramp grades and checks. Next 4B-3.
 
 **4B-1 — Ramps drawn by hand**
 - Start a road from the side of another road (diverge) and end it on the side of another road (merge); the attachment

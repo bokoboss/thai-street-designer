@@ -12,9 +12,12 @@ import {joinRoads} from './join';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
 import {MAX_RADIUS,vertexCurve} from './curves';
+import {LEVEL_CRITERIA_LABEL,type Criterion,type LevelCriteriaKey} from './level-criteria';
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
+  /** Level criteria of the project (value and source per criterion); null removes one (back to the tool value). */
+  |{type:'project.setLevelCriteria';patch:Partial<Record<LevelCriteriaKey,Criterion|null>>}
   |{type:'road.add';road:Road}
   |{type:'road.remove';roadId:string}
   |{type:'road.rename';roadId:string;name:string}
@@ -114,6 +117,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const t=(d:Decision)=>(d.treatments??={});
   switch(cmd.type){
     case 'project.rename':p.title=cmd.title;label=`เปลี่ยนชื่อโครงการเป็น ${cmd.title}`;group='project.rename';break;
+    case 'project.setLevelCriteria':{
+      const levels={...p.options.levels};
+      for(const [k,v] of Object.entries(cmd.patch) as [LevelCriteriaKey,Criterion|null][]){if(v)levels[k]={value:v.value,...(v.source?.trim()?{source:v.source.trim()}:{})};else delete levels[k];}
+      if(Object.keys(levels).length)p.options={...p.options,levels};else{const {levels:_drop,...rest}=p.options;void _drop;p.options=rest;}
+      const keys=Object.keys(cmd.patch) as LevelCriteriaKey[];
+      label=`เกณฑ์ระดับ: ${keys.map(k=>`${LEVEL_CRITERIA_LABEL[k]} ${cmd.patch[k]?fmt(cmd.patch[k]!.value):'ค่าเริ่มต้น'}`).join(', ')}`;group=`project.levels:${keys.join(',')}`;break;
+    }
     case 'road.add':{
       if(road(cmd.road.id))return fail(`มีถนนรหัส ${cmd.road.id} อยู่แล้ว`,`เพิ่มถนน ${cmd.road.name}`);
       p.roads.push(structuredClone(cmd.road));label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;

@@ -2,6 +2,7 @@
 // own approaches, corners, treatments and junction-wide settings. Compiles to a NetworkProject.
 import {validateNetworkProject} from '../network/network-project';
 import {profileError} from './elevation';
+import {levelCriteriaError} from './level-criteria';
 import {compileRoadNetwork,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
 export const ROAD_FIRST_SCHEMA_VERSION=1;
@@ -15,6 +16,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
   if(!p||p.kind!=='road-first'||p.schemaVersion!==ROAD_FIRST_SCHEMA_VERSION)return 'ไม่ใช่ไฟล์โครงการแบบวาดถนน';
   if(typeof p.title!=='string'||p.title.length>100)return 'ชื่อโครงการไม่ถูกต้อง';
   if(!Array.isArray(p.roads)||!Array.isArray(p.decisions)||!p.options||typeof p.options!=='object')return 'ข้อมูลถนนหรือการยืนยันทางแยกไม่ครบ';
+  const le=levelCriteriaError(p.options.levels);if(le)return le;
   const ids=new Set<string>();
   for(const r of p.roads){
     if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id))return 'รหัสถนนซ้ำหรือว่าง';ids.add(r.id);
