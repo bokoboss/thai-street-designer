@@ -306,10 +306,26 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       else{p.decisions=trial;joined.push({candidateId:d.candidateId,roads:fresh});}
     });
   }
+  // A junction of two crossing roads whose levels the edit pulled apart (a road raised or lowered there) becomes a
+  // grade separation, higher road over, announced like a new one; one undo brings the junction back.
+  const separatedJunctions:string[]=[],separatedIds:string[]=[];
+  if(roadsChanged){
+    const now=detectCandidates(p.roads);
+    p.decisions=p.decisions.map(d=>{
+      const c=now.find(x=>x.id===d.candidateId);
+      if(d.decision!=='junction'||!c||c.kind!=='cross'||c.roads.length!==2||(d.roads&&d.roads.length!==2))return d;
+      const z=(rs:Road[],ref:{roadId:string;station:number})=>levelAt(rs.find(r=>r.id===ref.roadId)?.profile,ref.station);
+      const [a,b]=c.roads,gap=z(p.roads,a)-z(p.roads,b),was=z(project.roads,a)-z(project.roads,b);
+      if(Math.abs(gap)<=LEVEL_TOLERANCE||Math.abs(was)>LEVEL_TOLERANCE)return d;
+      separatedJunctions.push(d.name??d.candidateId);separatedIds.push(d.candidateId);
+      return{candidateId:d.candidateId,decision:'grade-separated',over:gap>0?a.roadId:b.roadId,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}};
+    });
+    if(separatedJunctions.length)label+=` · ${separatedJunctions.join(', ')} เป็นทางต่างระดับ`;
+  }
   const structural=validateRoadFirstProject(p);if(structural)return fail(structural,label);
   const invalid=newOverflow(p,overflowBefore)??engineError(p);if(invalid)return fail(invalid,label);
   // New crossings become junctions automatically (owner decision 2026-10-19); one that cannot be built stays open with its reason.
-  const autoJunctions:string[]=[],autoSeparated:string[]=[],openCrossings:{candidateId:string;reason:string}[]=[];
+  const autoJunctions:string[]=[],autoSeparated:string[]=[...separatedIds],openCrossings:{candidateId:string;reason:string}[]=[];
   // A junction with a project access is named after the access ("ทางเข้า 1").
   const accessName=(ids:string[])=>p.roads.find(r=>ids.includes(r.id)&&r.role==='access')?.name;
   if(roadsChanged){

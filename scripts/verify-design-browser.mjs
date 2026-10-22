@@ -81,6 +81,17 @@ try{
     await b.waitFor(()=>b.count('[data-network-junction-hit]'),'three undos bring the junction back');
     await b.key('Escape');
   }
+  // A junction of two crossing roads becomes a bridge from the junction panel in one step (owner report 2026-10-22).
+  {
+    const c0=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
+    await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
+    await openFold('junction-grade');
+    await b.click('[data-design-junction-over]');
+    await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'junction → bridge in one step');
+    await b.click('[data-design-undo]');
+    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'one undo brings the junction back');
+    await b.key('Escape');
+  }
   // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
   {
     const before=await b.count('[data-design-road]');

@@ -47,8 +47,22 @@ assert.equal(rp.compileRoadFirstProject(f.project).crossings[0].relation,'unreso
 // Junction with roads at different levels is reported.
 const j=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'A',points:[{x:-100,y:0},{x:100,y:0}],section:sec},{id:'B',name:'B',points:[{x:0,y:-100},{x:0,y:100}],section:sec}]});
 let g=c.endGesture(c.runCommand(j,{type:'road.add',road:{id:'tmp',name:'t',points:[{x:900,y:900},{x:950,y:900}],section:sec}}).editor);
-g=c.runCommand(g,{type:'road.setProfile',roadId:'A',profile:[{station:0,z:2},{station:200,z:2}]}).editor;
-assert.ok(rp.compileRoadFirstProject(g.project).issues.some(i=>/ระดับถนนต่างกัน/.test(i)),'junction level mismatch reported');
+// Raising one road of a two-road crossing junction makes it a grade separation (owner report 2026-10-22: a junction
+// could not become a bridge); one undo brings the junction back.
+{const raised=c.runCommand(g,{type:'road.setProfile',roadId:'A',profile:[{station:0,z:7},{station:200,z:7}]});
+ assert.equal(raised.result.error,null);assert.equal(raised.result.autoSeparated.length,1);assert.match(raised.result.label,/เป็นทางต่างระดับ/);
+ const d=raised.editor.project.decisions.find(x=>x.roads?.includes('A')&&x.roads?.includes('B'));assert.deepEqual([d.decision,d.over],['grade-separated','A']);
+ assert.equal(rp.compileRoadFirstProject(raised.editor.project).project.junctions.length,0);
+ assert.equal(c.undo(c.endGesture(raised.editor)).editor.project.decisions.find(x=>x.roads?.includes('A')).decision,'junction','undo: junction back');}
+// From the junction itself in one step: road B over A (relation and rise together).
+{const gs=T('core/road-first/grade-separation.cjs'),jd=g.project.decisions.find(x=>x.decision==='junction'&&x.roads.includes('B'));
+ const o=gs.overCommand(g.project,jd.candidateId,'B');const r=c.runCommand(g,o.cmd);assert.equal(r.result.error,null);
+ assert.equal(rp.compileRoadFirstProject(r.editor.project).crossings[0].over,'B');}
+// A T-junction (one road ends on the other) at different levels stays a junction and is reported.
+const tj=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'A',points:[{x:-100,y:0},{x:100,y:0}],section:sec}]});
+let tg=c.endGesture(c.runCommand(tj,{type:'road.add',road:{id:'B',name:'B',points:[{x:0,y:0},{x:0,y:100}],section:sec}}).editor);
+tg=c.runCommand(tg,{type:'road.setProfile',roadId:'A',profile:[{station:0,z:2},{station:200,z:2}]}).editor;
+assert.ok(rp.compileRoadFirstProject(tg.project).issues.some(i=>/ระดับถนนต่างกัน/.test(i)),'junction level mismatch reported');
 // 5. Old files: no profile, level 0, no crossings.
 const old=rp.normalizeRoadFirstProject(JSON.parse(JSON.stringify(j.project)));assert.equal(rp.compileRoadFirstProject(old).crossings.length,0);
 assert.ok(rp.compileRoadFirstProject(old).project.links.every(l=>!l.levels));
