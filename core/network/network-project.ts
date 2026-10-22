@@ -46,6 +46,8 @@ export type RoadLink={
   roadside?:{trees:boolean;lights:boolean};
   /** Vertical points along the link, link-local stations (Phase 4A). Linear between points; absent = level 0. */
   levels?:{station:number;z:number}[];
+  /** A ramp (one-way, may diverge from / merge into the side of another road): drawn under other roads at its level. */
+  ramp?:true;
   /** Mid-block median openings, link-local stations (start from the link's start). Optional; absent in older files. */
   medianOpenings?:LinkMedianOpening[];
 };
@@ -72,6 +74,8 @@ export type NetworkProject={
   roadEnds:RoadEnd[];
   /** Grade-separated crossings (Phase 4A), from the road-first compile; read by 2D, 3D, export and report. */
   crossings?:NetworkCrossing[];
+  /** Ramp attachments (Phase 4B): taper at a diverge or merge (main road edge, ramp end corners), at the main road level z. */
+  rampTapers?:{id:string;points:WorldPoint[];z:number}[];
 };
 /**
  * relation: over = one road passes over the other; unresolved = levels equal or contradicting the chosen over road.
@@ -768,6 +772,7 @@ export function validateNetworkProject(project:NetworkProject){
   if(project.schemaVersion!==5||!Array.isArray(project.junctions)||!Array.isArray(project.links)||!Array.isArray(project.parallelCorridors)||!Array.isArray(project.roadEnds))return'รูปแบบข้อมูลโครงข่ายไม่รองรับ';
   if(typeof project.title!=='string'||project.title.length>120)return'ชื่อ Network ไม่ถูกต้อง';
   if(project.junctions.length>200||project.links.length>500||project.parallelCorridors.length>100||project.roadEnds.length>500)return'Network มีวัตถุมากเกินขอบเขตที่รองรับ';
+  if(project.rampTapers!==undefined&&(!Array.isArray(project.rampTapers)||project.rampTapers.length>200||!project.rampTapers.every(t=>t&&typeof t.id==='string'&&Array.isArray(t.points)&&t.points.length===4&&t.points.every(p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y))&&Number.isFinite(t.z))))return'ข้อมูลช่วงเปลี่ยนเข้าทางลาดไม่ถูกต้อง';
   const nodeIds=[...project.junctions.map(j=>j.id),...project.roadEnds.map(e=>e.id)];
   if(new Set(nodeIds).size!==nodeIds.length)return'ID ของทางแยกหรือปลายถนนซ้ำ';
   for(const e of project.roadEnds)if(!validRoadEnd(e))return'ข้อมูลปลายถนนไม่สมบูรณ์';
@@ -795,6 +800,7 @@ export function validateNetworkProject(project:NetworkProject){
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
+    if(l.ramp!==undefined&&l.ramp!==true)return`${l.name}: ชนิดทางลาดไม่ถูกต้อง`;
     if(l.levels!==undefined&&(!Array.isArray(l.levels)||l.levels.length>66||!l.levels.every(q=>q&&Number.isFinite(q.station)&&q.station>=0&&Number.isFinite(q.z)&&Math.abs(q.z)<=200)))return`${l.name}: ระดับตามแนวถนนไม่ถูกต้อง`;
     if(l.roadside!==undefined&&(!l.roadside||typeof l.roadside.trees!=='boolean'||typeof l.roadside.lights!=='boolean'))return`${l.name}: ต้นไม้และเสาไฟไม่ถูกต้อง`;
     if(l.medianOpenings!==undefined){

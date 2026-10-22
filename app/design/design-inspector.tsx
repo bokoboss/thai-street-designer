@@ -17,6 +17,9 @@ import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import {overCommand,underCommand} from '@/core/road-first/grade-separation';
 import {DIP_DEFAULTS,RISE_DEFAULTS,levelAt,type Profile} from '@/core/road-first/elevation';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
+import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
+/** Kind of road the next drawing makes. */
+export type NewRole='road'|'access'|'ramp';
 import type {CommandOutcome} from './use-road-editor';
 import {DELTA_STYLE,type DesignSelection,type DesignTool} from './design-canvas';
 import type {ScenarioDiff} from '@/core/road-first/compare';
@@ -118,13 +121,28 @@ function RoadOpeningBlock({road,compiled,run,onMessage}:{road:Road;compiled:Comp
   </Fold>;
 }
 
+/** Ramp ends: where the ramp diverges from / merges into another road, with a way to unhook each end. */
+function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
+  const name=(id:string)=>roads.find(r=>r.id===id)?.name??id;
+  const ends=(['start','end'] as const).map(end=>({end,a:road.anchors?.[end]}));
+  return <section className="design-block" data-design-ramp={road.id}>
+    <small className="design-block-title">ทางลาด (ทางเดียวตามทิศที่วาด)</small>
+    {ends.map(({end,a})=><p key={end} className="design-meta" data-design-ramp-end={end} data-design-ramp-anchor={a?a.roadId:'none'}>
+      {end==='start'?'ต้นทาง: ':'ปลายทาง: '}{a?`${end==='start'?'แยกออกจาก':'เข้าสู่'} ${name(a.roadId)} ที่ระยะ ${a.station.toFixed(1)} ม.`:'ไม่ได้ต่อเข้าข้างถนน'}
+      {a&&<> <button className="design-link" data-design-ramp-detach={end} onClick={()=>run({type:'ramp.detach',roadId:road.id,end})}>ปลดออก</button></>}
+    </p>)}
+    <p className="design-meta">ลากจุดปลายไปตามข้างถนนเพื่อเลื่อนจุดเชื่อม · ลากออกห่างเพื่อปลด · ช่วงเปลี่ยน {RAMP_RULES.taper} ม. และมุมสูงสุด {RAMP_RULES.maxAngle}° เป็นค่าของเครื่องมือ ยังไม่ได้ตรวจกับมาตรฐาน</p>
+  </section>;
+}
+
 function RoadInspector({road,run,onDeleted,roads,compiled,onMessage}:{road:Road;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
   return <>
-    <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
-    <label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>
+    <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
+    {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
+    {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
     <div className="design-fields">
       <NumberField field="forward-lanes" label="ช่องจราจรตามทิศที่วาด" value={s.forwardLanes} min={0} max={4} onCommit={v=>set({forwardLanes:v})}/>
@@ -460,19 +478,19 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newAccess,onNewAccess}:{
+export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole}:{
   selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
-  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newAccess:boolean;onNewAccess:(v:boolean)=>void;
+  tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newRole:NewRole;onNewRole:(v:NewRole)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
-    <header className="design-inspector-head"><small>วาดถนน</small><b>{newAccess?'ทางเข้าโครงการใหม่':'ถนนใหม่'}</b></header>
+    <header className="design-inspector-head"><small>วาดถนน</small><b>{newRole==='access'?'ทางเข้าโครงการใหม่':newRole==='ramp'?'ทางลาดใหม่':'ถนนใหม่'}</b></header>
     <div className="design-reference-tools" role="radiogroup" aria-label="ชนิดถนน">
-      <button role="radio" aria-checked={!newAccess} className={newAccess?'':'active'} data-design-new-role="road" onClick={()=>onNewAccess(false)}>ถนน</button>
-      <button role="radio" aria-checked={newAccess} className={newAccess?'active':''} data-design-new-role="access" onClick={()=>onNewAccess(true)}>ทางเข้าโครงการ</button>
+      {([['road','ถนน'],['access','ทางเข้าโครงการ'],['ramp','ทางลาด']] as const).map(([v,label])=><button key={v} role="radio" aria-checked={newRole===v} className={newRole===v?'active':''} data-design-new-role={v} onClick={()=>onNewRole(v)}>{label}</button>)}
     </div>
-    {newAccess?<p className="design-meta" data-design-new-access="true">เริ่มคลิกบนแนวถนนหลัก แล้ววาดออกไปยังโครงการ · ถนนหลักไหลต่อเนื่อง ทางเข้ามีเส้นหยุดให้ทาง · หน้าตัดเริ่มต้น 1+1 ช่อง กว้าง 3 ม. (ค่าตั้งต้นของเครื่องมือ แก้ได้ภายหลัง)</p>
+    {newRole==='ramp'?<p className="design-meta" data-design-new-ramp="true">ทางลาดวิ่งทางเดียวตามทิศที่วาด · เริ่มบนถนนสายหลักแล้ววาดเฉียงออกไป = จุดแยกออก · จบบนข้างถนนอีกสายแบบเฉียง = จุดเข้าสู่ · จบตั้งฉากกับถนน = ทางแยกปกติ · ถ้าวางไม่ได้ เส้นจะเป็นสีแดงพร้อมเหตุผล · หน้าตัดเริ่มต้น 1 ช่อง กว้าง {RAMP_SECTION.laneWidth} ม. (ค่าตั้งต้นของเครื่องมือ แก้ได้ภายหลัง)</p>
+    :newRole==='access'?<p className="design-meta" data-design-new-access="true">เริ่มคลิกบนแนวถนนหลัก แล้ววาดออกไปยังโครงการ · ถนนหลักไหลต่อเนื่อง ทางเข้ามีเส้นหยุดให้ทาง · หน้าตัดเริ่มต้น 1+1 ช่อง กว้าง 3 ม. (ค่าตั้งต้นของเครื่องมือ แก้ได้ภายหลัง)</p>
     :<PresetPicker label="หน้าตัดของถนนใหม่" value={newRoadPreset} onPick={onNewRoadPreset}/>}
-    {!newAccess&&!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
+    {newRole==='road'&&!newRoadPreset&&<p className="design-meta" data-design-new-section="last">ใช้หน้าตัดล่าสุด: {newRoadSection.forwardLanes}+{newRoadSection.backwardLanes} ช่อง กว้าง {newRoadSection.laneWidth} ม. เกาะกลาง {newRoadSection.median} ม. ทางเท้า {newRoadSection.walk} ม.</p>}
     <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;

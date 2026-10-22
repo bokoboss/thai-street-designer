@@ -128,8 +128,8 @@ export function useRoadEditor(){
     setEditor(next);
     setNotice({text:result.openCrossings.length||result.blocked.length?`${result.label} · ${result.warnings.at(-1)}`:result.label,kind:'info',autoJunctions:result.autoJunctions.length?result.autoJunctions:undefined,autoSeparated:result.autoSeparated.length?result.autoSeparated:undefined});
     // A project access does not change the section used for the next ordinary road.
-    if(cmd.type==='road.add'&&cmd.road.role!=='access')setLastSection(structuredClone(cmd.road.section));
-    if(cmd.type==='road.setSection'){const r=next.project.roads.find(x=>x.id===cmd.roadId);if(r&&r.role!=='access')setLastSection(structuredClone(r.section));}
+    if(cmd.type==='road.add'&&!cmd.road.role)setLastSection(structuredClone(cmd.road.section));
+    if(cmd.type==='road.setSection'){const r=next.project.roads.find(x=>x.id===cmd.roadId);if(r&&!r.role)setLastSection(structuredClone(r.section));}
     return{ok:true,message:result.label};
   },[setEditor]);
   const finishGesture=useCallback(()=>setEditor(endGesture(editorNow())),[setEditor]);

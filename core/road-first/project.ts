@@ -23,11 +23,16 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     const s=r.section;
     if(!s||!lanes(s.forwardLanes)||!lanes(s.backwardLanes)||s.forwardLanes+s.backwardLanes<1||!finite(s.laneWidth,2.5,4.5)||!finite(s.median,0,12)||!finite(s.walk,0,8))return `หน้าตัดถนน ${r.name} ไม่ถูกต้อง`;
     if(r.links!==undefined&&!Array.isArray(r.links))return `ช่วงถนนของ ${r.name} ไม่ถูกต้อง`;
-    if(r.role!==undefined&&r.role!=='access')return `ชนิดถนน ${r.name} ไม่ถูกต้อง`;
+    if(r.role!==undefined&&r.role!=='access'&&r.role!=='ramp')return `ชนิดถนน ${r.name} ไม่ถูกต้อง`;
+    if(r.anchors!==undefined){
+      const ok=(a:unknown)=>{const v=a as {roadId?:unknown;station?:unknown;side?:unknown}|undefined;return v===undefined||(!!v&&typeof v.roadId==='string'&&v.roadId!==r.id&&finite(v.station,0,1e6)&&(v.side===1||v.side===-1));};
+      if(r.role!=='ramp'||!r.anchors||typeof r.anchors!=='object'||!ok(r.anchors.start)||!ok(r.anchors.end))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;
+    }
     const pe=profileError(r.profile);if(pe)return `แนวดิ่งของ ${r.name}: ${pe}`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }
+  for(const r of p.roads)for(const a of [r.anchors?.start,r.anchors?.end])if(a&&!ids.has(a.roadId))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;
   const candidates=new Set<string>();
   for(const d of p.decisions){
     if(!d||typeof d.candidateId!=='string'||candidates.has(d.candidateId))return 'การยืนยันจุดตัดซ้ำหรือว่าง';candidates.add(d.candidateId);

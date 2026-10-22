@@ -22,8 +22,9 @@ export function linkLevelAt(link:RoadLink,s:number):number{
 }
 /** Links in drawing order for the plan: lower first, so a road that passes over is drawn on top. Stable otherwise. */
 export function linksInDrawOrder(project:NetworkProject):RoadLink[]{
-  const peak=(l:RoadLink)=>Math.max(0,...(l.levels??[]).map(q=>q.z));
-  return project.links.map((l,i)=>({l,i,z:peak(l)})).sort((a,b)=>a.z-b.z||a.i-b.i).map(x=>x.l);
+  // A raised road by its highest point, a road below ground by its lowest; ramps under other roads at the same level.
+  const level=(l:RoadLink)=>{const z=(l.levels??[]).map(q=>q.z),hi=Math.max(0,...z);return hi>0?hi:Math.min(0,...z);};
+  return project.links.map((l,i)=>({l,i,z:level(l),r:l.ramp?0:1})).sort((a,b)=>a.z-b.z||a.r-b.r||a.i-b.i).map(x=>x.l);
 }
 /** Above or below this level (m) a stretch is on a structure (tool tolerance, same as the junction level tolerance). */
 export const STRUCTURE_LEVEL=.5;
