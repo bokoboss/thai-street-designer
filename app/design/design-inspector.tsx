@@ -140,6 +140,30 @@ function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onP
   </section>;
 }
 
+/** Where this road meets other roads: junction or grade separation, with bridge / underpass in one step from here. */
+function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road:Road;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
+  const list=detectCandidates(project.roads).filter(c=>c.roads.some(r=>r.roadId===road.id));
+  if(!list.length)return null;
+  const name=(id:string)=>project.roads.find(r=>r.id===id)?.name??id;
+  const go=(o:{cmd:RoadFirstCommand}|{error:string},id:string)=>{if('error' in o){onMessage(o.error,'error');return;}if(run(o.cmd).ok)onSelect({kind:'crossing',id});};
+  return <section className="design-block" data-design-road-crossings={list.length}>
+    <small className="design-block-title">ทางแยกและจุดตัดบนถนนนี้</small>
+    {list.map(c=>{
+      const others=c.roads.filter(r=>r.roadId!==road.id).map(r=>name(r.roadId)).join(', '),d=project.decisions.find(x=>x.candidateId===c.id);
+      const x=compiled.crossings.find(v=>v.candidateId===c.id&&v.roads.includes(road.id));
+      const state=d?.decision==='junction'?'ทางแยก':d?.decision==='grade-separated'?(x?.relation==='over'?(x.over===road.id?'ข้ามไปด้านบน':'ลอดใต้'):'ต่างระดับ (ยังไม่กำหนด)'):d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังไม่ได้เลือก';
+      const two=c.kind==='cross'&&c.roads.length===2;
+      return <div key={c.id} className="design-crossing-row" data-design-road-crossing={c.id}>
+        <button className="design-link" onClick={()=>onSelect(d?.decision==='junction'?{kind:'junction',id:c.id}:{kind:'crossing',id:c.id})}>กับ {others}</button> <span className="design-meta">· {state}</span>
+        {two&&<div className="design-reference-tools">
+          <button data-design-road-over={c.id} disabled={x?.over===road.id} onClick={()=>go(overCommand(project,c.id,road.id),c.id)}>ยกข้าม (สะพาน)</button>
+          <button data-design-road-under={c.id} disabled={x?.under===road.id} onClick={()=>go(underCommand(project,c.id,road.id),c.id)}>ลอดใต้</button>
+        </div>}
+      </div>;})}
+    <p className="design-meta">ยก {RISE_DEFAULTS.height} ม. / กดลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% เป็นค่าตั้งต้นของเครื่องมือ · กดย้อนกลับเพื่อคืนทางแยก</p>
+  </section>;
+}
+
 /** Ramp ends: where the ramp diverges from / merges into another road, with a way to unhook each end. */
 function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
   const name=(id:string)=>roads.find(r=>r.id===id)?.name??id;
@@ -154,13 +178,14 @@ function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
   </section>;
 }
 
-function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessage}:{road:Road;point?:number;onPoint:(point:number|undefined)=>void;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
+function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessage,project,onSelect}:{project:RoadFirstProject;onSelect:(s:DesignSelection)=>void;road:Road;point?:number;onPoint:(point:number|undefined)=>void;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
   const length=stations(road.points).at(-1)??0;
   const [armed,setArmed]=useState(false);
   return <>
     <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
     {point!==undefined&&point<road.points.length&&<PointBlock road={road} index={point} run={run} onPoint={onPoint}/>}
+    <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
@@ -536,7 +561,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
-    {road?<RoadInspector key={road.id} road={road} point={selection?.kind==='road'?selection.point:undefined} onPoint={point=>onSelect({kind:'road',id:road.id,point})} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
+    {road?<RoadInspector key={road.id} project={project} onSelect={onSelect} road={road} point={selection?.kind==='road'?selection.point:undefined} onPoint={point=>onSelect({kind:'road',id:road.id,point})} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} compiled={compiled} onMessage={onMessage} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
