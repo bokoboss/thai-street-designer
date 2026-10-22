@@ -157,3 +157,6 @@
 .design-fold[open]>summary .design-block-title::before{content:'▾ ';}
 .design-fold>summary small{color:var(--d-muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .design-fold[open]{display:flex;flex-direction:column;gap:8px}
+
+/* Inline text action inside a meta line (e.g. unhook a ramp end). */
+.design-link{border:0;background:none;padding:0 2px;color:#0f6f69;font:inherit;text-decoration:underline;cursor:pointer}

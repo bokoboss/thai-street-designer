@@ -101,6 +101,36 @@ try{
     await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the access');
   }
 
+  // Ramp drawn by hand (Phase 4B-1): started on the side of a road at a shallow angle it diverges from it (no junction);
+  // drawn against the traffic it previews red with the reason; its end can be unhooked; one undo removes it.
+  {
+    await b.key('Escape');
+    const before=await b.count('[data-design-road]'),junctions=await b.count('[data-network-junction-hit]');
+    const W=await b.evalValue(`(()=>{const ps=[...document.querySelectorAll('[data-design-road] path')].map(p=>p.getAttribute('d').match(/-?[0-9.]+/g).map(Number));
+      const q=ps[0],a={x:q[0],y:q[1]},z={x:q[q.length-2],y:q[q.length-1]},L=Math.hypot(z.x-a.x,z.y-a.y),u={x:(z.x-a.x)/L,y:(z.y-a.y)/L},n={x:u.y,y:-u.x}; /* left of travel on the plan: the forward lanes' side */
+      const sj=(ps[2][0]-a.x)/(u.x||1),s0=sj>110?sj-95:sj+50,m=document.querySelector('[data-design-plan]').getScreenCTM();
+      const at=(s,o)=>{const p=new DOMPoint(a.x+u.x*s+n.x*o,a.y+u.y*s+n.y*o).matrixTransform(m);return{x:p.x,y:p.y};};
+      return{p0:at(s0,0),p1:at(s0+40,12),p2:at(s0+60,30),back:at(s0-40,12)};})()`);
+    const move=p=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,button:'none'});
+    await b.click('[data-design-tool-button="road"]');await b.click('[data-design-new-role="ramp"]');
+    await b.waitFor(()=>b.count('[data-design-new-ramp]'),'ramp drawing explained');
+    await b.clickAt(W.p0);await move(W.back);
+    await b.waitFor(()=>b.count('[data-design-draft-check="error"]'),'against the traffic: red preview');
+    assert.match(await b.text('[data-design-draft-check="error"]'),/สวนทิศ/);
+    await b.key('Escape');
+    await b.clickAt(W.p0);await b.clickAt(W.p1);await b.clickAt(W.p2,2);
+    await b.waitFor(async()=>await b.count('[data-design-road]')===before+1,'ramp drawn');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-ramp-end="start"]')?.dataset.designRampAnchor`))!=='none','ramp start attached to the road');
+    assert.match(await b.evalValue(`document.querySelector('[data-design-field="road-name"]').value`),/^ทางลาด \d/);
+    assert.equal(await b.count('[data-network-ramp-taper]'),1,'taper at the diverge');
+    assert.equal(await b.count('[data-network-junction-hit]'),junctions,'no junction at the diverge');
+    await b.screenshot('artifacts/design-browser-ramp.png');
+    await b.click('[data-design-ramp-detach="start"]');
+    await b.waitFor(async()=>await b.count('[data-network-ramp-taper]')===0,'unhooked');
+    await b.click('[data-design-undo]');await b.click('[data-design-undo]');
+    await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the ramp');
+  }
+
   // Mid-block median opening on a road (GW-04), outside the junction approaches: cuts the median, handle moves it.
   {
     await b.key('Escape');

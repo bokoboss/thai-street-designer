@@ -223,6 +223,8 @@ export function NetworkDrawing({
       return id===parallelDraftMainlineId?'draft-mainline':undefined;
     };
   return <g>
+    {/* Ramp tapers at diverges and merges (Phase 4B), under the roads. */}
+    {project.rampTapers?.length?<g data-network-ramp-tapers={project.rampTapers.length} pointerEvents="none">{project.rampTapers.map(t=><path key={t.id} data-network-ramp-taper={t.id} d={`M${t.points.map(p=>`${p.x} ${p.y}`).join('L')}Z`} fill="#35424e"/>)}</g>:null}
     {linksInDrawOrder(project).map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
     {/* Grade separation (Phase 4A): the road that passes over is drawn on top, with its deck edges marked across the road below. */}
     {/* Tunnel (Phase 4A): the lower road's box under the crossing road, dashed over the road that hides it. */}

@@ -123,7 +123,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ## Phase 4 — Grade separation and engineering depth
 
-Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); next is 4B-1.
+Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1 done; next is 4B-2.
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
 
@@ -167,6 +167,8 @@ ordinary editable road, ramp or lane run; nothing is an opaque block. No score o
 Owner decision 2026-10-22: free drawing before templates. Ramps, merge/diverge points and levels are built as ordinary
 editable pieces first; the diamond template only places those same pieces. Non-standard layouts (flyovers and
 underpasses at a junction, constrained urban ramps) are drawn by hand from 4B-1 on, without waiting for 4D.
+
+Status 2026-10-22: 4B-1 done (spec `docs/spec/PHASE_4B_RAMPS.md`); next 4B-2.
 
 **4B-1 — Ramps drawn by hand**
 - Start a road from the side of another road (diverge) and end it on the side of another road (merge); the attachment

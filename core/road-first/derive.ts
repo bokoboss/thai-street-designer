@@ -10,6 +10,7 @@ import {isJunctionPort,type JunctionInstance,type LinkEndRef,type LinkSectionPro
 import {proposalId} from '../network/junction-auxiliary-proposal';
 import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
+import {taperPolygon,type RampAnchor} from './ramps';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -22,15 +23,18 @@ export type RoadLinkSource={kind:'junction-auxiliary';end:'from'|'to';direction:
 export type RoadLinkComponent=LinkStationWidthComponent|(Omit<LinkStationLaneComponent,'source'>&{source?:RoadLinkSource});
 /** Settings of the k-th RoadLink along the road (between consecutive junctions / road ends), in road direction. */
 export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;components?:RoadLinkComponent[]};
-/** access: a project access (driveway). Where it meets a road, that road keeps flowing (see compileRoadNetwork). */
-export type RoadRole='access';
+/** access: a project access (driveway). Where it meets a road, that road keeps flowing (see compileRoadNetwork).
+ * ramp: a one-way road whose ends may attach to the side of another road (diverge / merge, Phase 4B; see ramps.ts). */
+export type RoadRole='access'|'ramp';
 /** Mid-block median opening: station = start from the road start (road stations). */
 export type RoadOpening={id:string;station:number;length:number;type?:'opening'|'uturn'};
 export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[];
   /** Trees / street lights along both sidewalks, on the links and on this road's junction arms (engine roadside defaults). */
   roadside?:{trees:boolean;lights:boolean};
   /** Vertical points (station, z) — Phase 4A; absent = level 0. */
-  profile?:Profile};
+  profile?:Profile;
+  /** Ramp ends attached to the side of another road (diverge at the start, merge at the end). */
+  anchors?:{start?:RampAnchor;end?:RampAnchor}};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
@@ -301,6 +305,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       for(const o of inside)placed.add(o.id);
       if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
       const levels=profileSlice(road.profile,from.station,to.station);if(levels)built.levels=levels;
+      if(road.role==='ramp')built.ramp=true;
       linkRanges.push({id:built.id,roadId:road.id,from:from.station,to:to.station});
       links.push(built);
       span++;
@@ -328,5 +333,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     networkCrossings.push({id:d.candidateId,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings};
+  // Ramp attachments (Phase 4B): a taper at each diverge / merge, at the main road level.
+  const rampTapers:NonNullable<NetworkProject['rampTapers']>=[];
+  for(const r of roads)for(const end of ['start','end'] as const){
+    const a=r.anchors?.[end],main=a&&roadById.get(a.roadId);if(!a||!main)continue;
+    const points=taperPolygon(main,r,end);if(points.length===4)rampTapers.push({id:`${r.id}:${end}`,points,z:round(levelAt(main.profile,a.station),3)});
+  }
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings};
 }

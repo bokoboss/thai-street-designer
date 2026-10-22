@@ -10,6 +10,7 @@ import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type L
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
+import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
@@ -29,6 +30,8 @@ export type RoadFirstCommand=
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
   |{type:'crossing.setOver';candidateId:string;over:string;profiles:Record<string,Profile|null>;label:string}
+  /** Unhook a ramp end from the road it diverges from or merges into; the end point stays where it is. */
+  |{type:'ramp.detach';roadId:string;end:RampEnd}
   |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
@@ -151,7 +154,12 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     case 'road.setRole':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.role)r.role=cmd.role;else delete r.role;
-      label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+      label=cmd.role==='access'?`ตั้ง ${r.name} เป็นทางเข้าโครงการ`:cmd.role==='ramp'?`ตั้ง ${r.name} เป็นทางลาด`:`ตั้ง ${r.name} เป็นถนนทั่วไป`;roadsChanged=true;break;
+    }
+    case 'ramp.detach':{
+      const r=road(cmd.roadId);if(!r?.anchors?.[cmd.end])return fail('ไม่พบจุดเชื่อมทางลาดที่เลือก');
+      const main=road(r.anchors[cmd.end]!.roadId)?.name??'';delete r.anchors[cmd.end];if(!r.anchors.start&&!r.anchors.end)delete r.anchors;
+      label=`ปลด ${r.name} ออกจาก ${main}`;break;
     }
     case 'road.setProfile':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -247,6 +255,15 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       }
     }
   }
+  // Ramp ends stay on the edge of the road they attach to, whatever the edit changed.
+  {
+    const joined=cmd.type==='road.join'?{from:cmd.otherId,into:cmd.roadId}:undefined;
+    const next=reattachRamps(project.roads,p.roads,{joined,remap:!!joined||(cmd.type==='road.extend'&&cmd.atStart)});
+    const shape=(rs:Road[])=>JSON.stringify(rs.map(r=>r.points));
+    if(shape(next)!==shape(p.roads))roadsChanged=true;
+    p.roads=next;
+    if(cmd.type==='road.add')label+=anchorNote(p.roads,road(cmd.road.id));
+  }
   const joined:CommandResult['joined']=[],blocked:CommandResult['blocked']=[];
   const overflowBefore=new Set(compileRoadFirstProject(project).overflow);
   if(roadsChanged){
@@ -289,6 +306,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     if(autoJunctions.length)label+=` · สร้างทางแยก ${autoJunctions.length} แห่ง`;
     if(autoSeparated.length)label+=` · ทางต่างระดับ ${autoSeparated.length} แห่ง`;
   }
+  const rampProblem=rampError(p.roads,p.decisions);if(rampProblem)return fail(rampProblem,label);
   const roadNames=(ids:string[])=>ids.map(id=>road(id)?.name??id).join(', ');
   for(const j of joined)label+=` · ${roadNames(j.roads)} เข้าทางแยก ${jname(decision(j.candidateId))}`;
   const compiled=compileRoadFirstProject(p);

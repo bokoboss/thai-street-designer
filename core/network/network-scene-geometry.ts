@@ -125,6 +125,8 @@ export function resolveElevatedLinkScene(project:NetworkProject):{faces:Structur
 
 export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
   const out:NetworkSceneSurface[]=[];
+  // Ramp tapers (Phase 4B) under the road surfaces, at the main road level.
+  for(const t of project.rampTapers??[])out.push({id:`taper:${t.id}`,kind:'road',points:t.points,z:.025,base:t.points.map(()=>t.z)});
   for(const link of project.links){
     const g=resolveLinkSectionGeometry(project,link);
     if(!g||g.points.length<2)continue;

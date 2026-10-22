@@ -4,13 +4,14 @@ import './style.css';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Crosshair,Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
-import {DesignInspector} from './design-inspector';
+import {DesignInspector,type NewRole} from './design-inspector';
 import {SectionStrip} from './section-strip';
 import {useReferenceImage} from './use-reference-image';
 import {useMapReference} from './map-panel';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
+import {RAMP_SECTION} from '@/core/road-first/ramps';
 import {pointAtLength,type SnapResult} from '@/core/road-first/snap';
 import {createWorkspace,migrateNetworkWorkspace,normalizeWorkspace} from '@/core/road-first/scenarios';
 import type {MigrationTarget} from '@/core/road-first/migrate';
@@ -52,8 +53,8 @@ export default function DesignWorkspace(){
   const [hasEarlier,setHasEarlier]=useState(false);
   // On narrow screens the inspector is a drawer: it opens when something is selected and can be toggled.
   const [inspectorOpen,setInspectorOpen]=useState(false),[fit3d,setFit3d]=useState(0),[focusKey,setFocusKey]=useState(0);
-  /** The next road drawn is a project access (driveway). */
-  const [newAccess,setNewAccess]=useState(false);
+  /** Kind of the next road drawn: ordinary road, project access (driveway) or ramp. */
+  const [newRole,setNewRole]=useState<NewRole>('road');
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
@@ -70,6 +71,8 @@ export default function DesignWorkspace(){
   // Fit once the stored project has been loaded.
   useEffect(()=>{if(!loaded.current&&ed.project.roads.length){loaded.current=true;setFitKey(k=>k+1);}},[ed.project.roads.length]);
 
+  /** Section of the road being drawn: the access and ramp starting sections, else the last section used. */
+  function newDraftSection(){return newRole==='access'?presetSection('access'):newRole==='ramp'?structuredClone(RAMP_SECTION):structuredClone(ed.lastSection);}
   function clearDraft(){setDraft([]);setExtend(null);setTypedLength('');setCalibration([]);}
   function chooseTool(next:DesignTool){clearDraft();setTool(next);}
   function addDraftPoint(points:WorldPoint[],snap:SnapResult){
@@ -84,9 +87,9 @@ export default function DesignWorkspace(){
       return;
     }
     // Ids are never reused across scenarios, so the comparison never mistakes a new road for an old one.
-    const role=newAccess?'access' as const:undefined,section=newAccess?presetSection('access'):structuredClone(ed.lastSection);
+    const role=newRole==='road'?undefined:newRole,section=newDraftSection();
     const id=newRoadId(ed.workspace.scenarios.flatMap(s=>s.project.roads)),r=ed.run({type:'road.add',road:{id,name:nextRoadName(ed.project.roads,role),...(role?{role}:{}),points:draft,section}});
-    if(r.ok){setNewAccess(false);clearDraft();setTool('select');setSelection({kind:'road',id});}
+    if(r.ok){setNewRole('road');clearDraft();setTool('select');setSelection({kind:'road',id});}
   }
   /** Right-click or Backspace while drawing: drop the typed length, else the last point, else leave Draw Road. */
   function draftBack(){
@@ -97,13 +100,14 @@ export default function DesignWorkspace(){
   const checkDraft=useCallback((points:WorldPoint[]):DraftCheck=>{
     if(points.length<2)return null;
     const cmd:RoadFirstCommand=extend?{type:'road.extend',roadId:extend.roadId,atStart:extend.atStart,points:points.slice(1)}
-      :{type:'road.add',road:{id:'R-preview',name:'ถนนใหม่',points,section:ed.lastSection}};
+      :{type:'road.add',road:{id:'R-preview',name:'ถนนใหม่',...(newRole==='road'?{}:{role:newRole}),points,section:newDraftSection()}};
     const r=executeCommand(ed.project,cmd);
     if(r.error)return{kind:'error',text:`วางไม่ได้ · ${r.error}`};
     if(r.blocked.length)return{kind:'warn',text:`ไม่เชื่อมเข้าทางแยก · ${r.blocked[0]!.reason}`};
     if(r.openCrossings.length)return{kind:'warn',text:`จุดตัดต้องเลือกเอง · ${r.openCrossings[0]!.reason}`};
     return null;
-  },[extend,ed.project,ed.lastSection]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[extend,ed.project,ed.lastSection,newRole]);
   function onKey(e:React.KeyboardEvent){
     if((e.target as HTMLElement).matches('input,select,textarea'))return;
     const k=e.key.toLowerCase();
@@ -242,7 +246,7 @@ export default function DesignWorkspace(){
       </div>
       <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
-          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newAccess={newAccess} onNewAccess={setNewAccess}/>
+          setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole}/>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

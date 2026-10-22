@@ -14,8 +14,8 @@ export function newRoadId(roads:Road[]):string{
   let id=`R-${randomPart()}`;while(used.has(id))id=`R-${randomPart()}`;
   return id;
 }
-/** "ถนน n" (or "ทางเข้า n" for a project access) with the first n not used by a road name in this scenario. */
+/** "ถนน n" (or "ทางเข้า n" for a project access, "ทางลาด n" for a ramp) with the first n not used by a road name in this scenario. */
 export function nextRoadName(roads:Road[],role?:RoadRole):string{
-  const stem=role==='access'?'ทางเข้า':'ถนน',names=new Set(roads.map(r=>r.name));let n=1;while(names.has(`${stem} ${n}`))n++;
+  const stem=role==='access'?'ทางเข้า':role==='ramp'?'ทางลาด':'ถนน',names=new Set(roads.map(r=>r.name));let n=1;while(names.has(`${stem} ${n}`))n++;
   return `${stem} ${n}`;
 }
