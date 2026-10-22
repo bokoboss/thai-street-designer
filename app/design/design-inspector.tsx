@@ -520,7 +520,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       </div>
       <p className="design-meta">PageUp / PageDown ยกหรือลดทีละ {DRAW_LEVEL_STEP} ม. ระหว่างวาด · ถนนที่ข้ามกันต่างระดับจะเป็นทางต่างระดับเอง · เริ่มวาดบนถนนเดิมจะเริ่มที่ระดับของถนนนั้น</p>
     </section>
-    <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
+    <p className="design-meta">คลิกเพื่อวางจุดแนวถนน · Tab สลับจุด snap ที่ซ้อนกัน · กด Space ค้างแล้วลากเพื่อเลื่อนแบบ · ดับเบิลคลิกหรือ Enter เพื่อจบ · คลิกขวาหรือ Backspace เพื่อย้อนจุดล่าสุด · Esc เพื่อยกเลิก · เส้นสีส้มหรือแดงบอกว่าจบตรงนี้แล้วจะเกิดอะไร · แก้หน้าตัดได้ภายหลัง</p>
   </aside>;
   const road=selection?.kind==='road'?project.roads.find(r=>r.id===selection.id):undefined;
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;

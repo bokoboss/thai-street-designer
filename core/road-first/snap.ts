@@ -18,35 +18,45 @@ export function nearestOnSegment(p:WorldPoint,a:WorldPoint,b:WorldPoint){
   return{x:a.x+dx*t,y:a.y+dy*t,t};
 }
 
-export function snapPoint(cursor:WorldPoint,roads:Road[],o:SnapOptions):SnapResult{
+/** guide: for an angle snap, how the direction was found (straight on / square to the previous segment, or a plan-axis step). */
+export type SnapCandidate=SnapResult&{guide?:'straight'|'square'|'axis'};
+
+/**
+ * Every snap target near the cursor, best first: road ends, then points on road alignments (nearest per road), then the
+ * angle step, then the free cursor. The first one is what snapPoint returns; Tab cycles through the rest.
+ */
+export function snapCandidates(cursor:WorldPoint,roads:Road[],o:SnapOptions):SnapCandidate[]{
   const measure=(point:WorldPoint):Pick<SnapResult,'angle'|'length'>=>o.from?{angle:round(headingOf(o.from,point)),length:round(dist(o.from,point))}:{};
-  if(o.off)return{point:cursor,kind:'none',...measure(cursor)};
-  const endR=(o.endRadiusPx??14)/o.pxPerMetre,roadR=(o.roadRadiusPx??9)/o.pxPerMetre;
-  let best:SnapResult|null=null,gap=Infinity;
+  const free:SnapCandidate={point:cursor,kind:'none',...measure(cursor)};
+  if(o.off)return[free];
+  const endR=(o.endRadiusPx??14)/o.pxPerMetre,roadR=(o.roadRadiusPx??9)/o.pxPerMetre,out:{c:SnapCandidate;d:number;rank:number}[]=[];
   for(const r of roads)for(const [end,p] of [['start',r.points[0]],['end',r.points.at(-1)!]] as const){
-    const d=dist(cursor,p);if(d<=endR&&d<gap){gap=d;best={point:{x:p.x,y:p.y},kind:'end',roadId:r.id,end};}
+    const d=dist(cursor,p);if(d<=endR)out.push({c:{point:{x:p.x,y:p.y},kind:'end',roadId:r.id,end,...measure(p)},d,rank:0});
   }
-  if(best)return{...best,...measure(best.point)};
-  for(const r of roads)for(let i=1;i<r.points.length;i++){
-    const q=nearestOnSegment(cursor,r.points[i-1],r.points[i]),d=dist(cursor,q);
-    if(d<=roadR&&d<gap){gap=d;best={point:{x:round(q.x),y:round(q.y)},kind:'road',roadId:r.id};}
+  for(const r of roads){
+    let best:{q:WorldPoint;d:number}|null=null;
+    for(let i=1;i<r.points.length;i++){const q=nearestOnSegment(cursor,r.points[i-1],r.points[i]),d=dist(cursor,q);if(d<=roadR&&(!best||d<best.d))best={q:{x:round(q.x),y:round(q.y)},d};}
+    if(best&&!out.some(x=>x.c.kind==='end'&&dist(x.c.point,best!.q)<1e-6))out.push({c:{point:best.q,kind:'road',roadId:r.id,...measure(best.q)},d:best.d,rank:1});
   }
-  if(best)return{...best,...measure(best.point)};
   if(o.from){
     const raw=headingOf(o.from,cursor),len=dist(o.from,cursor),tol=o.angleToleranceDeg??4;
     // Candidate directions: every 15° from the plan axes, and square/straight to the previous segment.
-    const bases=[0,...(o.previousHeading!==undefined?[o.previousHeading]:[])];
-    let pick:number|null=null,off=tol;
-    for(const base of bases)for(let k=0;k<24;k++){
+    let pick:{h:number;guide:'straight'|'square'|'axis'}|null=null,off=tol;
+    const bases:[number,boolean][]=[[0,false],...(o.previousHeading!==undefined?[[o.previousHeading,true] as [number,boolean]]:[])];
+    for(const [base,prev] of bases)for(let k=0;k<24;k++){
       const h=(base+k*15)%360,diff=Math.abs(((raw-h+540)%360)-180);
-      if(diff<=off){off=diff;pick=h;}
+      if(diff<=off){off=diff;pick={h,guide:prev&&k%12===0?'straight':prev&&k%6===0?'square':'axis'};}
     }
-    if(pick!==null&&len>0){
-      const rad=pick*Math.PI/180,point={x:round(o.from.x+Math.cos(rad)*len),y:round(o.from.y+Math.sin(rad)*len)};
-      return{point,kind:'angle',angle:round(pick),length:round(len)};
+    if(pick&&len>0){
+      const rad=pick.h*Math.PI/180,point={x:round(o.from.x+Math.cos(rad)*len),y:round(o.from.y+Math.sin(rad)*len)};
+      out.push({c:{point,kind:'angle',angle:round(pick.h),length:round(len),guide:pick.guide},d:0,rank:2});
     }
   }
-  return{point:cursor,kind:'none',...measure(cursor)};
+  return[...out.sort((a,b)=>a.rank-b.rank||a.d-b.d).map(x=>x.c),free];
+}
+
+export function snapPoint(cursor:WorldPoint,roads:Road[],o:SnapOptions):SnapResult{
+  return snapCandidates(cursor,roads,o)[0];
 }
 
 /** Point at an exact typed length from `from`, in the direction of `toward` (typed length while drawing). */

@@ -101,6 +101,30 @@ try{
     await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo removes the access');
   }
 
+  // Drawing quick wins (4B-2b): snap badge with Tab between overlapping targets, Space+drag pans in Select,
+  // Backspace no longer deletes a selected road (Delete does).
+  {
+    await b.key('Escape');
+    const J=await b.evalValue(`(()=>{const ps=[...document.querySelectorAll('[data-design-road] path')].map(p=>p.getAttribute('d').match(/-?[0-9.]+/g).map(Number));
+      const pt=new DOMPoint(ps[2][0],ps[0][1]).matrixTransform(document.querySelector('[data-design-plan]').getScreenCTM());return{x:pt.x,y:pt.y};})()`);
+    const move=p=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,button:'none'});
+    await b.click('[data-design-tool-button="road"]');await move({x:J.x+60,y:J.y+3});await move({x:J.x+2,y:J.y+2});
+    await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-design-snap-count]')?.dataset.designSnapCount??0`))>=3,'two alignments under the cursor');
+    const first=await b.text('.design-snap-badge');await b.key('Tab');
+    await b.waitFor(async()=>(await b.text('.design-snap-badge'))!==first,'Tab takes the next target');
+    await b.key('Escape');await b.key('Escape');
+    const road0=()=>b.evalValue(`(()=>{const r=document.querySelector('[data-design-road] path').getBoundingClientRect();return r.x;})()`),x0=await road0();
+    const c=await b.rect('.design-canvas');
+    await b.send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space'});
+    await b.drag({x:c.x-300,y:c.y+250},{x:c.x-220,y:c.y+250});
+    await b.send('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space'});
+    assert.ok(Math.abs((await road0())-x0-80)<4,'Space+drag pans the plan');
+    const roads=await b.count('[data-design-road]');
+    await b.click('[data-design-road] path');
+    await b.waitFor(()=>b.count('[data-design-inspector="road"]'),'a road selected');
+    await b.key('Backspace');await sleep(200);assert.equal(await b.count('[data-design-road]'),roads,'Backspace does not delete the selected road');
+    await b.key('Escape');
+  }
   // Ramp drawn by hand (Phase 4B-1): started on the side of a road at a shallow angle it diverges from it (no junction);
   // drawn against the traffic it previews red with the reason; its end can be unhooked; one undo removes it.
   {
@@ -123,6 +147,7 @@ try{
     await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-ramp-end="start"]')?.dataset.designRampAnchor`))!=='none','ramp start attached to the road');
     assert.match(await b.evalValue(`document.querySelector('[data-design-field="road-name"]').value`),/^ทางลาด \d/);
     assert.equal(await b.count('[data-network-ramp-taper]'),1,'taper at the diverge');
+    assert.equal(await b.count('[data-design-ramp-flow="start"]'),1,'traffic direction shown at the attachment');
     assert.equal(await b.count('[data-network-junction-hit]'),junctions,'no junction at the diverge');
     await b.screenshot('artifacts/design-browser-ramp.png');
     await b.click('[data-design-ramp-detach="start"]');
@@ -281,7 +306,7 @@ try{
   await move(near,8);
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-snap]')?.dataset.designSnap`)==='none','Shift turns snapping off');
   await move(near);
-  await b.waitFor(async()=>(await b.text('[data-design-readout]'))?.includes('ต่อจากปลายถนน'),'snaps to the road end');
+  await b.waitFor(async()=>(await b.text('[data-design-readout]'))?.includes('ต่อจากปลาย'),'snaps to the road end');
   await act('click road end',()=>b.clickAt(near));
   await move(up);
   await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-snap]')?.dataset.designSnap`)==='angle','angle lock while drawing');
@@ -564,6 +589,13 @@ try{
     return{sheetTop:i.top,sheetH:i.height,canvasTop:c.top,width:document.documentElement.scrollWidth,inner:innerWidth,note:getComputedStyle(document.querySelector('[data-design-phone-note]')??document.body).display};})()`);
   assert.ok(diag.phone.sheetH<=844*0.55&&diag.phone.sheetTop-diag.phone.canvasTop>=250,'plan visible above the sheet: '+JSON.stringify(diag.phone));
   assert.ok(diag.phone.width<=diag.phone.inner+1,'no sideways scroll on a phone: '+JSON.stringify(diag.phone));
+  assert.equal(await b.evalValue(`getComputedStyle(document.querySelector('[data-design-file="save"]')).display`),'none','phone: file actions folded');
+  assert.notEqual(await b.evalValue(`getComputedStyle(document.querySelector('[data-design-more]').parentElement).display`),'none','phone: "เพิ่มเติม" menu');
+  await b.click('[data-design-tool-button="road"]');
+  await b.waitFor(async()=>(await b.evalValue(`getComputedStyle(document.querySelector('[data-design-draw-actions]')).display`))==='flex','phone: drawing buttons');
+  assert.ok(await b.evalValue(`document.querySelector('[data-design-draw-actions]').getBoundingClientRect().bottom<document.querySelector('.design-inspector').getBoundingClientRect().top`),'phone: drawing buttons above the sheet');
+  await b.screenshot('artifacts/design-browser-phone-draw.png');
+  await b.click('[data-design-draw-action="cancel"]');
   await b.screenshot('artifacts/design-browser-phone.png');
   await b.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await sleep(300);
   await b.click('[data-design-scenario="alt-1"]');await b.waitFor(async()=>(await b.text('[data-design-scenario][aria-selected="true"]'))==='ทางเลือก A','back to the alternative');

@@ -60,6 +60,9 @@ export default function DesignWorkspace(){
   const [newRole,setNewRole]=useState<NewRole>('road');
   /** Level the next drawn point gets, and the level of each drawn point (drawing at a level). */
   const [level,setLevel]=useState(0),[draftLevels,setDraftLevels]=useState<number[]>([]);
+  /** Tab presses (cycle snap targets), snapping off (touch toggle), Space held (pan in any tool). */
+  const [moreOpen,setMoreOpen]=useState(false);
+  const [snapCycle,setSnapCycle]=useState(0),[snapOff,setSnapOff]=useState(false),[spacePan,setSpacePan]=useState(false);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
@@ -125,6 +128,9 @@ export default function DesignWorkspace(){
   function onKey(e:React.KeyboardEvent){
     if((e.target as HTMLElement).matches('input,select,textarea'))return;
     const k=e.key.toLowerCase();
+    // Space held = pan, also right after a toolbar click (buttons still activate with Enter).
+    if(e.key===' '&&!(e.target as HTMLElement).closest('[role=menuitem]')){e.preventDefault();if(!spacePan)setSpacePan(true);return;}
+    if(e.key==='Tab'&&tool==='road'){e.preventDefault();setSnapCycle(n=>n+1);return;}
     if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();if(e.shiftKey)ed.redo();else ed.undo();return;}
     if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();ed.redo();return;}
     if(k==='z'&&!e.ctrlKey&&!e.metaKey&&selection&&view==='2d'){setFocusKey(n=>n+1);return;}
@@ -141,10 +147,11 @@ export default function DesignWorkspace(){
       finishDraft();return;
     }
     // A picked road point is deleted on its own; otherwise the whole road.
-    if((e.key==='Delete'||e.key==='Backspace')&&selectedRoad&&selection?.kind==='road'&&selection.point!==undefined){
+    // Delete removes the selection; Backspace only steps back while drawing (research 2026-10-22).
+    if(e.key==='Delete'&&selectedRoad&&selection?.kind==='road'&&selection.point!==undefined){
       if(ed.run({type:'road.removePoint',roadId:selectedRoad.id,index:selection.point}).ok)setSelection({kind:'road',id:selectedRoad.id});return;
     }
-    if((e.key==='Delete'||e.key==='Backspace')&&selectedRoad){if(ed.run({type:'road.remove',roadId:selectedRoad.id}).ok)setSelection(null);return;}
+    if(e.key==='Delete'&&selectedRoad){if(ed.run({type:'road.remove',roadId:selectedRoad.id}).ok)setSelection(null);return;}
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(k==='v')chooseTool('select');if(k==='h')chooseTool('pan');if(k==='r')chooseTool('road');
   }
@@ -201,7 +208,7 @@ export default function DesignWorkspace(){
     setNewArmed(false);ed.replaceWorkspace(createWorkspace(emptyRoadFirstProject()),'เริ่มโครงการใหม่แล้ว');setSelection(null);setCompare(false);setFitKey(k=>k+1);
   }
 
-  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} data-design-workspace="true" data-design-ready={ed.loaded?"true":undefined} data-inspector-open={inspectorOpen?'true':'false'}>
+  return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} onKeyUp={e=>{if(e.key===' '){if(spacePan)e.preventDefault();setSpacePan(false);}}} onBlur={()=>setSpacePan(false)} data-design-workspace="true" data-design-ready={ed.loaded?"true":undefined} data-inspector-open={inspectorOpen?'true':'false'}>
     <header className="design-top">
       <div className="design-brand"><Route size={18}/><b>Thai Street Designer</b><span>{ed.project.title}</span></div>
       <div className="design-scenarios" role="tablist" aria-label="ทางเลือก">
@@ -210,9 +217,18 @@ export default function DesignWorkspace(){
         {ed.reference&&<button className={compare?'active compare':'compare'} aria-pressed={compare} data-design-compare-toggle="true" onClick={()=>setCompare(v=>!v)} title={`ไฮไลต์สิ่งที่ต่างจาก ${ed.reference.name}`}><GitCompare size={14}/><span>เทียบกับ {ed.reference.name}</span></button>}
       </div>
       <div className="design-top-actions">
-        <button data-design-file="new" onClick={newProject} onBlur={()=>setNewArmed(false)}>{newArmed?'ยืนยันโครงการใหม่':'ใหม่'}</button>
-        <button data-design-file="open" onClick={()=>fileInput.current?.click()}>เปิดไฟล์</button>
-        <button data-design-file="save" onClick={save}>บันทึกไฟล์</button>
+        <button className="design-file-btn" data-design-file="new" onClick={newProject} onBlur={()=>setNewArmed(false)}>{newArmed?'ยืนยันโครงการใหม่':'ใหม่'}</button>
+        <button className="design-file-btn" data-design-file="open" onClick={()=>fileInput.current?.click()}>เปิดไฟล์</button>
+        <button className="design-file-btn" data-design-file="save" onClick={save}>บันทึกไฟล์</button>
+        {/* Phones: file actions in one menu, so the plan keeps the space. */}
+        <span className="design-more">
+          <button data-design-more="true" aria-expanded={moreOpen} onClick={()=>setMoreOpen(v=>!v)} onBlur={e=>{if(!e.currentTarget.parentElement?.contains(e.relatedTarget))setMoreOpen(false);}}>เพิ่มเติม</button>
+          {moreOpen&&<span className="design-export-menu" role="menu">
+            <button role="menuitem" data-design-more-item="new" onClick={()=>{setMoreOpen(false);newProject();}}>{newArmed?'ยืนยันโครงการใหม่':'โครงการใหม่'}</button>
+            <button role="menuitem" data-design-more-item="open" onClick={()=>{setMoreOpen(false);fileInput.current?.click();}}>เปิดไฟล์</button>
+            <button role="menuitem" data-design-more-item="save" onClick={()=>{setMoreOpen(false);save();}}>บันทึกไฟล์</button>
+          </span>}
+        </span>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden data-design-file-input="true" onChange={e=>{const f=e.currentTarget.files?.[0];e.currentTarget.value='';void open(f);}}/>
         <span className="design-sep"/>
         <button data-design-undo="true" disabled={!ed.undoText} title={ed.undoText?`ย้อนกลับ: ${ed.undoText}`:'ไม่มีขั้นตอนให้ย้อน'} onClick={ed.undo}><Undo2 size={15}/><span>{ed.undoText??'ย้อนกลับ'}</span></button>
@@ -238,7 +254,14 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        {/* Drawing buttons for touch and narrow screens (no right-click, Backspace, Enter or Shift there). */}
+        {tool==='road'&&view==='2d'&&<div className="design-draw-actions" data-design-draw-actions="true">
+          <button data-design-draw-action="back" disabled={!draft.length} onClick={draftBack}>ย้อนจุด</button>
+          <button data-design-draw-action="finish" disabled={draft.length<2} onClick={finishDraft}>จบ</button>
+          <button data-design-draw-action="cancel" onClick={()=>{if(draft.length)clearDraft();else chooseTool('select');}}>ยกเลิก</button>
+          <button data-design-draw-action="snap" aria-pressed={!snapOff} onClick={()=>setSnapOff(v=>!v)}>{snapOff?'snap ปิด':'snap เปิด'}</button>
+        </div>}
         {ed.notice.autoJunctions&&<div className="design-toast" role="status" data-design-auto-junction={ed.notice.autoJunctions.length}>
           <span>สร้างทางแยกให้แล้ว {ed.notice.autoJunctions.length} แห่ง</span>
           <button data-design-toast-action="undo" onClick={ed.undo}>ย้อนกลับ</button>

@@ -158,3 +158,9 @@ export function taperPolygon(main:Road,ramp:Road,end:RampEnd):WorldPoint[]{
   const nx=-dy/l,ny=dx/l,away=(nx*t.y-ny*t.x)*a.side>=0?1:-1,corner={x:p.x+nx*h*away,y:p.y+ny*h*away},inner={x:p.x-nx*h*away,y:p.y-ny*h*away};
   return[far,corner,p,inner].map(v=>({x:round(v.x,3),y:round(v.y,3)}));
 }
+
+/** Where an attachment is and which way traffic runs there (for the direction arrows on the plan). */
+export function anchorFlow(main:Road,a:RampAnchor):{point:WorldPoint;dir:WorldPoint}{
+  const t=tangentAt(main.points,a.station);
+  return{point:anchorPoint(main,a),dir:{x:t.x*a.side,y:t.y*a.side}};
+}
