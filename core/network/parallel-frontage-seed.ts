@@ -61,7 +61,8 @@ function buildSide(project:NetworkProject,oriented:OrientedLink[],side:ParallelC
     sources=nodeIds.map(id=>junctionById(project,id));
   if(sources.some(source=>!source))return{project,error:'สร้าง frontage seed ไม่ได้ · mainline chain อ้าง Junction ที่หายไป'};
   if((sources as JunctionInstance[]).some(source=>source.design.type==='roundabout'))return{project,error:'Assisted frontage seed ยังไม่รองรับ mainline chain ที่ผ่าน Roundabout · สร้าง/เชื่อม frontage ด้วยตนเองก่อน'};
-  const centers=(sources as JunctionInstance[]).map(source=>({x:source.x,y:source.y})),signed=side==='left'?offset:-offset,
+  const centers=(sources as JunctionInstance[]).map(source=>({x:source.x,y:source.y})),// Frontage sides keep their earlier placement (left = +y of an eastbound mainline); the shared offset helper now measures left of travel on the plan.
+    signed=side==='left'?-offset:offset,
     offsetCenters=profiledParallel(centers,centers.map(()=>signed)),cloneBySource=new Map<string,JunctionInstance>();
   let working=project;
   for(let index=0;index<sources.length;index++){

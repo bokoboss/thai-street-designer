@@ -64,7 +64,7 @@ export function resolveRoadLinkSceneFaces(project:NetworkProject):NetworkSceneFa
   const rs=roadsideDefaults();
   return project.links.flatMap(link=>{
     const g=resolveLinkSectionGeometry(project,link);if(!g)return[];
-    return g.objects.flatMap((o,k)=>objectFaces({kind:o.kind,x:o.x,y:o.y,angle:o.angle,side:o.side,height:o.kind==='tree'?rs.treeHeight:rs.lightHeight,size:o.kind==='tree'?rs.treeSize:rs.lightSize,reach:rs.lightReach})
+    return g.objects.flatMap((o,k)=>objectFaces({kind:o.kind,x:o.x,y:o.y,angle:o.angle,side:-o.side, /* objectFaces reaches toward -side*local y; link offsets are left of travel */height:o.kind==='tree'?rs.treeHeight:rs.lightHeight,size:o.kind==='tree'?rs.treeSize:rs.lightSize,reach:rs.lightReach})
       .map((face,index)=>({id:`${link.id}:object:${k}:${index}`,color:face.color,points:face.points.map(p=>({...p,z:p.z+linkLevelAt(link,o.station)}))})));
   }).filter(face=>face.points.length>=3&&face.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z)));
 }

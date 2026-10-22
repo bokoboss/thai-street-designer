@@ -83,7 +83,7 @@ export function RoadLinkDrawing({
     {resolved?.openings.length?<g data-network-link-openings={resolved.openings.length} pointerEvents="none"/>:null}
     {resolved?.objects.length?<g data-network-link-objects={resolved.objects.length} pointerEvents="none">{resolved.objects.map((o,i)=><g key={i} data-road-object={o.kind} transform={`translate(${o.x} ${o.y}) rotate(${o.angle})`}>
       {o.kind==='tree'?<><circle r={roadsideDefaults().treeSize/2} fill="#609b73" stroke="#397a51" strokeWidth=".15"/><circle r=".18" fill="#8b6c4e"/></>
-      :<><circle r=".28" fill="#556b7b"/><path d={`M0 0V${-o.side*roadsideDefaults().lightReach}h.65`} fill="none" stroke="#637e8e" strokeWidth=".18"/></>}</g>)}</g>:null}
+      :<><circle r=".28" fill="#556b7b"/><path d={`M0 0V${o.side*roadsideDefaults().lightReach}h.65`} fill="none" stroke="#637e8e" strokeWidth=".18"/></>}</g>)}</g>:null}
     <path data-scene-detail="true" d={leftEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     <path data-scene-detail="true" d={rightEdge} stroke="#f3f6f7" strokeWidth=".22" fill="none"/>
     {linear&&resolved?resolved.laneLines.flatMap(line=>profiledLinePaths(renderPoints,line.offsets).map((d,index)=><path key={line.id+'-'+index} data-scene-detail="true" data-network-link-lane-transition={line.id} d={d} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)):laneLines.map(line=><path key={line.key} data-scene-detail="true" data-network-link-lane-line="true" d={path(variableParallel(ps,line.start,line.end))} stroke="#e7ecef" strokeWidth=".16" strokeDasharray="3 5" fill="none"/>)}
