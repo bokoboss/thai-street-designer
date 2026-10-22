@@ -4,7 +4,7 @@
 import {useCallback,useDeferredValue,useEffect,useMemo,useRef,useState} from 'react';
 import {NetworkDrawing} from '../network/network-drawing';
 import {portHeading,projectBounds,type WorldPoint} from '@/core/network/network-project';
-import {detectCandidates,stations,type Road} from '@/core/road-first/derive';
+import {detectCandidates,type Road} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import type {CompileResult} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
@@ -19,6 +19,7 @@ import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/r
 import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
 import {anchorFlow} from '@/core/road-first/ramps';
 import type {TemplateGhost} from './diamond-panel';
+import {resolveAlignment} from '@/core/common/resolved-alignment';
 import {smoothAlignment} from '@/core/common/alignment';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
@@ -166,7 +167,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     }
     if(d.kind==='radius'){
       const r=project.roads.find(x=>x.id===d.roadId);if(!r)return;
-      const radius=radiusFromPoint(r.points,d.index,toWorld(e));
+      const radius=radiusFromPoint(r.points,d.index,toWorld(e),r.alignment);
       if(radius!==null&&radius!==(r.points[d.index].radius??0))run({type:'road.setPointRadius',roadId:r.id,index:d.index,radius},{gesture:true});return;
     }
     if(d.kind==='road-opening'){
@@ -237,8 +238,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   function insertPoint(e:React.MouseEvent,road:Road){
     if(tool!=='select')return;
     e.stopPropagation();
-    const p=toWorld(e),s=stations(road.points);let best=1,gap=Infinity;
-    for(let i=1;i<road.points.length;i++){const a=road.points[i-1],b=road.points[i],t=Math.max(0,Math.min(1,((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/((s[i]-s[i-1])**2||1))),q={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},g=Math.hypot(p.x-q.x,p.y-q.y);if(g<gap){gap=g;best=i;}}
+    const p=toWorld(e);let best=1,gap=Infinity;
+    for(let i=1;i<road.points.length;i++){const a=road.points[i-1],b=road.points[i],t=Math.max(0,Math.min(1,((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/((b.x-a.x)**2+(b.y-a.y)**2||1))),q={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},g=Math.hypot(p.x-q.x,p.y-q.y);if(g<gap){gap=g;best=i;}}
     run({type:'road.insertPoint',roadId:road.id,index:best,point:p});
   }
 
@@ -297,7 +298,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         {/* Higher roads last, so a click at a grade separation picks the road on top. */}
         {[...project.roads].sort((a,b)=>Math.max(0,...(a.profile??[]).map(q=>q.z))-Math.max(0,...(b.profile??[]).map(q=>q.z))).map(road=>{
           // The centre line as drawn: arcs at curved points.
-          const d=smoothAlignment(road.points).map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id,
+          const d=(road.alignment==='arc'?resolveAlignment(road.points).sample():smoothAlignment(road.points)).map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id,
             pointPicked=selected&&selection?.kind==='road'?selection.point:undefined,radiusAt=pointPicked!==undefined?curveHandle(road.points,pointPicked,px(28)):null;
           return <g key={road.id} data-design-road={road.id}>
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}

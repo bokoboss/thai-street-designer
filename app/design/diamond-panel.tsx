@@ -30,7 +30,7 @@ function placement(project:RoadFirstProject,candidateId:string,params:DiamondPar
   const cmd:RoadFirstCommand=remove?{type:'batch',quiet:true,label:`${plan.cmd.type==='batch'?plan.cmd.label:''} (แทนชุดเดิม)`,commands:[...(remove.type==='batch'?remove.commands:[]),...(plan.cmd.type==='batch'?plan.cmd.commands:[])]}:plan.cmd;
   const check=executeCommand(project,cmd);
   // Placement feedback: ramp lengths and their steepest grade (from the generated profiles).
-  const lengths=plan.ramps.map(r=>stations(r.road.points).at(-1)!),grades=plan.ramps.map(r=>{const p=r.road.profile??[];let g=0;for(let i=1;i<p.length;i++)g=Math.max(g,Math.abs(p[i].z-p[i-1].z)/((p[i].station-p[i-1].station)||1));return g*100;});
+  const lengths=plan.ramps.map(r=>stations(r.road.points,r.road.alignment).at(-1)!),grades=plan.ramps.map(r=>{const p=r.road.profile??[];let g=0;for(let i=1;i<p.length;i++)g=Math.max(g,Math.abs(p[i].z-p[i-1].z)/((p[i].station-p[i-1].station)||1));return g*100;});
   return{cmd,error:check.error??undefined,lines:plan.ramps.map(r=>r.road.points),warnings:check.warnings.filter(w=>/ต้องตรวจตามเกณฑ์/.test(w)),
     info:{minLength:Math.min(...lengths),maxLength:Math.max(...lengths),grade:Math.max(...grades)}};
 }

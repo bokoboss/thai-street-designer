@@ -2,6 +2,7 @@
 // two roads (bridge or underpass, from the level criteria) and up to four one-way ramps, each attached to the main road
 // by a diverge / merge and meeting the crossroad in an ordinary junction (one junction per side of the main road).
 // Everything is one batch command (one undo step); afterwards each piece is an ordinary road / ramp / junction.
+import {resolveAlignment} from '../common/resolved-alignment';
 import type {WorldPoint} from '../network/network-project';
 import type {RoadFirstCommand} from './commands';
 import {detectCandidates,pointAt,stations,type Road} from './derive';
@@ -35,7 +36,8 @@ const ALL_RAMPS:Record<DiamondRampKey,boolean>={forwardOff:true,forwardOn:true,b
 
 const r2=(v:number)=>Math.round(v*100)/100;
 const add=(a:WorldPoint,b:WorldPoint,k=1)=>({x:a.x+b.x*k,y:a.y+b.y*k});
-function unitAt(points:WorldPoint[],station:number){
+function unitAt(points:Road['points'],station:number,mode?:'arc'){
+  if(mode==='arc')return resolveAlignment(points).tangentAt(station);
   const s=stations(points);
   for(let i=0;i<points.length-1;i++)if(station<=s[i+1]+1e-6||i===points.length-2){const dx=points[i+1].x-points[i].x,dy=points[i+1].y-points[i].y,l=Math.hypot(dx,dy)||1;return{x:dx/l,y:dy/l};}
   return{x:1,y:0};
@@ -64,7 +66,7 @@ export function diamondPlan(project:RoadFirstProject,candidateId:string,params:D
   const main=project.roads.find(r=>r.id===mRef?.roadId),cross=project.roads.find(r=>r.id===cRef?.roadId);
   if(!mRef||!cRef||!main||!cross)return{error:'ไม่พบถนนหลักที่เลือก'};
   if(main.section.forwardLanes<1||main.section.backwardLanes<1)return{error:`${main.name} ต้องมีช่องจราจรทั้งสองทิศ`};
-  const {length:L,offset:W}=params,mainTotal=stations(main.points).at(-1)!;
+  const {length:L,offset:W}=params,mainTotal=stations(main.points,main.alignment).at(-1)!;
   if(!(L>0&&W>0))return{error:'ระยะทางลาดต้องมากกว่า 0'};
   if(mRef.station-L<1||mRef.station+L>mainTotal-1)return{error:`${main.name} สั้นเกินไปสำหรับทางลาดยาว ${L} ม. จากจุดตัด — ยืดถนนหรือลดระยะ`};
   // The ramp diverges at a shallow angle until it is clear of the main road, then runs to its terminal.
@@ -77,18 +79,18 @@ export function diamondPlan(project:RoadFirstProject,candidateId:string,params:D
   if('error' in sep)return sep;
   const profiles=sep.cmd.type==='crossing.setOver'?sep.cmd.profiles:{};
   const prof=(r:Road):Profile|undefined=>r.id in profiles?(profiles[r.id]??undefined):r.profile;
-  const X=c.point,u=unitAt(main.points,mRef.station),n={x:u.y,y:-u.x}; // n: forward-lane side (left of travel on the plan)
-  const v0=unitAt(cross.points,cRef.station);
+  const X=c.point,u=unitAt(main.points,mRef.station,main.alignment),n={x:u.y,y:-u.x}; // n: forward-lane side (left of travel on the plan)
+  const v0=unitAt(cross.points,cRef.station,cross.alignment);
   // Terminal on the crossroad at distance W across the main road, on one side (+1 forward side, -1 the other).
   // Points follow both alignments (a curved road keeps its ramps along its curve).
-  const crossTotal=stations(cross.points).at(-1)!;
+  const crossTotal=stations(cross.points,cross.alignment).at(-1)!;
   const terminal=(side:1|-1)=>{const dir=(v0.x*n.x+v0.y*n.y)*side>=0?1:-1,across=Math.abs(v0.x*n.x+v0.y*n.y);
-    if(across<.3)return null;const s=cRef.station+dir*W/across;if(s<1||s>crossTotal-1)return undefined;return pointAt(cross.points,s);};
+    if(across<.3)return null;const s=cRef.station+dir*W/across;if(s<1||s>crossTotal-1)return undefined;return pointAt(cross.points,s,cross.alignment);};
   const tF=terminal(1),tB=terminal(-1);
   if(tF===null||tB===null)return{error:`${cross.name} ตัด ${main.name} เฉียงเกินไปสำหรับข้าวหลามตัด`};
   if(!tF||!tB)return{error:`${cross.name} สั้นเกินไปสำหรับทางแยกปลายทางลาดที่ห่าง ${W} ม. — ยืดถนนหรือลดระยะ`};
-  const onMain=(s:number)=>pointAt(main.points,mRef.station+s);
-  const at=(s:number,side:number)=>{const t=unitAt(main.points,mRef.station+s);return add(onMain(s),{x:t.y,y:-t.x},side*clear);};
+  const onMain=(s:number)=>pointAt(main.points,mRef.station+s,main.alignment);
+  const at=(s:number,side:number)=>{const t=unitAt(main.points,mRef.station+s,main.alignment);return add(onMain(s),{x:t.y,y:-t.x},side*clear);};
   const shape:Record<DiamondRampKey,WorldPoint[]>={
     // Forward traffic (along the main road's drawing direction) runs on the forward side (+n).
     forwardOff:[onMain(-L),at(-(L-taper),1),tF],forwardOn:[tF,at(L-taper,1),onMain(L)],

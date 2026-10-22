@@ -2,6 +2,7 @@
 // Roads own alignment + section. Crossings become explicit candidates. Confirmed
 // junctions compile to ordinary JunctionInstance/RoadLink objects, so every
 // existing geometry, Slip, review, 2D/3D and export path is reused unchanged.
+import {resolveAlignment,alignmentIntersections,type AlignmentMode} from '../common/resolved-alignment';
 import {initial,markingsFor,roadsideDefaults,type Arm,type Band,type Design} from '../junction/model';
 import {defaultSlip,nextActiveArm,type SlipLane} from '../junction/slip-model';
 import {requiredArmLength} from '../junction/arm-fit';
@@ -30,7 +31,7 @@ export type RoadLinkData={name?:string;sectionProfile?:LinkSectionProfile;compon
 export type RoadRole='access'|'ramp';
 /** Mid-block median opening: station = start from the road start (road stations). */
 export type RoadOpening={id:string;station:number;length:number;type?:'opening'|'uturn'};
-export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[];
+export type Road={alignment?:'arc';id:string;name:string;role?:RoadRole;points:RoadPoint[];section:RoadSection;ends?:{start?:RoadEndData;end?:RoadEndData};links?:RoadLinkData[];openings?:RoadOpening[];
   /** Trees / street lights along both sidewalks, on the links and on this road's junction arms (engine roadside defaults). */
   roadside?:{trees:boolean;lights:boolean};
   /** Vertical points (station, z) — Phase 4A; absent = level 0. */
@@ -64,7 +65,7 @@ export type CompileSources={junctions:Record<string,string>;links:Record<string,
 export type ArmShortfall={candidateId:string;junctionId:string;armId:number;roadId:string;side:'ahead'|'behind';room:number;required:number};
 /** A grade-separated crossing (Phase 4A): relation, the two roads and the measured level gap (over minus under). */
 export type CompiledCrossing={candidateId:string;roads:string[];point:WorldPoint;relation:'over'|'unresolved';over?:string;under?:string;gap:number;name:string};
-export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[]};
+export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[];linkRanges:{id:string;roadId:string;from:number;to:number}[]};
 
 /** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
 const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
@@ -74,15 +75,16 @@ const lerp=(a:WorldPoint,b:WorldPoint,t:number)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-
 const headingDeg=(v:WorldPoint)=>((Math.atan2(v.y,v.x)*180/Math.PI)+360)%360;
 const round=(v:number,d=6)=>Math.round(v*10**d)/10**d;
 
-export function stations(points:WorldPoint[]){const out=[0];for(let i=1;i<points.length;i++)out.push(out[i-1]+len(sub(points[i],points[i-1])));return out;}
-export function pointAt(points:WorldPoint[],station:number){
+export function stations(points:RoadPoint[],mode:AlignmentMode='chord'){if(mode==='arc')return resolveAlignment(points).vertices;const out=[0];for(let i=1;i<points.length;i++)out.push(out[i-1]+len(sub(points[i],points[i-1])));return out;}
+export function pointAt(points:RoadPoint[],station:number,mode:AlignmentMode='chord'){
+  if(mode==='arc')return resolveAlignment(points).pointAt(station);
   const s=stations(points);
   for(let i=1;i<points.length;i++)if(station<=s[i]+EPS){const t=(station-s[i-1])/((s[i]-s[i-1])||1);return lerp(points[i-1],points[i],Math.max(0,Math.min(1,t)));}
   return points[points.length-1];
 }
 /** Index of the segment containing a station (segment i runs from point i to i+1). */
-function segmentAt(points:WorldPoint[],station:number,preferAhead:boolean){
-  const s=stations(points);
+function segmentAt(points:RoadPoint[],station:number,preferAhead:boolean,mode?:'arc'){
+  const s=stations(points,mode);
   for(let i=0;i<points.length-1;i++){
     if(preferAhead?station<s[i+1]-EPS:station<=s[i+1]+EPS)return i;
   }
@@ -93,7 +95,26 @@ function segmentAt(points:WorldPoint[],station:number,preferAhead:boolean){
 export function detectCandidates(roads:Road[],tolerance=1):Candidate[]{
   const out:Candidate[]=[];
   for(let a=0;a<roads.length;a++)for(let b=a+1;b<roads.length;b++){
-    const A=roads[a],B=roads[b],sa=stations(A.points),sb=stations(B.points);
+    const A=roads[a],B=roads[b],sa=stations(A.points,A.alignment),sb=stations(B.points,B.alignment);
+    if(A.alignment==='arc'||B.alignment==='arc'){
+      const aa=resolveAlignment(A.points,A.alignment??'chord'),bb=resolveAlignment(B.points,B.alignment??'chord');
+      const hits=alignmentIntersections(aa,bb);
+      // End-to-road snapping uses the same nearest point, without extending interior arc segments.
+      for(const [one,two,flip] of [[aa,bb,false],[bb,aa,true]] as const)for(const st of [0,one.length]){
+        const p=one.pointAt(st),f=two.project(p);
+        if(f.distance<=tolerance&&f.station>tolerance&&f.station<two.length-tolerance&&!hits.some(h=>len(sub(h.point,p))<tolerance))
+          hits.push({point:f.point,stationA:flip?f.station:st,stationB:flip?st:f.station});
+      }
+      for(const hit of hits){
+        const endA=hit.stationA<tolerance||hit.stationA>aa.length-tolerance,endB=hit.stationB<tolerance||hit.stationB>bb.length-tolerance;
+        if(endA&&endB)continue;
+        const refs=[{roadId:A.id,station:round(hit.stationA)},{roadId:B.id,station:round(hit.stationB)}];
+        const same=out.find(c=>len(sub(c.point,hit.point))<tolerance);
+        if(same){for(const ref of refs)if(!same.roads.some(r=>r.roadId===ref.roadId))same.roads.push(ref);}
+        else out.push({id:'',kind:endA||endB?'tee':'cross',point:hit.point,roads:refs});
+      }
+      continue;
+    }
     for(let i=0;i<A.points.length-1;i++)for(let j=0;j<B.points.length-1;j++){
       const p=A.points[i],r=sub(A.points[i+1],p),q=B.points[j],s=sub(B.points[j+1],q),den=r.x*s.y-r.y*s.x;
       if(Math.abs(den)<EPS)continue;
@@ -166,7 +187,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   // Crossings are found on the straight lines between road points; one inside an arc is reported, not moved.
   for(const c of candidates)for(const ref of c.roads){
     const road=roads.find(r=>r.id===ref.roadId);if(!road)continue;
-    const arc=curveRanges(road.points,stations(road.points)).find(a=>ref.station>a.from+EPS&&ref.station<a.to-EPS);
+    const arc=road.alignment==='arc'?undefined:curveRanges(road.points,stations(road.points,road.alignment)).find(a=>ref.station>a.from+EPS&&ref.station<a.to-EPS);
     if(arc)issues.push(`${road.name}: จุดตัดอยู่ในช่วงโค้งที่จุดแนวถนนที่ ${arc.index+1} — ตำแหน่งจุดตัดคิดจากแนวเส้นตรง ลดรัศมีหรือย้ายจุดตัดออกจากช่วงโค้ง`);
   }
   const roadById=new Map(roads.map(r=>[r.id,r]));
@@ -190,15 +211,16 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   confirmed.forEach(({d,c},jIndex)=>{
     const id=`J-${jIndex+1}`,found:Leg[]=[];
     for(const ref of c.roads){
-      const road=roadById.get(ref.roadId)!,s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)!,k=list.findIndex(v=>v.jIndex===jIndex);
-      const next=list[k+1],prev=list[k-1];
+      const road=roadById.get(ref.roadId)!,s=stations(road.points,road.alignment),total=s[s.length-1],list=onRoad.get(road.id)!,k=list.findIndex(v=>v.jIndex===jIndex);
+      const next=list[k+1],prev=list[k-1],solved=road.alignment==='arc'?resolveAlignment(road.points):null;
+      const curveRoom=(ahead:boolean)=>{const pc=solved?.pieceAt(ref.station,ahead);return pc?.kind==='arc'?0:pc?(ahead?pc.start+pc.length-ref.station:ref.station-pc.start):Infinity;};
       if(ref.station<total-tolerance){
-        const seg=segmentAt(road.points,ref.station,true),vertex=s[seg+1],toEnd=total-ref.station,clear=clearAt(road,seg+1);
-        found.push({roadId:road.id,side:'ahead',heading:headingDeg(sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear),room:legRoom(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear)});
+        const seg=segmentAt(road.points,ref.station,true,road.alignment),vertex=s[seg+1],toEnd=total-ref.station,clear=clearAt(road,seg+1);
+        found.push({roadId:road.id,side:'ahead',heading:headingDeg(solved?.tangentAt(ref.station)??sub(road.points[seg+1],road.points[seg])),available:legLength(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear),room:Math.min(curveRoom(true),legRoom(next?next.station-ref.station:null,toEnd,vertex-ref.station,vertex>=total-EPS,clear))});
       }
       if(ref.station>tolerance){
-        const seg=segmentAt(road.points,ref.station,false),vertex=s[seg],clear=clearAt(road,seg);
-        found.push({roadId:road.id,side:'behind',heading:headingDeg(sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear),room:legRoom(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear)});
+        const seg=segmentAt(road.points,ref.station,false,road.alignment),vertex=s[seg],clear=clearAt(road,seg);
+        found.push({roadId:road.id,side:'behind',heading:headingDeg(solved?{x:-solved.tangentAt(ref.station,false).x,y:-solved.tangentAt(ref.station,false).y}:sub(road.points[seg],road.points[seg+1])),available:legLength(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear),room:Math.min(curveRoom(false),legRoom(prev?ref.station-prev.station:null,ref.station,ref.station-vertex,vertex<=EPS,clear))});
       }
     }
     if(found.length>4){issues.push(`${d.name??id}: มี ${found.length} ขา · ตอนนี้ทางแยกรองรับสูงสุด 4 ขา ขาที่เกินจึงไม่ได้สร้าง`);overflow.push(d.candidateId);found.length=4;}
@@ -257,6 +279,10 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
         shortfalls.push({candidateId:d.candidateId,junctionId:id,armId:leg.armId,roadId:road.id,side:leg.side,room:Math.max(0,room.get(leg.armId)!),required});
         issues.push(`${d.name??id}: ขา ${road.name} ${leg.side==='ahead'?'→':'←'} มีช่วงตรง ${Math.max(0,room.get(leg.armId)!).toFixed(1)} ม. แต่ขานี้ต้องยาวอย่างน้อย ${required.toFixed(1)} ม. สำหรับปากทางแยกและสิ่งที่อยู่บนขา (ถูกยืดจึงไม่ตรงแนวถนน)`);
       }
+      if(road.alignment==='arc'&&design.arms[leg.armId].length>room.get(leg.armId)!+EPS&&!shortfalls.some(s=>s.junctionId===id&&s.armId===leg.armId)){
+        shortfalls.push({candidateId:d.candidateId,junctionId:id,armId:leg.armId,roadId:road.id,side:leg.side,room:Math.max(0,room.get(leg.armId)!),required:design.arms[leg.armId].length});
+        issues.push(`${road.name}: ปากทางแยกยาวเกินช่วงตรงที่มี — ปรับแนวถนนหรือย้ายจุดตัดออกจากโค้ง`);
+      }
       armLength.set(`${id}:${leg.armId}`,design.arms[leg.armId].length);
     }
     // Junction level: its roads should meet at one level; a difference is reported, not hidden (Phase 4A).
@@ -284,7 +310,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     return{...link,name:data.name??link.name,sectionProfile:structuredClone(data.sectionProfile??link.sectionProfile),components};
   };
   for(const road of roads){
-    const s=stations(road.points),total=s[s.length-1],list=onRoad.get(road.id)??[];
+    const s=stations(road.points,road.alignment),total=s[s.length-1],list=onRoad.get(road.id)??[];
     type Node={ref:LinkEndRef;station:number};
     const nodes:{ahead?:Node;behind?:Node}[]=[];
     const first=list[0],last=list.at(-1);
@@ -313,6 +339,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const via=road.points.filter((_,i)=>s[i]>from.station+EPS&&s[i]<to.station-EPS).map(p=>({x:round(p.x),y:round(p.y),radius:p.radius??0}));
       sources.links[`L-${links.length+1}`]=road.id;
       const built=linkData(road,{id:`L-${links.length+1}`,name:`${road.name} ${links.length+1}`,from:from.ref,to:to.ref,via,sectionProfile:{mode:'review'},components:[]},road.links?.[span]);
+      // Overlapping junction approaches have no forward slice; keep the existing port geometry and diagnostics.
+      if(road.alignment==='arc'&&from.station>=0&&to.station>from.station&&to.station<=total+EPS)built.alignment={vertices:structuredClone(road.points),from:from.station,to:to.station};
       // Mid-block openings that fall wholly inside this link, in link-local stations.
       const inside=(road.openings??[]).filter(o=>o.station>=from.station-EPS&&o.station+o.length<=to.station+EPS);
       if(inside.length&&road.section.median>0)built.medianOpenings=inside.map(o=>({id:o.id,start:round(Math.max(0,o.station-from.station),3),length:o.length,...(o.type?{type:o.type}:{})}));
@@ -354,9 +382,9 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       if(gap<need-1e-6)issues.push(`${name}: ต่างระดับ ${gap.toFixed(2)} ม. น้อยกว่าที่ตั้งไว้ ${need.toFixed(2)} ม. (ช่องลอด ${criteria.clearance.value} + ${tunnel?'หลังคาอุโมงค์':'โครงสร้าง'} ${(tunnel?criteria.tunnelRoof:criteria.deckDepth).value} ม.${hasSource(criteria.clearance)?'':' · ค่ายังไม่มีแหล่งอ้างอิง'}) — ต้องตรวจตามเกณฑ์`);
     }
     const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
-      return{a:pointAt(top.r.points,sa),b:pointAt(top.r.points,sb),half:sectionWidth(top.r.section)/2};})():undefined;
+      return{a:pointAt(top.r.points,sa,top.r.alignment),b:pointAt(top.r.points,sb,top.r.alignment),half:sectionWidth(top.r.section)/2};})():undefined;
     const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const half=sectionWidth(top.r.section)/2+2;
-      return{a:pointAt(bottom.r.points,Math.max(0,bottom.ref.station-half)),b:pointAt(bottom.r.points,bottom.ref.station+half),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3)};})():undefined;
+      return{a:pointAt(bottom.r.points,Math.max(0,bottom.ref.station-half),bottom.r.alignment),b:pointAt(bottom.r.points,bottom.ref.station+half,bottom.r.alignment),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3)};})():undefined;
     networkCrossings.push({id,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
   };
@@ -380,5 +408,5 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const a=r.anchors?.[end],main=a&&roadById.get(a.roadId);if(!a||!main)continue;
     const points=taperPolygon(main,r,end);if(points.length===4)rampTapers.push({id:`${r.id}:${end}`,points,z:round(levelAt(main.profile,a.station),3)});
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings};
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
 }

@@ -13,7 +13,7 @@ import type {RoadSection} from '@/core/road-first/derive';
 import {DEFAULT_PRESET,presetSection} from '@/core/road-first/presets';
 
 export const ROAD_FIRST_STORAGE='thai-street-road-first-v1';
-export const emptyRoadFirstProject=():RoadFirstProject=>({kind:'road-first',schemaVersion:1,title:'โครงการใหม่',roads:[],decisions:[],options:{approachLength:40}});
+export const emptyRoadFirstProject=():RoadFirstProject=>({kind:'road-first',schemaVersion:2,title:'โครงการใหม่',roads:[],decisions:[],options:{approachLength:40}});
 
 /** Copy of stored work that could not be read; kept until the user downloads or clears it. */
 export const ROAD_FIRST_UNREADABLE_STORAGE='thai-street-road-first-v1-unreadable';

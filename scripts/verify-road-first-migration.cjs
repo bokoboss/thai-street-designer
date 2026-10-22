@@ -119,7 +119,7 @@ assert.deepEqual(g8r.issues,g8r.items.map(mg.migrationText),'issue text is deriv
 
 
 // File rules.
-assert.throws(()=>rp.normalizeRoadFirstProject({...demo.project,schemaVersion:2}),/รุ่นที่ใหม่กว่า/,'future road-first version rejected');
+assert.throws(()=>rp.normalizeRoadFirstProject({...demo.project,schemaVersion:rp.ROAD_FIRST_SCHEMA_VERSION+1}),/รุ่นที่ใหม่กว่า/,'future road-first version rejected');
 assert.throws(()=>rp.normalizeRoadFirstProject({...demo.project,kind:'network'}),/ไม่ใช่ไฟล์/);
 const broken=structuredClone(demo.project);broken.roads[0].points=[broken.roads[0].points[0]];
 assert(rp.validateRoadFirstProject(broken),'road needs two points');

@@ -35,9 +35,9 @@ export function curveHandle(points:RoadPoint[],i:number,minOffset:number):WorldP
 }
 
 /** Radius from a dragged handle: distance along the bisector, capped by what the straights allow, in 0.5 m steps. */
-export function radiusFromPoint(points:RoadPoint[],i:number,p:WorldPoint):number|null{
+export function radiusFromPoint(points:RoadPoint[],i:number,p:WorldPoint,mode?:'arc'):number|null{
   const c=vertexCurve(points,i);if(!c)return null;
-  const b=points[i],d=(p.x-b.x)*c.bisector.x+(p.y-b.y)*c.bisector.y,cap=Math.min(c.maxRadius,MAX_RADIUS),r=Math.max(0,Math.min(cap,d/((c.k-1)||1)));
+  const b=points[i],d=(p.x-b.x)*c.bisector.x+(p.y-b.y)*c.bisector.y,cap=mode==='arc'?c.maxRadius:Math.min(c.maxRadius,MAX_RADIUS),r=Math.max(0,Math.min(cap,d/((c.k-1)||1)));
   const step=Math.round(r*2)/2;return step>cap+1e-9?Math.floor(cap*2)/2:step;
 }
 

@@ -123,6 +123,13 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ## Phase 4 — Grade separation and engineering depth
 
+Owner-approved review sequence (2026-10-22), superseding the earlier “next Select hub” notes below:
+**review PR-01+02 together → PR-04 → PR-05 → PR-06 → PR-07 → PR-08**.
+These are review-plan IDs, not GitHub PR numbers. Select hub (PR-03) and PR-09 onward are not authorized in this round.
+PR-17 is limited to CriterionRef schema after PR-05. Five licensed real-site examples are the v2 closure gate, not a gate to start coding.
+Keep road-first and one resolver; retain legacy compile on open and offer explicit previewed conversion. Diamond origin version 1 is never regenerated automatically.
+Details of the combined first slice: [canonical alignment and migration](spec/CANONICAL_ALIGNMENT.md).
+
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))

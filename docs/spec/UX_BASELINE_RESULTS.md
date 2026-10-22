@@ -42,6 +42,18 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### Explicit curved-alignment conversion (2026-10-22, scripted)
+
+Build: `fix/interchange-alignment-migration`, based on `1cd8f5972116beed8867a6482b041c0c3fb661b5` (combined review-plan PR-01+02). Chromium 153, 1440 × 1000. No human timing measurement.
+
+| Task | Completed | Actions | Evidence |
+| --- | --- | --- | --- |
+| Convert an opened legacy project from its project inspector | Y | 2 | Open review, confirm. Before/after stations and crossing locations are shown before confirmation. |
+| Cancel preview | Y | 1 | Authored project remains identical. |
+| Undo / redo conversion | Y | 1 each | Entire active scenario returns in one step; reload keeps the confirmed result. |
+
+There was no conversion workflow in the prior baseline. Existing design-browser workflows and junction visual goldens pass unchanged. UX review: **PASS** for this conversion task: active-scenario scope is explicit; preview does not edit; cancellation is initially focused; errors disable confirmation; numeric and dragged radii share the same property; UI copy guard passes. Evidence: `verify-alignment-browser.mjs`, `artifacts/alignment-upgrade-preview.png`, `artifacts/alignment-upgrade-3d.png`.
+
 ### Road-first workspace `/design`, first slice (2026-10-18, scripted)
 
 Only tasks the new workspace already supports are measured; the rest follow in later Phase 3 slices.
