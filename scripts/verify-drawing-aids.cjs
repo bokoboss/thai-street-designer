@@ -38,4 +38,14 @@ assert.deepEqual(tee.result.autoJunctions.length,1);
 const tj=rp.compileRoadFirstProject(tee.editor.project).project.junctions[0];
 assert.equal(tj.design.enabled.filter(Boolean).length,3,'three-leg junction');
 
-console.log('PASS drawing aids: end and alignment snapping, 15° angle inference (axes and previous segment), Shift suspends snapping, typed length, continue from road end, T-junction on an alignment');
+// Candidates for the snap badge and Tab cycling (research 2026-10-22): two alignments under the cursor, best first, free last.
+{const two=[{id:'A',name:'A',points:[{x:-50,y:0},{x:50,y:0}],section:sec},{id:'B',name:'B',points:[{x:0,y:-50},{x:0,y:50}],section:sec}];
+ const list=s.snapCandidates({x:2,y:1},two,{pxPerMetre:1,roadRadiusPx:5});
+ assert.deepEqual(list.map(x=>x.kind+':'+(x.roadId??'')),['road:A','road:B','none:'],'nearest alignment first, the other next, free cursor last');
+ assert.deepEqual(s.snapPoint({x:2,y:1},two,{pxPerMetre:1,roadRadiusPx:5}),list[0]);
+ const straight=s.snapCandidates({x:100+Math.cos(Math.PI/6)*40,y:Math.sin(Math.PI/6)*40+.5},[],{pxPerMetre:1,from:{x:100,y:0},previousHeading:30})[0];
+ assert.equal(straight.guide,'straight');
+ const square=s.snapCandidates({x:100+Math.cos(2*Math.PI/3)*40+.4,y:Math.sin(2*Math.PI/3)*40},[],{pxPerMetre:1,from:{x:100,y:0},previousHeading:30})[0];
+ assert.equal(square.guide,'square');
+ assert.equal(s.snapCandidates({x:3,y:3},two,{pxPerMetre:1,off:true}).length,1,'snap off: free cursor only');}
+console.log('PASS drawing aids: snap candidates (cycle order, straight/square guides), end and alignment snapping, 15° angle inference (axes and previous segment), Shift suspends snapping, typed length, continue from road end, T-junction on an alignment');

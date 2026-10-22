@@ -45,6 +45,26 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
     const s=r1(S(local(e).x));if(profile.some(q=>Math.abs(q.station-s)<1))return;
     set([...profile,{station:s,z:r1(levelAt(profile,s))}].sort((a,b)=>a.station-b.station));
   }
+  // Labels placed greedily (crossings, then junctions, then grades); one that would overlap moves up a line or is
+  // left to its hover tooltip, so a busy long section stays readable.
+  const crossingText=(m:Mark)=>`${m.name} ${fmt(m.z)} · ต่าง ${Math.abs(levelAt(road.profile,m.station)-m.z).toFixed(1)} ม.`;
+  type Label={kind:string;text:string;x:number;y:number;anchor:'start'|'middle';color:string};
+  const wanted:Label[]=[
+    ...marks.filter(m=>m.kind==='road').map(m=>({kind:'crossing',text:crossingText(m),x:X(m.station)+7,y:Z(m.z)+4,anchor:'start' as const,color:'#4a565b'})),
+    ...marks.filter(m=>m.kind==='junction').map(m=>({kind:'junction',text:m.name,x:X(m.station)+3,y:H-PAD.b-4,anchor:'start' as const,color:'#0b6f69'})),
+    ...line.slice(1).flatMap((q,i)=>{const a=line[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;
+      return Math.abs(g)>.05?[{kind:'grade',text:`${g.toFixed(1)}%`,x:(X(a.station)+X(q.station))/2,y:(Z(a.z)+Z(q.z))/2-6,anchor:'middle' as const,color:'#0b6f69'}]:[];}),
+  ];
+  const boxes:{x0:number;x1:number;y0:number;y1:number}[]=[],labels:Label[]=[];
+  for(const l of wanted){
+    const w=l.text.length*5.6,x0=l.anchor==='middle'?l.x-w/2:l.x;
+    for(const dy of [0,-13,13]){
+      const b={x0,x1:x0+w,y0:l.y+dy-10,y1:l.y+dy+2};
+      if(b.y0<0||b.y1>H)continue;
+      if(boxes.some(o=>b.x0<o.x1&&b.x1>o.x0&&b.y0<o.y1&&b.y1>o.y0))continue;
+      boxes.push(b);labels.push({...l,y:l.y+dy});break;
+    }
+  }
   return <div className="design-profile" ref={box} data-design-profile={road.id} data-design-profile-points={profile.length}>
     <svg width={w} height={H} onPointerMove={move} onPointerUp={()=>{if(drag.current!==null){drag.current=null;setFrozen(null);finishGesture();}}} onDoubleClick={addAt}>
       <rect x={PAD.l} y={PAD.t} width={w-PAD.l-PAD.r} height={H-PAD.t-PAD.b} fill="#f6f8f8"/>
@@ -52,12 +72,12 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
       <text x={PAD.l-6} y={Z(0)+4} textAnchor="end" fontSize="11" fill="#5c676b">0</text>
       <text x={PAD.l-6} y={PAD.t+10} textAnchor="end" fontSize="11" fill="#5c676b">{fmt(Math.round(zMax))}</text>
       {marks.map((m,i)=>m.kind==='junction'
-        ?<g key={i} data-design-profile-junction={i}><line x1={X(m.station)} x2={X(m.station)} y1={PAD.t} y2={H-PAD.b} stroke="#0b7f86" strokeDasharray="2 3"/><text x={X(m.station)+3} y={H-PAD.b-4} fontSize="10" fill="#0b6f69">{m.name}</text></g>
-        :<g key={i} data-design-profile-crossing={m.name}><rect x={X(m.station)-5} y={Z(m.z)-3} width="10" height="6" fill="#6f7d84"/><text x={X(m.station)+7} y={Z(m.z)+4} fontSize="10" fill="#4a565b">{m.name} {fmt(m.z)} · ต่าง {Math.abs(levelAt(road.profile,m.station)-m.z).toFixed(1)} ม.</text></g>)}
+        ?<g key={i} data-design-profile-junction={i}><title>{m.name}</title><line x1={X(m.station)} x2={X(m.station)} y1={PAD.t} y2={H-PAD.b} stroke="#0b7f86" strokeDasharray="2 3"/></g>
+        :<g key={i} data-design-profile-crossing={m.name}><title>{crossingText(m)}</title><rect x={X(m.station)-5} y={Z(m.z)-3} width="10" height="6" fill="#6f7d84"/></g>)}
       <polyline points={line.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#1f2d33" strokeWidth="2.2"/>
-      {line.slice(1).map((q,i)=>{const a=line[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;return Math.abs(g)>.05&&q.station-a.station>total*.06?<text key={'g'+i} x={(X(a.station)+X(q.station))/2} y={(Z(a.z)+Z(q.z))/2-6} textAnchor="middle" fontSize="10" fill="#0b6f69">{g.toFixed(1)}%</text>:null;})}
+      {labels.map((l,i)=><text key={'l'+i} data-design-profile-label={l.kind} x={l.x} y={l.y} textAnchor={l.anchor} fontSize="10" fill={l.color}>{l.text}</text>)}
       {profile.map((q,i)=><g key={i}>
-        <circle data-design-profile-point={i} data-design-profile-z={q.z} cx={X(q.station)} cy={Z(q.z)} r="9" fill="transparent" style={{cursor:'move'}}
+        <circle data-design-profile-point={i} data-design-profile-z={q.z} cx={X(q.station)} cy={Z(q.z)} r="14" fill="transparent" style={{cursor:'move'}}
           onPointerDown={e=>{e.stopPropagation();(e.currentTarget as Element).closest('svg')!.setPointerCapture(e.pointerId);drag.current=i;setFrozen({zMin,zMax});}}
           onDoubleClick={e=>{e.stopPropagation();set(profile.filter((_,k)=>k!==i));}}>
           <title>{`ระยะ ${q.station.toFixed(1)} ม. · ระดับ ${fmt(q.z)} ม. · ลากเพื่อย้าย · ดับเบิลคลิกเพื่อลบ`}</title></circle>

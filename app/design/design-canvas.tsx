@@ -10,11 +10,14 @@ import type {CompileResult} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {CommandOutcome} from './use-road-editor';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
-import {pointAtLength,snapPoint,type SnapResult} from '@/core/road-first/snap';
+import {pointAtLength,snapCandidates,type SnapCandidate,type SnapResult} from '@/core/road-first/snap';
+/** The snap in use, with how many targets are under the cursor (Tab cycles them). */
+type ShownSnap=SnapCandidate&{count:number;index:number};
 import {approachInfo,cornerFromPoint,cornerHandles,openingHandle,openingStartFromPoint,openingsOf,openingsPatch,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/road-openings';
 import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
+import {anchorFlow} from '@/core/road-first/ramps';
 import {smoothAlignment} from '@/core/common/alignment';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
@@ -35,10 +38,20 @@ export type DraftCheck={kind:'error'|'warn';text:string}|null;
 const noop=()=>{};
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 
+/** What the cursor is held to while drawing, in words (snap badge). */
+function snapLabel(s:ShownSnap,roads:Road[],drawing:boolean,off:boolean){
+  const name=(id?:string)=>roads.find(r=>r.id===id)?.name??'';
+  if(s.kind==='end')return drawing?`ปลาย ${name(s.roadId)}`:`ต่อจากปลาย ${name(s.roadId)}`;
+  if(s.kind==='road')return `บน ${name(s.roadId)}`;
+  if(s.kind==='angle')return s.guide==='straight'?'ต่อแนวเดิม':s.guide==='square'?'ตั้งฉากกับช่วงก่อน':'มุมทีละ 15°';
+  return off?'ปิด snap':'อิสระ';
+}
 /** Level label: +6.0 ม. / −3.5 ม. */
 const fmtLevel=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)} ม.`;
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[]}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[],snapCycle=0,snapOff=false,spacePan=false}:{
+  /** Tab presses while drawing (cycle overlapping snap targets); snapOff: snapping turned off (touch toggle); spacePan: Space held. */
+  snapCycle?:number;snapOff?:boolean;spacePan?:boolean;
   /** Drawing at a level: the level of the next point and of each drawn point. */
   drawLevel?:number;draftLevels?:number[];
   project:RoadFirstProject;compiled:CompileResult;selection:DesignSelection;onSelect:(s:DesignSelection)=>void;
@@ -60,7 +73,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
 }){
   const wrap=useRef<HTMLDivElement>(null),svg=svgRef;
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
-  const [snap,setSnap]=useState<SnapResult|null>(null);
+  const [snap,setSnap]=useState<ShownSnap|null>(null);
+  const cycle=useRef({key:'',base:0}),lastPointer=useRef<{clientX:number;clientY:number;shiftKey:boolean}|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
     |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}|null>(null);
 
@@ -108,7 +122,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const decisionOf=(id:string)=>project.decisions.find(d=>d.candidateId===id);
 
   function onPointerDownCapture(e:React.PointerEvent<SVGSVGElement>){
-    if(e.button===1||tool==='pan'){
+    if(e.button===1||tool==='pan'||(spacePan&&e.button===0)){
       e.preventDefault();e.stopPropagation();(e.currentTarget as Element).setPointerCapture(e.pointerId);
       drag.current={kind:'pan',from:{x:e.clientX,y:e.clientY},start:view};return;
     }
@@ -178,11 +192,23 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);drag.current=next;
   }
   /** Snapped cursor for Draw Road; Shift suspends snapping. */
-  function snapAt(e:{clientX:number;clientY:number;shiftKey:boolean}):SnapResult{
-    const from=draft.at(-1),prev=draft.at(-2);
-    return snapPoint(toWorld(e),project.roads,{pxPerMetre:view.scale,from,off:e.shiftKey,
+  function snapAt(e:{clientX:number;clientY:number;shiftKey:boolean}):ShownSnap{
+    const from=draft.at(-1),prev=draft.at(-2);lastPointer.current={clientX:e.clientX,clientY:e.clientY,shiftKey:e.shiftKey};
+    const list=snapCandidates(toWorld(e),project.roads,{pxPerMetre:view.scale,from,off:e.shiftKey||snapOff,
       previousHeading:from&&prev?((Math.atan2(from.y-prev.y,from.x-prev.x)*180/Math.PI)+360)%360:undefined});
+    // Tab counts from the moment this set of targets appeared under the cursor.
+    const key=list.map(c=>`${c.kind}:${c.roadId??''}:${c.end??''}:${c.guide??''}`).join('|');
+    if(key!==cycle.current.key)cycle.current={key,base:snapCycle};
+    const index=((snapCycle-cycle.current.base)%list.length+list.length)%list.length;
+    return{...list[index],count:list.length,index};
   }
+  // Tab while drawing: take the next target under the cursor without moving it.
+  useEffect(()=>{
+    if(tool!=='road'||!lastPointer.current)return;
+    const s=snapAt(lastPointer.current);
+    setSnap(s);onSnap(s);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[snapCycle,snapOff]);
   function onPointerUp(){
     if(drag.current&&drag.current.kind!=='pan'&&drag.current.kind!=='ref'&&drag.current.kind!=='map')finishGesture();
     drag.current=null;
@@ -227,7 +253,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const draftColor=draftCheck?.kind==='error'?'#b3261e':draftCheck?'#c47b12':'#0b7f86';
   // The map component measures its view as a square span across the shorter side of the plan.
   const MAP_SPAN=600,mapView={zoom:MAP_SPAN*view.scale/Math.max(1,Math.min(size.w,size.h)),pan:{x:view.x,y:view.y},span:MAP_SPAN,minZoom:1e-6};
-  return <div className="design-canvas" ref={wrap} data-design-tool={tool} data-design-map={map.reference.enabled?'on':'off'}>
+  return <div className="design-canvas" ref={wrap} data-design-tool={tool} data-design-space-pan={spacePan?'true':undefined} data-design-map={map.reference.enabled?'on':'off'}>
     <MapBackground reference={map.reference} credentials={map.credentials} view={mapView}/>
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
       onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}}
@@ -285,6 +311,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
               <circle cx={p.x} cy={p.y} r={px(pointPicked===i?7:6)} fill={pointPicked===i?'#0b7f86':'#fff'} stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
               {(p.radius??0)>0&&vertexCurve(road.points,i)&&<text x={p.x+px(10)} y={p.y-px(10)} fontSize={px(12)} fontWeight="700" fill="#0b6f69" pointerEvents="none">R{Math.round(vertexCurve(road.points,i)!.radius)}</text>}
             </g>)}
+            {/* A selected ramp: traffic direction at each attachment and along the ramp (attach on the right side at a glance). */}
+            {selected&&road.role==='ramp'&&(['start','end'] as const).map(end=>{const a=road.anchors?.[end],main=a&&project.roads.find(r=>r.id===a.roadId);if(!a||!main)return null;
+              const f=anchorFlow(main,a),ang=Math.atan2(f.dir.y,f.dir.x)*180/Math.PI;
+              return <g key={'flow-'+end} data-design-ramp-flow={end} transform={`translate(${f.point.x} ${f.point.y}) rotate(${ang})`} pointerEvents="none">
+                {[-1,0,1].map(k=><path key={k} d={`M${px(k*16-5)} ${px(-6)}L${px(k*16+3)} 0L${px(k*16-5)} ${px(6)}`} fill="none" stroke="#0b7f86" strokeWidth={px(2.5)} strokeLinecap="round"/>)}
+              </g>;})}
+            {selected&&road.role==='ramp'&&road.points.length>1&&(()=>{const a=road.points[0],b=road.points[1],m={x:(a.x+b.x)/2,y:(a.y+b.y)/2},ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+              return <path data-design-ramp-dir="true" transform={`translate(${m.x} ${m.y}) rotate(${ang})`} d={`M${px(-6)} ${px(-7)}L${px(4)} 0L${px(-6)} ${px(7)}`} fill="none" stroke="#fff" strokeWidth={px(2.5)} strokeLinecap="round" pointerEvents="none"/>;})()}
             {/* Curve radius handle of the picked point: drag towards the inside of the bend for a larger radius. */}
             {radiusAt&&pointPicked!==undefined&&<g style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'radius',roadId:road.id,index:pointPicked})}>
               <line x1={road.points[pointPicked].x} y1={road.points[pointPicked].y} x2={radiusAt.x} y2={radiusAt.y} stroke="#0b7f86" strokeWidth={px(1.2)} strokeDasharray={`${px(3)} ${px(3)}`} pointerEvents="none"/>
@@ -361,8 +395,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       {(drawLevel!==0||draftLevels.some(z=>z!==0))&&<span data-design-readout-level={drawLevel}>ระดับ {fmtLevel(drawLevel)}</span>}
       {(()=>{const last=draft.at(-1),z0=draftLevels[draft.length-1]??0;if(!last||!cursor||z0===drawLevel)return null;const l=Math.hypot(cursor.x-last.x,cursor.y-last.y);
         return l>.5?<span data-design-readout-grade="true">ลาด {((drawLevel-z0)/l*100).toFixed(1)}%</span>:null;})()}
-      {snap.kind==='end'&&<span>{draft.length?'ปลายถนน':'ต่อจากปลายถนน'}</span>}
-      {snap.kind==='road'&&<span>บนแนวถนน</span>}
+      <span className="design-snap-badge" data-design-snap={snap.kind} data-design-snap-count={snap.count}>{snapLabel(snap,project.roads,draft.length>0,snapOff)}{snap.count>2&&<i> · Tab {snap.index+1}/{snap.count}</i>}</span>
       {draftCheck&&<em data-design-draft-check={draftCheck.kind} className={draftCheck.kind}>{draftCheck.text}</em>}
     </div>}
     <div className="design-scale" aria-hidden="true"><span>{scaleLen} ม.</span><i style={{width:scaleLen*view.scale}}/></div>
