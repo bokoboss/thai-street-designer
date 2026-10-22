@@ -177,3 +177,4 @@
 @media (max-width:600px){.design-top-actions .design-file-btn{display:none}.design-top-actions .design-more{display:inline-flex}
   /* Above the bottom sheet, under the view switch. */
   .design-draw-actions{top:52px;bottom:auto}}
+.design-crossing-row{padding:4px 0;border-top:1px solid var(--d-line)}.design-crossing-row:first-of-type{border-top:0}

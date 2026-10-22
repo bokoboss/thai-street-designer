@@ -91,6 +91,13 @@ try{
     await b.click('[data-design-undo]');
     await b.waitFor(()=>b.count('[data-network-junction-hit]'),'one undo brings the junction back');
     await b.key('Escape');
+    // The same from the road panel: the road lists where it meets other roads.
+    await b.click('[data-design-road] path');await b.waitFor(()=>b.count('[data-design-road-crossings]'),'road panel lists its crossings');
+    await b.screenshot('artifacts/design-browser-road-crossings.png');
+    await b.click('[data-design-road-over]');
+    await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'road raised over from its own panel');
+    await b.click('[data-design-undo]');await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo');
+    await b.key('Escape');
   }
   // Project access (driveway): draw it as an access from the side of a road; the access junction keeps the road flowing.
   {
