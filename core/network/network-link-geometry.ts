@@ -237,7 +237,7 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
         for(let s=5+shift;s<=total-3;s+=rs.spacing){
           const inner=sample(walk.inner,s),outer=sample(walk.outer,s);if(Math.abs(outer-inner)<.75)continue;
           const offset=inner+side*Math.max(.35,Math.min(Math.abs(outer-inner)-.35,rs.offset)),c=station(basePoints,s),ahead=station(basePoints,Math.min(total,s+.5)),behind=station(basePoints,Math.max(0,s-.5));
-          const h=Math.atan2(ahead.y-behind.y,ahead.x-behind.x),p={x:c.x-Math.sin(h)*offset,y:c.y+Math.cos(h)*offset};
+          const h=Math.atan2(ahead.y-behind.y,ahead.x-behind.x),p={x:c.x+Math.sin(h)*offset,y:c.y-Math.cos(h)*offset};
           objects.push({kind,station:Math.round(s*1000)/1000,offset:Math.round(offset*1000)/1000,side,x:p.x,y:p.y,angle:h*180/Math.PI});
         }
       }

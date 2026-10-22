@@ -14,12 +14,14 @@ export function projectAlignment(ps:P[],p:P){
  return best;
 }
 export const parallel=(ps:P[],leftOffset:number)=>offset(ps,-leftOffset,-leftOffset);
-export const variableParallel=(ps:P[],leftStart:number,leftEnd:number)=>offset(ps,-leftStart,-leftEnd);
+/** Same side convention as profiledParallel (positive = left of travel on the plan). */
+export const variableParallel=(ps:P[],leftStart:number,leftEnd:number)=>offset(ps,leftStart,leftEnd);
+/** Offset line; a positive offset lies to the left of the direction of travel on the plan (y down), where the forward lanes run in left-hand traffic. */
 export function profiledParallel(ps:P[],leftOffsets:number[]):P[]{
  if(ps.length!==leftOffsets.length)return ps.map(p=>({...p}));
  return ps.map((p,i)=>{
   const a=ps[Math.max(0,i-1)],b=ps[Math.min(ps.length-1,i+1)],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,w=leftOffsets[i];
-  return{x:p.x-dy/l*w,y:p.y+dx/l*w};
+  return{x:p.x+dy/l*w,y:p.y-dx/l*w};
  });
 }
 
