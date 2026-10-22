@@ -15,7 +15,7 @@ Product v1 released baseline: merge commit `98198c443b4aee96fcb25c64d5c426aa03bb
 
 The owner decided to make this repository the single product base and to stop parallel work in `street-concept-designer` and `road-concept-builder` (see ADR-0001). Consequences for anyone continuing work:
 
-- Feature freeze lifted: Phase 3 of `docs/CONSOLIDATION_ROADMAP.md` was accepted on 2026-10-21. Ramps and grade separation now follow Phase 4 (4A elevation and crossings first); the earlier Phase 8B design is history.
+- Feature freeze lifted: Phase 3 of `docs/CONSOLIDATION_ROADMAP.md` was accepted on 2026-10-21. Ramps and grade separation now follow Phase 4: 4A (elevation, crossings, structures) is done; 4B draws ramps by hand first (4B-1, 4B-2) and adds the diamond template after (4B-3), per the owner decision of 2026-10-22. The earlier Phase 8B design is history.
 - The target interaction model is **road-first in one workspace**: draw roads, confirm candidate junctions, edit junction detail in place. Read `docs/spec/UX_ARCHITECTURE.md` and `docs/spec/GOLDEN_WORKFLOWS.md`.
 - The geometry engine, its invariants and the regression suites below remain authoritative. The sections from "Product v1 mission and guardrails" onward describe the released engine and its history; where they conflict with the consolidation documents on *interaction or scope*, the consolidation documents win. Engine rules (Slip invariant, single resolver, explicit migration) are unchanged.
 
