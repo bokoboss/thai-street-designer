@@ -11,6 +11,7 @@ import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} 
 import {joinRoads} from './join';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
+import {MAX_RADIUS,vertexCurve} from './curves';
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
@@ -148,7 +149,14 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       if(cmd.type==='road.movePoint'){r.points[i]={...r.points[i],x:cmd.point.x,y:cmd.point.y};label=`ย้ายจุดแนวถนน ${r.name}`;group=`road.move:${r.id}:${i}`;}
       else if(cmd.type==='road.insertPoint'){r.points.splice(i,0,{x:cmd.point.x,y:cmd.point.y});label=`เพิ่มจุดแนวถนน ${r.name}`;}
       else if(cmd.type==='road.removePoint'){if(r.points.length<=2)return fail('ถนนต้องมีอย่างน้อยสองจุด',`ลบจุดแนวถนน ${r.name}`);r.points.splice(i,1);label=`ลบจุดแนวถนน ${r.name}`;}
-      else{r.points[i]={...r.points[i],radius:cmd.radius};label=`ปรับรัศมีโค้ง ${r.name} เป็น ${fmt(cmd.radius)} ม.`;group=`road.radius:${r.id}:${i}`;}
+      else{
+        if(!(cmd.radius>=0&&cmd.radius<=MAX_RADIUS))return fail(`รัศมีโค้งต้องอยู่ระหว่าง 0–${MAX_RADIUS} ม.`,`ปรับรัศมีโค้ง ${r.name}`);
+        if(cmd.radius>0&&!vertexCurve(r.points,i))return fail('จุดนี้เป็นปลายถนนหรือแนวถนนไม่หักมุม จึงทำโค้งไม่ได้',`ปรับรัศมีโค้ง ${r.name}`);
+        if(cmd.radius>0)r.points[i]={...r.points[i],radius:cmd.radius};else{const {radius:_drop,...rest}=r.points[i];void _drop;r.points[i]=rest;}
+        const c=vertexCurve(r.points,i);
+        label=cmd.radius>0?`ปรับรัศมีโค้ง ${r.name} เป็น ${fmt(cmd.radius)} ม.${c&&c.radius<cmd.radius-.01?` (ช่วงตรงรับได้ ${fmt(Math.floor(c.maxRadius*10+1e-6)/10)} ม.)`:''}`:`ทำมุมตรง ${r.name} ที่จุด ${i+1}`;
+        group=`road.radius:${r.id}:${i}`;
+      }
       roadsChanged=true;break;
     }
     case 'road.setRole':{

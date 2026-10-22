@@ -168,7 +168,10 @@ Owner decision 2026-10-22: free drawing before templates. Ramps, merge/diverge p
 editable pieces first; the diamond template only places those same pieces. Non-standard layouts (flyovers and
 underpasses at a junction, constrained urban ramps) are drawn by hand from 4B-1 on, without waiting for 4D.
 
-Status 2026-10-22: 4B-1 done (spec `docs/spec/PHASE_4B_RAMPS.md`); next 4B-2.
+Status 2026-10-22: 4B-1 done (spec `docs/spec/PHASE_4B_RAMPS.md`). Road curve editing in `/design` added before 4B-2
+(owner request): pick a road point, radius typed or dragged (capped by the straights and reported), back to a sharp
+corner, delete a point; arms keep clear of arcs; a crossing inside an arc is reported (crossings are still found on
+the straight lines between points). Next 4B-2.
 
 **4B-1 — Ramps drawn by hand**
 - Start a road from the side of another road (diverge) and end it on the side of another road (merge); the attachment

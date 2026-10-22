@@ -124,6 +124,10 @@ export default function DesignWorkspace(){
       if(typedLength&&len>0&&last&&toward){setDraft([...draft,pointAtLength(last,toward,len)]);setTypedLength('');return;}
       finishDraft();return;
     }
+    // A picked road point is deleted on its own; otherwise the whole road.
+    if((e.key==='Delete'||e.key==='Backspace')&&selectedRoad&&selection?.kind==='road'&&selection.point!==undefined){
+      if(ed.run({type:'road.removePoint',roadId:selectedRoad.id,index:selection.point}).ok)setSelection({kind:'road',id:selectedRoad.id});return;
+    }
     if((e.key==='Delete'||e.key==='Backspace')&&selectedRoad){if(ed.run({type:'road.remove',roadId:selectedRoad.id}).ok)setSelection(null);return;}
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(k==='v')chooseTool('select');if(k==='h')chooseTool('pan');if(k==='r')chooseTool('road');
