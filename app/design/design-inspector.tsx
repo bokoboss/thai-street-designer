@@ -19,6 +19,7 @@ import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation'
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
+import {DiamondPanel,TemplatePiecesBlock} from './diamond-panel';
 import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
 /** Kind of road the next drawing makes. */
 export type NewRole='road'|'access'|'ramp';
@@ -219,6 +220,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
     <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
     {point!==undefined&&point<road.points.length&&<PointBlock road={road} index={point} run={run} onPoint={onPoint}/>}
     <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
+    <TemplatePiecesBlock project={project} roadId={road.id} run={run} onSelectRoad={id=>onSelect({kind:'road',id})}/>
     {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
@@ -251,7 +253,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
   </>;
 }
 
-function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage}:{candidate:Candidate;project:RoadFirstProject;compiled:CompileResult;run:Run;onConfirmed:()=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
+function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage,onPlacedDiamond}:{candidate:Candidate;project:RoadFirstProject;compiled:CompileResult;run:Run;onConfirmed:()=>void;onMessage:(text:string,kind?:'info'|'error')=>void;onPlacedDiamond:()=>void}){
   const names=candidate.roads.map(r=>project.roads.find(x=>x.id===r.roadId)?.name??r.roadId),d=project.decisions.find(x=>x.candidateId===candidate.id);
   const state=d?.decision==='grade-separated'?'ทางต่างระดับ':d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังเป็นทางแยกไม่ได้';
   return <>
@@ -271,6 +273,7 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
         </div>
         <LevelBasis project={project} note="ทางลอด: ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ · ถนนที่สูงหรือต่ำพออยู่แล้วไม่ถูกปรับ · แก้ต่อได้ที่แนวดิ่งของถนน"/>
       </section>;})()}
+    <DiamondPanel project={project} candidateId={candidate.id} run={run} onPlaced={onPlacedDiamond}/>
     <p className="design-meta">{d?'จุดนี้ถนนข้ามกันโดยไม่มีทางแยก':'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>
     <div className="design-actions">
       <button className="primary" data-design-action="confirm-junction" onClick={()=>{if(run({type:'crossing.decide',candidateId:candidate.id,decision:'junction',name:d?.name??`แยก ${names.join(' × ')}`}).ok)onConfirmed();}}>ทำเป็นทางแยก</button>
@@ -414,6 +417,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const separate=(o:{cmd:RoadFirstCommand}|{error:string})=>{if('error' in o){onMessage(o.error,'error');return;}if(run(o.cmd).ok)onSelect({kind:'crossing',id:candidateId});};
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
+    {two&&<DiamondPanel project={project} candidateId={candidateId} run={run} onPlaced={()=>onSelect({kind:'crossing',id:candidateId})}/>}
     {two&&<Fold id="junction-grade" title="ทำเป็นทางต่างระดับ (สะพาน / ทางลอด)" summary="ไม่มีทางแยก ถนนผ่านข้ามกัน" data="junction-grade">
       <div className="design-reference-tools">
         {crossing!.roads.map(r=><button key={'o'+r.roadId} data-design-junction-over={r.roadId} onClick={()=>separate(overCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ข้าม (สะพาน)</button>)}
@@ -596,7 +600,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
   const candidate=selection?.kind==='crossing'?candidates.find(c=>c.id===selection.id):undefined;
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
     {road?<RoadInspector key={road.id} project={project} onSelect={onSelect} road={road} point={selection?.kind==='road'?selection.point:undefined} onPoint={point=>onSelect({kind:'road',id:road.id,point})} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
-    :candidate?<CrossingInspector candidate={candidate} project={project} compiled={compiled} onMessage={onMessage} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})}/>
+    :candidate?<CrossingInspector candidate={candidate} project={project} compiled={compiled} onMessage={onMessage} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})} onPlacedDiamond={()=>onSelect({kind:'crossing',id:candidate.id})}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     :<>

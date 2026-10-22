@@ -16,6 +16,8 @@ import {LEVEL_CRITERIA_LABEL,type Criterion,type LevelCriteriaKey} from './level
 
 export type RoadFirstCommand=
   |{type:'project.rename';title:string}
+  /** Several edits as one undo step (templates); stops at the first refused edit and changes nothing. */
+  |{type:'batch';commands:RoadFirstCommand[];label:string;quiet?:boolean}
   /** Level criteria of the project (value and source per criterion); null removes one (back to the tool value). */
   |{type:'project.setLevelCriteria';patch:Partial<Record<LevelCriteriaKey,Criterion|null>>}
   |{type:'road.add';road:Road}
@@ -115,6 +117,16 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const legName=(key:LegKey)=>{const l=parseLegKey(key),r=l&&road(l.roadId);return r?`${r.name} ${l!.side==='ahead'?'→':'←'}`:key;};
   let label='แก้ไข',group:string|undefined,roadsChanged=false;
   const t=(d:Decision)=>(d.treatments??={});
+  if(cmd.type==='batch'){
+    let cur=project;const acc:Omit<CommandResult,'project'|'error'|'label'|'group'>={warnings:[],autoJunctions:[],autoSeparated:[],openCrossings:[],joined:[],blocked:[]};
+    for(const sub of cmd.commands){
+      const r=executeCommand(cur,sub);if(r.error)return fail(r.error,cmd.label);
+      cur=r.project;acc.autoJunctions.push(...r.autoJunctions);acc.autoSeparated.push(...r.autoSeparated);acc.openCrossings.push(...r.openCrossings);acc.joined.push(...r.joined);acc.blocked.push(...r.blocked);acc.warnings=r.warnings;
+    }
+    // quiet (templates): the junctions and separations it makes are intended, so no "made automatically" notice.
+    if(cmd.quiet){acc.autoJunctions=[];acc.autoSeparated=[];}
+    return{project:cur,error:null,label:cmd.label,...acc};
+  }
   switch(cmd.type){
     case 'project.rename':p.title=cmd.title;label=`เปลี่ยนชื่อโครงการเป็น ${cmd.title}`;group='project.rename';break;
     case 'project.setLevelCriteria':{

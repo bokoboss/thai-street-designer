@@ -99,6 +99,25 @@ try{
     await b.click('[data-design-undo]');await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo');
     await b.key('Escape');
   }
+  // Diamond interchange (4B-3): from the junction panel, ghost preview, place as one step, one undo back.
+  {
+    await b.key('Escape');await b.key('Escape');
+    const roads=await b.count('[data-design-road]');
+    const c0=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
+    await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');await sleep(300);
+    await openFold('diamond');
+    for(const [f,v] of [['diamond-length','140'],['diamond-offset','60']]){await b.click(`[data-design-field="${f}"]`);await b.evalValue(`document.querySelector('[data-design-field="${f}"]').select()`);await b.type(v);}
+    await b.waitFor(async()=>await b.count('[data-design-ghost="ok"]')===1&&await b.count('[data-design-diamond-ok]')===1,'ghost preview of the diamond');
+    await b.screenshot('artifacts/design-browser-diamond-ghost.png');
+    await b.click('[data-design-action="place-diamond"]');
+    await b.waitFor(async()=>await b.count('[data-design-road]')===roads+4&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-ramp-taper]')===4,'diamond placed: 4 ramps, bridge, diverges/merges');
+    assert.equal(await b.count('[data-design-ghost]'),0,'ghost gone after placing');
+    assert.equal(await b.count('[data-design-auto-junction]'),0,'no "made automatically" notice for a template');
+    await sleep(300);await b.screenshot('artifacts/design-browser-diamond.png');
+    await b.click('[data-design-undo]');
+    await b.waitFor(async()=>await b.count('[data-design-road]')===roads&&await b.count('[data-network-crossing-deck]')===0,'one undo removes the whole diamond');
+    await b.key('Escape');
+  }
   // Level criteria in the project panel: value + source; derived heights follow; drawing presets use them.
   {
     await b.key('Escape');await b.key('Escape');

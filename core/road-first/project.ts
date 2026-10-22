@@ -31,6 +31,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
       if(r.role!=='ramp'||!r.anchors||typeof r.anchors!=='object'||!ok(r.anchors.start)||!ok(r.anchors.end))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;
     }
     const pe=profileError(r.profile);if(pe)return `แนวดิ่งของ ${r.name}: ${pe}`;
+    if(r.origin!==undefined&&(!r.origin||r.origin.template!=='diamond'||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }
