@@ -5,6 +5,8 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Crosshair,Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
 import {DesignInspector,type NewRole} from './design-inspector';
+import {TemplateContext,type TemplateGhost} from './diamond-panel';
+import type {Road} from '@/core/road-first/derive';
 import {SectionStrip} from './section-strip';
 import {useReferenceImage} from './use-reference-image';
 import {useMapReference} from './map-panel';
@@ -62,6 +64,10 @@ export default function DesignWorkspace(){
   const [level,setLevel]=useState(0),[draftLevels,setDraftLevels]=useState<number[]>([]);
   /** Tab presses (cycle snap targets), snapping off (touch toggle), Space held (pan in any tool). */
   const [moreOpen,setMoreOpen]=useState(false);
+  /** Template preview drawn on the plan (diamond panel), and ids for template pieces (never reused across scenarios). */
+  const [ghost,setGhost]=useState<TemplateGhost>(null);
+  const templateServices=useMemo(()=>({onGhost:setGhost,makeIds:(n:number)=>{const used=[...ed.workspace.scenarios.flatMap(s=>s.project.roads)],out:string[]=[];
+    for(let i=0;i<n;i++){const id=newRoadId(used);out.push(id);used.push({id} as Road);}return out;}}),[ed.workspace]);
   const [snapCycle,setSnapCycle]=useState(0),[snapOff,setSnapOff]=useState(false),[spacePan,setSpacePan]=useState(false);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -254,7 +260,7 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
         {/* Drawing buttons for touch and narrow screens (no right-click, Backspace, Enter or Shift there). */}
         {tool==='road'&&view==='2d'&&<div className="design-draw-actions" data-design-draw-actions="true">
           <button data-design-draw-action="back" disabled={!draft.length} onClick={draftBack}>ย้อนจุด</button>
@@ -287,9 +293,11 @@ export default function DesignWorkspace(){
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>
       </div>
+      <TemplateContext.Provider value={templateServices}>
       <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
           setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole} drawLevel={level} onDrawLevel={z=>setLevel(Math.max(-30,Math.min(30,Math.round(z*10)/10)))}/>
+      </TemplateContext.Provider>
     </div>
     <footer className="design-status">
       <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>

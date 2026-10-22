@@ -18,6 +18,7 @@ import {legKey,type LegKey} from '@/core/road-first/leg-binding';
 import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/road-openings';
 import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
 import {anchorFlow} from '@/core/road-first/ramps';
+import type {TemplateGhost} from './diamond-panel';
 import {smoothAlignment} from '@/core/common/alignment';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
 import type {LocalImageReference} from '@/core/network/local-reference';
@@ -49,7 +50,9 @@ function snapLabel(s:ShownSnap,roads:Road[],drawing:boolean,off:boolean){
 /** Level label: +6.0 ม. / −3.5 ม. */
 const fmtLevel=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)} ม.`;
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[],snapCycle=0,snapOff=false,spacePan=false}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[],snapCycle=0,snapOff=false,spacePan=false,ghost=null}:{
+  /** Template preview (pieces' centre lines and width; red with the reason when it cannot be placed). */
+  ghost?:TemplateGhost;
   /** Tab presses while drawing (cycle overlapping snap targets); snapOff: snapping turned off (touch toggle); spacePan: Space held. */
   snapCycle?:number;snapOff?:boolean;spacePan?:boolean;
   /** Drawing at a level: the level of the next point and of each drawn point. */
@@ -357,6 +360,10 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           </g>;
         })}
       </g>
+      {ghost&&ghost.lines.length>0&&<g data-design-ghost={ghost.error?'error':'ok'} pointerEvents="none">
+          {ghost.lines.map((l,i)=><polyline key={i} points={l.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ghost.error?'#b3261e':'#0b7f86'} strokeOpacity={.35} strokeWidth={ghost.width} strokeLinejoin="round" strokeLinecap="round"/>)}
+          {ghost.lines.map((l,i)=><polyline key={'c'+i} points={l.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ghost.error?'#b3261e':'#0b7f86'} strokeWidth={px(2)} strokeDasharray={`${px(6)} ${px(4)}`}/>)}
+        </g>}
       {preview.length>0&&<g data-design-draft={draftCheck?draftCheck.kind:'true'} pointerEvents="none">
         <polyline points={preview.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={draftColor} strokeWidth={px(draftCheck?3:2)} strokeDasharray={`${px(6)} ${px(4)}`}/>
         {draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={px(4)} fill={draftColor}/>)}

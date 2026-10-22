@@ -35,8 +35,11 @@ export type Road={id:string;name:string;role?:RoadRole;points:RoadPoint[];sectio
   roadside?:{trees:boolean;lights:boolean};
   /** Vertical points (station, z) — Phase 4A; absent = level 0. */
   profile?:Profile;
+  /** Made by a template (Phase 4B-3): which one, its version, the group of pieces placed together and the parameters used. */
+  origin?:RoadOrigin;
   /** Ramp ends attached to the side of another road (diverge at the start, merge at the end). */
   anchors?:{start?:RampAnchor;end?:RampAnchor}};
+export type RoadOrigin={template:'diamond';version:1;group:string;params:Record<string,unknown>};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';
