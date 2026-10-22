@@ -69,3 +69,13 @@ export const midpoint=(a:WorldPoint,b:WorldPoint)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2
 export function sectionWidth(s:{forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:{width:number}[]}){
   return (s.forwardLanes+s.backwardLanes)*s.laneWidth+s.median+2*s.walk+2*(s.bands??[]).reduce((t,b)=>t+b.width,0);
 }
+
+/** Profile of a road drawn point by point at chosen levels (undefined when every level is 0). */
+export function drawnProfile(points:WorldPoint[],levels:number[]):Profile|undefined{
+  if(!levels.some(z=>Math.abs(z)>1e-9))return undefined;
+  const r=(v:number)=>Math.round(v*1000)/1000;let s=0;
+  return points.map((p,i)=>{if(i)s+=Math.hypot(p.x-points[i-1].x,p.y-points[i-1].y);return{station:r(s),z:r(levels[i]??0)};})
+    .filter((q,i,all)=>i===0||q.station-all[i-1].station>=.01);
+}
+/** Level step of the raise / lower keys while drawing (tool value). */
+export const DRAW_LEVEL_STEP=1;

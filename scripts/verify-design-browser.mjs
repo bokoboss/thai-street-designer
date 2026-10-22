@@ -154,6 +154,34 @@ try{
     await b.waitFor(async()=>await b.count('[data-design-road]')===before,'undo back to before the road');
   }
 
+  // Drawing at a level (Phase 4B-2): PageUp / PageDown between points; the crossing becomes a grade separation at once;
+  // the long section shows the levels and the road crossed, and a dragged level point is one undo step.
+  {
+    await b.key('Escape');
+    const roads=await b.count('[data-design-road]'),decks=await b.count('[data-network-crossing-deck]'),junctions=await b.count('[data-network-junction-hit]');
+    const c=await b.rect('.design-canvas'),at=(x,y)=>({x:c.x+x,y:c.y+y});
+    await b.click('[data-design-tool-button="road"]');await b.click('[data-design-new-role="road"]');
+    await b.clickAt(at(-250,-170));
+    for(let i=0;i<7;i++)await b.key('PageUp');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-draw-level]')?.dataset.designDrawLevel`))==='7','level raised while drawing');
+    await b.clickAt(at(-250,-70));await b.clickAt(at(-250,70));
+    for(let i=0;i<7;i++)await b.key('PageDown');
+    await b.clickAt(at(-250,170),2);
+    await b.waitFor(async()=>await b.count('[data-design-road]')===roads+1,'raised road drawn');
+    await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===decks+1,'crossing at different levels: deck, no junction');
+    assert.equal(await b.count('[data-network-junction-hit]'),junctions);
+    await b.click('[data-design-section-mode="profile"]');
+    await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-profile]')?.dataset.designProfilePoints`))==='4','long section with the drawn levels');
+    assert.ok(await b.count('[data-design-profile-crossing]')>0,'road crossed shown in the long section');
+    const pt=await b.rect('[data-design-profile-point="1"]');await b.drag({x:pt.x,y:pt.y},{x:pt.x,y:pt.y-25});
+    await b.waitFor(async()=>(await b.rect('[data-design-profile-point="1"]')).y<pt.y-10,'dragged level point');
+    await b.screenshot('artifacts/design-browser-profile.png');
+    await b.click('[data-design-undo]');
+    await b.waitFor(async()=>Math.abs((await b.rect('[data-design-profile-point="1"]')).y-pt.y)<2,'one undo per drag');
+    await b.click('[data-design-section-mode="road"]');
+    await b.click('[data-design-undo]');await b.waitFor(async()=>await b.count('[data-design-road]')===roads,'undo removes the raised road');
+  }
+
   // Mid-block median opening on a road (GW-04), outside the junction approaches: cuts the median, handle moves it.
   {
     await b.key('Escape');

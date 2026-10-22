@@ -6,11 +6,15 @@
 import {useState} from 'react';
 import type {CompileResult,Road} from '@/core/road-first/derive';
 import NetworkSectionDock from '../network/network-section-dock';
+import type {RoadFirstProject} from '@/core/road-first/project';
+import type {RoadFirstCommand} from '@/core/road-first/commands';
+import type {CommandOutcome} from './use-road-editor';
+import {ProfileStrip} from './profile-strip';
 
 const BAND_LABEL:Record<string,string>={bike:'จักรยาน',motorcycle:'จยย.',shoulder:'ไหล่ทาง',buffer:'แถบคั่น'};
 
-export function SectionStrip({road,compiled}:{road:Road;compiled:CompileResult}){
-  const [mode,setMode]=useState<'road'|'station'>('road'),[segment,setSegment]=useState(0);
+export function SectionStrip({road,compiled,project,run,finishGesture}:{road:Road;compiled:CompileResult;project:RoadFirstProject;run:(cmd:RoadFirstCommand,opts?:{gesture?:boolean})=>CommandOutcome;finishGesture:()=>void}){
+  const [mode,setMode]=useState<'road'|'station'|'profile'>('road'),[segment,setSegment]=useState(0);
   const links=compiled.project.links.filter(l=>compiled.sources.links[l.id]===road.id),link=links[Math.min(segment,links.length-1)];
   const s=road.section,parts:{kind:string;label:string;width:number}[]=[];
   // Bands (bike, motorcycle, shoulder, buffer) sit between the lanes and the sidewalk on both sides.
@@ -26,8 +30,13 @@ export function SectionStrip({road,compiled}:{road:Road;compiled:CompileResult})
   const tabs=<div className="design-section-modes" role="group" aria-label="แสดงหน้าตัด">
     <button className={mode==='road'?'active':''} aria-pressed={mode==='road'} data-design-section-mode="road" onClick={()=>setMode('road')}>ทั้งเส้น</button>
     <button className={mode==='station'?'active':''} aria-pressed={mode==='station'} data-design-section-mode="station" disabled={!links.length} onClick={()=>setMode('station')}>ตามระยะทาง</button>
+    <button className={mode==='profile'?'active':''} aria-pressed={mode==='profile'} data-design-section-mode="profile" onClick={()=>setMode('profile')}>แนวดิ่ง</button>
     {mode==='station'&&links.length>1&&links.map((l,i)=><button key={l.id} className={'segment '+(i===segment?'active':'')} data-design-section-segment={i} onClick={()=>setSegment(i)}>ช่วง {i+1}</button>)}
   </div>;
+  if(mode==='profile')return <section className="design-section design-section-profile" data-design-section={road.id}>
+    <header><b>แนวดิ่ง · {road.name}</b><span>ระดับตามระยะทางจากต้นถนน · ลากจุดเพื่อปรับ</span>{tabs}</header>
+    <ProfileStrip road={road} project={project} run={run} finishGesture={finishGesture}/>
+  </section>;
   if(mode==='station'&&link)return <section className="design-section design-section-station" data-design-section={road.id} data-design-section-station={link.id}>
     <header><b>หน้าตัด · {road.name}{links.length>1?` · ช่วง ${segment+1}/${links.length}`:''}</b>{tabs}</header>
     <NetworkSectionDock key={link.id} project={compiled.project} armId={null} link={link}/>

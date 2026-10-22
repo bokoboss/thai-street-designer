@@ -18,7 +18,8 @@ export type RoadFirstCommand=
   |{type:'road.add';road:Road}
   |{type:'road.remove';roadId:string}
   |{type:'road.rename';roadId:string;name:string}
-  |{type:'road.extend';roadId:string;atStart:boolean;points:WorldPoint[]}
+  /** levels: level of each added point (drawn at a level); the road's profile is extended with them. */
+  |{type:'road.extend';roadId:string;atStart:boolean;points:WorldPoint[];levels?:number[]}
   /** Make one road of two roads whose ends touch; roadId keeps its id, name and section. */
   |{type:'road.join';roadId:string;otherId:string}
   |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
@@ -127,8 +128,16 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const added=cmd.points.map(q=>({x:q.x,y:q.y}));
       const oldLength=stations(r.points).at(-1)??0;
       r.points=cmd.atStart?[...added.reverse(),...r.points]:[...r.points,...added];
-      // Openings are measured from the road start: extending the start moves them along by the added length.
-      if(cmd.atStart&&r.openings){const grown=(stations(r.points).at(-1)??0)-oldLength;r.openings=r.openings.map(o=>({...o,station:Math.round((o.station+grown)*1000)/1000}));}
+      // Openings and levels are measured from the road start: extending the start moves them along by the added length.
+      const grown=(stations(r.points).at(-1)??0)-oldLength,shift=(v:number)=>Math.round((v+(cmd.atStart?grown:0))*1000)/1000;
+      if(cmd.atStart&&r.openings)r.openings=r.openings.map(o=>({...o,station:shift(o.station)}));
+      if(r.profile||cmd.levels?.some(z=>Math.abs(z)>1e-9)){
+        const s=stations(r.points),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
+        // Without a profile the old road lies at level 0; its far end keeps that level.
+        const kept=(r.profile??[{station:0,z:0},{station:oldLength,z:0}]).map(q=>({station:shift(q.station),z:q.z}));
+        const fresh=cmd.points.map((_,k)=>({station:Math.round(at(k)*1000)/1000,z:cmd.levels?.[k]??levelAt(r.profile,cmd.atStart?0:oldLength)}));
+        r.profile=[...kept,...fresh].sort((a,b)=>a.station-b.station).filter((q,i,all)=>i===0||q.station-all[i-1].station>=.01);
+      }
       label=`ต่อถนน ${r.name}`;roadsChanged=true;break;
     }
     case 'road.join':{
@@ -272,7 +281,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     p.roads=next;
     if(cmd.type==='road.add')label+=anchorNote(p.roads,road(cmd.road.id));
   }
-  const joined:CommandResult['joined']=[],blocked:CommandResult['blocked']=[];
+  const joined:CommandResult['joined']=[],blocked:CommandResult['blocked']=[],passedJunction:string[]=[];
   const overflowBefore=new Set(compileRoadFirstProject(project).overflow);
   if(roadsChanged){
     p.decisions=rebindDecisions(project.roads,p.roads,p.decisions);
@@ -283,7 +292,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     p.decisions.forEach((d,i)=>{
       const was=project.decisions[i],there=now.get(d.candidateId);
       if(d.decision!=='junction'||!d.roads||!there||!was)return;
-      const earlier=before.get(was.candidateId)??was.roads??[],fresh=there.filter(r=>!d.roads!.includes(r)&&!earlier.includes(r)&&!d.excluded?.includes(r));
+      const earlier=before.get(was.candidateId)??was.roads??[],found=there.filter(r=>!d.roads!.includes(r)&&!earlier.includes(r)&&!d.excluded?.includes(r));
+      if(!found.length)return;
+      // A road at another level passes over or under the junction instead of joining it.
+      const at=detectCandidates(p.roads).find(x=>x.id===d.candidateId)!,levelOf=(id:string)=>{const ref=at.roads.find(r=>r.roadId===id);return ref?levelAt(road(id)?.profile,ref.station):0;};
+      const zj=d.roads.map(levelOf),mean=zj.reduce((t,v)=>t+v,0)/(zj.length||1);
+      const passing=found.filter(r=>Math.abs(levelOf(r)-mean)>LEVEL_TOLERANCE),fresh=found.filter(r=>!passing.includes(r));
+      if(passing.length){d.excluded=[...(d.excluded??[]),...passing];passedJunction.push(...passing);}
       if(!fresh.length)return;
       const trial=p.decisions.map(x=>x===d?{...d,roads:[...d.roads!,...fresh]}:x),probe={...p,decisions:trial};
       const reason=newOverflow(probe,overflowBefore)??engineError(probe);
@@ -307,12 +322,26 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
         p.decisions=[...p.decisions,{candidateId:c.id,decision:'grade-separated',over:levels[0].id,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
         autoSeparated.push(c.id);continue;
       }
+      // Three or more roads at one point: roads at one level meet in a junction, the others pass over or under it;
+      // all at different levels = a stack of grade separations (Phase 4B-2).
+      const groups=levelGroups(levels);
+      if(levels.length>2&&groups.length>1){
+        const meeting=groups.filter(g=>g.length>1);
+        if(!meeting.length){p.decisions=[...p.decisions,{candidateId:c.id,decision:'grade-separated',roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];autoSeparated.push(c.id);continue;}
+        if(meeting.length>1){openCrossings.push({candidateId:c.id,reason:'ทางแยกสองระดับซ้อนกันที่จุดเดียวกันยังทำไม่ได้ — ปรับระดับให้มีทางแยกระดับเดียว'});continue;}
+        const ids=meeting[0],passing=c.roads.map(r=>r.roadId).filter(id=>!ids.includes(id));
+        const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:accessName(ids)??`แยก ${ids.map(id=>road(id)?.name??id).join(' × ')}`,roads:ids,excluded:passing,at:{x:c.point.x,y:c.point.y}}];
+        const reason=newOverflow({...p,decisions:trial},overflowBefore)??engineError({...p,decisions:trial});
+        if(reason)openCrossings.push({candidateId:c.id,reason});else{p.decisions=trial;autoJunctions.push(c.id);autoSeparated.push(c.id);}
+        continue;
+      }
       const trial=[...p.decisions,{candidateId:c.id,decision:'junction' as const,name:accessName(c.roads.map(r=>r.roadId))??`แยก ${names.join(' × ')}`,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}}];
       const reason=newOverflow({...p,decisions:trial},overflowBefore)??engineError({...p,decisions:trial});
       if(reason)openCrossings.push({candidateId:c.id,reason});else{p.decisions=trial;autoJunctions.push(c.id);}
     }
     if(autoJunctions.length)label+=` · สร้างทางแยก ${autoJunctions.length} แห่ง`;
     if(autoSeparated.length)label+=` · ทางต่างระดับ ${autoSeparated.length} แห่ง`;
+    if(passedJunction.length)label+=` · ${passedJunction.map(id=>road(id)?.name??id).join(', ')} ผ่านต่างระดับที่ทางแยก`;
   }
   const rampProblem=rampError(p.roads,p.decisions);if(rampProblem)return fail(rampProblem,label);
   const roadNames=(ids:string[])=>ids.map(id=>road(id)?.name??id).join(', ');
@@ -321,6 +350,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const warnings=[...compiled.issues,...openCrossings.map(o=>`จุดตัดนี้ยังเป็นทางแยกไม่ได้ · ${o.reason}`),
     ...blocked.map(b=>`${roadNames(b.roads)} ถึง${jname(decision(b.candidateId))}แต่เชื่อมเข้าไม่ได้ · ${b.reason}`)];
   return{project:p,error:null,label,warnings,group,autoJunctions,autoSeparated,openCrossings,joined,blocked};
+}
+
+/** Road ids grouped by level (each group within the same-level tolerance of its neighbour), highest first. */
+function levelGroups(levels:{id:string;z:number}[]):string[][]{
+  const out:string[][]=[];let last=Infinity;
+  for(const l of levels){if(last-l.z>LEVEL_TOLERANCE||!out.length)out.push([l.id]);else out[out.length-1].push(l.id);last=l.z;}
+  return out;
 }
 
 /** A junction that now has more legs than supported (and did not before) is refused instead of losing legs. */
