@@ -11,7 +11,7 @@ import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} 
 import {approachInfo,cornerHandles,junctionApproaches,newOpening,newSlip,openingsOf,openingsPatch,pocketTreatment,slipPatch,type ApproachInfo,type OpeningType,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
-import {stations} from '@/core/road-first/derive';
+import {detectCandidates,stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import {overCommand,underCommand} from '@/core/road-first/grade-separation';
@@ -351,8 +351,19 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const [armed,setArmed]=useState(false);
   if(!d||!j)return <p className="design-meta">ไม่พบทางแยกนี้แล้ว</p>;
   const approaches=junctionApproaches(compiled,candidateId);
+  // Two roads crossing: make it a bridge or an underpass from here in one step (one undo brings the junction back).
+  const crossing=detectCandidates(project.roads).find(c=>c.id===candidateId),two=crossing?.kind==='cross'&&crossing.roads.length===2&&(d.roads?.length??2)===2;
+  const rname=(id:string)=>project.roads.find(r=>r.id===id)?.name??id;
+  const separate=(o:{cmd:RoadFirstCommand}|{error:string})=>{if('error' in o){onMessage(o.error,'error');return;}if(run(o.cmd).ok)onSelect({kind:'crossing',id:candidateId});};
   return <>
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
+    {two&&<Fold id="junction-grade" title="ทำเป็นทางต่างระดับ (สะพาน / ทางลอด)" summary="ไม่มีทางแยก ถนนผ่านข้ามกัน" data="junction-grade">
+      <div className="design-reference-tools">
+        {crossing!.roads.map(r=><button key={'o'+r.roadId} data-design-junction-over={r.roadId} onClick={()=>separate(overCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ข้าม (สะพาน)</button>)}
+        {crossing!.roads.map(r=><button key={'u'+r.roadId} data-design-junction-under={r.roadId} onClick={()=>separate(underCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ลอดใต้</button>)}
+      </div>
+      <p className="design-meta">ยก {RISE_DEFAULTS.height} ม. หรือกดลง {DIP_DEFAULTS.depth} ม. ลาด {RISE_DEFAULTS.grade*100}% (ค่าตั้งต้นของเครื่องมือ ไม่ใช่ค่ามาตรฐาน) · การตั้งค่าของทางแยกนี้จะไม่ใช้แล้ว กดย้อนกลับเพื่อคืนทางแยก · ยกหรือลดระดับถนนเองในแนวดิ่งก็ได้ ระบบจะเปลี่ยนเป็นทางต่างระดับให้</p>
+    </Fold>}
     {(d.roads??[]).some(id=>project.roads.find(r=>r.id===id)?.role==='access')&&<p className="design-meta" data-design-access-junction="true">ทางเข้าโครงการ: ถนนหลักไหลต่อเนื่อง ไม่มีเส้นหยุด ทางข้าม หรือสัญญาณไฟ · ทางเข้ามีเส้นหยุดให้ทาง (ค่าเริ่มต้นแนวคิด)</p>}
     {compiled.unjoined[candidateId]&&<div className="design-issues" data-design-unjoined-note={compiled.unjoined[candidateId].length}>
       <b>มีถนนถึงทางแยกนี้แต่ไม่ได้เชื่อม</b>
