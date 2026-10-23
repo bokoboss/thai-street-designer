@@ -35,7 +35,7 @@ export function SectionStrip({road,compiled,project,run,finishGesture}:{road:Roa
   </div>;
   if(mode==='profile')return <section className="design-section design-section-profile" data-design-section={road.id}>
     <header><b>แนวดิ่ง · {road.name}</b><span>ระดับตามระยะทางจากต้นถนน · ลากจุดเพื่อปรับ</span>{tabs}</header>
-    <ProfileStrip road={road} project={project} run={run} finishGesture={finishGesture}/>
+    <ProfileStrip road={road} project={project} crossings={compiled.crossings} run={run} finishGesture={finishGesture}/>
   </section>;
   if(mode==='station'&&link)return <section className="design-section design-section-station" data-design-section={road.id} data-design-section-station={link.id}>
     <header><b>หน้าตัด · {road.name}{links.length>1?` · ช่วง ${segment+1}/${links.length}`:''}</b>{tabs}</header>

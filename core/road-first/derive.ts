@@ -13,7 +13,8 @@ import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
 import {taperPolygon,type RampAnchor} from './ramps';
 import {curveRanges,vertexCurve} from './curves';
-import {bridgeRise,gradeFor,hasSource,levelCriteria,tunnelDepth,type LevelCriteria} from './level-criteria';
+import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
+import {measureClearance,type ClearanceMeasure} from './structure-clearance';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -64,9 +65,13 @@ export type CompileSources={junctions:Record<string,string>;links:Record<string,
 /** shortfalls: arms that need more length than the straight part of their road gives (stretched off the alignment). */
 export type ArmShortfall={candidateId:string;junctionId:string;armId:number;roadId:string;side:'ahead'|'behind';room:number;required:number};
 /** A grade-separated crossing (Phase 4A): relation, the two roads and the measured level gap (over minus under). */
-export type CompiledCrossing={candidateId:string;roads:string[];point:WorldPoint;relation:'over'|'unresolved';over?:string;under?:string;gap:number;name:string};
+export type CompiledCrossing={candidateId:string;roads:string[];point:WorldPoint;relation:'over'|'unresolved';over?:string;under?:string;gap:number;name:string;
+  /** Measured clearance under the structure over the overlap of the two roads (relation over only). */
+  clearance?:ClearanceMeasure};
 export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[];linkRanges:{id:string;roadId:string;from:number;to:number}[]};
 
+/** Plan extent of a bridge deck or tunnel beyond the measured overlap of the two roads (m; display tool value). */
+export const STRUCTURE_MARGIN=2;
 /** Tool defaults (m): clearance kept before a bend, straight tail absorbed into an arm, shortest link left between two junctions. */
 const EPS=1e-6,BEND_CLEARANCE=15,SHORT_TAIL=20,MIN_LINK=5;
 const sub=(a:WorldPoint,b:WorldPoint)=>({x:a.x-b.x,y:a.y-b.y});
@@ -376,17 +381,27 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
     const name=top&&bottom?`${top.r.name} ข้าม ${bottom.r.name}`:`${ra.name} × ${rb.name}`;
     const id=networkCrossings.some(x=>x.id===d.candidateId)?`${d.candidateId}~${ra.id}~${rb.id}`:d.candidateId;
-    crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name});
-    // Level difference against the project's criteria (a flag to check, never a pass / fail against a standard).
-    if(relation==='over'&&bottom){
-      const tunnel=bottom.z<-LEVEL_TOLERANCE,need=tunnel?tunnelDepth(criteria):bridgeRise(criteria);
-      if(gap<need-1e-6)issues.push(`${name}: ต่างระดับ ${gap.toFixed(2)} ม. น้อยกว่าที่ตั้งไว้ ${need.toFixed(2)} ม. (ช่องลอด ${criteria.clearance.value} + ${tunnel?'หลังคาอุโมงค์':'โครงสร้าง'} ${(tunnel?criteria.tunnelRoof:criteria.deckDepth).value} ม.${hasSource(criteria.clearance)?'':' · ค่ายังไม่มีแหล่งอ้างอิง'}) — ต้องตรวจตามเกณฑ์`);
+    const clearance=relation==='over'&&top&&bottom?measureClearance(top.r,bottom.r,top.ref.station,bottom.ref.station,criteria):undefined;
+    crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name,...(clearance?{clearance}:{})});
+    // Measured clearance against the project's value (a flag to check, never a pass / fail against a standard).
+    if(clearance){
+      const what=clearance.structure==='tunnel'?'หลังคาอุโมงค์':'โครงสร้างสะพาน',src=hasSource(criteria.clearance)?'':' · ค่ายังไม่มีแหล่งอ้างอิง';
+      if(clearance.min===null)issues.push(`${name}: ยังวัดช่องลอดใต้${what}ไม่ได้ (แนวถนนสองสายซ้อนกันไม่ชัดเจน) — ต้องตรวจเอง`);
+      else if(clearance.min<criteria.clearance.value-1e-6)issues.push(`${name}: ช่องลอดที่วัดได้ ${clearance.min.toFixed(2)} ม. (ใต้${what} ลึก ${clearance.depth} ม.) น้อยกว่าที่ตั้งไว้ ${criteria.clearance.value} ม.${src} — ต้องตรวจตามเกณฑ์`);
     }
-    const deck=top&&bottom?(()=>{const half=sectionWidth(bottom.r.section)/2+2,sa=Math.max(0,top.ref.station-half),sb=top.ref.station+half;
+    // Structure extents in plan: the measured overlap plus an abutment / portal margin (display, tool value).
+    const margin=STRUCTURE_MARGIN;
+    const deck=top&&bottom?(()=>{const span=clearance?.spanOver,half=sectionWidth(bottom.r.section)/2+margin,len=stations(top.r.points,top.r.alignment).at(-1)??0;
+      const sa=Math.max(0,span?span[0]-margin:top.ref.station-half),sb=Math.min(len,span?span[1]+margin:top.ref.station+half);
       return{a:pointAt(top.r.points,sa,top.r.alignment),b:pointAt(top.r.points,sb,top.r.alignment),half:sectionWidth(top.r.section)/2};})():undefined;
-    const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const half=sectionWidth(top.r.section)/2+2;
-      return{a:pointAt(bottom.r.points,Math.max(0,bottom.ref.station-half),bottom.r.alignment),b:pointAt(bottom.r.points,bottom.ref.station+half,bottom.r.alignment),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3)};})():undefined;
+    const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const span=clearance?.spanUnder,half=sectionWidth(top.r.section)/2+margin,len=stations(bottom.r.points,bottom.r.alignment).at(-1)??0;
+      const sa=Math.max(0,span?span[0]-margin:bottom.ref.station-half),sb=Math.min(len,span?span[1]+margin:bottom.ref.station+half);
+      // Roof underside at each portal: the upper road level there minus the roof (falls back to the crossing level).
+      const soffit=round(top.z-criteria.tunnelRoof.value,3);
+      return{a:pointAt(bottom.r.points,sa,bottom.r.alignment),b:pointAt(bottom.r.points,sb,bottom.r.alignment),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3),
+        za:round(levelAt(bottom.r.profile,sa),3),zb:round(levelAt(bottom.r.profile,sb),3),soffit};})():undefined;
     networkCrossings.push({id,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
+      ...(clearance?{clearance:{min:clearance.min,structure:clearance.structure,depth:clearance.depth,...(clearance.at?{at:clearance.at}:{})}}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
   };
   for(const d of decisions){
@@ -409,5 +424,5 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     const a=r.anchors?.[end],main=a&&roadById.get(a.roadId);if(!a||!main)continue;
     const points=taperPolygon(main,r,end);if(points.length===4)rampTapers.push({id:`${r.id}:${end}`,points,z:round(levelAt(main.profile,a.station),3)});
   }
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
 }
