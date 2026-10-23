@@ -192,3 +192,7 @@
 .design-alignment-review footer { display:flex; justify-content:flex-end; gap:12px; margin-top:16px; }
 .design-alignment-review button { padding:8px 16px; border:1px solid #64748b; border-radius:4px; }
 .design-alignment-review button:disabled { opacity:.45; }
+.design-alignment-review table { width:100%; border-collapse:collapse; font-size:12px; margin:12px 0; }
+.design-alignment-review th,.design-alignment-review td { padding:6px 8px; text-align:left; border-bottom:1px solid #e2e8f0; }
+.design-profile-editor-point { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--d-line); }
+.design-profile-editor-point > button { align-self:flex-end; }

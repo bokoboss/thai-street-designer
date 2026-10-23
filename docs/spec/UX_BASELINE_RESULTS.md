@@ -42,6 +42,21 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### Vertical curves and profile review (2026-10-23, scripted)
+
+Build: `feat/vertical-curves-provenance`, based on `7d421c91344160fbc5b4bec9d08aadb7289d2ecb` (review-plan PR-04). Chromium headless, 1440 × 1000. No human timing measurement.
+
+| Task | Completed | Actions | Prior behavior / result |
+| --- | --- | --- | --- |
+| Apply a rise/dip from its visible inspector action | Y | 2 | Previously 1 immediate action; now open before/after review, then confirm. The extra confirmation protects authored profile work. |
+| Cancel an open profile review | Y | 1 | Project remains identical, including all PVI and decisions. |
+| Undo / redo the profile transaction | Y | 1 each | Relation, generated points and ownership are restored together. |
+| Edit an internal vertical curve | Y | 1 committed value | After the field is open, the entered length changes the same profile used by longitudinal drawing and 3D; undo/redo and reload retain it. |
+
+UX review: **PASS** for this slice. The diagram distinguishes the road surface from the tangent PVI. The review shows old/new profiles and point source; cancellation is initially focused. Conflicting authored points are refused with their station. `verify-vertical-browser.mjs` exercises the task; screenshots are `artifacts/vertical-curve-profile.png`, `artifacts/vertical-rise-preview.png` and `artifacts/vertical-curve-3d.png`. No automatic curve length or engineering compliance claim is introduced.
+
+The existing two-road browser fixture now includes 1 camera gesture before its 6 drawing actions, to provide full approach lengths for the bridge. It no longer relies on a clipped partial rise. The drawing controls themselves retain the same action count; the short-road refusal is tested separately.
+
 ### Explicit curved-alignment conversion (2026-10-22, scripted)
 
 Build: `fix/interchange-alignment-migration`, based on `1cd8f5972116beed8867a6482b041c0c3fb661b5` (combined review-plan PR-01+02). Chromium 153, 1440 × 1000. No human timing measurement.

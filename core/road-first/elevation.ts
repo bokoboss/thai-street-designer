@@ -1,10 +1,10 @@
-// Phase 4A — road levels and grade-separated crossings (docs/spec/PHASE_4A_ELEVATION.md).
-// A road's profile is a list of vertical points (station, z); between them the level is linear, outside them constant.
+// Road elevations and explicit local rise/dip proposals.
+// Profiles without curve lengths remain linear between their points and constant outside them.
 // No profile = level 0, so files saved before 4A are unchanged. Values here are tool values, not standards.
 import type {WorldPoint} from '../network/network-project';
 
-export type ProfilePoint={station:number;z:number};
-export type Profile=ProfilePoint[];
+import {levelAt,sortedProfile,verticalSlice,type Profile} from '../common/vertical-profile';
+export {levelAt,gradeAt,sortedProfile,profileError,resolveVerticalProfile,authoredProfile,type Profile,type ProfilePoint} from '../common/vertical-profile';
 
 /** |Δz| at or below this is "the same level" for making a junction (tool tolerance). */
 export const LEVEL_TOLERANCE=0.5;
@@ -13,54 +13,33 @@ export const RISE_DEFAULTS={height:6,grade:.04,margin:10};
 /** Starting depth of a trough under another road (tool value, editable, not a standard). */
 export const DIP_DEFAULTS={depth:6.5};
 
-export const sortedProfile=(p?:Profile)=>[...(p??[])].sort((a,b)=>a.station-b.station);
-
-/** Level of a profile at a station: linear between points, constant outside, 0 without points. */
-export function levelAt(profile:Profile|undefined,station:number):number{
-  const p=sortedProfile(profile);if(!p.length)return 0;
-  if(station<=p[0].station)return p[0].z;
-  for(let i=1;i<p.length;i++)if(station<=p[i].station){const a=p[i-1],b=p[i],t=b.station>a.station?(station-a.station)/(b.station-a.station):1;return a.z+(b.z-a.z)*t;}
-  return p[p.length-1].z;
-}
-
 /** Profile points within [from,to] re-measured from `from`, with the levels at both ends (link-local levels). */
 export function profileSlice(profile:Profile|undefined,from:number,to:number):Profile|undefined{
   const p=sortedProfile(profile);if(!p.length||p.every(q=>q.z===0))return undefined;
+  if(p.some(q=>(q.curveLength??0)>0))return verticalSlice(p,from,to);
   const r=(v:number)=>Math.round(v*1000)/1000;
   const inner=p.filter(q=>q.station>from+1e-6&&q.station<to-1e-6).map(q=>({station:r(q.station-from),z:r(q.z)}));
   return[{station:0,z:r(levelAt(p,from))},...inner,{station:r(to-from),z:r(levelAt(p,to))}];
 }
 
-/** Points removed within `extent` of a station (used to take a generated rise away again). */
-export function flattenAround(profile:Profile|undefined,station:number,extent:number):Profile{
-  return sortedProfile(profile).filter(q=>Math.abs(q.station-station)>extent+1e-6);
+/** Only points owned by this operation may be removed automatically. Untagged points are authored. */
+export function removeGenerated(profile:Profile|undefined,owner:string):Profile{
+  return sortedProfile(profile).filter(q=>q.generatedBy!==owner);
 }
 
-/**
- * A profile that rises over another road at `station`: up at `grade`, flat across `top` (width of the other road plus a
- * margin each side), down again; the rest of the existing profile is kept outside the rise.
- */
-export function riseProfile(profile:Profile|undefined,station:number,base:number,top:number,height=RISE_DEFAULTS.height,grade=RISE_DEFAULTS.grade,length=Infinity):Profile{
-  // A negative height makes a dip (a trough under the other road) with the same shape.
-  const run=Math.abs(height)/grade,half=top/2,extent=half+run,dir=Math.sign(height)||1;
+/** Local rise/dip proposal; authored points and unrelated generated work are never overwritten. */
+export function riseProfile(profile:Profile|undefined,station:number,base:number,top:number,height=RISE_DEFAULTS.height,grade=RISE_DEFAULTS.grade,length=Infinity,owner='local-rise'):Profile{
+  if(!Number.isFinite(grade)||grade<=0||!Number.isFinite(height)||!Number.isFinite(top)||top<0)throw Error('ค่าระดับหรือความชันสำหรับยกถนนไม่ถูกต้อง');
+  const kept=removeGenerated(profile,owner),peak=base+height,ground=(s:number)=>levelAt(kept,s);
+  const run=Math.max(Math.abs(height),Math.abs(peak-ground(station)))/grade,half=top/2,extent=half+run,start=station-extent,end=station+extent;
+  if(start<0||end>length)throw Error(`ช่วงถนนไม่พอ: ต้องมีระยะ ${extent.toFixed(1)} ม. ก่อนและหลังจุดตัด — ปรับแนวถนนหรือแก้เกณฑ์ที่ใช้`);
+  const conflict=kept.find(q=>q.station>start+1e-6&&q.station<end-1e-6||q.curveLength&&q.station+q.curveLength/2>start&&q.station-q.curveLength/2<end);
+  if(conflict)throw Error(`จุดระดับที่ระยะ ${conflict.station.toFixed(1)} ม. อยู่ในช่วงที่จะปรับ — เก็บจุดเดิมไว้ กรุณาย้ายช่วงหรือแก้แนวดิ่งเอง`);
   const r=(v:number)=>Math.round(v*1000)/1000;
-  const kept=flattenAround(profile,station,extent);
-  const peak=base+height,ground=(s:number)=>levelAt(kept,s);
-  // Level along the rise (ramp up, flat top, ramp down), cut at the road's ends: a rise near an end starts part-way up.
-  const along=(s:number)=>{const d=Math.abs(s-station);return d<=half?peak:d>=extent?ground(s):peak-dir*(d-half)*grade;};
-  const at=(s:number)=>({station:r(Math.max(0,Math.min(length,s))),z:r(along(Math.max(0,Math.min(length,s))))});
-  const pts=[at(station-extent),at(station-half),at(station+half),at(station+extent)].filter((q,i,all)=>all.findIndex(o=>Math.abs(o.station-q.station)<.01)===i);
-  return [...kept.filter(q=>q.station>=0&&q.station<=length),...pts].sort((a,b)=>a.station-b.station);
-}
-
-/** Valid profile: up to 64 points, finite, stations ≥ 0 and distinct, levels within ±200 m. */
-export function profileError(p:unknown):string|null{
-  if(p===undefined)return null;
-  if(!Array.isArray(p)||p.length>64)return 'แนวดิ่งต้องมีไม่เกิน 64 จุด';
-  if(!p.every(q=>q&&Number.isFinite(q.station)&&q.station>=0&&Number.isFinite(q.z)&&Math.abs(q.z)<=200))return 'ค่าระยะหรือระดับในแนวดิ่งไม่ถูกต้อง';
-  const s=p.map(q=>q.station).sort((a,b)=>a-b);
-  for(let i=1;i<s.length;i++)if(s[i]-s[i-1]<.01)return 'จุดแนวดิ่งสองจุดอยู่ที่ระยะเดียวกัน';
-  return null;
+  const pts=[{station:r(start),z:r(ground(start))},{station:r(station-half),z:r(peak)},{station:r(station+half),z:r(peak)},{station:r(end),z:r(ground(end))}];
+  for(let i=1;i<pts.length;i++)if(Math.abs((pts[i].z-pts[i-1].z)/(pts[i].station-pts[i-1].station))>grade+1e-5)throw Error('ระดับเดิมทำให้ช่วงขึ้นหรือลงชันเกินเกณฑ์ที่ตั้งไว้ — ปรับช่วงหรือแก้แนวดิ่งเอง');
+  const additions=pts.filter(q=>!kept.some(p=>Math.abs(p.station-q.station)<.01&&Math.abs(p.z-q.z)<1e-6)).map(q=>({...q,generatedBy:owner}));
+  return[...kept,...additions].sort((a,b)=>a.station-b.station);
 }
 
 export const midpoint=(a:WorldPoint,b:WorldPoint)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});

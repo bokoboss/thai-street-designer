@@ -7,7 +7,7 @@ import type {Road} from '@/core/road-first/derive';
 import {detectCandidates,stations} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
-import {levelAt,sortedProfile,type Profile} from '@/core/road-first/elevation';
+import {levelAt,sortedProfile,resolveVerticalProfile,type Profile} from '@/core/road-first/elevation';
 import {gradeFor,levelCriteria} from '@/core/road-first/level-criteria';
 import type {CommandOutcome} from './use-road-editor';
 
@@ -33,13 +33,14 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
   const zs=[0,...profile.map(q=>q.z),...marks.map(m=>m.z)],zMin=frozen?.zMin??Math.min(...zs)-2,zMax=frozen?.zMax??Math.max(...zs)+3;
   const X=(s:number)=>PAD.l+(s/(total||1))*(w-PAD.l-PAD.r),Z=(z:number)=>PAD.t+(zMax-z)/(zMax-zMin)*(H-PAD.t-PAD.b);
   const S=(px:number)=>Math.max(0,Math.min(total,(px-PAD.l)/(w-PAD.l-PAD.r)*total)),ZofPx=(py:number)=>zMax-(py-PAD.t)/(H-PAD.t-PAD.b)*(zMax-zMin);
-  const line=(profile.length?[{station:0,z:levelAt(profile,0)},...profile,{station:total,z:levelAt(profile,total)}]:[{station:0,z:0},{station:total,z:0}]).filter((q,i,a)=>i===0||q.station>a[i-1].station+1e-6);
+  const tangentLine=(profile.length?[{station:0,z:levelAt(profile,0)},...profile,{station:total,z:levelAt(profile,total)}]:[{station:0,z:0},{station:total,z:0}]).filter((q,i,a)=>i===0||q.station>a[i-1].station+1e-6);
+  const solved=resolveVerticalProfile(profile),line=solved.curves.length?solved.sampleStations(0,total).map(station=>({station,z:solved.levelAt(station)})):tangentLine;
   const local=(e:React.PointerEvent|React.MouseEvent)=>{const r=(e.currentTarget as Element).closest('svg')!.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const set=(next:Profile,gesture=false)=>run({type:'road.setProfile',roadId:road.id,profile:next.length?next:null},gesture?{gesture:true}:undefined);
   const r1=(v:number)=>Math.round(v*10)/10;
   function move(e:React.PointerEvent){
     const i=drag.current;if(i===null)return;const p=local(e),lo=i>0?profile[i-1].station+.5:0,hi=i<profile.length-1?profile[i+1].station-.5:total;
-    const next=profile.map((q,k)=>k===i?{station:r1(Math.max(lo,Math.min(hi,S(p.x)))),z:r1(Math.max(-30,Math.min(30,ZofPx(p.y))))}:q);
+    const next=profile.map((q,k)=>k===i?{...q,station:r1(Math.max(lo,Math.min(hi,S(p.x)))),z:r1(Math.max(-30,Math.min(30,ZofPx(p.y))))}:q);
     if(next[i].station!==profile[i].station||next[i].z!==profile[i].z)set(next,true);
   }
   function addAt(e:React.MouseEvent){
@@ -54,7 +55,7 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
   const wanted:Label[]=[
     ...marks.filter(m=>m.kind==='road').map(m=>({kind:'crossing',text:crossingText(m),x:X(m.station)+7,y:Z(m.z)+4,anchor:'start' as const,color:'#4a565b'})),
     ...marks.filter(m=>m.kind==='junction').map(m=>({kind:'junction',text:m.name,x:X(m.station)+3,y:H-PAD.b-4,anchor:'start' as const,color:'#0b6f69'})),
-    ...line.slice(1).flatMap((q,i)=>{const a=line[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;
+    ...tangentLine.slice(1).flatMap((q,i)=>{const a=tangentLine[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;
       // Steeper than the project's maximum: marked to check (orange), never judged here.
       const steep=Math.abs(g)>maxGrade+1e-6;
       return Math.abs(g)>.05?[{kind:steep?'grade-steep':'grade',text:`${g.toFixed(1)}%${steep?' !':''}`,x:(X(a.station)+X(q.station))/2,y:(Z(a.z)+Z(q.z))/2-6,anchor:'middle' as const,color:steep?'#b05a00':'#0b6f69'}]:[];}),
@@ -78,7 +79,9 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
       {marks.map((m,i)=>m.kind==='junction'
         ?<g key={i} data-design-profile-junction={i}><title>{m.name}</title><line x1={X(m.station)} x2={X(m.station)} y1={PAD.t} y2={H-PAD.b} stroke="#0b7f86" strokeDasharray="2 3"/></g>
         :<g key={i} data-design-profile-crossing={m.name}><title>{crossingText(m)}</title><rect x={X(m.station)-5} y={Z(m.z)-3} width="10" height="6" fill="#6f7d84"/></g>)}
-      <polyline points={line.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#1f2d33" strokeWidth="2.2"/>
+      {solved.curves.length>0&&<polyline points={tangentLine.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#94a3b8" strokeDasharray="4 3"/>}
+      <polyline data-design-profile-surface points={line.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#1f2d33" strokeWidth="2.2"/>
+      {profile.filter(q=>(q.curveLength??0)>0).map((q,i)=><text key={`curve-${i}`} x={X(q.station)} y={Z(q.z)-8} textAnchor="middle" fontSize="10" fill="#2563eb">โค้งดิ่ง {q.curveLength} ม.</text>)}
       {labels.map((l,i)=><text key={'l'+i} data-design-profile-label={l.kind} x={l.x} y={l.y} textAnchor={l.anchor} fontSize="10" fill={l.color}>{l.text}</text>)}
       {profile.map((q,i)=><g key={i}>
         <circle data-design-profile-point={i} data-design-profile-z={q.z} cx={X(q.station)} cy={Z(q.z)} r="14" fill="transparent" style={{cursor:'move'}}
