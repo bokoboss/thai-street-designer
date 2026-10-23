@@ -132,7 +132,12 @@ export function resolveElevatedLinkScene(project:NetworkProject):{faces:Structur
 export function resolveRoadLinkSceneSurfaces(project:NetworkProject):NetworkSceneSurface[]{
   const out:NetworkSceneSurface[]=[];
   // Ramp tapers (Phase 4B) under the road surfaces, at the main road level.
-  for(const t of project.rampTapers??[])out.push({id:`taper:${t.id}`,kind:'road',points:t.points,z:.025,base:t.points.map(()=>t.z)});
+  for(const t of project.rampTapers??[]){
+    // Just above the footway surface: the terminal cuts through the footway beside the travelled way.
+    out.push({id:`taper:${t.id}`,kind:'road',points:t.points,z:.19,base:t.points.map(()=>t.z)});
+    // The gore triangle gets the midpoint of its edge side as a fourth point (surfaces are drawn from 4 points up).
+    if(t.gore){const [g,nose,e]=t.gore,points=[g,nose,e,{x:(e.x+g.x)/2,y:(e.y+g.y)/2}];out.push({id:`gore:${t.id}`,kind:'road',points,z:.19,base:points.map(()=>t.z)});}
+  }
   for(const link of project.links){
     const g=resolveLinkSectionGeometry(project,link);
     if(!g||g.points.length<2)continue;

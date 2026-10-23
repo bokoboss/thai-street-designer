@@ -223,9 +223,12 @@ export function NetworkDrawing({
       return id===parallelDraftMainlineId?'draft-mainline':undefined;
     };
   return <g>
-    {/* Ramp tapers at diverges and merges (Phase 4B), under the roads. */}
-    {project.rampTapers?.length?<g data-network-ramp-tapers={project.rampTapers.length} pointerEvents="none">{project.rampTapers.map(t=><path key={t.id} data-network-ramp-taper={t.id} d={`M${t.points.map(p=>`${p.x} ${p.y}`).join('L')}Z`} fill="#35424e"/>)}</g>:null}
     {linksInDrawOrder(project).map(link=>{const role=parallelRole(link.id);return <RoadLinkDrawing key={link.id} project={project} link={link} selected={selection?.kind==='link'&&selection.id===link.id} comparisonFocused={comparisonFocus?.kind==='roadlink'&&comparisonFocus.id===link.id} parallelRole={role} parallelCorridorId={role==='draft-mainline'?'draft':parallelCorridor?.id} selectedVertex={selection?.kind==='link'&&selection.id===link.id?selectedLinkVertex:null} onSelect={()=>onSelect({kind:'link',id:link.id})} onInsertVertex={e=>onLinkInsertVertex(link.id,e)} onVertexSelect={onLinkVertexSelect} onVertexMoveStart={(index,e)=>onLinkVertexMoveStart(link.id,index,e)}/>;})}
+    {/* Ramp terminals (tie-in and gore) after the roads at grade: they lie outside the travelled way and cut through the footway. */}
+    {project.rampTapers?.length?<g data-network-ramp-tapers={project.rampTapers.length} pointerEvents="none">{project.rampTapers.map(t=><g key={t.id}>
+      <path data-network-ramp-taper={t.id} d={`M${t.points.map(p=>`${p.x} ${p.y}`).join('L')}Z`} fill="#35424e"/>
+      {t.gore&&<GoreMarking id={t.id} points={t.gore}/>}
+    </g>)}</g>:null}
     {/* Grade separation (Phase 4A): the road that passes over is drawn on top, with its deck edges marked across the road below. */}
     {/* Tunnel (Phase 4A): the lower road's box under the crossing road, dashed over the road that hides it. */}
     {project.crossings?.map(c=>c.tunnel&&c.relation==='over'?<g key={'t'+c.id} data-network-crossing-tunnel={c.id} pointerEvents="none">{(()=>{const t=c.tunnel!,dx=t.b.x-t.a.x,dy=t.b.y-t.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*t.half,ny=dx/l*t.half;
@@ -233,5 +236,19 @@ export function NetworkDrawing({
     {project.crossings?.map(c=>c.deck&&c.relation==='over'?<g key={c.id} data-network-crossing-deck={c.id} pointerEvents="none">{[1,-1].map(s=>{const dx=c.deck!.b.x-c.deck!.a.x,dy=c.deck!.b.y-c.deck!.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*c.deck!.half*s,ny=dx/l*c.deck!.half*s;
       return <path key={s} d={`M${c.deck!.a.x+nx-dx/l*1.2} ${c.deck!.a.y+ny-dy/l*1.2}L${c.deck!.a.x+nx} ${c.deck!.a.y+ny}L${c.deck!.b.x+nx} ${c.deck!.b.y+ny}L${c.deck!.b.x+nx+dx/l*1.2} ${c.deck!.b.y+ny+dy/l*1.2}`} fill="none" stroke="#1f2d33" strokeWidth=".55"/>;})}</g>:null)}
     {project.junctions.map(junction=><JunctionInstanceDrawing key={junction.id} project={project} zoom={zoom} armHandles={armHandles} junction={junction} selected={selection?.kind==='junction'&&selection.id===junction.id} comparisonFocused={comparisonFocus?.kind==='junction'&&comparisonFocus.id===junction.id} selectedArm={selection?.kind==='junction'&&selection.id===junction.id?selectedArm:null} linkMode={linkMode} occupiedPorts={occupiedPorts} pendingPort={pendingPort} onSelect={()=>onSelect({kind:'junction',id:junction.id})} onArmSelect={armId=>onArmSelect(junction.id,armId)} onMoveStart={e=>onJunctionMoveStart(junction.id,e)} onArmMoveStart={(armId,e)=>onArmMoveStart(junction.id,armId,e)} onPort={onPort}/>)}
+  </g>;
+}
+
+/** Painted gore: pavement with a white outline and diagonal hatching clipped to the triangle (plan and export). */
+function GoreMarking({id,points}:{id:string;points:{x:number;y:number}[]}){
+  const [g,n,e]=points,clip=`gore-clip-${id.replace(/[^\w-]/g,'_')}`,d=`M${points.map(p=>`${p.x} ${p.y}`).join('L')}Z`;
+  // Hatch lines across the gore, every 1.5 m along it (display spacing).
+  const len=Math.hypot(n.x-g.x,n.y-g.y),k=Math.max(1,Math.floor(len/1.5)),lines=Array.from({length:k},(_,i)=>{const s=(i+.5)/k;
+    const a={x:g.x+(n.x-g.x)*s,y:g.y+(n.y-g.y)*s},b={x:g.x+(e.x-g.x)*s,y:g.y+(e.y-g.y)*s},dx=n.x-g.x,dy=n.y-g.y;
+    return{a:{x:a.x+dx*.15,y:a.y+dy*.15},b:{x:b.x-dx*.15,y:b.y-dy*.15}};});
+  return <g data-network-gore={id}>
+    <clipPath id={clip}><path d={d}/></clipPath>
+    <path d={d} fill="#35424e" stroke="#f4f6f7" strokeWidth=".18"/>
+    <g clipPath={`url(#${clip})`}>{lines.map((l,i)=><line key={i} x1={l.a.x} y1={l.a.y} x2={l.b.x} y2={l.b.y} stroke="#f4f6f7" strokeWidth=".18"/>)}</g>
   </g>;
 }
