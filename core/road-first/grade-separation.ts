@@ -1,58 +1,30 @@
-// Phase 4A — choosing which road passes over at a grade-separated crossing (docs/spec/PHASE_4A_ELEVATION.md).
-// One command sets the relation and the profiles together, so one undo reverts both.
+// Crossing relation and owned profile changes form one transaction.
 import type {RoadFirstCommand} from './commands';
 import {detectCandidates} from './derive';
-import {LEVEL_TOLERANCE,RISE_DEFAULTS,flattenAround,levelAt,riseProfile,sectionWidth,type Profile} from './elevation';
+import {LEVEL_TOLERANCE,RISE_DEFAULTS,levelAt,removeGenerated,riseProfile,sectionWidth,type Profile} from './elevation';
 import {bridgeRise,gradeFor,levelCriteria,tunnelDepth} from './level-criteria';
 import type {RoadFirstProject} from './project';
 import {roadLength} from './road-openings';
 
-/**
- * Make `overId` pass over the other road at this crossing. If it is not already higher, it gets a rise (tool starting
- * values, editable); if the other road was the one marked over, its points around the crossing are removed again.
- */
-export function overCommand(project:RoadFirstProject,candidateId:string,overId:string):{cmd:RoadFirstCommand}|{error:string}{
-  const c=detectCandidates(project.roads).find(x=>x.id===candidateId);if(!c)return{error:'ไม่พบจุดตัดนี้'};
-  const overRef=c.roads.find(r=>r.roadId===overId),underRef=c.roads.find(r=>r.roadId!==overId);
-  const over=project.roads.find(r=>r.id===overId),under=underRef&&project.roads.find(r=>r.id===underRef.roadId);
-  if(!overRef||!over||!under||!underRef)return{error:'ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้'};
-  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={},k=levelCriteria(project.options.levels);
-  // Rise height and grade come from the project's level criteria (clearance + structure depth; road or ramp grade).
-  const height=bridgeRise(k),grade=gradeFor(k,over),zUnder=levelAt(under.profile,underRef.station),top=sectionWidth(under.section)+2*RISE_DEFAULTS.margin;
-  // The previous over road loses its generated rise (points within the rise around this crossing).
-  if(d?.over===under.id&&under.profile?.length){
-    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,under);
-    const flat=flattenAround(under.profile,underRef.station,extent);profiles[under.id]=flat.length?flat:null;
-  }
-  const baseUnder=profiles[under.id]===undefined?zUnder:levelAt(profiles[under.id]??undefined,underRef.station);
-  if(levelAt(over.profile,overRef.station)-baseUnder<=LEVEL_TOLERANCE)profiles[over.id]=riseProfile(over.profile,overRef.station,baseUnder,top,height,grade,roadLength(over));
-  return{cmd:{type:'crossing.setOver',candidateId,over:over.id,profiles,label:`${over.name} ข้าม ${under.name}`}};
+function propose(project:RoadFirstProject,candidateId:string,roadId:string,kind:'over'|'under'):{cmd:RoadFirstCommand}|{error:string}{
+  const c=detectCandidates(project.roads).find(x=>x.id===candidateId);
+  if(!c||c.roads.length!==2)return{error:'เลือกจุดตัดของถนนสองสายเพื่อปรับระดับ'};
+  const ref=c.roads.find(r=>r.roadId===roadId),otherRef=c.roads.find(r=>r.roadId!==roadId);
+  const road=project.roads.find(r=>r.id===roadId),other=project.roads.find(r=>r.id===otherRef?.roadId);
+  if(!ref||!otherRef||!road||!other)return{error:'ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้'};
+  const used=new Set([...project.decisions.map(d=>d.profileOwner),...project.roads.flatMap(r=>(r.profile??[]).map(q=>q.generatedBy))]);
+  let owner=project.decisions.find(d=>d.candidateId===candidateId)?.profileOwner;
+  if(!owner){owner=candidateId;let suffix=2;while(used.has(owner))owner=`${candidateId}:${suffix++}`;}
+  const profiles:Record<string,Profile|null>={},criteria=levelCriteria(project.options.levels);
+  const current=removeGenerated(road.profile,owner),otherProfile=removeGenerated(other.profile,owner);
+  if(current.length!==(road.profile?.length??0))profiles[road.id]=current.length?current:null;
+  if(otherProfile.length!==(other.profile?.length??0))profiles[other.id]=otherProfile.length?otherProfile:null;
+  const z=levelAt(current,ref.station),base=levelAt(otherProfile,otherRef.station),gap=kind==='over'?z-base:base-z;
+  try{
+    if(gap<=LEVEL_TOLERANCE)profiles[road.id]=riseProfile(current,ref.station,base,sectionWidth(other.section)+2*RISE_DEFAULTS.margin,
+      kind==='over'?bridgeRise(criteria):-tunnelDepth(criteria),gradeFor(criteria,road),roadLength(road),owner);
+  }catch(error){return{error:`${road.name}: ${error instanceof Error?error.message:'ปรับแนวดิ่งไม่ได้'}`};}
+  return{cmd:{type:'crossing.setOver',candidateId,owner,over:kind==='over'?road.id:other.id,profiles,label:kind==='over'?`${road.name} ข้าม ${other.name}`:`${road.name} ลอดใต้ ${other.name}`}};
 }
-
-/**
- * Make `underId` pass under the other road at this crossing: if it is not already lower, it gets a dip (an open trough
- * on its ramps, a tunnel under the other road); tool starting values, editable. The other road becomes the one over.
- */
-export function underCommand(project:RoadFirstProject,candidateId:string,underId:string):{cmd:RoadFirstCommand}|{error:string}{
-  const c=detectCandidates(project.roads).find(x=>x.id===candidateId);if(!c)return{error:'ไม่พบจุดตัดนี้'};
-  const underRef=c.roads.find(r=>r.roadId===underId),overRef=c.roads.find(r=>r.roadId!==underId);
-  const under=project.roads.find(r=>r.id===underId),over=overRef&&project.roads.find(r=>r.id===overRef.roadId);
-  if(!underRef||!under||!over||!overRef)return{error:'ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้'};
-  const d=project.decisions.find(x=>x.candidateId===candidateId),profiles:Record<string,Profile|null>={},k=levelCriteria(project.options.levels);
-  // If the other road had been raised over this one here, take that rise away first.
-  if(d?.over===under.id&&under.profile?.length){
-    const extent=(sectionWidth(over.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,under);
-    const flat=flattenAround(under.profile,underRef.station,extent);profiles[under.id]=flat.length?flat:null;
-  }
-  if(d?.over===over.id||levelAt(over.profile,overRef.station)>LEVEL_TOLERANCE){
-    const extent=(sectionWidth(under.section)+2*RISE_DEFAULTS.margin)/2+bridgeRise(k)/gradeFor(k,over);
-    const flat=flattenAround(over.profile,overRef.station,extent);if(over.profile?.length)profiles[over.id]=flat.length?flat:null;
-  }
-  const zOver=levelAt(profiles[over.id]===undefined?over.profile:profiles[over.id]??undefined,overRef.station);
-  const current=profiles[under.id]===undefined?under.profile:profiles[under.id]??undefined;
-  if(zOver-levelAt(current,underRef.station)<=LEVEL_TOLERANCE){
-    const top=sectionWidth(over.section)+2*RISE_DEFAULTS.margin;
-    profiles[under.id]=riseProfile(current,underRef.station,zOver,top,-tunnelDepth(k),gradeFor(k,under),roadLength(under));
-  }
-  return{cmd:{type:'crossing.setOver',candidateId,over:over.id,profiles,label:`${under.name} ลอดใต้ ${over.name}`}};
-}
+export const overCommand=(project:RoadFirstProject,candidateId:string,roadId:string)=>propose(project,candidateId,roadId,'over');
+export const underCommand=(project:RoadFirstProject,candidateId:string,roadId:string)=>propose(project,candidateId,roadId,'under');

@@ -35,6 +35,11 @@ try{
 
   // Draw two crossing roads.
   await act('tool: Draw Road',()=>b.click('[data-design-tool-button="road"]'));
+  await b.waitFor(async()=>!(await b.count('[data-design-start]')),'drawing chooser closed before zoom');
+  const drawingView=await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`);
+  // Include the camera gesture needed to draw complete approaches at this viewport.
+  await act('zoom out for full bridge approaches',()=>b.send('Input.dispatchMouseEvent',{type:'mouseWheel',x:canvas.x,y:canvas.y,deltaY:500,deltaX:0}));await sleep(250);
+  await b.waitFor(async()=>(await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`))!==drawingView,'camera zoom applied');
   await act('click road start',()=>b.clickAt(at(-330,0)));
   await act('double-click road end',()=>b.clickAt(at(330,0),2));
   await b.waitFor(async()=>await b.count('[data-design-road]')===1,'first road');
@@ -42,10 +47,11 @@ try{
   await act('click road start',()=>b.clickAt(at(0,-250)));
   await act('double-click road end',()=>b.clickAt(at(0,250),2));
   await b.waitFor(async()=>await b.count('[data-design-road]')===2,'second road');
+  diag.approaches=await b.evalValue(`JSON.parse(localStorage.getItem('thai-street-road-first-v1')).scenarios[0].project.roads.map(r=>({name:r.name,length:r.points.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-r.points[i].x,p.y-r.points[i].y),0)}))`);
   // The crossing becomes a junction automatically and says so, with Undo and grade separation at hand.
   await b.waitFor(()=>b.count('[data-network-junction-hit]'),'junction created automatically');
   assert.equal(await b.count('[data-design-candidate]'),0,'no pending crossing');
-  assert.equal(actions.length,6,'two roads and a junction in 6 actions');
+  assert.equal(actions.length,7,'two roads and a junction: 6 drawing actions plus 1 camera gesture');
   assert.match(await b.text('[data-design-auto-junction]'),/สร้างทางแยกให้แล้ว 1 แห่ง/);
   await b.click('[data-design-toast-action="grade-separated"]');
   await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===0,'turned into a grade separation');
@@ -59,6 +65,7 @@ try{
     await b.waitFor(()=>b.count('[data-design-crossing-relation="unresolved"]'),'same level: which road is over is asked');
     const r2=await b.evalValue(`document.querySelectorAll('[data-design-over]')[1].dataset.designOver`);
     await b.click(`[data-design-over="${r2}"]`);
+    await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-design-crossing-relation="over"]')&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'upper road over the lower one, deck drawn, no junction');
     assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./,'rise = clearance + structure depth (starting values)');
     await b.screenshot('artifacts/design-browser-grade-separation.png');
@@ -70,6 +77,7 @@ try{
     // Underpass: the other road dips into a trough and a tunnel under the crossing road.
     const r1=await b.evalValue(`[...document.querySelectorAll('[data-design-under]')].map(x=>x.dataset.designUnder).find(id=>id!==${JSON.stringify(r2)})`);
     await b.click(`[data-design-under="${r1}"]`);
+    await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-network-crossing-tunnel]')===1&&await b.count('[data-network-structure-piece="trough"]')>0&&await b.count('[data-network-junction-hit]')===0,'tunnel and trough drawn, still no junction');
     assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./);
     await b.screenshot('artifacts/design-browser-underpass.png');
@@ -87,6 +95,7 @@ try{
     await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
     await openFold('junction-grade');
     await b.click('[data-design-junction-over]');
+    await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'junction → bridge in one step');
     await b.click('[data-design-undo]');
     await b.waitFor(()=>b.count('[data-network-junction-hit]'),'one undo brings the junction back');
@@ -95,6 +104,7 @@ try{
     await b.click('[data-design-road] path');await b.waitFor(()=>b.count('[data-design-road-crossings]'),'road panel lists its crossings');
     await b.screenshot('artifacts/design-browser-road-crossings.png');
     await b.click('[data-design-road-over]');
+    await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'road raised over from its own panel');
     await b.click('[data-design-undo]');await b.waitFor(()=>b.count('[data-network-junction-hit]'),'undo');
     await b.key('Escape');
@@ -350,7 +360,8 @@ try{
   const move=(p,modifiers=0)=>b.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:p.x,y:p.y,modifiers});
   // Let the plan finish fitting after the reload before picking a road by position.
   await sleep(500);
-  await b.clickAt(at(-250,0));
+  const restoredRoad=await b.evalValue(`(()=>{const group=[...document.querySelectorAll('[data-design-road]')].find(g=>g.dataset.designRoad===${JSON.stringify(R1)}),line=group.querySelector('path'),p=line.getPointAtLength(line.getTotalLength()*.25).matrixTransform(line.getScreenCTM());return{x:p.x,y:p.y};})()`);
+  await b.clickAt(restoredRoad);
   const endPt=await b.waitFor(()=>b.rect(`[data-design-road-point="${R1}:1"]`),'road 1 end handle');
   const near={x:endPt.x+4,y:endPt.y+4},up={x:endPt.x+1,y:endPt.y-160};
   const aidStart=actions.length;

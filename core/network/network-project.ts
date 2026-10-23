@@ -1,3 +1,4 @@
+import {profileError,verticalSlice,type Profile} from '../common/vertical-profile';
 import {resolveAlignment,type AlignmentPoint} from '../common/resolved-alignment';
 import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,validSection,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../junction/model';
 import {normalizeArrowOverrides} from '../junction/arrow-layout';
@@ -49,6 +50,8 @@ export type RoadLink={
   roadside?:{trees:boolean;lights:boolean};
   /** Vertical points along the link, link-local stations (Phase 4A). Linear between points; absent = level 0. */
   levels?:{station:number;z:number}[];
+  /** Exact vertical profile slice; level samples are drawing subdivision only. */
+  verticalAlignment?:{profile:Profile;from:number;to:number};
   /** A ramp (one-way, may diverge from / merge into the side of another road): drawn under other roads at its level. */
   ramp?:true;
   /** Mid-block median openings, link-local stations (start from the link's start). Optional; absent in older files. */
@@ -810,7 +813,8 @@ export function validateNetworkProject(project:NetworkProject){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
     if(l.ramp!==undefined&&l.ramp!==true)return`${l.name}: ชนิดทางลาดไม่ถูกต้อง`;
-    if(l.levels!==undefined&&(!Array.isArray(l.levels)||l.levels.length>66||!l.levels.every(q=>q&&Number.isFinite(q.station)&&q.station>=0&&Number.isFinite(q.z)&&Math.abs(q.z)<=200)))return`${l.name}: ระดับตามแนวถนนไม่ถูกต้อง`;
+    if(l.verticalAlignment!==undefined){const v=l.verticalAlignment;if(!v||profileError(v.profile)||!Array.isArray(v.profile)||!Number.isFinite(v.from)||!Number.isFinite(v.to)||v.from<0||v.to<=v.from)return 'ข้อมูลแนวดิ่งของช่วงถนนไม่ถูกต้อง';}
+    if(l.levels!==undefined&&(!Array.isArray(l.levels)||l.levels.length>(l.verticalAlignment?8192:66)||!l.levels.every(q=>q&&Number.isFinite(q.station)&&q.station>=0&&Number.isFinite(q.z)&&Math.abs(q.z)<=200)))return`${l.name}: ระดับตามแนวถนนไม่ถูกต้อง`;
     if(l.roadside!==undefined&&(!l.roadside||typeof l.roadside.trees!=='boolean'||typeof l.roadside.lights!=='boolean'))return`${l.name}: ต้นไม้และเสาไฟไม่ถูกต้อง`;
     if(l.medianOpenings!==undefined){
       const list=l.medianOpenings,total=linkLength(project,l);
@@ -920,6 +924,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       to:readLinkEnd(to,schemaVersion),
       via,
       ...(item.alignment!==undefined?{alignment:structuredClone(item.alignment) as RoadLink['alignment']}:{}),
+      ...(item.verticalAlignment!==undefined?{verticalAlignment:structuredClone(item.verticalAlignment) as RoadLink['verticalAlignment'],levels:structuredClone(item.levels) as RoadLink['levels']}:{}),
       sectionProfile,
       components
     };
@@ -948,6 +953,11 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
   const roadEnds:RoadEnd[]=schemaVersion>=5&&Array.isArray(source.roadEnds)?source.roadEnds.map(readRoadEnd):[];
   const project:NetworkProject={schemaVersion:5,title:String(source.title??'Thai Street Network Concept'),junctions,links,parallelCorridors,roadEnds};
   const error=validateNetworkProject(project);if(error)throw Error(error);
+  for(const link of project.links)if(link.verticalAlignment){
+    const v=link.verticalAlignment,levels=verticalSlice(v.profile,v.from,v.to);
+    if(levels.length>8192)throw Error('รายละเอียดแนวดิ่งมากเกินขอบเขตข้อมูลที่รองรับ');
+    link.levels=levels;
+  }
   return project;
 }
 export function restoreNetworkProject(raw:string|null):NetworkProject{

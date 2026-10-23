@@ -3,17 +3,17 @@
 import {validateNetworkProject} from '../network/network-project';
 import {profileError} from './elevation';
 import {levelCriteriaError} from './level-criteria';
-import {compileRoadNetwork,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
+import {compileRoadNetwork,stations,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
-export const ROAD_FIRST_SCHEMA_VERSION=2;
-export type RoadFirstProject={kind:'road-first';schemaVersion:1|2;title:string;roads:Road[];decisions:Decision[];options:CompileOptions};
+export const ROAD_FIRST_SCHEMA_VERSION=3;
+export type RoadFirstProject={kind:'road-first';schemaVersion:1|2|3;title:string;roads:Road[];decisions:Decision[];options:CompileOptions};
 
 const finite=(v:unknown,lo=-1e7,hi=1e7)=>typeof v==='number'&&Number.isFinite(v)&&v>=lo&&v<=hi;
 const lanes=(v:unknown)=>Number.isInteger(v)&&(v as number)>=0&&(v as number)<=4;
 
 /** Structural check of the authored model; the compiled network is checked by the engine. */
 export function validateRoadFirstProject(p:RoadFirstProject):string|null{
-  if(!p||p.kind!=='road-first'||(p.schemaVersion!==1&&p.schemaVersion!==ROAD_FIRST_SCHEMA_VERSION))return 'ไม่ใช่ไฟล์โครงการแบบวาดถนน';
+  if(!p||p.kind!=='road-first'||![1,2,ROAD_FIRST_SCHEMA_VERSION].includes(p.schemaVersion))return 'ไม่ใช่ไฟล์โครงการแบบวาดถนน';
   if(typeof p.title!=='string'||p.title.length>100)return 'ชื่อโครงการไม่ถูกต้อง';
   if(!Array.isArray(p.roads)||!Array.isArray(p.decisions)||!p.options||typeof p.options!=='object')return 'ข้อมูลถนนหรือการยืนยันทางแยกไม่ครบ';
   const le=levelCriteriaError(p.options.levels);if(le)return le;
@@ -22,7 +22,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(!r||typeof r.id!=='string'||!r.id||ids.has(r.id))return 'รหัสถนนซ้ำหรือว่าง';ids.add(r.id);
     if(typeof r.name!=='string'||r.name.length>80)return `ชื่อถนน ${r.id} ไม่ถูกต้อง`;
     if(!Array.isArray(r.points)||r.points.length<2||r.points.length>200||!r.points.every(q=>finite(q?.x)&&finite(q?.y)&&(q.radius===undefined||finite(q.radius,0,r.alignment==='arc'?1e7:200))))return `แนวถนน ${r.name} ไม่ถูกต้อง`;
-    if(r.alignment!==undefined&&(r.alignment!=='arc'||p.schemaVersion!==2))return `ระยะตามแนวถนน ${r.name} ไม่ถูกต้อง`;
+    if(r.alignment!==undefined&&(r.alignment!=='arc'||p.schemaVersion<2))return `ระยะตามแนวถนน ${r.name} ไม่ถูกต้อง`;
     const s=r.section;
     if(!s||!lanes(s.forwardLanes)||!lanes(s.backwardLanes)||s.forwardLanes+s.backwardLanes<1||!finite(s.laneWidth,2.5,4.5)||!finite(s.median,0,12)||!finite(s.walk,0,8))return `หน้าตัดถนน ${r.name} ไม่ถูกต้อง`;
     if(r.links!==undefined&&!Array.isArray(r.links))return `ช่วงถนนของ ${r.name} ไม่ถูกต้อง`;
@@ -32,14 +32,18 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
       if(r.role!=='ramp'||!r.anchors||typeof r.anchors!=='object'||!ok(r.anchors.start)||!ok(r.anchors.end))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;
     }
     const pe=profileError(r.profile);if(pe)return `แนวดิ่งของ ${r.name}: ${pe}`;
+    if(p.schemaVersion<3&&r.profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))return 'ข้อมูลโค้งดิ่งต้องบันทึกด้วยรูปแบบโครงการที่รองรับ';
+    if(r.profile?.some(q=>(q.curveLength??0)>0&&q.station+q.curveLength!/2>(stations(r.points,r.alignment).at(-1)??0)))return `${r.name}: โค้งดิ่งเลยปลายถนน — ลดความยาวหรือปรับจุดระดับ`;
+    if(r.profile?.some(q=>(q.curveLength??0)>0)&&r.alignment!=='arc'&&r.points.some(q=>(q.radius??0)>0))return `${r.name}: แปลงระยะตามแนวโค้งก่อนเพิ่มโค้งดิ่ง เพื่อให้รูปตัดและภาพถนนใช้ระยะเดียวกัน`;
     if(r.origin!==undefined&&(!r.origin||r.origin.template!=='diamond'||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }
   for(const r of p.roads)for(const a of [r.anchors?.start,r.anchors?.end])if(a&&!ids.has(a.roadId))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;
-  const candidates=new Set<string>();
+  const candidates=new Set<string>(),owners=new Set<string>();
   for(const d of p.decisions){
     if(!d||typeof d.candidateId!=='string'||candidates.has(d.candidateId))return 'การยืนยันจุดตัดซ้ำหรือว่าง';candidates.add(d.candidateId);
+    if(d.profileOwner!==undefined){if(p.schemaVersion<3||typeof d.profileOwner!=='string'||!d.profileOwner||d.profileOwner.length>160||owners.has(d.profileOwner))return 'เจ้าของแนวดิ่งของจุดตัดซ้ำหรือไม่ถูกต้อง';owners.add(d.profileOwner);}
     if(!['junction','grade-separated','ignore'].includes(d.decision))return 'ประเภทการยืนยันจุดตัดไม่ถูกต้อง';
     if(d.over!==undefined&&(typeof d.over!=='string'||!ids.has(d.over)))return 'ถนนที่อยู่บนของทางต่างระดับไม่ถูกต้อง';
     if(d.treatments!==undefined&&(typeof d.treatments!=='object'||d.treatments===null))return 'การตั้งค่าทางแยกไม่ถูกต้อง';

@@ -43,7 +43,12 @@ export function previewAlignmentUpgrade(source:RoadFirstProject):AlignmentUpgrad
     }
     if(r.alignment!=='arc'){
       const was=old.get(r.id)!,map=stationMap(was,r);
-      r.profile=r.profile?.map(q=>({...q,station:map(q.station)}));
+      r.profile=r.profile?.map(q=>{
+        if(!q.curveLength)return{...q,station:map(q.station)};
+        const center=map(q.station),a=map(q.station-q.curveLength/2),b=map(q.station+q.curveLength/2);
+        if(Math.abs(center-(a+b)/2)>.001)throw Error(`${r.name}: จับคู่ช่วงโค้งดิ่งที่ระยะ ${q.station} ม. แบบสมมาตรไม่ได้ — แก้แนวดิ่งก่อนแปลง`);
+        return{...q,station:center,curveLength:b-a};
+      });
       r.openings=r.openings?.map(o=>({...o,station:map(o.station),length:map(o.station+o.length)-map(o.station)}));
       // Do not introduce empty optional fields into unchanged records.
       if(!was.profile)delete r.profile;if(!was.openings)delete r.openings;
@@ -57,7 +62,7 @@ export function previewAlignmentUpgrade(source:RoadFirstProject):AlignmentUpgrad
     visiting.delete(r.id);done.add(r.id);
   };
   try{for(const r of p.roads)prepare(r);}catch(e){errors.push(e instanceof Error?e.message:'แปลงระยะไม่ได้');return{project:p,changes,errors};}
-  p.schemaVersion=2;
+  if(p.schemaVersion<2)p.schemaVersion=2;
   const fresh=detectCandidates(p.roads),used=new Set<string>();
   p.decisions=p.decisions.map((d,i)=>{
     const was=oldCandidates.find(c=>c.id===d.candidateId),ids=was?.roads.map(r=>r.roadId)??d.roads;

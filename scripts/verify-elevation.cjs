@@ -7,10 +7,10 @@ const c=T('core/road-first/commands.cjs'),rp=T('core/road-first/project.cjs'),el
 const sec={forwardLanes:2,backwardLanes:2,laneWidth:3.25,median:3,walk:2};
 // Profile basics.
 assert.equal(el.levelAt(undefined,50),0);assert.equal(el.levelAt([{station:0,z:0},{station:100,z:10}],50),5);assert.equal(el.levelAt([{station:10,z:3}],0),3);
-{const near=el.riseProfile(undefined,40,0,30,6,.04,500);assert.equal(el.profileError(near),null,'rise near the road start stays valid');assert.equal(near[0].station,0);assert.ok(near[0].z>0&&near[0].z<6,'starts part-way up');assert.equal(el.levelAt(near,40),6);}
+{assert.throws(()=>el.riseProfile(undefined,40,0,30,6,.04,500),/ช่วงถนนไม่พอ/,'partial rise at a road end is refused');const full=el.riseProfile(undefined,250,0,30,6,.04,500);assert.equal(el.profileError(full),null);assert.equal(el.levelAt(full,250),6);}
 assert.match(el.profileError([{station:5,z:0},{station:5,z:1}]),/ระยะเดียวกัน/);assert.equal(el.profileError(undefined),null);
 
-let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'R1',name:'ถนนล่าง',points:[{x:-300,y:0},{x:300,y:0}],section:sec}]});
+let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'R1',name:'ถนนล่าง',points:[{x:-500,y:0},{x:500,y:0}],section:sec}]});
 const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd.type+' → '+x.result.error);e=c.endGesture(x.editor);return x.result;};
 const comp=()=>rp.compileRoadFirstProject(e.project);
 // 1. Crossing in plan at different levels: no junction; grade-separated with the higher road over.
@@ -46,7 +46,7 @@ let f=c.endGesture(c.runCommand(flat,{type:'road.add',road:{id:'tmp',name:'t',po
 const cid=f.project.decisions[0].candidateId;f=c.runCommand(f,{type:'crossing.decide',candidateId:cid,decision:'grade-separated'}).editor;
 assert.equal(rp.compileRoadFirstProject(f.project).crossings[0].relation,'unresolved','same level → unresolved');
 // Junction with roads at different levels is reported.
-const j=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'A',points:[{x:-100,y:0},{x:100,y:0}],section:sec},{id:'B',name:'B',points:[{x:0,y:-100},{x:0,y:100}],section:sec}]});
+const j=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'A',points:[{x:-500,y:0},{x:500,y:0}],section:sec},{id:'B',name:'B',points:[{x:0,y:-500},{x:0,y:500}],section:sec}]});
 let g=c.endGesture(c.runCommand(j,{type:'road.add',road:{id:'tmp',name:'t',points:[{x:900,y:900},{x:950,y:900}],section:sec}}).editor);
 // Raising one road of a two-road crossing junction makes it a grade separation (owner report 2026-10-22: a junction
 // could not become a bridge); one undo brings the junction back.

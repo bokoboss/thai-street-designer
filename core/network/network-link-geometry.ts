@@ -1,3 +1,4 @@
+import {levelAt,verticalSlice} from '../common/vertical-profile';
 import {
   linkEndSection,linkLinearTransitionPossible,linkPoints,
   type LinkDirection,type LinkStationWidthComponent,type NetworkProject,type RoadLink,type WorldPoint
@@ -15,6 +16,7 @@ import {
 
 /** Level along a link: linear between its level points, constant outside, 0 without them. */
 export function linkLevelAt(link:RoadLink,s:number):number{
+  if(link.verticalAlignment)return levelAt(link.verticalAlignment.profile,s+link.verticalAlignment.from);
   const p=link.levels;if(!p?.length)return 0;
   if(s<=p[0].station)return p[0].z;
   for(let i=1;i<p.length;i++)if(s<=p[i].station){const a=p[i-1],b=p[i],t=b.station>a.station?(s-a.station)/(b.station-a.station):1;return a.z+(b.z-a.z)*t;}
@@ -176,7 +178,7 @@ export function resolveLinkSectionGeometry(project:NetworkProject,link:RoadLink)
     backwardLaneSet=resolveLinkLaneLifecycles(project,link,'backward',total,linear),
     widthProfiles=linear?link.components.filter((component):component is LinkStationWidthComponent=>component.kind==='width').map(component=>widthComponentWindow(component,total)):[],
     // Level points (Phase 4A) are sampled too, so a rise between two vertices is not lost.
-    levelStations=(link.levels??[]).map(q=>q.station).filter(v=>v>0&&v<total),sampled=linear||levelStations.length>0,
+    levelStations=(link.verticalAlignment?verticalSlice(link.verticalAlignment.profile,link.verticalAlignment.from,link.verticalAlignment.to):link.levels??[]).map(q=>q.station).filter(v=>v>0&&v<total),sampled=linear||levelStations.length>0,
     stationList=sampled?mergeStations(total,[levelStations,
       baseStations,
       ...forwardLaneSet.lifecycles.map(lifecycle=>profileSampleStations(lifecycle.profile)),

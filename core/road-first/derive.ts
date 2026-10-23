@@ -51,7 +51,7 @@ export type JunctionTreatments={slips?:LegSlip[];corner?:number;cornerRadii?:Par
 /** at: last known position of the crossing, used to re-attach the decision after road edits. */
 /** excluded: roads that reach the junction point but were deliberately left out of it (not reported, never auto-joined). */
 /** over: on a grade-separated crossing, the road that passes over (absent = from the levels). */
-export type Decision={candidateId:string;decision:'junction'|'grade-separated'|'ignore';over?:string;name?:string;roads?:string[];excluded?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
+export type Decision={profileOwner?:string;candidateId:string;decision:'junction'|'grade-separated'|'ignore';over?:string;name?:string;roads?:string[];excluded?:string[];at?:WorldPoint;treatments?:JunctionTreatments};
 /** levels: the project's level criteria (clearance, structure depth, grades); absent = tool starting values. */
 export type CompileOptions={approachLength?:number;tolerance?:number;levels?:Partial<LevelCriteria>};
 export type LegBinding={junctionId:string;armId:number;roadId:string;side:'ahead'|'behind'};
@@ -347,6 +347,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       for(const o of inside)placed.add(o.id);
       if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
       const levels=profileSlice(road.profile,from.station,to.station);if(levels)built.levels=levels;
+      if(road.profile?.some(q=>(q.curveLength??0)>0))built.verticalAlignment={profile:structuredClone(road.profile),from:from.station,to:to.station};
       if(road.role==='ramp')built.ramp=true;
       linkRanges.push({id:built.id,roadId:road.id,from:from.station,to:to.station});
       links.push(built);

@@ -5,7 +5,7 @@ Owner approval: 2026-10-22. Review-plan PR-01 and PR-02 must land together.
 
 ## Compatibility decision
 
-Opening an existing RoadFirst schema-1 project keeps its original compile behaviour. It is not automatically converted. Network imports retain the same legacy path. New projects use schema 2 and new roads carry `alignment: 'arc'`. A schema-2 project can retain unmigrated roads; absence of the flag always means the original chord-station convention.
+Opening an existing RoadFirst schema-1 project keeps its original compile behaviour. It is not automatically converted. Network imports retain the same legacy path. New roads carry `alignment: 'arc'`, introduced with schema 2. The later schema 3 adds optional vertical curves and point ownership; it keeps this station convention. Projects can retain unmigrated roads; absence of the alignment flag always means the original chord-station convention.
 
 The project inspector offers **ตรวจการแปลงแนวโค้ง**. Preview shows before/after road reference lines and crossing locations, length changes, PVI/opening counts, dormant decisions, newly found crossings and blockers. Confirm applies to the active scenario only, through a single undoable command. Cancel changes nothing. Save/reopen preserves the chosen convention. Diamond origin version 1 and its parameters remain unchanged; no template generator is called.
 

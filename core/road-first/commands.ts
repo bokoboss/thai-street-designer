@@ -2,6 +2,7 @@
 // Every edit — a drag, a typed number, a menu action or future automation — is a plain JSON command.
 // executeCommand() applies it, keeps junction decisions attached to their crossing, checks the result
 // with the engine and returns a readable Thai label for the undo history. A rejected edit changes nothing.
+import {authoredProfile,resolveVerticalProfile} from './elevation';
 import {previewAlignmentUpgrade} from './alignment-upgrade';
 import {designError} from '../junction/design-validation';
 import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
@@ -38,7 +39,7 @@ export type RoadFirstCommand=
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
-  |{type:'crossing.setOver';candidateId:string;over:string;profiles:Record<string,Profile|null>;label:string}
+  |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string}
   /** Unhook a ramp end from the road it diverges from or merges into; the end point stays where it is. */
   |{type:'ramp.detach';roadId:string;end:RampEnd}
   |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
@@ -145,7 +146,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     }
     case 'road.add':{
       if(road(cmd.road.id))return fail(`มีถนนรหัส ${cmd.road.id} อยู่แล้ว`,`เพิ่มถนน ${cmd.road.name}`);
-      p.roads.push({...structuredClone(cmd.road),...(p.schemaVersion===2?{alignment:'arc' as const}:{})});label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;
+      p.roads.push({...structuredClone(cmd.road),...(p.schemaVersion>=2?{alignment:'arc' as const}:{})});label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;
     }
     case 'road.remove':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -163,7 +164,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       if(r.profile||cmd.levels?.some(z=>Math.abs(z)>1e-9)){
         const s=stations(r.points,r.alignment),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
         // Without a profile the old road lies at level 0; its far end keeps that level.
-        const kept=(r.profile??[{station:0,z:0},{station:oldLength,z:0}]).map(q=>({station:shift(q.station),z:q.z}));
+        const kept=(r.profile??[{station:0,z:0},{station:oldLength,z:0}]).map(q=>({...q,station:shift(q.station)}));
         const fresh=cmd.points.map((_,k)=>({station:Math.round(at(k)*1000)/1000,z:cmd.levels?.[k]??levelAt(r.profile,cmd.atStart?0:oldLength)}));
         r.profile=[...kept,...fresh].sort((a,b)=>a.station-b.station).filter((q,i,all)=>i===0||q.station-all[i-1].station>=.01);
       }
@@ -209,16 +210,25 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     }
     case 'road.setProfile':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
-      if(cmd.profile?.length)r.profile=structuredClone(cmd.profile).sort((a,b)=>a.station-b.station);else delete r.profile;
+      if(cmd.profile?.length)r.profile=authoredProfile(structuredClone(cmd.profile),r.profile).sort((a,b)=>a.station-b.station);else delete r.profile;
+      if(r.profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))p.schemaVersion=3;
       label=`แก้แนวดิ่ง ${r.name}`;group=`road.profile:${r.id}`;roadsChanged=true;break;
     }
     case 'crossing.setOver':{
       const c=detectCandidates(p.roads).find(x=>x.id===cmd.candidateId);if(!c)return fail('ไม่พบจุดตัดที่เลือก');
       if(!c.roads.some(x=>x.roadId===cmd.over))return fail('ถนนนี้ไม่ได้อยู่ที่จุดตัดนี้');
-      for(const [id,profile] of Object.entries(cmd.profiles)){const r=road(id);if(!r)return fail('ไม่พบถนนที่เลือก');if(profile?.length)r.profile=structuredClone(profile);else delete r.profile;}
-      const d=decision(c.id),next:Decision={...d,candidateId:c.id,decision:'grade-separated',over:cmd.over,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
+      const owner=cmd.owner??decision(c.id)?.profileOwner??cmd.candidateId;
+      if(decision(c.id)?.profileOwner&&decision(c.id)!.profileOwner!==owner)return fail('เจ้าของแนวดิ่งเปลี่ยน — ตรวจผลใหม่ก่อนยืนยัน',cmd.label);
+      for(const [id,profile] of Object.entries(cmd.profiles)){
+        const r=road(id);if(!r)return fail('ไม่พบถนนที่เลือก');
+        const protectedPoint=r.profile?.find(q=>q.generatedBy!==owner&&!profile?.some(p=>p.station===q.station&&p.z===q.z&&(p.curveLength??0)===(q.curveLength??0)&&p.generatedBy===q.generatedBy));
+        if(protectedPoint)return fail(`${r.name}: ต้องเก็บจุดระดับเดิมที่ระยะ ${protectedPoint.station} ม.`,cmd.label);
+        if(profile?.length)r.profile=structuredClone(profile);else delete r.profile;
+        if(profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))p.schemaVersion=3;
+      }
+      const d=decision(c.id),next:Decision={...d,profileOwner:owner,candidateId:c.id,decision:'grade-separated',over:cmd.over,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
       delete next.treatments;delete next.name;
-      p.decisions=[...p.decisions.filter(x=>x!==d),next];label=cmd.label;break;
+      p.schemaVersion=3;p.decisions=[...p.decisions.filter(x=>x!==d),next];label=cmd.label;break;
     }
     case 'road.setRoadside':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -347,7 +357,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const [a,b]=c.roads,gap=z(p.roads,a)-z(p.roads,b),was=z(project.roads,a)-z(project.roads,b);
       if(Math.abs(gap)<=LEVEL_TOLERANCE||Math.abs(was)>LEVEL_TOLERANCE)return d;
       separatedJunctions.push(d.name??d.candidateId);separatedIds.push(d.candidateId);
-      return{candidateId:d.candidateId,decision:'grade-separated',over:gap>0?a.roadId:b.roadId,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}};
+      return{...(d.profileOwner?{profileOwner:d.profileOwner}:{}),candidateId:d.candidateId,decision:'grade-separated',over:gap>0?a.roadId:b.roadId,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}};
     });
     if(separatedJunctions.length)label+=` · ${separatedJunctions.join(', ')} เป็นทางต่างระดับ`;
   }
@@ -417,6 +427,16 @@ function engineError(p:RoadFirstProject):string|null{
   const compiled=compileRoadFirstProject(p),engine=validateNetworkProject(compiled.project);
   if(engine)return`ทำไม่ได้ · ${engine}`;
   if(compiled.shortfalls.some(s=>p.roads.some(r=>r.id===s.roadId&&r.alignment==='arc'&&r.points.some(q=>(q.radius??0)>=.25))))return 'ช่วงตรงสำหรับปากทางแยกไม่พอ — ย้ายจุดตัดออกจากโค้งหรือปรับแนวถนน';
+  const verticals=new Map(p.roads.filter(r=>r.profile?.some(q=>(q.curveLength??0)>0)).map(r=>[r.id,resolveVerticalProfile(r.profile)]));
+  const candidates=verticals.size?detectCandidates(p.roads):[];
+  for(const leg of compiled.legs){
+    const vertical=verticals.get(leg.roadId);if(!vertical)continue;
+    const road=p.roads.find(r=>r.id===leg.roadId)!,j=compiled.project.junctions.find(j=>j.id===leg.junctionId)!;
+    const ref=candidates.find(c=>c.id===compiled.sources.junctions[j.id])?.roads.find(r=>r.roadId===road.id);
+    if(!ref)continue;
+    const cut=ref.station+(leg.side==='ahead'?1:-1)*j.design.arms[leg.armId].length;
+    if(vertical.curves.some(c=>c.start<Math.max(cut,ref.station)&&c.end>Math.min(cut,ref.station)&&(Math.abs(c.g0)>1e-8||Math.abs(c.g1)>1e-8)))return `${road.name}: โค้งดิ่งอยู่ในช่วงปากทางแยกที่ใช้ระดับคงที่ — ย้ายโค้งหรือปรับการเชื่อมต่อ`;
+  }
   for(const j of compiled.project.junctions){const e=designError(j.design);if(e)return`${j.name}: ${e}`;}
   return null;
 }
