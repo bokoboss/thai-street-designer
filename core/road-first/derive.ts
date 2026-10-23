@@ -41,7 +41,7 @@ export type Road={alignment?:'arc';id:string;name:string;role?:RoadRole;points:R
   origin?:RoadOrigin;
   /** Ramp ends attached to the side of another road (diverge at the start, merge at the end). */
   anchors?:{start?:RampAnchor;end?:RampAnchor}};
-export type RoadOrigin={template:'diamond';version:1;group:string;params:Record<string,unknown>};
+export type RoadOrigin={template:'diamond'|'uturn-bridge';version:1;group:string;params:Record<string,unknown>};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
 export type {LegKey} from './leg-binding';

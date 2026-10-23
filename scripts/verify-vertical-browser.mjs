@@ -52,5 +52,15 @@ try{
  await selectA();await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-design-notice="error"]'),'authored point conflict');assert.deepEqual(await current(),authored);
  const short=structuredClone(flat);short.roads[0].points=[{x:-30,y:0},{x:30,y:0}];await seed(short);
  await b.click(`[data-design-candidate="${cid}"]`);await b.click('[data-design-over="A"]');await b.waitFor(async()=>/ช่วงถนนไม่พอ/.test(await b.text('[data-design-notice]')),'short approach refused');assert.deepEqual(await current(),short);
- assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: composer parameters with live ghost / clearance and red refusal, structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
+ // U-turn bridge from the road panel: ghost, then one step places a ramp over the road; one undo removes it.
+ const single=structuredClone(flat);single.roads=[single.roads[0]];single.decisions=[];await seed(single);
+ await selectA();await b.click('[data-design-fold-toggle="uturn-bridge"]');
+ await b.waitFor(async()=>await b.count('[data-design-uturn-ok]')&&await b.count('[data-design-ghost="ok"]'),'U-turn bridge ghost');
+ assert.match(await b.text('[data-design-uturn-ok]'),/ช่องลอดที่จะได้ 5\.00 ม\./);await b.screenshot('artifacts/uturn-bridge-preview.png');
+ await b.click('[data-design-action="place-uturn-bridge"]');
+ await b.waitFor(async()=>{const p=await current();return p.roads.length===2&&p.roads[1].role==='ramp'&&p.roads[1].anchors?.start&&p.roads[1].anchors?.end&&p.decisions[0]?.decision==='grade-separated';},'placed: ramp attached both ends, over the road');
+ await b.waitFor(()=>b.count('[data-design-template="uturn-bridge"]'),'new ramp selected with its set');
+ await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await b.screenshot('artifacts/uturn-bridge-3d.png');await b.click('[data-design-view="2d"]');
+ await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads.length===1,'one undo removes it');
+ assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: U-turn bridge ghost / place / 3D / undo, composer parameters with live ghost / clearance and red refusal, structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
 }catch(error){await b.screenshot('artifacts/vertical-browser-failure.png');throw error;}finally{b.close();}

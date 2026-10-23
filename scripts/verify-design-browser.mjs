@@ -70,6 +70,10 @@ try{
     assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับที่แนวกึ่งกลาง 6\.5 ม\./,'rise = clearance + structure depth (starting values)');
     assert.equal(await b.evalValue(`document.querySelector('[data-design-clearance]').dataset.designClearance`),'5','measured clearance under the deck = the set clearance');
     assert.match(await b.text('[data-design-clearance]'),/ช่องลอดต่ำสุดที่วัดได้ 5\.00 ม\. ใต้สะพาน .* \(TO_VERIFY\)/);
+    // U-turn opening under the bridge (both roads have a median here): one click, placed under the structure.
+    if(await b.count('[data-design-action="uturn-under"]')){await b.click('[data-design-action="uturn-under"]');
+      await b.waitFor(()=>b.evalValue(`document.querySelector('[data-design-action="uturn-under"]')?.disabled===true`),'U-turn under the bridge placed');
+      await b.click('[data-design-undo]');await b.waitFor(()=>b.evalValue(`document.querySelector('[data-design-action="uturn-under"]')?.disabled===false`),'undo');}
     await b.screenshot('artifacts/design-browser-grade-separation.png');
     await b.click('[data-design-view="3d"]');
     await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-raised]')?.dataset.networkSceneRaised??0`))>0,'3D shows the raised road');

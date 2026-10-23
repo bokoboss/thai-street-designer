@@ -21,6 +21,7 @@ import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {DiamondPanel,TemplatePiecesBlock} from './diamond-panel';
+import {UturnBridgePanel,UturnUnderAction} from './uturn-panel';
 import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
 /** Kind of road the next drawing makes. */
 export type NewRole='road'|'access'|'ramp';
@@ -236,6 +237,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
     {point!==undefined&&point<road.points.length&&<PointBlock road={road} index={point} run={run} onPoint={onPoint}/>}
     <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     <TemplatePiecesBlock project={project} roadId={road.id} run={run} onSelectRoad={id=>onSelect({kind:'road',id})}/>
+    <UturnBridgePanel key={road.id} project={project} road={road} run={run} onPlaced={id=>onSelect({kind:'road',id})}/>
     {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
@@ -279,6 +281,7 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
         <small className="design-block-title">ถนนไหนอยู่บน</small>
         <p className="design-meta">{x?.relation==='over'?`${name(x.over)} อยู่บน · ต่างระดับที่แนวกึ่งกลาง ${x.gap.toFixed(1)} ม.`:'ยังไม่กำหนด · ถนนสองสายอยู่ระดับเดียวกันที่จุดนี้'}</p>
         {x?.relation==='over'&&<ClearanceLine crossing={x} project={project}/>}
+        <UturnUnderAction project={project} compiled={compiled} candidateId={candidate.id} run={run} onMessage={onMessage}/>
         <div className="design-reference-tools" role="radiogroup" aria-label="ถนนไหนอยู่บน">
           {candidate.roads.map(r=><button key={r.roadId} role="radio" aria-checked={x?.over===r.roadId} className={x?.over===r.roadId&&x.relation==='over'?'active':''} data-design-over={r.roadId}
             onClick={()=>request({candidateId:candidate.id,roadId:r.roadId,kind:'over'})}>{name(r.roadId)} อยู่บน</button>)}

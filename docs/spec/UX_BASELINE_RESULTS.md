@@ -42,6 +42,15 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### U-turn structures (2026-10-23, scripted)
+
+Build: `feat/uturn-structures`, based on `55c6a62` (review-plan PR-07). Chromium headless, 1440 × 1000. No human timing measurement.
+
+| Task | Completed (Y/N) | Actions | Friction notes |
+| --- | --- | --- | --- |
+| U-turn bridge on a road | Y | 2 (open “สะพานกลับรถ” on the road panel → วางสะพานกลับรถ) | Ghost on the plan follows the solved arcs; footprint, clearance it gives and items to check shown before placing; the new ramp is selected with its set (remove in 1). One undo. Choosing the other traffic direction is 1 more click. |
+| U-turn under a bridge | Y | 1 (เพิ่มจุดกลับรถใต้สะพาน on the crossing panel) | Placed in the lower road's median, centred under the structure; moved / resized with the existing median-opening tools. |
+
 ### Flyover / underpass composer (2026-10-23, scripted)
 
 Build: `feat/grade-composer`, based on `2525fd7` (review-plan PR-06). Chromium headless, 1440 × 1000. No human timing measurement.
