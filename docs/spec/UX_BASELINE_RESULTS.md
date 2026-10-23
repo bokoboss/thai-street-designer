@@ -55,6 +55,7 @@ Build: `feat/select-hub`, based on `fecefb2` (review-plan PR-03). Chromium headl
 | Reverse a road | Y | 2 (right-click → กลับทิศการวาด) or 3 on the road panel | Traffic, junction settings, levels and openings stay on the ground. |
 | Straighten a road | Y | 2 (right-click → ทำแนวตรงทั้งเส้น); a range: 4 on the road panel | |
 | Connect two roads with a tangent curve | Y | 3 (select both, right-click → เชื่อมด้วยโค้งสัมผัส) | Largest radius that fits by default; typed radius on the panel. |
+| Draw on the extension of a road / parallel to a road | Y | 0 extra (hover the road, then move along the guide) | Badge names the guide and road; readout shows the distance to the reference road. |
 
 ### U-turn structures (2026-10-23, scripted)
 

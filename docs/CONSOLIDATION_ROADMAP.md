@@ -225,7 +225,7 @@ Source for 4B-2b and the editing hub: [road drawing UX research, 2026-10-22](res
 - Placement feedback: the main road it attaches to, the station and the level it inherits.
 - "Select the pieces of this template" after commit; pieces stay ordinary objects.
 
-**4B-4 — Select as the editing hub** (right after 4B-3) — first part done 2026-10-23 (box / Shift selection, move a selection, right-click zoom / split / join / delete; spec `docs/spec/SELECT_HUB.md`); reverse, straighten and tangent curve done 2026-10-23 (second part); still open: one-shot guides.
+**4B-4 — Select as the editing hub** (right after 4B-3) — first part done 2026-10-23 (box / Shift selection, move a selection, right-click zoom / split / join / delete; spec `docs/spec/SELECT_HUB.md`); reverse, straighten and tangent curve done 2026-10-23 (second part, PR #71); one-shot guides (third part) complete 4B-4.
 - Box select and `Shift`+click add / remove; move a selection as one gesture (junctions and ramps re-bound after).
 - Right-click menu in Select: join, split here, reverse, straighten, zoom, delete.
 - Straighten selected points; tangent curve between two straights ("เชื่อมด้วยโค้งสัมผัส").
