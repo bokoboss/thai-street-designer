@@ -57,6 +57,21 @@ try{
   await b.clickAt(await screen(-150,200));await b.click('[data-design-multi-select]');
   await b.clickAt(await screen(-100,0));await b.clickAt(await screen(-100,120));await b.waitFor(()=>b.count('[data-design-multi-count="2"]'),'taps add with multi-select on');
   await b.clickAt(await screen(-100,0));await b.waitFor(async()=>await sel()==='road','tap again removes');
+  // Reverse from the menu; straighten from the road panel.
+  await b.click('[data-design-multi-select]');
+  await b.clickAt(await screen(-100,0));await rightClick(await screen(-100,0));await b.click('[data-design-menu="reverse"]');
+  await b.waitFor(async()=>(await current()).roads[0].points[0].x===200,'reversed');
+  await b.click('[data-design-undo]');
+  // Tangent curve between two roads whose straights meet: Ctrl+A, then the menu.
+  const corner={...fixture,roads:[{...fixture.roads[0],points:[{x:-200,y:0},{x:-50,y:0}]},{...fixture.roads[1],points:[{x:0,y:50},{x:0,y:200}]}]};
+  await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(corner))})`);await b.send('Page.reload');
+  await b.waitFor(()=>b.count('[data-design-ready="true"]'),'ready');
+  await b.clickAt(await screen(-150,150));await b.key('a','KeyA',2);await b.waitFor(()=>b.count('[data-design-tangent]'),'tangent offered with its radius');
+  await rightClick(await screen(-100,0));await b.waitFor(()=>b.count('[data-design-menu="tangent"]'),'tangent in the menu');
+  await b.click('[data-design-menu="tangent"]');
+  await b.waitFor(async()=>{const p=await current();return p.roads.length===1&&p.roads[0].points.length===3&&p.roads[0].points[1].radius===90;},'joined with a tangent curve');
+  await b.screenshot('artifacts/select-tangent.png');
+  await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads.length===2,'one undo');
   assert.deepEqual(b.errors,[]);
-  console.log('PASS select browser: pan / empty drag never edit, box select, Shift+click, drag-move as one undo, move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button for touch');
+  console.log('PASS select browser: reverse from the menu, tangent curve between two roads, pan / empty drag never edit, box select, Shift+click, drag-move as one undo, move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button for touch');
 }catch(error){await b.screenshot('artifacts/select-browser-failure.png');throw error;}finally{b.close();}

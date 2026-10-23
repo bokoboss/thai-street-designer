@@ -4,15 +4,20 @@
 import {useEffect,useRef} from 'react';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {joinablePair} from '@/core/road-first/selection';
+import {tangentConnectPlan} from '@/core/road-first/tangent-connect';
 import type {WorldPoint} from '@/core/network/network-project';
 
 export type MenuAt={x:number;y:number;world:WorldPoint;roadId?:string};
-export type MenuAction='zoom'|'split'|'join'|'select-all'|'delete'|'clear';
+export type MenuAction='zoom'|'split'|'join'|'reverse'|'straighten'|'tangent'|'select-all'|'delete'|'clear';
 export function menuItems(project:RoadFirstProject,ids:string[],at?:MenuAt):{action:MenuAction;label:string;danger?:boolean}[]{
   const out:{action:MenuAction;label:string;danger?:boolean}[]=[];
   if(ids.length)out.push({action:'zoom',label:ids.length>1?`ซูมไปที่ถนนที่เลือก (${ids.length} สาย) · Z`:'ซูมไปที่ถนนนี้ · Z'});
   if(at?.roadId&&ids.length===1&&ids[0]===at.roadId)out.push({action:'split',label:'แยกถนนตรงนี้'});
   if(joinablePair(project.roads,ids))out.push({action:'join',label:'ต่อสองเส้นนี้เป็นถนนเดียว'});
+  if(ids.length===2){const t=tangentConnectPlan(project,ids[0],ids[1]);if(!('error' in t))out.push({action:'tangent',label:`เชื่อมด้วยโค้งสัมผัส (รัศมี ${t.radius} ม.)`});}
+  const one=ids.length===1?project.roads.find(r=>r.id===ids[0]):undefined;
+  if(one)out.push({action:'reverse',label:one.role==='ramp'?'กลับทิศเดินรถของทางลาด':'กลับทิศการวาด'});
+  if(one&&one.points.length>2)out.push({action:'straighten',label:'ทำแนวตรงทั้งเส้น'});
   if(project.roads.length>ids.length)out.push({action:'select-all',label:'เลือกถนนทั้งหมด · Ctrl+A'});
   if(ids.length)out.push({action:'clear',label:'ยกเลิกการเลือก · Esc'},{action:'delete',label:ids.length>1?`ลบถนนที่เลือก ${ids.length} สาย · Delete`:'ลบถนนนี้ · Delete',danger:true});
   return out;

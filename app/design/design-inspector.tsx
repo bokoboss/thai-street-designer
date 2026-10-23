@@ -137,6 +137,23 @@ function RoadOpeningBlock({road,compiled,run,onMessage}:{road:Road;compiled:Comp
 }
 
 /** The picked road point: curve radius (typed; the plan handle edits the same value), sharp corner, delete. */
+/** Drawing direction and straightening (also in the right-click menu). */
+function RoadShapeBlock({road,run}:{road:Road;run:Run}){
+  const last=road.points.length-1,[from,setFrom]=useState(0),[to,setTo]=useState(last);
+  const a=Math.min(from,last),b=Math.min(Math.max(to,0),last),ok=b-a>=2;
+  return <details className="design-block design-fold" data-design-fold="road-shape">
+    <summary data-design-fold-toggle="road-shape"><span className="design-block-title">แนวถนน</span><small>กลับทิศ · ทำแนวตรง</small></summary>
+    <div className="design-actions"><button data-design-action="road-reverse" onClick={()=>run({type:'road.reverse',roadId:road.id})}>{road.role==='ramp'?'กลับทิศเดินรถของทางลาด':'กลับทิศการวาด'}</button></div>
+    <p className="design-meta">{road.role==='ramp'?'ทางลาดเป็นทางเดียว: กลับทิศคือกลับทิศเดินรถ ถ้าปลายติดถนนอยู่จะกลับไม่ได้เพราะจะวิ่งสวนทิศ':'รถยังวิ่งตามเดิม จำนวนช่องสลับตามทิศที่วาด ทางแยก ระดับ และช่องเปิดอยู่ที่เดิม'}</p>
+    {last>=2&&<>
+      <div className="design-grade-fields">
+        <label className="design-field"><span>ทำแนวตรงจากจุดที่</span><select value={a} data-design-field="straighten-from" onChange={e=>setFrom(Number(e.target.value))}>{road.points.map((_,i)=><option key={i} value={i}>{i+1}</option>)}</select></label>
+        <label className="design-field"><span>ถึงจุดที่</span><select value={b} data-design-field="straighten-to" onChange={e=>setTo(Number(e.target.value))}>{road.points.map((_,i)=><option key={i} value={i}>{i+1}</option>)}</select></label>
+      </div>
+      <div className="design-actions"><button data-design-action="road-straighten" disabled={!ok} onClick={()=>run({type:'road.straighten',roadId:road.id,from:a,to:b})}>ทำแนวตรง (ลบจุดระหว่างกลาง {ok?b-a-1:0} จุด)</button></div>
+    </>}
+  </details>;
+}
 /** Split the road at this (sharp) point: the touch / keyboard way to "แยกถนนตรงนี้". */
 function SplitAtPoint({road,index,run,onPoint}:{road:Road;index:number;run:Run;onPoint:(point:number|undefined)=>void}){
   const {makeIds}=useContext(TemplateContext);
@@ -243,6 +260,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
   return <>
     <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
     {point!==undefined&&point<road.points.length&&<PointBlock road={road} index={point} run={run} onPoint={onPoint}/>}
+    <RoadShapeBlock road={road} run={run}/>
     <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     <TemplatePiecesBlock project={project} roadId={road.id} run={run} onSelectRoad={id=>onSelect({kind:'road',id})}/>
     <UturnBridgePanel key={road.id} project={project} road={road} run={run} onPlaced={id=>onSelect({kind:'road',id})}/>

@@ -1,7 +1,8 @@
 'use client';
 // Inspector for several selected roads: what is selected, moving them by typed distances (the touch / keyboard
 // equivalent of dragging), and the same actions as the right-click menu.
-import {useState} from 'react';
+import {useMemo,useState} from 'react';
+import {tangentConnectPlan} from '@/core/road-first/tangent-connect';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
 import {joinablePair} from '@/core/road-first/selection';
@@ -14,6 +15,9 @@ export function MultiRoadInspector({project,ids,run,onSelect,onAction}:{project:
   const roads=ids.map(id=>project.roads.find(r=>r.id===id)).filter((r):r is NonNullable<typeof r>=>!!r);
   const x=Number(dx),y=Number(dy),valid=Number.isFinite(x)&&Number.isFinite(y)&&(x!==0||y!==0)&&dx.trim()!==''&&dy.trim()!=='';
   const ramps=roads.filter(r=>r.role==='ramp').length;
+  const tangent=useMemo(()=>ids.length===2?tangentConnectPlan(project,ids[0],ids[1]):null,[project,ids]);
+  const [radiusText,setRadius]=useState<string|null>(null),radius=radiusText??(tangent&&!('error' in tangent)?String(tangent.radius):'');
+  const rv=Number(radius),tangentOk=!!tangent&&!('error' in tangent)&&Number.isFinite(rv)&&rv>0&&rv<=tangent.maxRadius;
   return <>
     <header className="design-inspector-head"><small>เลือกหลายชิ้น</small><b data-design-multi-count={roads.length}>ถนน {roads.length} สาย</b></header>
     <section className="design-block">
@@ -30,9 +34,15 @@ export function MultiRoadInspector({project,ids,run,onSelect,onAction}:{project:
         onClick={()=>{if(run({type:'roads.move',roadIds:ids,delta:{x,y}}).ok){setDx('0');setDy('0');}}}>ย้าย</button></div>
       <p className="design-meta">ทางแยกระหว่างถนนที่ย้ายไปด้วยกันคงการตั้งค่าไว้{ramps?' · ทางลาดที่ย้ายโดยไม่มีถนนหลักไปด้วย จะเลื่อนตามขอบถนนหลัก หรือหลุดออกถ้าห่างเกิน':''}</p>
     </section>
+    {tangent&&!('error' in tangent)&&<section className="design-block" data-design-tangent={tangent.maxRadius}>
+      <small className="design-block-title">เชื่อมด้วยโค้งสัมผัส</small>
+      <label className="design-field"><span>รัศมี (ม.) · สูงสุด {tangent.maxRadius}</span><input type="number" inputMode="decimal" step={1} value={radius} data-design-field="tangent-radius" onChange={e=>setRadius(e.target.value)}/></label>
+      <p className="design-meta">ยืดปลายถนนสองเส้นตามแนวตรงไปพบกัน รวมเป็นถนนเดียว และใส่โค้งที่จุดพบ · รัศมีเป็นค่าที่วาด ยังไม่ได้ตรวจกับความเร็วออกแบบ</p>
+    </section>}
     <div className="design-actions">
       <button data-design-action="multi-zoom" onClick={()=>onAction('zoom')}>ซูมไปที่ที่เลือก</button>
       {joinablePair(project.roads,ids)&&<button data-design-action="multi-join" onClick={()=>onAction('join')}>ต่อเป็นถนนเดียว</button>}
+      {tangent&&!('error' in tangent)&&<button data-design-action="multi-tangent" disabled={!tangentOk} onClick={()=>{const p=tangentConnectPlan(project,ids[0],ids[1],Number(radius));if(!('error' in p)&&run(p.cmd).ok)onSelect({kind:'road',id:ids[0]});}}>เชื่อมด้วยโค้งสัมผัส</button>}
       <button data-design-action="multi-clear" onClick={()=>onAction('clear')}>ยกเลิกการเลือก</button>
       <button className="danger" data-design-action="multi-delete" onClick={()=>{if(!armed){setArmed(true);return;}onAction('delete');}}>{armed?`กดอีกครั้งเพื่อลบ ${roads.length} สาย`:'ลบที่เลือก'}</button>
     </div>
