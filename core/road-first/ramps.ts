@@ -151,16 +151,41 @@ export function anchorNote(roads:Road[],ramp:Road|undefined):string{
   return [ramp.anchors.start&&`แยกออกจาก ${name(ramp.anchors.start.roadId)}`,ramp.anchors.end&&`เข้าสู่ ${name(ramp.anchors.end.roadId)}`].filter(Boolean).map(s=>` · ${s}`).join('');
 }
 
-/** Taper drawn at an attachment: from the main road edge a taper length away to the ramp end's outer corner. */
-export function taperPolygon(main:Road,ramp:Road,end:RampEnd):WorldPoint[]{
-  const a=ramp.anchors?.[end];if(!a)return[];
+/** Width of the painted gore between the main road edge and the ramp at its nose (m; tool value, TO_VERIFY). */
+export const GORE_WIDTH=3;
+const r3=(v:WorldPoint)=>({x:round(v.x,3),y:round(v.y,3)});
+/**
+ * Ramp terminal at an attachment, from the same lines as the two roads: the tie-in surface and the painted gore.
+ * - tie-in: from the main road edge a taper length away (zero width, tangent to the edge) along a smooth curve to the
+ *   ramp end's outer corner, arriving in the ramp's own direction (C1 at both ends), closed along the main road edge.
+ * - gore: the triangle between the main road edge and the ramp's inner edge, from where they separate to where they are
+ *   GORE_WIDTH apart (on the ramp's first straight).
+ * Not a lane: acceleration / deceleration lanes come with station-based lanes later.
+ */
+export function rampTerminal(main:Road,ramp:Road,end:RampEnd):{tieIn:WorldPoint[];gore:WorldPoint[]}|null{
+  const a=ramp.anchors?.[end];if(!a)return null;
   const total=stations(main.points,main.alignment).at(-1)!,t=tangentAt(main.points,a.station,main.alignment),dir=a.side*(end==='start'?-1:1);
   const far=anchorPoint(main,{...a,station:Math.max(0,Math.min(total,a.station+dir*RAMP_RULES.taper))});
   const p=ramp.points[endIndex(ramp,end)],q=ramp.points[nextIndex(ramp,end)],dx=q.x-p.x,dy=q.y-p.y,l=Math.hypot(dx,dy)||1,h=(ramp.section.forwardLanes+ramp.section.backwardLanes)*ramp.section.laneWidth/2;
-  // The ramp-end corner away from the main road (normal pointing off the main road).
-  const nx=-dy/l,ny=dx/l,away=(nx*t.y-ny*t.x)*a.side>=0?1:-1,corner={x:p.x+nx*h*away,y:p.y+ny*h*away},inner={x:p.x-nx*h*away,y:p.y-ny*h*away};
-  return[far,corner,p,inner].map(v=>({x:round(v.x,3),y:round(v.y,3)}));
+  const u={x:dx/l,y:dy/l},n0={x:-u.y,y:u.x},away=(n0.x*t.y-n0.y*t.x)*a.side>=0?1:-1,nr={x:n0.x*away,y:n0.y*away};
+  const outer={x:p.x+nr.x*h,y:p.y+nr.y*h},inner={x:p.x-nr.x*h,y:p.y-nr.y*h};
+  // Away from the main road (its outward normal on this side).
+  const nm={x:t.y*a.side,y:-t.x*a.side};
+  // Tie-in: cubic curve far → outer corner, leaving along the main road edge and arriving along the ramp.
+  const L=Math.hypot(outer.x-far.x,outer.y-far.y),toward={x:(p.x-far.x),y:(p.y-far.y)},tl=Math.sign(toward.x*t.x+toward.y*t.y)||1,tf={x:t.x*tl,y:t.y*tl};
+  const P1={x:far.x+tf.x*L/3,y:far.y+tf.y*L/3},P2={x:outer.x-u.x*L/3,y:outer.y-u.y*L/3},N=16;
+  const curve=Array.from({length:N+1},(_,i)=>{const s=i/N,m=1-s;return{x:m*m*m*far.x+3*m*m*s*P1.x+3*m*s*s*P2.x+s*s*s*outer.x,y:m*m*m*far.y+3*m*m*s*P1.y+3*m*s*s*P2.y+s*s*s*outer.y};});
+  const tieIn=[...curve,p].map(r3);
+  // Gore along the ramp's inner edge: offset from the main road edge grows by sin θ per metre.
+  const sin=u.x*nm.x+u.y*nm.y,off0=(inner.x-p.x)*nm.x+(inner.y-p.y)*nm.y;
+  if(sin<=1e-3)return{tieIn,gore:[]};
+  const sG=-off0/sin,sN=Math.min(l,(GORE_WIDTH-off0)/sin);
+  if(sN<=sG+.1)return{tieIn,gore:[]};
+  const at=(s:number)=>({x:inner.x+u.x*s,y:inner.y+u.y*s}),G=at(sG),Nn=at(sN),w=(Nn.x-p.x)*nm.x+(Nn.y-p.y)*nm.y;
+  return{tieIn,gore:[G,Nn,{x:Nn.x-nm.x*w,y:Nn.y-nm.y*w}].map(r3)};
 }
+/** Older name: the tie-in outline only. */
+export const taperPolygon=(main:Road,ramp:Road,end:RampEnd):WorldPoint[]=>rampTerminal(main,ramp,end)?.tieIn??[];
 
 /** Where an attachment is and which way traffic runs there (for the direction arrows on the plan). */
 export function anchorFlow(main:Road,a:RampAnchor):{point:WorldPoint;dir:WorldPoint}{

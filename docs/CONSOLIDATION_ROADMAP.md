@@ -132,7 +132,8 @@ Details of the combined first slice: [canonical alignment and migration](spec/CA
 PR #64 is merged at `7d421c9` after Quality and Vercel success. The next isolated review-plan PR-04 implements [vertical curves and owned profile proposals](spec/VERTICAL_CURVES.md); merged as PR #65 at `fb3ecbb`.
 Review-plan PR-05: [structure envelope and measured clearance](spec/STRUCTURE_CLEARANCE.md), merged as PR #66 at `2525fd7`.
 Review-plan PR-06: [flyover / underpass composer](spec/GRADE_COMPOSER.md), merged as PR #67 at `55c6a62`.
-Review-plan PR-07 (this slice): [U-turn bridge and U-turn under a bridge](spec/UTURN_STRUCTURES.md). Next: PR-08 ramp terminals and tangential connector solver.
+Review-plan PR-07: [U-turn bridge and U-turn under a bridge](spec/UTURN_STRUCTURES.md), merged as PR #68 at `f85fe37`.
+Review-plan PR-08 (this slice): [ramp terminals — tangent tie-in and gore](spec/RAMP_TERMINALS.md). This closes the approved first round (PR-01/02/04–08); PR-03 and PR-09 onward need the owner's go-ahead.
 
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
 

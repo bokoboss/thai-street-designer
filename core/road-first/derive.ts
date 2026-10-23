@@ -11,7 +11,7 @@ import {isJunctionPort,type JunctionInstance,type LinkEndRef,type LinkSectionPro
 import {proposalId} from '../network/junction-auxiliary-proposal';
 import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
-import {taperPolygon,type RampAnchor} from './ramps';
+import {rampTerminal,type RampAnchor} from './ramps';
 import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
@@ -422,7 +422,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   const rampTapers:NonNullable<NetworkProject['rampTapers']>=[];
   for(const r of roads)for(const end of ['start','end'] as const){
     const a=r.anchors?.[end],main=a&&roadById.get(a.roadId);if(!a||!main)continue;
-    const points=taperPolygon(main,r,end);if(points.length===4)rampTapers.push({id:`${r.id}:${end}`,points,z:round(levelAt(main.profile,a.station),3)});
+    const t=rampTerminal(main,r,end);if(t&&t.tieIn.length>=3)rampTapers.push({id:`${r.id}:${end}`,points:t.tieIn,z:round(levelAt(main.profile,a.station),3),...(t.gore.length===3?{gore:t.gore}:{})});
   }
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
 }
