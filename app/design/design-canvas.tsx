@@ -19,6 +19,7 @@ import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/r
 import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
 import {anchorFlow} from '@/core/road-first/ramps';
 import type {TemplateGhost} from './diamond-panel';
+import {roadsInBox,selectionBounds,toggleId} from '@/core/road-first/selection';
 import {resolveAlignment} from '@/core/common/resolved-alignment';
 import {smoothAlignment} from '@/core/common/alignment';
 import type {DeltaStatus,ScenarioDiff} from '@/core/road-first/compare';
@@ -29,7 +30,11 @@ export const DELTA_STYLE:Record<DeltaStatus,{color:string;label:string}>={added:
 
 /** approach: one road leg at a junction (id = junction candidate id, leg = road leg key). */
 /** point: a road point picked on the plan (its curve radius, or delete it). */
-export type DesignSelection={kind:'road';id:string;point?:number}|{kind:'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
+export type DesignSelection={kind:'road';id:string;point?:number}|{kind:'roads';ids:string[]}|{kind:'crossing'|'junction';id:string}|{kind:'approach';id:string;leg:LegKey}|null;
+/** Roads in a selection (one road or several). */
+export const selectedRoadIds=(s:DesignSelection):string[]=>s?.kind==='road'?[s.id]:s?.kind==='roads'?s.ids:[];
+/** Selection from a list of road ids. */
+export const roadSelection=(ids:string[]):DesignSelection=>ids.length===0?null:ids.length===1?{kind:'road',id:ids[0]}:{kind:'roads',ids};
 /** ref-move / ref-calibrate: place and scale the reference image (started from the inspector). */
 export type DesignTool='select'|'pan'|'road'|'ref-move'|'ref-calibrate'|'map-move';
 export type ReferenceImageView={reference:LocalImageReference;url:string|null};
@@ -51,7 +56,9 @@ function snapLabel(s:ShownSnap,roads:Road[],drawing:boolean,off:boolean){
 /** Level label: +6.0 ม. / −3.5 ม. */
 const fmtLevel=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)} ม.`;
 
-export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[],snapCycle=0,snapOff=false,spacePan=false,ghost=null}:{
+export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onDraftChange,onFinishDraft,onDraftBack,checkDraft,run,finishGesture,fitKey,onSnap,typedLength,comparison,svgRef,referenceImage,onReferenceMove,calibration,onCalibratePoint,map,onMapMove,focusKey=0,drawLevel=0,draftLevels=[],snapCycle=0,snapOff=false,spacePan=false,ghost=null,multiAdd=false,onMenu}:{
+  /** Touch equivalent of Shift: taps add / remove roads in the selection. onMenu: right-click in Select (menu at the pointer). */
+  multiAdd?:boolean;onMenu?:(m:{x:number;y:number;world:WorldPoint;roadId?:string})=>void;
   /** Template preview (pieces' centre lines and width; red with the reason when it cannot be placed). */
   ghost?:TemplateGhost;
   /** Tab presses while drawing (cycle overlapping snap targets); snapOff: snapping turned off (touch toggle); spacePan: Space held. */
@@ -80,7 +87,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const [snap,setSnap]=useState<ShownSnap|null>(null);
   const cycle=useRef({key:'',base:0}),lastPointer=useRef<{clientX:number;clientY:number;shiftKey:boolean}|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
-    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}|null>(null);
+    |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}
+    |{kind:'move';ids:string[];from:WorldPoint;screen:{x:number;y:number};applied:WorldPoint;moved:boolean;single?:string}
+    |{kind:'box';from:WorldPoint;screen:{x:number;y:number};additive:boolean}|null>(null);
+  const [box,setBox]=useState<{x0:number;y0:number;x1:number;y1:number}|null>(null);
+  const selectedIds=selectedRoadIds(selection);
 
   useEffect(()=>{
     const el=wrap.current;if(!el)return;
@@ -105,6 +116,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     if(!focusKey||!selection)return;
     let pts:WorldPoint[]=[];
     if(selection.kind==='road')pts=project.roads.find(r=>r.id===selection.id)?.points??[];
+    else if(selection.kind==='roads'){const b=selectionBounds(project.roads,selection.ids);if(b)pts=[{x:b.x0,y:b.y0},{x:b.x1,y:b.y1}];}
     else{const c=detectCandidates(project.roads).find(x=>x.id===selection.id);if(c)pts=[{x:c.point.x-60,y:c.point.y-60},{x:c.point.x+60,y:c.point.y+60}];}
     if(!pts.length)return;
     const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
@@ -151,6 +163,16 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     const d=drag.current;
     if(tool==='road'){const s=snapAt(e);setSnap(s);onSnap(s);}
     if(!d)return;
+    if(d.kind==='move'){
+      // A small wobble is still a click; past 4 px the whole selection follows the pointer (one undo step).
+      if(!d.moved&&Math.hypot(e.clientX-d.screen.x,e.clientY-d.screen.y)<4)return;
+      d.moved=true;const p=toWorld(e),r1=(v:number)=>Math.round(v*10)/10,want={x:r1(p.x-d.from.x),y:r1(p.y-d.from.y)},inc={x:r1(want.x-d.applied.x),y:r1(want.y-d.applied.y)};
+      if(inc.x||inc.y){if(run({type:'roads.move',roadIds:d.ids,delta:inc},{gesture:true}).ok)d.applied=want;}return;
+    }
+    if(d.kind==='box'){
+      if(Math.hypot(e.clientX-d.screen.x,e.clientY-d.screen.y)<4){setBox(null);return;}
+      const p=toWorld(e);setBox({x0:d.from.x,y0:d.from.y,x1:p.x,y1:p.y});return;
+    }
     if(d.kind==='pan'){setView({...d.start,x:d.start.x-(e.clientX-d.from.x)/d.start.scale,y:d.start.y-(e.clientY-d.from.y)/d.start.scale});return;}
     if(d.kind==='map'){
       // The plan does not move while the map is dragged, so the pointer is read against the plan directly.
@@ -214,7 +236,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[snapCycle,snapOff]);
   function onPointerUp(){
-    if(drag.current&&drag.current.kind!=='pan'&&drag.current.kind!=='ref'&&drag.current.kind!=='map')finishGesture();
+    const d=drag.current;
+    if(d?.kind==='box'){
+      // Box: roads touched by it (added to the selection with Shift / multi-select); a plain click clears the selection.
+      if(box){const hit=roadsInBox(project.roads,box);onSelect(roadSelection(d.additive?[...new Set([...selectedIds,...hit])]:hit));}
+      else if(!d.additive)onSelect(null);
+      setBox(null);drag.current=null;return;
+    }
+    if(d?.kind==='move'){if(d.moved)finishGesture();else if(d.single)onSelect({kind:'road',id:d.single});drag.current=null;return;}
+    if(d&&d.kind!=='pan'&&d.kind!=='ref'&&d.kind!=='map')finishGesture();
     drag.current=null;
   }
   // Wheel zooms toward the pointer; line/page wheel units are normalised like the 3D view, and the page never scrolls.
@@ -230,6 +260,17 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     const handler=(e:WheelEvent)=>wheelRef.current(e);
     el.addEventListener('wheel',handler,{passive:false});return()=>el.removeEventListener('wheel',handler);
   },[svg]);
+  /** Road body in Select: Shift (or multi-select) toggles it; otherwise press selects and a drag moves the selection. */
+  function startRoadDrag(e:React.PointerEvent,roadId:string){
+    if(tool!=='select')return;e.stopPropagation();
+    if(e.button===2){if(!selectedIds.includes(roadId))onSelect({kind:'road',id:roadId});return;}
+    if(e.button!==0)return;
+    if(e.shiftKey||multiAdd){onSelect(roadSelection(toggleId(selectedIds,roadId)));return;}
+    const member=selectedIds.includes(roadId),ids=member?selectedIds:[roadId];
+    if(!member)onSelect({kind:'road',id:roadId});
+    (svg.current as Element|null)?.setPointerCapture(e.pointerId);
+    drag.current={kind:'move',ids,from:toWorld(e),screen:{x:e.clientX,y:e.clientY},applied:{x:0,y:0},moved:false,...(member&&selectedIds.length>1?{single:roadId}:{})};
+  }
   function startPointDrag(e:React.PointerEvent,road:Road,index:number){
     if(tool!=='select'||e.button!==0)return;
     e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);
@@ -261,8 +302,16 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     <MapBackground reference={map.reference} credentials={map.credentials} view={mapView}/>
     <svg ref={svg} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} data-design-plan="true"
       onPointerDownCapture={onPointerDownCapture} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={()=>{setSnap(null);onSnap(null);}}
-      onContextMenu={e=>{if(tool!=='road')return;e.preventDefault();onDraftBack();}} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
-      <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" onPointerDown={()=>{if(tool==='select')onSelect(null);}}/>
+      onContextMenu={e=>{
+        if(tool==='road'){e.preventDefault();onDraftBack();return;}
+        if(tool!=='select'||!onMenu)return;
+        e.preventDefault();const roadId=(e.target as Element).closest('[data-design-road]')?.getAttribute('data-design-road')??undefined;
+        onMenu({x:e.clientX,y:e.clientY,world:toWorld(e),...(roadId?{roadId}:{})});
+      }} onDoubleClick={()=>{if(tool==='road')onFinishDraft();}}>
+      <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="transparent" data-design-plan-background="true" onPointerDown={e=>{
+        if(tool!=='select'||e.button!==0)return;
+        // Drag on empty plan = box selection (never an edit); pan stays on the middle button, Space or the Pan tool.
+        (svg.current as Element|null)?.setPointerCapture(e.pointerId);drag.current={kind:'box',from:toWorld(e),screen:{x:e.clientX,y:e.clientY},additive:e.shiftKey||multiAdd};}}/>
       {referenceImage?.url&&referenceImage.reference.enabled&&(()=>{const r=referenceImage.reference,w=r.widthPx*r.metersPerPixel,h=r.heightPx*r.metersPerPixel;
         return <g data-design-reference-image="true" transform={`translate(${r.x} ${r.y}) rotate(${r.rotation})`} opacity={r.opacity} pointerEvents="none">
           <image href={referenceImage.url} x={-w/2} y={-h/2} width={w} height={h} preserveAspectRatio="none"/>
@@ -298,12 +347,12 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         {/* Higher roads last, so a click at a grade separation picks the road on top. */}
         {[...project.roads].sort((a,b)=>Math.max(0,...(a.profile??[]).map(q=>q.z))-Math.max(0,...(b.profile??[]).map(q=>q.z))).map(road=>{
           // The centre line as drawn: arcs at curved points.
-          const d=(road.alignment==='arc'?resolveAlignment(road.points).sample():smoothAlignment(road.points)).map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id,
+          const d=(road.alignment==='arc'?resolveAlignment(road.points).sample():smoothAlignment(road.points)).map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' '),selected=selection?.kind==='road'&&selection.id===road.id,inSet=selectedIds.includes(road.id),
             pointPicked=selected&&selection?.kind==='road'?selection.point:undefined,radiusAt=pointPicked!==undefined?curveHandle(road.points,pointPicked,px(28)):null;
           return <g key={road.id} data-design-road={road.id}>
             <path d={d} fill="none" stroke="transparent" strokeWidth={px(16)} style={{cursor:tool==='select'?'pointer':undefined}}
-              onPointerDown={e=>{if(tool!=='select')return;e.stopPropagation();onSelect({kind:'road',id:road.id});}} onDoubleClick={e=>insertPoint(e,road)}/>
-            <path d={d} fill="none" stroke={selected?'#0b7f86':'#5f7f86'} strokeWidth={px(selected?2:1)} strokeDasharray={`${px(8)} ${px(5)}`} pointerEvents="none" opacity={selected?1:.55}/>
+              onPointerDown={e=>startRoadDrag(e,road.id)} onDoubleClick={e=>insertPoint(e,road)}/>
+            <path d={d} fill="none" stroke={inSet?'#0b7f86':'#5f7f86'} strokeWidth={px(inSet?2:1)} strokeDasharray={`${px(8)} ${px(5)}`} pointerEvents="none" opacity={inSet?1:.55} data-design-road-selected={inSet?'true':undefined}/>
             {selected&&(road.openings??[]).map(o=>{const p=roadOpeningHandle(road,o);
               return <g key={'o-'+o.id} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'road-opening',roadId:road.id,id:o.id})}>
                 <circle data-design-road-opening-handle={o.id} cx={p.x} cy={p.y} r={px(13)} fill="transparent"><title>{`ช่องเปิด เริ่ม ${o.station} ม. จากต้นถนน · ลากเพื่อย้าย`}</title></circle>
@@ -361,6 +410,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           </g>;
         })}
       </g>
+      {box&&<rect data-design-box-select="true" x={Math.min(box.x0,box.x1)} y={Math.min(box.y0,box.y1)} width={Math.abs(box.x1-box.x0)} height={Math.abs(box.y1-box.y0)} fill="#0b7f86" fillOpacity={.06} stroke="#0b7f86" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(4)}`} pointerEvents="none"/>}
       {ghost&&ghost.lines.length>0&&<g data-design-ghost={ghost.error?'error':'ok'} pointerEvents="none">
           {ghost.lines.map((l,i)=><polyline key={i} points={l.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ghost.error?'#b3261e':'#0b7f86'} strokeOpacity={.35} strokeWidth={ghost.width} strokeLinejoin="round" strokeLinecap="round"/>)}
           {ghost.lines.map((l,i)=><polyline key={'c'+i} points={l.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ghost.error?'#b3261e':'#0b7f86'} strokeWidth={px(2)} strokeDasharray={`${px(6)} ${px(4)}`}/>)}
@@ -371,7 +421,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         {draft.map((p,i)=>(draftLevels[i]??0)!==0&&<text key={'z'+i} data-design-draft-level={i} x={p.x+px(7)} y={p.y-px(7)} fontSize={px(11)} fontWeight="700" fill={draftColor}>{fmtLevel(draftLevels[i])}</text>)}
       </g>}
       {tool==='select'&&selectedJunction&&selection&&<g data-design-handles="true">
-        {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection.id,corner:h.corner})}>
+        {cornerHandles(selectedJunction).map(h=><g key={`c${h.corner}`} style={{cursor:'move'}} onPointerDown={e=>startHandleDrag(e,{kind:'corner',candidateId:selection&&'id' in selection?selection.id:'',corner:h.corner})}>
           <circle data-design-corner-handle={h.corner} cx={h.point.x} cy={h.point.y} r={px(13)} fill="transparent"><title>{`รัศมีมุมนี้ ${h.radius} ม. · ลากเพื่อปรับเฉพาะมุมนี้`}</title></circle>
           <rect x={h.point.x-px(5)} y={h.point.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
         </g>)}

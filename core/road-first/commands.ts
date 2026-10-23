@@ -11,6 +11,7 @@ import {detectCandidates,stations,type Candidate,type Decision,type JunctionTrea
 import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type LegSlip,type LegTreatment} from './leg-binding';
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
+import {splitRoad} from './split';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
 import {MAX_RADIUS,vertexCurve} from './curves';
@@ -30,6 +31,10 @@ export type RoadFirstCommand=
   |{type:'road.extend';roadId:string;atStart:boolean;points:WorldPoint[];levels?:number[]}
   /** Make one road of two roads whose ends touch; roadId keeps its id, name and section. */
   |{type:'road.join';roadId:string;otherId:string}
+  /** Move whole roads by one offset (a selection dragged or moved by typed distances). */
+  |{type:'roads.move';roadIds:string[];delta:WorldPoint}
+  /** Split a road in two at a point on a straight stretch; the second piece gets `newId`. */
+  |{type:'road.split';roadId:string;at:WorldPoint;newId:string}
   |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.insertPoint';roadId:string;index:number;point:WorldPoint}
   |{type:'road.removePoint';roadId:string;index:number}
@@ -120,7 +125,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const decision=(id:string)=>p.decisions.find(d=>d.candidateId===id);
   const jname=(d:Decision|undefined)=>d?.name??'ทางแยก';
   const legName=(key:LegKey)=>{const l=parseLegKey(key),r=l&&road(l.roadId);return r?`${r.name} ${l!.side==='ahead'?'→':'←'}`:key;};
-  let label='แก้ไข',group:string|undefined,roadsChanged=false;
+  let label='แก้ไข',group:string|undefined,roadsChanged=false,splitAt:{from:string;into:string;at:number}|undefined;
   const t=(d:Decision)=>(d.treatments??={});
   if(cmd.type==='batch'){
     let cur=project;const acc:Omit<CommandResult,'project'|'error'|'label'|'group'>={warnings:[],autoJunctions:[],autoSeparated:[],openCrossings:[],joined:[],blocked:[]};
@@ -178,6 +183,22 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       if('error' in out)return fail(out.error,`เชื่อม ${a.name} กับ ${b.name}`);
       p.roads=out.roads;p.decisions=out.decisions;
       label=[`เชื่อม ${a.name} กับ ${b.name} เป็นถนนเดียว`,...out.notes].join(' · ');roadsChanged=true;break;
+    }
+    case 'roads.move':{
+      const ids=[...new Set(cmd.roadIds)],list=ids.map(id=>road(id));
+      if(!ids.length||list.some(r=>!r))return fail('ไม่พบถนนที่เลือก');
+      if(!Number.isFinite(cmd.delta.x)||!Number.isFinite(cmd.delta.y)||Math.hypot(cmd.delta.x,cmd.delta.y)>1e6)return fail('ระยะย้ายไม่ถูกต้อง');
+      const r3=(v:number)=>Math.round(v*1000)/1000;
+      for(const r of list as Road[])r.points=r.points.map(q=>({...q,x:r3(q.x+cmd.delta.x),y:r3(q.y+cmd.delta.y)}));
+      label=list.length===1?`ย้ายถนน ${list[0]!.name}`:`ย้ายถนน ${list.length} สาย`;group=`roads.move:${ids.slice().sort().join(',')}`;roadsChanged=true;break;
+    }
+    case 'road.split':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      const names=new Set(p.roads.map(x=>x.name));let n=2;while(names.has(`${r.name} (${n})`))n++;
+      const out=splitRoad(p.roads,p.decisions,cmd.roadId,cmd.at,cmd.newId,`${r.name} (${n})`);
+      if('error' in out)return fail(out.error,`แยกถนน ${r.name}`);
+      p.roads=out.roads;p.decisions=out.decisions;splitAt={from:cmd.roadId,into:cmd.newId,at:out.station};
+      label=[`แยกถนน ${r.name} ที่ระยะ ${out.station.toFixed(1)} ม.`,...out.notes].join(' · ');roadsChanged=true;break;
     }
     case 'road.rename':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -317,7 +338,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   // Ramp ends stay on the edge of the road they attach to, whatever the edit changed.
   {
     const joined=cmd.type==='road.join'?{from:cmd.otherId,into:cmd.roadId}:undefined;
-    const next=reattachRamps(project.roads,p.roads,{joined,remap:!!joined||(cmd.type==='road.extend'&&cmd.atStart)});
+    const next=reattachRamps(project.roads,p.roads,{joined,remap:!!joined||(cmd.type==='road.extend'&&cmd.atStart),...(splitAt?{split:splitAt}:{})});
     const shape=(rs:Road[])=>JSON.stringify(rs.map(r=>r.points));
     if(shape(next)!==shape(p.roads))roadsChanged=true;
     p.roads=next;

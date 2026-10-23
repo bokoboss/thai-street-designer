@@ -81,8 +81,8 @@ function withEndLevel(profile:Profile|undefined,total:number,end:RampEnd,z:numbe
  * stations shifted: extended at its start, or joined with another road, possibly reversed): the station is found
  * again from the old attachment point instead. joined: road id merged into another.
  */
-export function reattachRamps(before:Road[],after:Road[],opts:{joined?:{from:string;into:string};remap?:boolean}={}):Road[]{
-  const {joined,remap}=opts;
+export function reattachRamps(before:Road[],after:Road[],opts:{joined?:{from:string;into:string};remap?:boolean;split?:{from:string;into:string;at:number}}={}):Road[]{
+  const {joined,remap,split}=opts;
   const old=new Map(before.map(r=>[r.id,r])),byId=new Map(after.map(r=>[r.id,r]));
   return after.map(road=>{
     if(road.role!=='ramp'&&!road.anchors)return road;
@@ -93,7 +93,9 @@ export function reattachRamps(before:Road[],after:Road[],opts:{joined?:{from:str
       let a:RampAnchor|null|undefined=r.anchors?.[end];
       if(!prev||prev.role!=='ramp'||movedEnd(prev,r,end))a=detectAnchor(after,r,end);
       else if(a){
-        const was=old.get(a.roadId),id=byId.has(a.roadId)?a.roadId:joined?.from===a.roadId?joined.into:null,main=id?byId.get(id):undefined;
+        // A road split in two: attachments past the split point move to the new road, re-measured from its start.
+        if(split&&a.roadId===split.from&&a.station>split.at+1e-9&&byId.has(split.into))a={...a,roadId:split.into,station:round(a.station-split.at,3)};
+        const was=old.get(a.roadId)??(split&&a.roadId===split.into?old.get(split.from):undefined),id=byId.has(a.roadId)?a.roadId:joined?.from===a.roadId?joined.into:null,main=id?byId.get(id):undefined;
         if(!main||!was)a=null;
         else if(!remap)a={...a,station:Math.min(a.station,round(stations(main.points,main.alignment).at(-1)!,3))};
         else{
