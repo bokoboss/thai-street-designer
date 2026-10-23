@@ -11,8 +11,8 @@ import {isJunctionPort,linkLinearTransitionPossible,type JunctionInstance,type L
 import {proposalId} from '../network/junction-auxiliary-proposal';
 import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
-import {rampTerminal,type RampAnchor} from './ramps';
-import {clipRun,type LaneRun} from './lane-runs';
+import {rampTerminal,type AuxLane,type RampAnchor} from './ramps';
+import {auxLaneRuns,clipRun,weavingSections,type LaneRun} from './lane-runs';
 import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
@@ -43,7 +43,9 @@ export type Road={alignment?:'arc';id:string;name:string;role?:RoadRole;points:R
   /** Made by a template (Phase 4B-3): which one, its version, the group of pieces placed together and the parameters used. */
   origin?:RoadOrigin;
   /** Ramp ends attached to the side of another road (diverge at the start, merge at the end). */
-  anchors?:{start?:RampAnchor;end?:RampAnchor}};
+  anchors?:{start?:RampAnchor;end?:RampAnchor};
+  /** Auxiliary lane on the main road at an attached ramp end: deceleration before a diverge, acceleration after a merge. */
+  terminals?:{start?:AuxLane;end?:AuxLane}};
 export type RoadOrigin={template:'diamond'|'uturn-bridge';version:1;group:string;params:Record<string,unknown>};
 export type CandidateKind='cross'|'tee';
 export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{roadId:string;station:number}[]};
@@ -317,6 +319,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     });
     return{...link,name:data.name??link.name,sectionProfile:structuredClone(data.sectionProfile??link.sectionProfile),components};
   };
+  // Auxiliary lanes at attached ramp ends, built on their main roads like lane runs.
+  const aux=auxLaneRuns(roads);
   for(const road of roads){
     const s=stations(road.points,road.alignment),total=s[s.length-1],list=onRoad.get(road.id)??[];
     type Node={ref:LinkEndRef;station:number};
@@ -354,7 +358,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       if(inside.length&&road.section.median>0)built.medianOpenings=inside.map(o=>({id:o.id,start:round(Math.max(0,o.station-from.station),3),length:o.length,...(o.type?{type:o.type}:{})}));
       for(const o of inside)placed.add(o.id);
       // Lane runs on this link: clipped to it, in link stations; the link then changes section along its length.
-      for(const run of road.laneRuns??[]){const c=clipRun(run,from.station,to.station);if(!c)continue;
+      for(const run of [...(road.laneRuns??[]),...(aux.get(road.id)??[])]){const c=clipRun(run,from.station,to.station);if(!c)continue;
         built.components=[...built.components,c.component];placedRuns.add(run.id);if(c.clipped)clippedRuns.add(run.id);}
       if(built.components.some(c=>c.id.startsWith('run-')))built.sectionProfile={...built.sectionProfile,mode:'linear'};
       if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
@@ -365,8 +369,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       links.push(built);
       span++;
     }
-    for(const run of road.laneRuns??[]){
-      const where=`${round(run.start,0)}–${round(run.end,0)} ม.`;
+    for(const run of [...(road.laneRuns??[]),...(aux.get(road.id)??[])]){
+      const where=`${run.id.startsWith('aux-')?'ของทางลาด ':''}${round(run.start,0)}–${round(run.end,0)} ม.`;
       if(!placedRuns.has(run.id))issues.push(`${road.name}: ช่องเพิ่ม ${where} อยู่ในช่วงเข้าทางแยกหรือเลยปลายถนน จึงไม่ได้สร้าง — ย้ายออกจากช่วงเข้าทางแยก`);
       else if(clippedRuns.has(run.id))issues.push(`${road.name}: ช่องเพิ่ม ${where} ถูกตัดที่ช่วงเข้าทางแยก — ยังไม่ได้ต่อกับช่องของทางแยก ตรวจการเชื่อมช่องจราจร`);
     }
@@ -434,8 +438,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   const rampTapers:NonNullable<NetworkProject['rampTapers']>=[];
   for(const r of roads)for(const end of ['start','end'] as const){
     const a=r.anchors?.[end],main=a&&roadById.get(a.roadId);if(!a||!main)continue;
-    const t=rampTerminal(main,r,end);if(t&&t.tieIn.length>=3)rampTapers.push({id:`${r.id}:${end}`,points:t.tieIn,z:round(levelAt(main.profile,a.station),3),...(t.gore.length===3?{gore:t.gore}:{})});
+    const t=rampTerminal(main,r,end),points=t?.tieIn.length?t.tieIn:t?.gore;if(t&&points&&points.length>=3)rampTapers.push({id:`${r.id}:${end}`,points,z:round(levelAt(main.profile,a.station),3),...(t.gore.length===3?{gore:t.gore}:{})});
   }
+  // Weaving: a merge followed by the next diverge on the same side, measured (no criterion here).
+  for(const w of weavingSections(roads,aux)){if(w.length>2000)continue;const nm=(id:string)=>roadById.get(id)?.name??id;
+    issues.push(`${nm(w.roadId)}: ทางเข้าจาก ${nm(w.merge)} ถึงทางออกไป ${nm(w.diverge)} ห่าง ${round(w.length,0)} ม.${w.connected?' · ช่องเสริมต่อเนื่อง (ช่วงทอผ้า)':''} — ต้องตรวจตามเกณฑ์`);}
   // A link whose two ends differ in a way the engine cannot change between along its length keeps its plain section; its runs are reported.
   {const base:NetworkProject={schemaVersion:5,title:'',junctions,links,parallelCorridors:[],roadEnds};
    for(const l of links){if(!l.components.some(c=>c.id.startsWith('run-'))||linkLinearTransitionPossible(base,l))continue;

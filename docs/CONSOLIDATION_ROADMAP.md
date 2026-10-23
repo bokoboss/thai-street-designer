@@ -237,7 +237,7 @@ road geometry, a full CAD constraint set, silent auto-clamping of drawn geometry
 
 ### 4C — Lane runs and lane connections
 
-Status 2026-10-23: lane runs along a stretch (station-based add / drop with tapers) in progress — spec `docs/spec/LANE_RUNS.md`.
+Status 2026-10-23: lane runs along a stretch done (PR #73, spec `docs/spec/LANE_RUNS.md`); auxiliary lanes at ramp ends, lane continuity into ramps and weaving measurement (spec `docs/spec/RAMP_LANES.md`). Still open in 4C: section replacement of a stretch, custom structure sections, lane connectors at junctions.
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".

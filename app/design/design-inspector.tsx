@@ -20,6 +20,7 @@ import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation'
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {freeStretches,newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {newLaneRun,type LaneRun} from '@/core/road-first/lane-runs';
+import {AUX_LANE_DEFAULTS} from '@/core/road-first/ramps';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {DiamondPanel,TemplateContext,TemplatePiecesBlock} from './diamond-panel';
 import {MultiRoadInspector} from './multi-select-panel';
@@ -279,6 +280,15 @@ function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
       {end==='start'?'ต้นทาง: ':'ปลายทาง: '}{a?`${end==='start'?'แยกออกจาก':'เข้าสู่'} ${name(a.roadId)} ที่ระยะ ${a.station.toFixed(1)} ม.`:'ไม่ได้ต่อเข้าข้างถนน'}
       {a&&<> <button className="design-link" data-design-ramp-detach={end} onClick={()=>run({type:'ramp.detach',roadId:road.id,end})}>ปลดออก</button></>}
     </p>)}
+    {ends.filter(x=>x.a).map(({end})=>{const lane=road.terminals?.[end],what=end==='start'?'ช่องลดความเร็วก่อนแยกออก':'ช่องเร่งความเร็วหลังเข้าสู่';
+      return <div key={'lane-'+end} className="design-opening" data-design-ramp-lane={end}>
+        <label className="design-check"><input type="checkbox" checked={!!lane} data-design-ramp-lane-toggle={end} onChange={e=>run({type:'ramp.setLane',roadId:road.id,end,lane:e.currentTarget.checked?{...AUX_LANE_DEFAULTS}:null})}/> {what} (แบบขนาน)</label>
+        {lane&&<div className="design-fields">
+          <NumberField field={`ramp-lane-${end}-length`} label="ช่วงเต็มช่อง (ม.)" value={lane.length} step={5} min={10} max={1000} onCommit={length=>run({type:'ramp.setLane',roadId:road.id,end,lane:{...lane,length}})}/>
+          <NumberField field={`ramp-lane-${end}-taper`} label="ช่วงเปลี่ยน (ม.)" value={lane.taper} step={5} min={0} max={300} onCommit={taper=>run({type:'ramp.setLane',roadId:road.id,end,lane:{...lane,taper}})}/>
+        </div>}
+      </div>;})}
+    {ends.some(x=>x.a)&&<p className="design-meta">ช่องเสริมอยู่บนถนนหลักฝั่งทิศจราจรของทางลาด ทางลาดต่อจากช่องนั้นโดยตรง · ช่องเสริมของทางเข้าและทางออกที่ต่อกันรวมเป็นช่องต่อเนื่อง · ความยาวเป็นค่าที่วาด (ค่าเริ่มต้นของเครื่องมือ) ยังไม่ได้ตรวจตามเกณฑ์</p>}
     <p className="design-meta">ลากจุดปลายไปตามข้างถนนเพื่อเลื่อนจุดเชื่อม · ลากออกห่างเพื่อปลด · ช่วงเปลี่ยน {RAMP_RULES.taper} ม. และมุมสูงสุด {RAMP_RULES.maxAngle}° เป็นค่าของเครื่องมือ ยังไม่ได้ตรวจกับมาตรฐาน</p>
   </section>;
 }

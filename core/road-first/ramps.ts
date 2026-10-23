@@ -9,6 +9,12 @@ import {levelAt,type Profile} from './elevation';
 
 /** side: 1 = the forward-lane side of the main road (positive offset, left of its drawing direction on the plan), -1 = the backward-lane side. */
 export type RampAnchor={roadId:string;station:number;side:1|-1};
+/** Auxiliary lane at a ramp end, on the main road: `length` of full lane next to the attachment plus a `taper` (m; drawn values). */
+export type AuxLane={length:number;taper:number};
+/** Starting values for an auxiliary lane (tool values for drawing, TO_VERIFY against the project's manual). */
+export const AUX_LANE_DEFAULTS:AuxLane={length:100,taper:50};
+/** With an auxiliary lane the ramp continues that lane: its centre line sits on the lane's centre, half a lane outside the edge. */
+export const auxShift=(main:Road,ramp:Road,end:RampEnd)=>ramp.terminals?.[end]&&ramp.anchors?.[end]?.roadId===main.id?main.section.laneWidth/2:0;
 export type RampEnd='start'|'end';
 /** Starting section of a ramp: one lane, one way. Tool value, editable. */
 export const RAMP_SECTION:RoadSection={forwardLanes:1,backwardLanes:0,laneWidth:3.5,median:0,walk:0};
@@ -44,8 +50,8 @@ function tangentAt(points:RoadPoint[],station:number,mode:AlignmentMode='chord')
   return{x:1,y:0};
 }
 /** Where an anchored ramp end sits: on the travelled-way edge of the main road at the anchor station. */
-export function anchorPoint(main:Road,a:RampAnchor):WorldPoint{
-  const c=pointAt(main.points,a.station,main.alignment),t=tangentAt(main.points,a.station,main.alignment),o=edgeOffset(main.section,a.side)*a.side;
+export function anchorPoint(main:Road,a:RampAnchor,shift=0):WorldPoint{
+  const c=pointAt(main.points,a.station,main.alignment),t=tangentAt(main.points,a.station,main.alignment),o=(edgeOffset(main.section,a.side)+shift)*a.side;
   return{x:round(c.x+t.y*o),y:round(c.y-t.x*o)};
 }
 const endIndex=(r:Road,end:RampEnd)=>end==='start'?0:r.points.length-1;
@@ -103,7 +109,7 @@ export function reattachRamps(before:Road[],after:Road[],opts:{joined?:{from:str
           a={roadId:main.id,station:round(f.station,3),side:(flip?-a.side:a.side) as 1|-1};
         }
       }
-      if(a){r.anchors={...r.anchors,[end]:a};const main=byId.get(a.roadId)!;r.points[i]={...r.points[i],...anchorPoint(main,a)};}
+      if(a){r.anchors={...r.anchors,[end]:a};const main=byId.get(a.roadId)!;r.points[i]={...r.points[i],...anchorPoint(main,a,auxShift(main,r,end))};}
       else if(r.anchors){delete r.anchors[end];}
     }
     if(r.anchors&&!r.anchors.start&&!r.anchors.end)delete r.anchors;
@@ -166,6 +172,8 @@ const r3=(v:WorldPoint)=>({x:round(v.x,3),y:round(v.y,3)});
  */
 export function rampTerminal(main:Road,ramp:Road,end:RampEnd):{tieIn:WorldPoint[];gore:WorldPoint[]}|null{
   const a=ramp.anchors?.[end];if(!a)return null;
+  // With an auxiliary lane the lane itself is the tie-in; the gore is measured from the main lanes' edge.
+  const e0=auxShift(main,ramp,end);
   const total=stations(main.points,main.alignment).at(-1)!,t=tangentAt(main.points,a.station,main.alignment),dir=a.side*(end==='start'?-1:1);
   const far=anchorPoint(main,{...a,station:Math.max(0,Math.min(total,a.station+dir*RAMP_RULES.taper))});
   const p=ramp.points[endIndex(ramp,end)],q=ramp.points[nextIndex(ramp,end)],dx=q.x-p.x,dy=q.y-p.y,l=Math.hypot(dx,dy)||1,h=(ramp.section.forwardLanes+ramp.section.backwardLanes)*ramp.section.laneWidth/2;
@@ -177,13 +185,13 @@ export function rampTerminal(main:Road,ramp:Road,end:RampEnd):{tieIn:WorldPoint[
   const L=Math.hypot(outer.x-far.x,outer.y-far.y),toward={x:(p.x-far.x),y:(p.y-far.y)},tl=Math.sign(toward.x*t.x+toward.y*t.y)||1,tf={x:t.x*tl,y:t.y*tl};
   const P1={x:far.x+tf.x*L/3,y:far.y+tf.y*L/3},P2={x:outer.x-u.x*L/3,y:outer.y-u.y*L/3},N=16;
   const curve=Array.from({length:N+1},(_,i)=>{const s=i/N,m=1-s;return{x:m*m*m*far.x+3*m*m*s*P1.x+3*m*s*s*P2.x+s*s*s*outer.x,y:m*m*m*far.y+3*m*m*s*P1.y+3*m*s*s*P2.y+s*s*s*outer.y};});
-  const tieIn=[...curve,p].map(r3);
+  const tieIn=e0?[]:[...curve,p].map(r3);
   // Gore along the ramp's inner edge: offset from the main road edge grows by sin θ per metre.
-  const sin=u.x*nm.x+u.y*nm.y,off0=(inner.x-p.x)*nm.x+(inner.y-p.y)*nm.y;
+  const sin=u.x*nm.x+u.y*nm.y,off0=(inner.x-p.x)*nm.x+(inner.y-p.y)*nm.y+e0;
   if(sin<=1e-3)return{tieIn,gore:[]};
   const sG=-off0/sin,sN=Math.min(l,(GORE_WIDTH-off0)/sin);
   if(sN<=sG+.1)return{tieIn,gore:[]};
-  const at=(s:number)=>({x:inner.x+u.x*s,y:inner.y+u.y*s}),G=at(sG),Nn=at(sN),w=(Nn.x-p.x)*nm.x+(Nn.y-p.y)*nm.y;
+  const at=(s:number)=>({x:inner.x+u.x*s,y:inner.y+u.y*s}),G=at(sG),Nn=at(sN),w=(Nn.x-p.x)*nm.x+(Nn.y-p.y)*nm.y+e0;
   return{tieIn,gore:[G,Nn,{x:Nn.x-nm.x*w,y:Nn.y-nm.y*w}].map(r3)};
 }
 /** Older name: the tie-in outline only. */
