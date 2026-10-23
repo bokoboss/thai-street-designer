@@ -33,13 +33,24 @@ try{
  const flat=structuredClone(fixture);delete flat.roads[0].profile;await seed(flat);
  await selectA();await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-profile-review]'),'preview');
  assert.deepEqual(await current(),flat,'preview does not edit');await b.screenshot('artifacts/vertical-rise-preview.png');
+ // Parameters re-plan live with a ghost on the plan; an impossible value turns the ghost red and disables placing.
+ assert.equal(await b.count('[data-design-ghost="ok"]'),1,'footprint ghost on the plan');
+ assert.match(await b.text('[data-grade-clearance]'),/ช่องลอดที่จะได้ 5\.00 ม\./);
+ const setField=async(f,v)=>{await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="${f}"]'),set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,${JSON.stringify(v)});i.dispatchEvent(new Event('input',{bubbles:true}));})()`);};
+ await setField('grade-curve','400');await b.waitFor(async()=>await b.count('[data-grade-state="error"]')&&await b.count('[data-design-ghost="error"]'),'red ghost with the reason');
+ assert.equal(await b.evalValue(`document.querySelector('[data-profile-review-confirm]').disabled`),true);await b.screenshot('artifacts/grade-composer-refused.png');
+ await setField('grade-curve','0');await setField('grade-height','8');
+ await b.waitFor(async()=>/ช่องลอดที่จะได้ 6\.50 ม\./.test(await b.text('[data-grade-clearance]')),'re-measured for the new height');
+ assert.deepEqual(await current(),flat,'adjusting does not edit');
+ await b.click('[data-profile-review-cancel]');await b.waitFor(async()=>await b.count('[data-design-ghost]')===0,'cancel clears the ghost');
+ await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-profile-review]'),'preview again');
  await b.click('[data-profile-review-cancel]');assert.deepEqual(await current(),flat,'cancel does not edit');
- await b.click('[data-design-road-over]');await b.click('[data-profile-review-confirm]');await b.waitFor(async()=>(await current()).roads[0].profile?.length===4,'confirmed owned rise');
+ await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-profile-review-confirm]'),'preview');await b.click('[data-profile-review-confirm]');await b.waitFor(async()=>(await current()).roads[0].profile?.length===4,'confirmed owned rise');
  assert.ok((await current()).roads[0].profile.every(p=>p.generatedBy===cid));
  await b.click('[data-design-undo]');await b.waitFor(async()=>!(await current()).roads[0].profile,'one undo restores all');
  const authored=structuredClone(flat);authored.roads[0].profile=[{station:500,z:0}];await seed(authored);
  await selectA();await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-design-notice="error"]'),'authored point conflict');assert.deepEqual(await current(),authored);
  const short=structuredClone(flat);short.roads[0].points=[{x:-30,y:0},{x:30,y:0}];await seed(short);
  await b.click(`[data-design-candidate="${cid}"]`);await b.click('[data-design-over="A"]');await b.waitFor(async()=>/ช่วงถนนไม่พอ/.test(await b.text('[data-design-notice]')),'short approach refused');assert.deepEqual(await current(),short);
- assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
+ assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: composer parameters with live ghost / clearance and red refusal, structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
 }catch(error){await b.screenshot('artifacts/vertical-browser-failure.png');throw error;}finally{b.close();}

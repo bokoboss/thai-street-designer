@@ -130,7 +130,8 @@ PR-17 is limited to CriterionRef schema after PR-05. Five licensed real-site exa
 Keep road-first and one resolver; retain legacy compile on open and offer explicit previewed conversion. Diamond origin version 1 is never regenerated automatically.
 Details of the combined first slice: [canonical alignment and migration](spec/CANONICAL_ALIGNMENT.md).
 PR #64 is merged at `7d421c9` after Quality and Vercel success. The next isolated review-plan PR-04 implements [vertical curves and owned profile proposals](spec/VERTICAL_CURVES.md); merged as PR #65 at `fb3ecbb`.
-Review-plan PR-05 (this slice): [structure envelope and measured clearance](spec/STRUCTURE_CLEARANCE.md). Next: PR-06 flyover / underpass composer.
+Review-plan PR-05: [structure envelope and measured clearance](spec/STRUCTURE_CLEARANCE.md), merged as PR #66 at `2525fd7`.
+Review-plan PR-06 (this slice): [flyover / underpass composer](spec/GRADE_COMPOSER.md). Next: PR-07 U-turn bridge and under-bridge U-turn.
 
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
 
