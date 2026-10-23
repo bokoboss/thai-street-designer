@@ -15,7 +15,7 @@ import {splitRoad} from './split';
 import {laneRunError,type LaneRun} from './lane-runs';
 import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
-import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
+import {anchorNote,rampError,reattachRamps,type AuxLane,type RampEnd} from './ramps';
 import {MAX_RADIUS,vertexCurve} from './curves';
 import {LEVEL_CRITERIA_LABEL,type Criterion,type LevelCriteriaKey} from './level-criteria';
 
@@ -57,6 +57,8 @@ export type RoadFirstCommand=
     release?:{roadId:string;station:number}[]}
   /** Unhook a ramp end from the road it diverges from or merges into; the end point stays where it is. */
   |{type:'ramp.detach';roadId:string;end:RampEnd}
+  /** Auxiliary lane on the main road at a ramp end (deceleration before a diverge, acceleration after a merge); null removes it. */
+  |{type:'ramp.setLane';roadId:string;end:RampEnd;lane:AuxLane|null}
   |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
   |{type:'crossing.decide';candidateId:string;decision:Decision['decision'];name?:string}
   |{type:'junction.rename';candidateId:string;name:string}
@@ -274,6 +276,15 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.roadside&&(cmd.roadside.trees||cmd.roadside.lights))r.roadside={...cmd.roadside};else delete r.roadside;
       label=`ต้นไม้และเสาไฟ ${r.name}: ${r.roadside?[r.roadside.trees?'ต้นไม้':'',r.roadside.lights?'เสาไฟ':''].filter(Boolean).join(' + '):'ไม่มี'}`;break;
+    }
+    case 'ramp.setLane':{
+      const r=road(cmd.roadId);if(!r||r.role!=='ramp')return fail('ไม่พบทางลาดที่เลือก');
+      const what=cmd.end==='start'?'ช่องลดความเร็วก่อนแยกออก':'ช่องเร่งความเร็วหลังเข้าสู่';
+      if(cmd.lane&&!(cmd.lane.length>=10&&cmd.lane.length<=1000&&cmd.lane.taper>=0&&cmd.lane.taper<=300))return fail('ความยาวช่องเสริม 10–1000 ม. และช่วงเปลี่ยน 0–300 ม.',what);
+      if(cmd.lane&&!r.anchors?.[cmd.end])return fail(`ปลายนี้ของ ${r.name} ไม่ได้ต่อกับข้างถนน — ต่อปลายทางลาดกับถนนก่อน`,what);
+      const next={...r.terminals,[cmd.end]:cmd.lane??undefined};if(!cmd.lane)delete next[cmd.end];
+      if(next.start||next.end)r.terminals=next;else delete r.terminals;
+      label=`${cmd.lane?'ตั้ง':'ลบ'}${what} ${r.name}`;group=`ramp.lane:${r.id}:${cmd.end}`;roadsChanged=true;break;
     }
     case 'road.setLaneRuns':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

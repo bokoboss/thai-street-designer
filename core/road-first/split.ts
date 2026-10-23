@@ -60,9 +60,9 @@ export function splitRoad(roads:Road[],decisions:Decision[],roadId:string,at:Wor
   const notes:string[]=[];if(r.links?.length)notes.push('ล้างช่วงเปลี่ยนหน้าตัดของถนนเดิม');
   const common={...(r.alignment?{alignment:r.alignment}:{}),...(r.role?{role:r.role}:{}),...(r.roadside?{roadside:{...r.roadside}}:{}),...(r.origin?{origin:structuredClone(r.origin)}:{}),section:structuredClone(r.section)};
   const a:Road={...common,id:r.id,name:r.name,points:ptsA,...(profileA?{profile:profileA}:{}),...(openA.length?{openings:openA}:{}),...(runsA.length?{laneRuns:runsA}:{}),
-    ...(r.ends?.start?{ends:{start:structuredClone(r.ends.start)}}:{}),...(r.anchors?.start?{anchors:{start:{...r.anchors.start}}}:{})};
+    ...(r.ends?.start?{ends:{start:structuredClone(r.ends.start)}}:{}),...(r.anchors?.start?{anchors:{start:{...r.anchors.start}}}:{}),...(r.terminals?.start?{terminals:{start:{...r.terminals.start}}}:{})};
   const b:Road={...common,id:newId,name:newName,points:ptsB,...(profileB?{profile:profileB}:{}),...(openB.length?{openings:openB}:{}),...(runsB.length?{laneRuns:runsB}:{}),
-    ...(r.ends?.end?{ends:{end:structuredClone(r.ends.end)}}:{}),...(r.anchors?.end?{anchors:{end:{...r.anchors.end}}}:{})};
+    ...(r.ends?.end?{ends:{end:structuredClone(r.ends.end)}}:{}),...(r.anchors?.end?{anchors:{end:{...r.anchors.end}}}:{}),...(r.terminals?.end?{terminals:{end:{...r.terminals.end}}}:{})};
   const out=roads.flatMap(x=>x.id===roadId?[a,b]:[x]);
   return{roads:out,decisions:nextDecisions,station:r3(s),notes};
 }

@@ -78,3 +78,52 @@ export function newLaneRun(road:Road,stretches:{start:number;end:number}[],direc
   const length=Math.min(LANE_RUN_DEFAULTS.length,(s.end-s.start)*.8),mid=(s.start+s.end)/2,taper=Math.min(LANE_RUN_DEFAULTS.taper,length/3);
   return{run:{id:`L${n}`,direction,side,start:r3(mid-length/2),end:r3(mid+length/2),taperIn:r3(taper),taperOut:r3(taper)}};
 }
+
+/**
+ * Auxiliary lanes of attached ramp ends, as lane runs on their main roads: a deceleration lane before a diverge
+ * (full lane up to the attachment, taper upstream), an acceleration lane after a merge (full lane from the attachment,
+ * taper downstream). Upstream / downstream follow the traffic on that side (side 1 runs with the drawing direction).
+ * Overlapping lanes on the same side join into one continuous auxiliary lane (a merge followed by a diverge).
+ */
+export function auxLaneRuns(roads:Road[]):Map<string,LaneRun[]>{
+  const out=new Map<string,LaneRun[]>(),length=new Map(roads.map(r=>[r.id,resolveAlignment(r.points,r.alignment??'chord').length]));
+  for(const r of roads)for(const end of ['start','end'] as const){
+    const a=r.anchors?.[end],lane=r.terminals?.[end],L=a&&length.get(a.roadId);if(!a||!lane||L===undefined)continue;
+    const span=lane.length+lane.taper,withTraffic=a.side===1,upstream=end==='start';
+    // Along the stations: before the attachment when the lane is upstream of it for this traffic, else after.
+    const before=upstream===withTraffic;
+    const s0=before?a.station-span:a.station,s1=before?a.station:a.station+span,start=Math.max(0,s0),stop=Math.min(L,s1);
+    if(stop-start<2)continue;
+    out.set(a.roadId,[...(out.get(a.roadId)??[]),{id:`aux-${r.id}-${end}`.slice(0,30),direction:withTraffic?'forward':'backward',side:'curb',start:r3(start),end:r3(stop),
+      taperIn:before?Math.min(lane.taper,stop-start):0,taperOut:before?0:Math.min(lane.taper,stop-start)}]);
+  }
+  for(const [id,list] of out){
+    const merged:LaneRun[]=[];
+    for(const x of [...list].sort((p,q)=>p.start-q.start)){
+      const m=merged.find(y=>y.direction===x.direction&&y.side===x.side&&x.start<=y.end+1e-6);
+      if(m){if(x.end>m.end){m.end=x.end;m.taperOut=x.taperOut;}m.id=`${m.id}+`.slice(0,30);}else merged.push({...x});
+    }
+    out.set(id,merged);
+  }
+  return out;
+}
+
+/** A merge followed by the next diverge on the same side of a road: the stretch traffic weaves across (measured only). */
+export type Weave={roadId:string;side:1|-1;merge:string;diverge:string;length:number;connected:boolean};
+export function weavingSections(roads:Road[],aux=auxLaneRuns(roads)):Weave[]{
+  const out:Weave[]=[];
+  for(const main of roads){
+    for(const side of [1,-1] as const){
+      const ev=roads.flatMap(r=>(['start','end'] as const).flatMap(end=>{const a=r.anchors?.[end];
+        return a&&a.roadId===main.id&&a.side===side?[{ramp:r.id,kind:end==='end'?'merge' as const:'diverge' as const,station:a.station}]:[];}))
+        .sort((p,q)=>(p.station-q.station)*side);
+      for(let i=1;i<ev.length;i++){
+        const m=ev[i-1],d=ev[i];if(m.kind!=='merge'||d.kind!=='diverge'||m.ramp===d.ramp)continue;
+        const lo=Math.min(m.station,d.station),hi=Math.max(m.station,d.station),dir=side===1?'forward':'backward';
+        const connected=(aux.get(main.id)??[]).some(x=>x.direction===dir&&x.start<=lo+1e-6&&x.end>=hi-1e-6);
+        out.push({roadId:main.id,side,merge:m.ramp,diverge:d.ramp,length:r3(hi-lo),connected});
+      }
+    }
+  }
+  return out;
+}

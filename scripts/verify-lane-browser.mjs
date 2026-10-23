@@ -29,6 +29,15 @@ try{
   await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].laneRuns[0].taperIn===45,'typed taper');
   await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await new Promise(r=>setTimeout(r,500));
   await b.screenshot('artifacts/lane-run-3d.png');await b.click('[data-design-view="2d"]');
+  // Deceleration lane at a ramp's diverge: one tick on the ramp panel; the ramp then continues the added lane.
+  const withRamp={...fixture,roads:[fixture.roads[0],{id:'X',name:'ทางออก',role:'ramp',alignment:'arc',points:[{x:-100,y:-9},{x:20,y:-35},{x:120,y:-55}],section:{forwardLanes:1,backwardLanes:0,laneWidth:3.5,median:0,walk:0},anchors:{start:{roadId:'A',station:100,side:1}}}]};
+  await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(withRamp))})`);await b.send('Page.reload');
+  await b.waitFor(()=>b.count('[data-design-ready="true"]'),'ready');
+  await b.clickAt(await screen(70,-45));await b.waitFor(()=>b.count('[data-design-ramp-lane="start"]'),'ramp panel with its diverge');
+  await b.click('[data-design-ramp-lane-toggle="start"]');
+  await b.waitFor(async()=>{const r=(await current()).roads.find(x=>x.id==='X');return r.terminals?.start?.length===100&&Math.abs(r.points[0].y+(2+7+1.75))<.01;},'lane added; ramp starts on its centre');
+  await b.screenshot('artifacts/ramp-decel-lane.png');
+  await b.click('[data-design-undo]');await b.waitFor(async()=>!(await current()).roads.find(x=>x.id==='X').terminals,'one undo');
   assert.deepEqual(b.errors,[]);
-  console.log('PASS lane browser: add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D');
+  console.log('PASS lane browser: deceleration lane at a ramp diverge in 1 click, add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D');
 }catch(error){await b.screenshot('artifacts/lane-browser-failure.png');throw error;}finally{b.close();}

@@ -27,7 +27,7 @@ export function reverseRoad(roads:Road[],decisions:Decision[],roadId:string):Out
   const L=stations(r.points,r.alignment).at(-1)??0,notes:string[]=[];
   const next:Road={...structuredClone(r),points:[...r.points].reverse().map(p=>({...p}))};
   if(r.role!=='ramp')next.section={...r.section,forwardLanes:r.section.backwardLanes,backwardLanes:r.section.forwardLanes};
-  else{delete next.anchors;notes.push('ทางลาดกลับทิศเดินรถ');}
+  else{delete next.anchors;delete next.terminals;notes.push('ทางลาดกลับทิศเดินรถ');if(r.terminals)notes.push('ลบช่องเร่ง/ลดความเร็วเดิม');}
   if(r.profile)next.profile=r.profile.map(q=>({...q,station:r3(L-q.station)})).sort((a,b)=>a.station-b.station);
   if(r.openings)next.openings=r.openings.map(o=>({...o,station:r3(Math.max(0,L-o.station-o.length))}));
   // Lane runs stay on the ground; on a two-way road they keep their traffic (direction flips with the drawing direction).
