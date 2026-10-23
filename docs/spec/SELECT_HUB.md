@@ -52,9 +52,22 @@ joining). Join is the existing `road.join`.
 Menu: กลับทิศการวาด / กลับทิศเดินรถของทางลาด, ทำแนวตรงทั้งเส้น, เชื่อมด้วยโค้งสัมผัส (รัศมี … ม.). Panels: “แนวถนน” on the road
 panel (reverse, straighten a range); tangent radius on the two-road panel.
 
-## Not yet (rest of 4B-4)
+## One-shot guides while drawing (third part)
 
-One-shot guides after hovering a road (extension, perpendicular, parallel, distance to a picked reference); rotate / mirror.
+`core/road-first/snap.ts`, after the road ends and points on roads:
+
+- **Extension:** beyond either end of any road, along its end straight, within the road-snap distance of the line
+  (rank between road points and angle steps). Drawn as a dashed line from the road end; badge “แนวต่อของ …”.
+- **Reference road:** the road the cursor last came onto (a point on it or its end) while drawing; shown with a light
+  amber band. From the last drawn point, directions **parallel** and **perpendicular** to the reference road (its direction
+  nearest the cursor) are offered alongside the 15° steps, the closer one first (Tab cycles); badge “ขนานกับ …” /
+  “ตั้งฉากกับ …”.
+- **Distance to the reference road** for whatever point is used, in the readout (“ห่าง … ม.”).
+- Shift (or the snap-off toggle) suspends all of them, as before.
+
+## Not yet
+
+Rotate / mirror a selection (roadmap 4D), command search, a picked point (not a road) as reference.
 
 ## Verification
 
@@ -63,6 +76,8 @@ One-shot guides after hovering a road (extension, perpendicular, parallel, dista
 - `scripts/verify-reshape.cjs`: reverse keeps traffic / junction settings / levels / openings / ramps and twice is identity,
   ramp reversal refused while attached and allowed when free; straighten re-measures levels, openings and ramps; tangent
   curve joins two roads with the largest fitting radius (line, quarter circle, line), radius on request, one undo, refusals.
-- `scripts/verify-select-browser.mjs`: reverse from the menu, tangent curve via Ctrl+A and the menu; pan and empty drags never edit, box select, Shift+click, drag-move with one undo,
+- `scripts/verify-draw-guides.cjs`: extension (ends first, off-line ignored, Shift suspends), parallel / perpendicular to
+  the reference road, distance to it.
+- `scripts/verify-select-browser.mjs`: extension guide, reference road, parallel guide with its distance; reverse from the menu, tangent curve via Ctrl+A and the menu; pan and empty drags never edit, box select, Shift+click, drag-move with one undo,
   move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button. Screenshots
   `artifacts/select-multi.png`, `artifacts/select-menu.png`.

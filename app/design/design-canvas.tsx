@@ -51,6 +51,7 @@ function snapLabel(s:ShownSnap,roads:Road[],drawing:boolean,off:boolean){
   if(s.kind==='end')return drawing?`ปลาย ${name(s.roadId)}`:`ต่อจากปลาย ${name(s.roadId)}`;
   if(s.kind==='road')return `บน ${name(s.roadId)}`;
   if(s.kind==='angle')return s.guide==='straight'?'ต่อแนวเดิม':s.guide==='square'?'ตั้งฉากกับช่วงก่อน':'มุมทีละ 15°';
+  if(s.kind==='guide')return s.guide==='extension'?`แนวต่อของ ${name(s.roadId)}`:s.guide==='parallel'?`ขนานกับ ${name(s.roadId)}`:`ตั้งฉากกับ ${name(s.roadId)}`;
   return off?'ปิด snap':'อิสระ';
 }
 /** Level label: +6.0 ม. / −3.5 ม. */
@@ -85,6 +86,8 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const wrap=useRef<HTMLDivElement>(null),svg=svgRef;
   const [size,setSize]=useState({w:900,h:600}),[view,setView]=useState<View>({x:0,y:0,scale:2});
   const [snap,setSnap]=useState<ShownSnap|null>(null);
+  /** Reference road for one-shot guides: the road the cursor last came onto while drawing. */
+  const [reference,setReference]=useState<string|null>(null);
   const cycle=useRef({key:'',base:0}),lastPointer=useRef<{clientX:number;clientY:number;shiftKey:boolean}|null>(null);
   const drag=useRef<{kind:'pan';from:{x:number;y:number};start:View}|{kind:'point';roadId:string;index:number}
     |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}
@@ -220,8 +223,11 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   /** Snapped cursor for Draw Road; Shift suspends snapping. */
   function snapAt(e:{clientX:number;clientY:number;shiftKey:boolean}):ShownSnap{
     const from=draft.at(-1),prev=draft.at(-2);lastPointer.current={clientX:e.clientX,clientY:e.clientY,shiftKey:e.shiftKey};
-    const list=snapCandidates(toWorld(e),project.roads,{pxPerMetre:view.scale,from,off:e.shiftKey||snapOff,
+    const ref=reference&&project.roads.some(r=>r.id===reference)?reference:undefined;
+    const list=snapCandidates(toWorld(e),project.roads,{pxPerMetre:view.scale,from,off:e.shiftKey||snapOff,...(ref?{reference:ref}:{}),
       previousHeading:from&&prev?((Math.atan2(from.y-prev.y,from.x-prev.x)*180/Math.PI)+360)%360:undefined});
+    // Hovering a road (on it or at its end) makes it the reference for the next guides.
+    const on=list.find(c=>c.kind==='road'||c.kind==='end');if(on?.roadId&&on.roadId!==reference)setReference(on.roadId);
     // Tab counts from the moment this set of targets appeared under the cursor.
     const key=list.map(c=>`${c.kind}:${c.roadId??''}:${c.end??''}:${c.guide??''}`).join('|');
     if(key!==cycle.current.key)cycle.current={key,base:snapCycle};
@@ -439,9 +445,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         {calibration.length===2&&<line x1={calibration[0].x} y1={calibration[0].y} x2={calibration[1].x} y2={calibration[1].y} stroke="#c47b12" strokeWidth={px(2)}/>}
         {calibration.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r={px(6)} fill="#fff" stroke="#c47b12" strokeWidth={px(2)}/><text x={p.x+px(9)} y={p.y-px(8)} fontSize={px(13)} fontWeight="700" fill="#c47b12">{i?'B':'A'}</text></g>)}
       </g>}
+      {tool==='road'&&reference&&(()=>{const r=project.roads.find(x=>x.id===reference);if(!r)return null;
+        const d=resolveAlignment(r.points,r.alignment??'chord').sample().map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' ');
+        return <path data-design-reference-road={reference} d={d} fill="none" stroke="#c47b12" strokeOpacity={.35} strokeWidth={px(6)} pointerEvents="none"/>;})()}
       {tool==='road'&&snap&&<g data-design-snap={snap.kind} pointerEvents="none">
         {snap.kind==='angle'&&draft.length>0&&(()=>{const a=draft.at(-1)!,r=(snap.angle??0)*Math.PI/180,L=px(2000);
           return <line x1={a.x-Math.cos(r)*L} y1={a.y-Math.sin(r)*L} x2={a.x+Math.cos(r)*L} y2={a.y+Math.sin(r)*L} stroke="#c47b12" strokeWidth={px(1)} strokeDasharray={`${px(5)} ${px(5)}`}/>;})()}
+        {snap.kind==='guide'&&snap.guide==='extension'&&snap.guideFrom&&<line x1={snap.guideFrom.x} y1={snap.guideFrom.y} x2={snap.point.x} y2={snap.point.y} stroke="#c47b12" strokeWidth={px(1.2)} strokeDasharray={`${px(5)} ${px(5)}`} data-design-guide="extension"/>}
+        {snap.kind==='guide'&&snap.guide!=='extension'&&draft.length>0&&(()=>{const a=draft.at(-1)!,r=(snap.angle??0)*Math.PI/180,L=px(2000);
+          return <line data-design-guide={snap.guide} x1={a.x-Math.cos(r)*L} y1={a.y-Math.sin(r)*L} x2={a.x+Math.cos(r)*L} y2={a.y+Math.sin(r)*L} stroke="#c47b12" strokeWidth={px(1.2)} strokeDasharray={`${px(5)} ${px(5)}`}/>;})()}
         {snap.kind==='end'&&<circle cx={snap.point.x} cy={snap.point.y} r={px(12)} fill="#0b7f8622" stroke="#0b7f86" strokeWidth={px(2)}/>}
         {snap.kind==='road'&&<rect x={snap.point.x-px(7)} y={snap.point.y-px(7)} width={px(14)} height={px(14)} transform={`rotate(45 ${snap.point.x} ${snap.point.y})`} fill="#fff" stroke="#0b7f86" strokeWidth={px(2)}/>}
         <circle cx={snap.point.x} cy={snap.point.y} r={px(3)} fill="#0b7f86"/>
@@ -450,6 +462,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     {tool==='road'&&snap&&<div className="design-readout" data-design-readout="true" style={{left:Math.max(8,Math.min((snap.point.x-vb.x)*view.scale+16,size.w-(draftCheck?350:140))),top:Math.max(8,Math.min((snap.point.y-vb.y)*view.scale+16,size.h-(draftCheck?90:40)))}}>
       {typedLength?<b>{typedLength} ม. ↵</b>:snap.length!==undefined&&<b>{snap.length.toFixed(1)} ม.</b>}
       {snap.angle!==undefined&&<span>{snap.angle.toFixed(0)}°</span>}
+      {snap.refDistance!==undefined&&<span data-design-readout-ref={snap.refDistance}>ห่าง {project.roads.find(r=>r.id===reference)?.name} {snap.refDistance.toFixed(1)} ม.</span>}
       {(drawLevel!==0||draftLevels.some(z=>z!==0))&&<span data-design-readout-level={drawLevel}>ระดับ {fmtLevel(drawLevel)}</span>}
       {(()=>{const last=draft.at(-1),z0=draftLevels[draft.length-1]??0;if(!last||!cursor||z0===drawLevel)return null;const l=Math.hypot(cursor.x-last.x,cursor.y-last.y);
         return l>.5?<span data-design-readout-grade="true">ลาด {((drawLevel-z0)/l*100).toFixed(1)}%</span>:null;})()}

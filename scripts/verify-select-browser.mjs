@@ -72,6 +72,16 @@ try{
   await b.waitFor(async()=>{const p=await current();return p.roads.length===1&&p.roads[0].points.length===3&&p.roads[0].points[1].radius===90;},'joined with a tangent curve');
   await b.screenshot('artifacts/select-tangent.png');
   await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads.length===2,'one undo');
+  // One-shot guides while drawing: the extension of a road end, then parallel to the road last hovered, with its distance.
+  {await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(fixture))})`);await b.send('Page.reload');
+   await b.waitFor(()=>b.count('[data-design-ready="true"]'),'ready');await b.click('[data-design-tool-button="road"]');
+   await mouse('mouseMoved',await screen(260,1));await b.waitFor(async()=>/แนวต่อของ ถนนเอ/.test(await b.text('.design-snap-badge')??''),'extension guide');
+   assert.equal(await b.count('[data-design-guide="extension"]'),1);await b.screenshot('artifacts/guide-extension.png');
+   await mouse('mouseMoved',await screen(-100,121));await b.waitFor(()=>b.count('[data-design-reference-road="C"]'),'hovered road becomes the reference');
+   await b.clickAt(await screen(-120,60));await mouse('mouseMoved',await screen(0,63));
+   await b.waitFor(async()=>/ขนานกับ ถนนซี/.test(await b.text('.design-snap-badge')??''),'parallel guide');
+   assert.match(await b.text('[data-design-readout]'),/ห่าง ถนนซี 60\.0 ม\./);await b.screenshot('artifacts/guide-parallel.png');
+   await b.key('Escape','Escape');}
   assert.deepEqual(b.errors,[]);
-  console.log('PASS select browser: reverse from the menu, tangent curve between two roads, pan / empty drag never edit, box select, Shift+click, drag-move as one undo, move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button for touch');
+  console.log('PASS select browser: one-shot guides (extension, parallel with distance), reverse from the menu, tangent curve between two roads, pan / empty drag never edit, box select, Shift+click, drag-move as one undo, move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button for touch');
 }catch(error){await b.screenshot('artifacts/select-browser-failure.png');throw error;}finally{b.close();}
