@@ -18,7 +18,8 @@ import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
 import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation';
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
-import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
+import {freeStretches,newRoadOpening,roadLength} from '@/core/road-first/road-openings';
+import {newLaneRun,type LaneRun} from '@/core/road-first/lane-runs';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {DiamondPanel,TemplateContext,TemplatePiecesBlock} from './diamond-panel';
 import {MultiRoadInspector} from './multi-select-panel';
@@ -109,6 +110,35 @@ function ProfileBlock({road,run}:{road:Road;run:Run}){
       {pts.length>0&&<button data-design-action="flatten-profile" onClick={()=>set([])}>ราบทั้งเส้น</button>}
     </div>
     <p className="design-meta">ระยะวัดจากต้นถนน · ความยาวโค้งดิ่ง 0 = แนวเส้นตรงเดิม · ใส่ความยาวที่จุดภายในเพื่อสร้างโค้งพาราโบลาแบบสมมาตร · ยังไม่ได้ตรวจความลาดชันตามมาตรฐาน</p>
+  </Fold>;
+}
+
+const RUN_LABEL=(r:LaneRun)=>`${r.direction==='forward'?'ทิศที่วาด':'ทิศสวน'} · ${r.side==='curb'?'ฝั่งขอบทาง':'ฝั่งเกาะกลาง'}`;
+/** Lanes added along stretches of the road (station-based): add, place, taper, remove. */
+function LaneRunBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileResult;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
+  const list=road.laneRuns??[],set=(runs:LaneRun[])=>run({type:'road.setLaneRuns',roadId:road.id,runs});
+  const edit=(id:string,patch:Partial<LaneRun>)=>set(list.map(x=>x.id===id?{...x,...patch}:x));
+  const add=(direction:LaneRun['direction'],side:LaneRun['side'])=>{const r=newLaneRun(road,freeStretches(road,compiled),direction,side);if('error' in r){onMessage(r.error,'error');return;}set([...list,r.run]);};
+  const two=road.section.backwardLanes>0&&road.section.forwardLanes>0,L=roadLength(road);
+  return <Fold id="lane-runs" title="ช่องจราจรเพิ่มตามระยะทาง" summary={list.length?list.map(x=>`+1 ${x.direction==='forward'?'→':'←'} ${Math.round(x.start)}–${Math.round(x.end)} ม.`).join(' · '):'ยังไม่มี'} data="lane-runs">
+    {list.map((x,i)=><div key={x.id} className="design-opening" data-design-lane-run={x.id}>
+      <header><b>+1 ช่อง · {RUN_LABEL(x)}</b><button className="link" data-design-action={`remove-lane-run-${i}`} onClick={()=>set(list.filter(y=>y.id!==x.id))}>ลบ</button></header>
+      <div className="design-reference-tools">
+        {two&&(['forward','backward'] as const).map(d=><button key={d} className={x.direction===d?'active':''} aria-pressed={x.direction===d} data-design-lane-run-direction={`${i}:${d}`} onClick={()=>edit(x.id,{direction:d})}>{d==='forward'?'ทิศที่วาด':'ทิศสวน'}</button>)}
+        {(['curb','median'] as const).map(sd=><button key={sd} className={x.side===sd?'active':''} aria-pressed={x.side===sd} data-design-lane-run-side={`${i}:${sd}`} onClick={()=>edit(x.id,{side:sd})}>{sd==='curb'?'ฝั่งขอบทาง':'ฝั่งเกาะกลาง'}</button>)}
+      </div>
+      <div className="design-fields">
+        <NumberField field={`lane-run-${i}-start`} label="เริ่มที่ระยะ (ม.)" value={x.start} step={1} min={0} max={L} onCommit={start=>edit(x.id,{start})}/>
+        <NumberField field={`lane-run-${i}-end`} label="สิ้นสุดที่ระยะ (ม.)" value={x.end} step={1} min={0} max={L} onCommit={end=>edit(x.id,{end})}/>
+        <NumberField field={`lane-run-${i}-taper-in`} label="ช่วงเปลี่ยนเข้า (ม.)" value={x.taperIn} step={1} min={0} max={500} onCommit={taperIn=>edit(x.id,{taperIn})}/>
+        <NumberField field={`lane-run-${i}-taper-out`} label="ช่วงเปลี่ยนออก (ม.)" value={x.taperOut} step={1} min={0} max={500} onCommit={taperOut=>edit(x.id,{taperOut})}/>
+      </div>
+    </div>)}
+    {list.length<24&&<div className="design-reference-tools">
+      <button data-design-action="add-lane-run-forward" onClick={()=>add('forward','curb')}>+ ช่อง{two?'ทิศที่วาด':''}</button>
+      {two&&<button data-design-action="add-lane-run-backward" onClick={()=>add('backward','curb')}>+ ช่องทิศสวน</button>}
+    </div>}
+    <p className="design-meta">ระยะวัดจากต้นถนน · ลากจุดบนแบบเพื่อเลื่อนต้น/ปลาย · ช่วงเปลี่ยนเป็นค่าที่วาด (ค่าเริ่มต้นของเครื่องมือ) ยังไม่ได้ตรวจตามเกณฑ์ · ช่วงที่ทับปากทางแยกจะถูกตัดและขึ้นรายการให้ตรวจ</p>
   </Fold>;
 }
 
@@ -284,6 +314,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
       <p className="design-meta">ทั้งสองฝั่ง ทุก 15 ม. รวมช่วงเข้าทางแยกของถนนนี้ (ค่าตั้งต้นของเครื่องมือ)</p>
     </section>
     <RoadOpeningBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
+    <LaneRunBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
     <ProfileBlock road={road} run={run}/>
     {endJoins(roads).filter(j=>j.a===road.id||j.b===road.id).map(j=>{const other=roads.find(r=>r.id===(j.a===road.id?j.b:j.a));if(!other)return null;
       return <div key={other.id} className="design-issues" data-design-join-offer={other.id}><b>ปลายถนนชนกับ {other.name}</b>

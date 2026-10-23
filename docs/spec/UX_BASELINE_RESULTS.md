@@ -42,6 +42,12 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### Lane runs (2026-10-23, scripted)
+
+| Task | Completed (Y/N) | Actions | Friction notes |
+| --- | --- | --- | --- |
+| Widen a stretch by one lane | Y | 2 with the road selected (open “ช่องจราจรเพิ่มตามระยะทาง”, + ช่อง) | Placed on the longest stretch between junctions with tool-value tapers; ends dragged on the plan or typed. 4 → 6 lanes: one more click for the other direction. |
+
 ### Select as the editing hub (2026-10-23, scripted)
 
 Build: `feat/select-hub`, based on `fecefb2` (review-plan PR-03). Chromium headless, 1440 × 1000. No human timing measurement.

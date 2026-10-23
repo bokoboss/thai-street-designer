@@ -6,6 +6,7 @@ import type {WorldPoint} from '../network/network-project';
 import {pointAt,type Decision,type Road} from './derive';
 import {projectAlignment} from '../common/alignment';
 import {parseLegKey,legKey,type LegKey,type LegSlip} from './leg-binding';
+import {remapRuns} from './lane-runs';
 
 export type RoadEnd='start'|'end';
 export type EndJoin={a:string;aEnd:RoadEnd;b:string;bEnd:RoadEnd;point:WorldPoint};
@@ -79,6 +80,8 @@ export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:strin
   const used=new Set<string>();
   const openings=centres.map(({o,c})=>{let id=o.id,k=2;while(used.has(id))id=`${o.id}-${k++}`;used.add(id);
     return{...o,id,station:Math.max(0,Math.round(((A.alignment==='arc'?resolveAlignment(finalPoints).project(c):projectAlignment(finalPoints,c)).station-o.length/2)*1000)/1000)};});
-  const joined:Road={...(A.alignment?{alignment:A.alignment}:{}),id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(A.roadside?{roadside:{...A.roadside}}:{}),...(openings.length?{openings}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
+  // Lane runs keep their place on the ground: both ends re-measured on the joined road.
+  const target={points:finalPoints,alignment:A.alignment},laneRuns=[...(remapRuns(A.laneRuns,A,target)??[]),...(remapRuns(B.laneRuns,B,target)??[]).map(x=>({...x,id:(A.laneRuns??[]).some(y=>y.id===x.id)?`${x.id}j`.slice(0,30):x.id}))];
+  const joined:Road={...(A.alignment?{alignment:A.alignment}:{}),id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(A.roadside?{roadside:{...A.roadside}}:{}),...(openings.length?{openings}:{}),...(laneRuns.length?{laneRuns}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
   return{roads:roads.filter(r=>r.id!==bId).map(r=>r.id===aId?joined:r),decisions:nextDecisions,notes};
 }
