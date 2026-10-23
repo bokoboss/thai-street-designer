@@ -21,7 +21,7 @@ const B=e.project.roads.find(x=>x.id==='B'),p=B.profile;assert.ok(Math.abs((p[1]
 assert.ok(!C.issues.some(i=>/ต้องตรวจตามเกณฑ์/.test(i)),'generated rise meets the entered criteria');
 // 3. A design short of the criteria is flagged, with whether the criterion has a source.
 run({type:'road.setProfile',roadId:'B',profile:[{station:0,z:5},{station:800,z:5}]});
-C=rp.compileRoadFirstProject(e.project);const gapIssue=C.issues.find(i=>/น้อยกว่าที่ตั้งไว้ 7\.00 ม\./.test(i));assert.ok(gapIssue,'clearance short flagged');
+C=rp.compileRoadFirstProject(e.project);const gapIssue=C.issues.find(i=>/ช่องลอดที่วัดได้ 3\.50 ม\. \(ใต้โครงสร้างสะพาน ลึก 1\.5 ม\.\) น้อยกว่าที่ตั้งไว้ 5\.5 ม\./.test(i));assert.ok(gapIssue,'clearance short flagged (measured 5 − 1.5 against 5.5)');
 assert.ok(!/ยังไม่มีแหล่งอ้างอิง/.test(gapIssue),'clearance has a source');assert.match(gapIssue,/ต้องตรวจตามเกณฑ์/);assert.ok(!/ผ่าน/.test(gapIssue));
 // 4. Grades over the maximum: main road against the main maximum, ramps against the ramp maximum.
 run({type:'road.setProfile',roadId:'B',profile:[{station:0,z:0},{station:100,z:7},{station:800,z:7}]});

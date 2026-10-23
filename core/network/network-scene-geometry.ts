@@ -77,7 +77,10 @@ export const ELEVATED=.5;
 export type StructureFaceLayer='below'|'deck'|'top';
 export type StructureSceneFace=NetworkSceneFace&{layer:StructureFaceLayer};
 export type StructureSceneLine={id:string;points:{x:number;y:number;z:number}[];dashed:boolean};
-/** Display heights for the structure cues (tool values for the picture, not design standards). */
+/**
+ * Display heights for the structure cues (tool values for the picture, not design standards). The deck depth and the
+ * tunnel opening are only used when the project carries no structure depths (older compiled data).
+ */
 export const STRUCTURE_DISPLAY={deck:1.2,parapet:1.1,tunnelOpening:5};
 /**
  * Bridges, troughs and tunnels (Phase 4A). Faces are layered for the painter: 'below' (trough walls, tunnel portals) is drawn
@@ -85,7 +88,7 @@ export const STRUCTURE_DISPLAY={deck:1.2,parapet:1.1,tunnelOpening:5};
  * Links off the ground get their markings as lines at their own level, since the flat marking texture lies at level 0.
  */
 export function resolveElevatedLinkScene(project:NetworkProject):{faces:StructureSceneFace[];lines:StructureSceneLine[]}{
-  const faces:StructureSceneFace[]=[],lines:StructureSceneLine[]=[],{deck:DECK,parapet:PARAPET}=STRUCTURE_DISPLAY;
+  const faces:StructureSceneFace[]=[],lines:StructureSceneLine[]=[],{parapet:PARAPET}=STRUCTURE_DISPLAY,DECK=project.structure?.deckDepth??STRUCTURE_DISPLAY.deck;
   for(const link of project.links){
     const g=resolveLinkSectionGeometry(project,link);if(!g||!g.z.some(v=>Math.abs(v)>ELEVATED))continue;
     const outerL=g.forwardWalk?.outer??g.left,outerR=g.backwardWalk?.outer??g.right.map(v=>-v);
@@ -113,10 +116,12 @@ export function resolveElevatedLinkScene(project:NetworkProject):{faces:Structur
   // Tunnel portals: the opening (dark) and the headwall above it up to the ground.
   for(const c of project.crossings??[]){
     const t=c.tunnel;if(!t||c.relation!=='over')continue;
-    const dx=t.b.x-t.a.x,dy=t.b.y-t.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*t.half,ny=dx/l*t.half,top=Math.min(0,t.z+STRUCTURE_DISPLAY.tunnelOpening);
+    const dx=t.b.x-t.a.x,dy=t.b.y-t.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l*t.half,ny=dx/l*t.half;
     for(const [k,q] of [[0,t.a],[1,t.b]] as const){
+      // The opening runs from the road at the portal up to the roof underside (same value as the measured clearance).
+      const floor=(k===0?t.za:t.zb)??t.z,top=Math.min(0,t.soffit??t.z+STRUCTURE_DISPLAY.tunnelOpening);
       const L={x:q.x+nx,y:q.y+ny},R={x:q.x-nx,y:q.y-ny};
-      faces.push({id:`${c.id}:portal:${k}`,layer:'below',color:'#2c3438',points:[{...L,z:t.z},{...R,z:t.z},{...R,z:top},{...L,z:top}]});
+      if(top>floor+.05)faces.push({id:`${c.id}:portal:${k}`,layer:'below',color:'#2c3438',points:[{...L,z:floor},{...R,z:floor},{...R,z:top},{...L,z:top}]});
       if(top<-.05)faces.push({id:`${c.id}:headwall:${k}`,layer:'below',color:'#b4bdc1',points:[{...L,z:top},{...R,z:top},{...R,z:.2},{...L,z:.2}]});
     }
   }

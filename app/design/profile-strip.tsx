@@ -3,7 +3,8 @@
 // their levels) and its junctions. Drag a level point to change station and level; double-click the line to add a
 // point, double-click a point to remove it. Each drag is one undo step; the typed list in the inspector edits the same points.
 import {useLayoutEffect,useRef,useState} from 'react';
-import type {Road} from '@/core/road-first/derive';
+import type {CompiledCrossing,Road} from '@/core/road-first/derive';
+import {clearanceText} from '@/core/road-first/structure-clearance';
 import {detectCandidates,stations} from '@/core/road-first/derive';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import type {RoadFirstCommand} from '@/core/road-first/commands';
@@ -15,7 +16,7 @@ type Run=(cmd:RoadFirstCommand,opts?:{gesture?:boolean})=>CommandOutcome;
 const H=150,PAD={l:44,r:14,t:14,b:22};
 const fmt=(z:number)=>`${z>0?'+':z<0?'−':''}${Math.abs(z).toFixed(1)}`;
 
-export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project:RoadFirstProject;run:Run;finishGesture:()=>void}){
+export function ProfileStrip({road,project,crossings=[],run,finishGesture}:{road:Road;project:RoadFirstProject;crossings?:CompiledCrossing[];run:Run;finishGesture:()=>void}){
   const box=useRef<HTMLDivElement>(null),[w,setW]=useState(800),drag=useRef<number|null>(null);
   // The level scale holds still while a point is dragged, so the point stays under the pointer.
   const [frozen,setFrozen]=useState<{zMin:number;zMax:number}|null>(null);
@@ -30,7 +31,18 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
     if(d?.decision==='junction'&&d.roads?.includes(road.id))return[{kind:'junction',station:me.station,z:levelAt(road.profile,me.station),name:d.name??'ทางแยก'}];
     return c.roads.filter(r=>r.roadId!==road.id).map(r=>{const o=project.roads.find(x=>x.id===r.roadId);return{kind:'road',station:me.station,z:levelAt(o?.profile,r.station),name:o?.name??r.roadId};});
   });
-  const zs=[0,...profile.map(q=>q.z),...marks.map(m=>m.z)],zMin=frozen?.zMin??Math.min(...zs)-2,zMax=frozen?.zMax??Math.max(...zs)+3;
+  // Structures at this road's grade-separated crossings, from the compile (the same extents as the plan and 3D):
+  // the deck or roof band between the upper surface and its underside, and the smallest measured clearance under it.
+  type Structure={id:string;from:number;to:number;band:(s:number)=>[number,number];clear:{station:number;low:number;soffit:number;text:string}};
+  const structures=crossings.flatMap((x):Structure[]=>{
+    const m=x.clearance;if(x.relation!=='over'||!m||m.min===null)return[];
+    if(x.over===road.id&&m.spanOver&&m.atOver!==undefined){const soffit=levelAt(road.profile,m.atOver)-m.depth;
+      return[{id:x.candidateId,from:m.spanOver[0],to:m.spanOver[1],band:s=>[levelAt(road.profile,s)-m.depth,levelAt(road.profile,s)],clear:{station:m.atOver,low:soffit-m.min,soffit,text:clearanceText(m)}}];}
+    if(x.under===road.id&&m.spanUnder&&m.atUnder!==undefined){const low=levelAt(road.profile,m.atUnder),soffit=low+m.min;
+      return[{id:x.candidateId,from:m.spanUnder[0],to:m.spanUnder[1],band:()=>[soffit,soffit+m.depth],clear:{station:m.atUnder,low,soffit,text:clearanceText(m)}}];}
+    return[];
+  });
+  const zs=[0,...profile.map(q=>q.z),...marks.map(m=>m.z),...structures.flatMap(t=>[...t.band(t.from),...t.band(t.to),t.clear.low])],zMin=frozen?.zMin??Math.min(...zs)-2,zMax=frozen?.zMax??Math.max(...zs)+3;
   const X=(s:number)=>PAD.l+(s/(total||1))*(w-PAD.l-PAD.r),Z=(z:number)=>PAD.t+(zMax-z)/(zMax-zMin)*(H-PAD.t-PAD.b);
   const S=(px:number)=>Math.max(0,Math.min(total,(px-PAD.l)/(w-PAD.l-PAD.r)*total)),ZofPx=(py:number)=>zMax-(py-PAD.t)/(H-PAD.t-PAD.b)*(zMax-zMin);
   const tangentLine=(profile.length?[{station:0,z:levelAt(profile,0)},...profile,{station:total,z:levelAt(profile,total)}]:[{station:0,z:0},{station:total,z:0}]).filter((q,i,a)=>i===0||q.station>a[i-1].station+1e-6);
@@ -53,6 +65,7 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
   const crossingText=(m:Mark)=>`${m.name} ${fmt(m.z)} · ต่าง ${Math.abs(levelAt(road.profile,m.station)-m.z).toFixed(1)} ม.`;
   type Label={kind:string;text:string;x:number;y:number;anchor:'start'|'middle';color:string};
   const wanted:Label[]=[
+    ...structures.map(t=>({kind:'clearance',text:`ช่องลอด ${t.clear.text}`,x:X(t.clear.station)+5,y:Z((t.clear.low+t.clear.soffit)/2)+4,anchor:'start' as const,color:'#4a565b'})),
     ...marks.filter(m=>m.kind==='road').map(m=>({kind:'crossing',text:crossingText(m),x:X(m.station)+7,y:Z(m.z)+4,anchor:'start' as const,color:'#4a565b'})),
     ...marks.filter(m=>m.kind==='junction').map(m=>({kind:'junction',text:m.name,x:X(m.station)+3,y:H-PAD.b-4,anchor:'start' as const,color:'#0b6f69'})),
     ...tangentLine.slice(1).flatMap((q,i)=>{const a=tangentLine[i],g=(q.z-a.z)/((q.station-a.station)||1)*100;
@@ -79,6 +92,12 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
       {marks.map((m,i)=>m.kind==='junction'
         ?<g key={i} data-design-profile-junction={i}><title>{m.name}</title><line x1={X(m.station)} x2={X(m.station)} y1={PAD.t} y2={H-PAD.b} stroke="#0b7f86" strokeDasharray="2 3"/></g>
         :<g key={i} data-design-profile-crossing={m.name}><title>{crossingText(m)}</title><rect x={X(m.station)-5} y={Z(m.z)-3} width="10" height="6" fill="#6f7d84"/></g>)}
+      {structures.map(t=>{const n=Math.max(2,Math.ceil((t.to-t.from)/2)),ss=Array.from({length:n+1},(_,k)=>t.from+(t.to-t.from)*k/n);
+        return <g key={'st'+t.id} data-design-profile-structure={t.id} data-design-profile-clearance={t.clear.text}>
+          <title>{`โครงสร้าง ระยะ ${t.from.toFixed(1)}–${t.to.toFixed(1)} ม. · ช่องลอดต่ำสุด ${t.clear.text}`}</title>
+          <polygon points={[...ss.map(v=>`${X(v)},${Z(t.band(v)[1])}`),...[...ss].reverse().map(v=>`${X(v)},${Z(t.band(v)[0])}`)].join(' ')} fill="#cfd6d9" stroke="#8d999e" strokeWidth="1"/>
+          <line x1={X(t.clear.station)} x2={X(t.clear.station)} y1={Z(t.clear.low)} y2={Z(t.clear.soffit)} stroke="#4a565b" strokeDasharray="3 2"/>
+        </g>;})}
       {solved.curves.length>0&&<polyline points={tangentLine.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#94a3b8" strokeDasharray="4 3"/>}
       <polyline data-design-profile-surface points={line.map(q=>`${X(q.station)},${Z(q.z)}`).join(' ')} fill="none" stroke="#1f2d33" strokeWidth="2.2"/>
       {profile.filter(q=>(q.curveLength??0)>0).map((q,i)=><text key={`curve-${i}`} x={X(q.station)} y={Z(q.z)-8} textAnchor="middle" fontSize="10" fill="#2563eb">โค้งดิ่ง {q.curveLength} ม.</text>)}

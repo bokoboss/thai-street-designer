@@ -5,7 +5,8 @@ import {useProfileReview} from './profile-review';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {useReferenceImage} from './use-reference-image';
 import {MapPanel,type MapState} from './map-panel';
-import type {Candidate,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
+import type {Candidate,CompiledCrossing,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
+import {clearanceText} from '@/core/road-first/structure-clearance';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
 import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} from '@/core/junction/model';
@@ -179,6 +180,16 @@ function LevelCriteriaBlock({project,run}:{project:RoadFirstProject;run:Run}){
   </Fold>;
 }
 
+/** Measured clearance under the structure against the project's value: shown to check, never as a pass / fail. */
+function ClearanceLine({crossing,project}:{crossing:CompiledCrossing;project:RoadFirstProject}){
+  const m=crossing.clearance;if(!m)return null;
+  const k=levelCriteria(project.options.levels),short=m.min!==null&&m.min<k.clearance.value-1e-6;
+  return <p className={`design-meta${short?' design-warning':''}`} data-design-clearance={m.min===null?'unknown':m.min} data-design-clearance-structure={m.structure}>
+    ช่องลอดต่ำสุดที่วัดได้ {clearanceText(m)} ใต้{m.structure==='tunnel'?'หลังคาอุโมงค์':'สะพาน'} (ลึก {m.depth} ม.) · ค่าที่ตั้งไว้ {k.clearance.value} ม.{hasSource(k.clearance)?'':' (TO_VERIFY)'}
+    {m.min===null?' — ต้องตรวจเอง':short?' — ต้องตรวจตามเกณฑ์':''}
+  </p>;
+}
+
 function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road:Road;project:RoadFirstProject;compiled:CompileResult;run:Run;onSelect:(s:DesignSelection)=>void;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const list=detectCandidates(project.roads).filter(c=>c.roads.some(r=>r.roadId===road.id));
   const {request,review}=useProfileReview(project,run,onMessage);
@@ -190,7 +201,7 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
     {list.map(c=>{
       const others=c.roads.filter(r=>r.roadId!==road.id).map(r=>name(r.roadId)).join(', '),d=project.decisions.find(x=>x.candidateId===c.id);
       const x=compiled.crossings.find(v=>v.candidateId===c.id&&v.roads.includes(road.id));
-      const state=d?.decision==='junction'?'ทางแยก':d?.decision==='grade-separated'?(x?.relation==='over'?(x.over===road.id?'ข้ามไปด้านบน':'ลอดใต้'):'ต่างระดับ (ยังไม่กำหนด)'):d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังไม่ได้เลือก';
+      const state=d?.decision==='junction'?'ทางแยก':d?.decision==='grade-separated'?(x?.relation==='over'?`${x.over===road.id?'ข้ามไปด้านบน':'ลอดใต้'} · ช่องลอด ${clearanceText(x.clearance)}`:'ต่างระดับ (ยังไม่กำหนด)'):d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังไม่ได้เลือก';
       const two=c.kind==='cross'&&c.roads.length===2;
       return <div key={c.id} className="design-crossing-row" data-design-road-crossing={c.id}>
         <button className="design-link" onClick={()=>onSelect(d?.decision==='junction'?{kind:'junction',id:c.id}:{kind:'crossing',id:c.id})}>กับ {others}</button> <span className="design-meta">· {state}</span>
@@ -267,7 +278,8 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
     {d?.decision==='grade-separated'&&(()=>{const x=compiled.crossings.find(v=>v.candidateId===candidate.id),name=(id?:string)=>project.roads.find(r=>r.id===id)?.name??'';
       return <section className="design-block" data-design-crossing-relation={x?.relation??'unresolved'}>
         <small className="design-block-title">ถนนไหนอยู่บน</small>
-        <p className="design-meta">{x?.relation==='over'?`${name(x.over)} อยู่บน · ต่างระดับ ${x.gap.toFixed(1)} ม. (วัดจากแนวดิ่ง ยังไม่ได้ตรวจระยะช่องลอดตามมาตรฐาน)`:'ยังไม่กำหนด · ถนนสองสายอยู่ระดับเดียวกันที่จุดนี้'}</p>
+        <p className="design-meta">{x?.relation==='over'?`${name(x.over)} อยู่บน · ต่างระดับที่แนวกึ่งกลาง ${x.gap.toFixed(1)} ม.`:'ยังไม่กำหนด · ถนนสองสายอยู่ระดับเดียวกันที่จุดนี้'}</p>
+        {x?.relation==='over'&&<ClearanceLine crossing={x} project={project}/>}
         <div className="design-reference-tools" role="radiogroup" aria-label="ถนนไหนอยู่บน">
           {candidate.roads.map(r=><button key={r.roadId} role="radio" aria-checked={x?.over===r.roadId} className={x?.over===r.roadId&&x.relation==='over'?'active':''} data-design-over={r.roadId}
             onClick={()=>request(overCommand(project,candidate.id,r.roadId))}>{name(r.roadId)} อยู่บน</button>)}

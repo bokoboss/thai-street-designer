@@ -82,6 +82,8 @@ export type NetworkProject={
   crossings?:NetworkCrossing[];
   /** Ramp attachments (Phase 4B): taper at a diverge or merge (main road edge, ramp end corners), at the main road level z. */
   rampTapers?:{id:string;points:WorldPoint[];z:number}[];
+  /** Structure depths from the project's level criteria (deck incl. surfacing; tunnel roof), used by 3D and export. */
+  structure?:{deckDepth:number;tunnelRoof:number};
 };
 /**
  * relation: over = one road passes over the other; unresolved = levels equal or contradicting the chosen over road.
@@ -89,8 +91,13 @@ export type NetworkProject={
  * deck: the over road across the crossing (for the plan's structure cue).
  */
 export type NetworkCrossing={id:string;name:string;point:WorldPoint;relation:'over'|'unresolved';overLink?:string;underLink?:string;gap:number;deck?:{a:WorldPoint;b:WorldPoint;half:number};
-  /** The lower road below ground under the upper one: a tunnel box over this stretch of the lower road. */
-  tunnel?:{a:WorldPoint;b:WorldPoint;half:number;z:number}};
+  /**
+   * The lower road below ground under the upper one: a tunnel box over this stretch of the lower road.
+   * za / zb: road level at each portal; soffit: underside of the roof (upper road level minus roof). Older data: z only.
+   */
+  tunnel?:{a:WorldPoint;b:WorldPoint;half:number;z:number;za?:number;zb?:number;soffit?:number};
+  /** Smallest measured clearance under the structure (null = not measured, never 0), the structure and depth used. */
+  clearance?:{min:number|null;structure:'deck'|'tunnel';depth:number;at?:WorldPoint}};
 export type LinkEndSection={
   forwardLanes:number;
   backwardLanes:number;

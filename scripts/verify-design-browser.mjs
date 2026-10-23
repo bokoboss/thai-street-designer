@@ -67,7 +67,9 @@ try{
     await b.click(`[data-design-over="${r2}"]`);
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-design-crossing-relation="over"]')&&await b.count('[data-network-crossing-deck]')===1&&await b.count('[data-network-junction-hit]')===0,'upper road over the lower one, deck drawn, no junction');
-    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./,'rise = clearance + structure depth (starting values)');
+    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับที่แนวกึ่งกลาง 6\.5 ม\./,'rise = clearance + structure depth (starting values)');
+    assert.equal(await b.evalValue(`document.querySelector('[data-design-clearance]').dataset.designClearance`),'5','measured clearance under the deck = the set clearance');
+    assert.match(await b.text('[data-design-clearance]'),/ช่องลอดต่ำสุดที่วัดได้ 5\.00 ม\. ใต้สะพาน .* \(TO_VERIFY\)/);
     await b.screenshot('artifacts/design-browser-grade-separation.png');
     await b.click('[data-design-view="3d"]');
     await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-raised]')?.dataset.networkSceneRaised??0`))>0,'3D shows the raised road');
@@ -79,7 +81,8 @@ try{
     await b.click(`[data-design-under="${r1}"]`);
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');
     await b.waitFor(async()=>await b.count('[data-network-crossing-tunnel]')===1&&await b.count('[data-network-structure-piece="trough"]')>0&&await b.count('[data-network-junction-hit]')===0,'tunnel and trough drawn, still no junction');
-    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับ 6\.5 ม\./);
+    assert.match(await b.text('[data-design-crossing-relation]'),/ต่างระดับที่แนวกึ่งกลาง 6\.5 ม\./);
+    assert.equal(await b.evalValue(`document.querySelector('[data-design-clearance]').dataset.designClearanceStructure`),'tunnel','measured under the tunnel roof');
     await b.screenshot('artifacts/design-browser-underpass.png');
     await b.click('[data-design-view="3d"]');
     await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-below]')?.dataset.networkSceneBelow??0`))>0,'3D shows trough walls and portals');

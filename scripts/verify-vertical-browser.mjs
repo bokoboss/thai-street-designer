@@ -15,6 +15,10 @@ async function seed(project){await b.evalValue(`localStorage.setItem('thai-stree
 try{
  await b.waitFor(()=>b.count('[data-design-ready="true"]'),'loaded');await seed(fixture);assert.deepEqual(await current(),fixture,'opening never smooths or changes authored data');
  await selectA();await b.click('[data-design-section-mode="profile"]');await b.waitFor(()=>b.count('[data-design-profile="A"]'),'long section');
+ // The structure at the crossing appears in the long section with the measured clearance, as in the road panel.
+ await b.waitFor(()=>b.count('[data-design-profile-structure]'),'structure band in the long section');
+ {const shown=await b.evalValue(`document.querySelector('[data-design-profile-structure]').dataset.designProfileClearance`);assert.match(shown,/^\d+\.\d\d ม\.$/);
+  assert.ok((await b.text('[data-design-road-crossings]')).includes(`ช่องลอด ${shown}`),'same measured clearance in the road panel');}
  await b.click('[data-design-fold-toggle="profile"]');await b.waitFor(()=>b.count('[data-design-field="profile-1-curve"]'),'curve length input');
  assert.equal(await b.evalValue(`document.querySelector('[data-design-field="profile-1-curve"]').value`),'200');
  const surface=await b.evalValue(`document.querySelector('[data-design-profile-surface]').getAttribute('points')`);assert.ok(surface.split(' ').length>10,'curved surface sampled separately from tangent controls');
@@ -37,5 +41,5 @@ try{
  await selectA();await b.click('[data-design-road-over]');await b.waitFor(()=>b.count('[data-design-notice="error"]'),'authored point conflict');assert.deepEqual(await current(),authored);
  const short=structuredClone(flat);short.roads[0].points=[{x:-30,y:0},{x:30,y:0}];await seed(short);
  await b.click(`[data-design-candidate="${cid}"]`);await b.click('[data-design-over="A"]');await b.waitFor(async()=>/ช่วงถนนไม่พอ/.test(await b.text('[data-design-notice]')),'short approach refused');assert.deepEqual(await current(),short);
- assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
+ assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
 }catch(error){await b.screenshot('artifacts/vertical-browser-failure.png');throw error;}finally{b.close();}
