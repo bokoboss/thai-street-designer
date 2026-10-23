@@ -12,6 +12,7 @@ import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type L
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
 import {splitRoad} from './split';
+import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
 import {MAX_RADIUS,vertexCurve} from './curves';
@@ -33,6 +34,10 @@ export type RoadFirstCommand=
   |{type:'road.join';roadId:string;otherId:string}
   /** Move whole roads by one offset (a selection dragged or moved by typed distances). */
   |{type:'roads.move';roadIds:string[];delta:WorldPoint}
+  /** Reverse a road's drawing direction (a two-way road keeps its traffic; a ramp changes its direction of travel). */
+  |{type:'road.reverse';roadId:string}
+  /** Remove the points between two points of a road (a straight line between them). */
+  |{type:'road.straighten';roadId:string;from:number;to:number}
   /** Split a road in two at a point on a straight stretch; the second piece gets `newId`. */
   |{type:'road.split';roadId:string;at:WorldPoint;newId:string}
   |{type:'road.movePoint';roadId:string;index:number;point:WorldPoint}
@@ -192,6 +197,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       for(const r of list as Road[])r.points=r.points.map(q=>({...q,x:r3(q.x+cmd.delta.x),y:r3(q.y+cmd.delta.y)}));
       label=list.length===1?`ย้ายถนน ${list[0]!.name}`:`ย้ายถนน ${list.length} สาย`;group=`roads.move:${ids.slice().sort().join(',')}`;roadsChanged=true;break;
     }
+    case 'road.reverse':case 'road.straighten':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      const out=cmd.type==='road.reverse'?reverseRoad(p.roads,p.decisions,cmd.roadId):straightenRoad(p.roads,p.decisions,cmd.roadId,cmd.from,cmd.to);
+      const what=cmd.type==='road.reverse'?`กลับทิศการวาด ${r.name}`:`ทำแนวตรง ${r.name} จากจุดที่ ${cmd.from+1} ถึง ${cmd.to+1}`;
+      if('error' in out)return fail(out.error,what);
+      p.roads=out.roads;p.decisions=out.decisions;label=[what,...out.notes].join(' · ');roadsChanged=true;break;
+    }
     case 'road.split':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       const names=new Set(p.roads.map(x=>x.name));let n=2;while(names.has(`${r.name} (${n})`))n++;
@@ -338,7 +350,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   // Ramp ends stay on the edge of the road they attach to, whatever the edit changed.
   {
     const joined=cmd.type==='road.join'?{from:cmd.otherId,into:cmd.roadId}:undefined;
-    const next=reattachRamps(project.roads,p.roads,{joined,remap:!!joined||(cmd.type==='road.extend'&&cmd.atStart),...(splitAt?{split:splitAt}:{})});
+    const next=reattachRamps(project.roads,p.roads,{joined,remap:!!joined||(cmd.type==='road.extend'&&cmd.atStart)||cmd.type==='road.reverse'||cmd.type==='road.straighten',...(splitAt?{split:splitAt}:{})});
     const shape=(rs:Road[])=>JSON.stringify(rs.map(r=>r.points));
     if(shape(next)!==shape(p.roads))roadsChanged=true;
     p.roads=next;

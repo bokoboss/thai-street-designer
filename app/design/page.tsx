@@ -6,6 +6,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Crosshair,Hand,Layers,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,roadSelection,selectedRoadIds,type DesignSelection,type DesignTool} from './design-canvas';
 import {SelectMenu,menuItems,type MenuAction,type MenuAt} from './select-menu';
+import {tangentConnectPlan} from '@/core/road-first/tangent-connect';
 import {DesignInspector,type NewRole} from './design-inspector';
 import {TemplateContext,type TemplateGhost} from './diamond-panel';
 import type {Road} from '@/core/road-first/derive';
@@ -178,6 +179,9 @@ export default function DesignWorkspace(){
       const names=ids.map(id=>ed.project.roads.find(r=>r.id===id)?.name??id);
       if(ed.run(ids.length===1?{type:'road.remove',roadId:ids[0]}:{type:'batch',label:`ลบถนน ${ids.length} สาย (${names.join(', ')})`,commands:ids.map(roadId=>({type:'road.remove' as const,roadId}))}).ok)setSelection(null);return;
     }
+    if(action==='reverse'&&ids.length===1){ed.run({type:'road.reverse',roadId:ids[0]});return;}
+    if(action==='straighten'&&ids.length===1){const r=ed.project.roads.find(x=>x.id===ids[0]);if(r)ed.run({type:'road.straighten',roadId:r.id,from:0,to:r.points.length-1});return;}
+    if(action==='tangent'&&ids.length===2){const t=tangentConnectPlan(ed.project,ids[0],ids[1]);if('error' in t){ed.setNotice({text:t.error,kind:'error'});return;}if(ed.run(t.cmd).ok)setSelection({kind:'road',id:ids[0]});return;}
     if(action==='join'&&ids.length===2){if(ed.run({type:'road.join',roadId:ids[0],otherId:ids[1]}).ok)setSelection({kind:'road',id:ids[0]});return;}
     if(action==='split'&&at?.roadId){const [newId]=templateServices.makeIds(1);if(ed.run({type:'road.split',roadId:at.roadId,at:at.world,newId}).ok)setSelection(roadSelection([at.roadId,newId]));}
   }

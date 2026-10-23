@@ -52,6 +52,9 @@ Build: `feat/select-hub`, based on `fecefb2` (review-plan PR-03). Chromium headl
 | Move several roads together | Y | 1 drag (one undo step) — or 3 by number (type, type, ย้าย) | Junctions between moved roads keep their settings; ramps follow, slide along or let go of their main road like a dragged end. |
 | Split a road and join it back | Y | 2 + 2 (right-click → แยกถนนตรงนี้; right-click → ต่อสองเส้นนี้) — on touch: pick a sharp point → แยกถนนที่จุดนี้ | Levels, median openings, junction settings and ramp attachments past the split follow the new piece. |
 | Delete a selection | Y | 1 (Delete) or 2 (ลบที่เลือก, confirm) | One undo brings all back. |
+| Reverse a road | Y | 2 (right-click → กลับทิศการวาด) or 3 on the road panel | Traffic, junction settings, levels and openings stay on the ground. |
+| Straighten a road | Y | 2 (right-click → ทำแนวตรงทั้งเส้น); a range: 4 on the road panel | |
+| Connect two roads with a tangent curve | Y | 3 (select both, right-click → เชื่อมด้วยโค้งสัมผัส) | Largest radius that fits by default; typed radius on the panel. |
 
 ### U-turn structures (2026-10-23, scripted)
 

@@ -33,14 +33,36 @@ crossing / junction. Levels get a point at the split on both pieces; openings, j
 attachments past the split move to the new piece, re-measured from its start; per-span link settings are cleared (as when
 joining). Join is the existing `road.join`.
 
+## Reshaping (second part)
+
+- **Reverse** (`road.reverse`, `core/road-first/reshape.ts`): the drawing direction flips. A two-way road keeps its traffic
+  on the ground: forward / backward lane counts swap, levels and median openings are re-measured from the other end, junction
+  leg settings swap ahead ↔ behind (the same arms), ramps attached to it are re-measured and change side with the
+  direction. Reversing twice gives the same road. A ramp is one-way, so reversing it changes its direction of travel; an
+  end still on a road edge would then run against traffic and is refused by the ordinary ramp rule with its reason.
+- **Straighten** (`road.straighten`): removes the points between two chosen points (whole road from the menu, any range on
+  the road panel). Levels, median openings and attached ramps are re-measured on the ground; refused when level points
+  would collapse or a vertical curve no longer fits.
+- **Tangent curve between two roads** (`core/road-first/tangent-connect.ts`): the end straights of two selected roads are
+  lengthened to where they meet (the end points slide along their own straights), the roads are joined there and that
+  point gets the largest radius the straights allow (`vertexCurve` limit, tool value) or a radius typed on the panel.
+  One batch, one undo; refused when the straights do not meet ahead of both ends, and by the join rules (e.g. roads with
+  level points on curved alignments).
+
+Menu: กลับทิศการวาด / กลับทิศเดินรถของทางลาด, ทำแนวตรงทั้งเส้น, เชื่อมด้วยโค้งสัมผัส (รัศมี … ม.). Panels: “แนวถนน” on the road
+panel (reverse, straighten a range); tangent radius on the two-road panel.
+
 ## Not yet (rest of 4B-4)
 
-Reverse a road, straighten selected points, tangent curve between two straights, one-shot guides, rotate / mirror.
+One-shot guides after hovering a road (extension, perpendicular, parallel, distance to a picked reference); rotate / mirror.
 
 ## Verification
 
 - `scripts/verify-select-hub.cjs`: move a selection (junction kept, one undo per drag), ramps follow / slide / let go,
   split keeps the ground with every attached item, refusals, split at a point, box selection, bounds, join pair.
-- `scripts/verify-select-browser.mjs`: pan and empty drags never edit, box select, Shift+click, drag-move with one undo,
+- `scripts/verify-reshape.cjs`: reverse keeps traffic / junction settings / levels / openings / ramps and twice is identity,
+  ramp reversal refused while attached and allowed when free; straighten re-measures levels, openings and ramps; tangent
+  curve joins two roads with the largest fitting radius (line, quarter circle, line), radius on request, one undo, refusals.
+- `scripts/verify-select-browser.mjs`: reverse from the menu, tangent curve via Ctrl+A and the menu; pan and empty drags never edit, box select, Shift+click, drag-move with one undo,
   move by number, right-click split and join, Ctrl+A / Delete / undo, multi-select button. Screenshots
   `artifacts/select-multi.png`, `artifacts/select-menu.png`.
