@@ -35,7 +35,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(p.schemaVersion<3&&r.profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))return 'ข้อมูลโค้งดิ่งต้องบันทึกด้วยรูปแบบโครงการที่รองรับ';
     if(r.profile?.some(q=>(q.curveLength??0)>0&&q.station+q.curveLength!/2>(stations(r.points,r.alignment).at(-1)??0)))return `${r.name}: โค้งดิ่งเลยปลายถนน — ลดความยาวหรือปรับจุดระดับ`;
     if(r.profile?.some(q=>(q.curveLength??0)>0)&&r.alignment!=='arc'&&r.points.some(q=>(q.radius??0)>0))return `${r.name}: แปลงระยะตามแนวโค้งก่อนเพิ่มโค้งดิ่ง เพื่อให้รูปตัดและภาพถนนใช้ระยะเดียวกัน`;
-    if(r.origin!==undefined&&(!r.origin||r.origin.template!=='diamond'||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
+    if(r.origin!==undefined&&(!r.origin||(r.origin.template!=='diamond'&&r.origin.template!=='uturn-bridge')||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }

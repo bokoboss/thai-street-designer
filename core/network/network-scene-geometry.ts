@@ -98,7 +98,8 @@ export function resolveElevatedLinkScene(project:NetworkProject):{faces:Structur
         const z0=g.z[i-1],z1=g.z[i],p0=edge[i-1],p1=edge[i];
         if(z0>ELEVATED||z1>ELEVATED){
           faces.push({id:`${link.id}:deck:${k}:${i}`,layer:'deck',color:'#8d999e',points:[{...p0,z:z0+.03},{...p1,z:z1+.03},{...p1,z:Math.max(0,z1-DECK)},{...p0,z:Math.max(0,z0-DECK)}]});
-          faces.push({id:`${link.id}:parapet:${k}:${i}`,layer:'top',color:'#c3cbcf',points:[{...p0,z:z0+.18},{...p1,z:z1+.18},{...p1,z:z1+PARAPET},{...p0,z:z0+PARAPET}]});
+          // Parapets are see-through in the picture so a narrow deck (a ramp) is not hidden behind them.
+          faces.push({id:`${link.id}:parapet:${k}:${i}`,layer:'top',color:'rgba(150,162,168,.45)',points:[{...p0,z:z0+.18},{...p1,z:z1+.18},{...p1,z:z1+PARAPET},{...p0,z:z0+PARAPET}]});
         }
         if(z0<-ELEVATED||z1<-ELEVATED)
           faces.push({id:`${link.id}:wall:${k}:${i}`,layer:'below',color:'#a3adb1',points:[{...p0,z:Math.min(0,z0)},{...p1,z:Math.min(0,z1)},{...p1,z:Math.max(Math.min(0,z1),.25)},{...p0,z:Math.max(Math.min(0,z0),.25)}]});

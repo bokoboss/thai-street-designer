@@ -73,10 +73,10 @@ export function DiamondPanel({project,candidateId,run,onPlaced}:{project:RoadFir
 /** On a template piece: the set it belongs to, with its pieces and removing the set. */
 export function TemplatePiecesBlock({project,roadId,run,onSelectRoad}:{project:RoadFirstProject;roadId:string;run:Run;onSelectRoad:(id:string)=>void}){
   const road=project.roads.find(r=>r.id===roadId),group=road?.origin?.group;if(!group)return null;
-  const pieces=templatePieces(project.roads,group);
-  return <section className="design-block" data-design-template-pieces={pieces.length}>
-    <small className="design-block-title">ส่วนหนึ่งของทางแยกต่างระดับแบบข้าวหลามตัด</small>
+  const pieces=templatePieces(project.roads,group),uturn=road?.origin?.template==='uturn-bridge';
+  return <section className="design-block" data-design-template-pieces={pieces.length} data-design-template={road?.origin?.template}>
+    <small className="design-block-title">{uturn?'สะพานกลับรถที่วางจากชุดสำเร็จรูป':'ส่วนหนึ่งของทางแยกต่างระดับแบบข้าวหลามตัด'}</small>
     <ul className="design-piece-list">{pieces.map(p=><li key={p.id}><button className="design-link" data-design-template-piece={p.id} onClick={()=>onSelectRoad(p.id)}>{p.name}</button>{p.id===roadId?' (ที่เลือกอยู่)':''}</li>)}</ul>
-    <button data-design-action="remove-template" onClick={()=>run(removeTemplateCommand(project.roads,group,'ลบทางลาดของข้าวหลามตัด'))}>ลบทางลาดทั้งชุด</button>
+    <button data-design-action="remove-template" onClick={()=>run(removeTemplateCommand(project.roads,group,uturn?'ลบสะพานกลับรถ':'ลบทางลาดของข้าวหลามตัด'))}>{uturn?'ลบสะพานกลับรถ':'ลบทางลาดทั้งชุด'}</button>
   </section>;
 }
