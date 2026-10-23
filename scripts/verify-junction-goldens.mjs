@@ -44,7 +44,7 @@ function writeReport(extra={}){
 async function waitForHttp(url,timeout=45000){
   const until=Date.now()+timeout;
   while(Date.now()<until){
-    try{const r=await fetch(url);if(r.ok)return;}catch{}
+    try{const r=await fetch(url,{signal:AbortSignal.timeout(3000)});if(r.ok)return;}catch{}
     await sleep(250);
   }
   throw new Error('Timed out waiting for '+url);
@@ -52,13 +52,13 @@ async function waitForHttp(url,timeout=45000){
 async function waitForJson(url,timeout=30000){
   const until=Date.now()+timeout;
   while(Date.now()<until){
-    try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}
+    try{const r=await fetch(url,{signal:AbortSignal.timeout(3000)});if(r.ok)return await r.json();}catch{}
     await sleep(200);
   }
   throw new Error('Timed out waiting for '+url);
 }
 
-const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port)],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});
+const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','-p',String(port)],{cwd:root,env:process.env,stdio:['ignore','pipe','pipe']});
 let serverLog='';server.stdout.on('data',d=>serverLog+=d);server.stderr.on('data',d=>serverLog+=d);
 let chrome=null,ws=null,seq=0;const pending=new Map();let runtimeErrors=[];
 const shutdown=()=>{

@@ -1,6 +1,7 @@
 // Roads whose ends touch (independent review 2026-10-20): drawn end to end they look continuous but are two
 // separate roads. endJoins() finds such pairs so the plan can show them; joinRoads() makes one road of them,
 // keeping every junction setting by re-keying the legs of the road that is absorbed.
+import {resolveAlignment} from '../common/resolved-alignment';
 import type {WorldPoint} from '../network/network-project';
 import {pointAt,type Decision,type Road} from './derive';
 import {projectAlignment} from '../common/alignment';
@@ -12,6 +13,7 @@ export type EndJoin={a:string;aEnd:RoadEnd;b:string;bEnd:RoadEnd;point:WorldPoin
 const dist=(p:WorldPoint,q:WorldPoint)=>Math.hypot(p.x-q.x,p.y-q.y);
 const endOf=(r:Road,e:RoadEnd)=>e==='start'?r.points[0]:r.points[r.points.length-1];
 function nearBody(r:Road,p:WorldPoint,tol:number){
+  if(r.alignment==='arc')return resolveAlignment(r.points).project(p).distance<=tol;
   for(let i=1;i<r.points.length;i++){
     const a=r.points[i-1],b=r.points[i],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/l2));
     if(dist(p,{x:a.x+dx*t,y:a.y+dy*t})<=tol)return true;
@@ -41,6 +43,8 @@ export type JoinOutcome={roads:Road[];decisions:Decision[];notes:string[]}|{erro
 export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:string,tolerance=1):JoinOutcome{
   const A=roads.find(r=>r.id===aId),B=roads.find(r=>r.id===bId);
   if(!A||!B||A===B)return{error:'ไม่พบถนนที่จะเชื่อม'};
+  if(A.alignment!==B.alignment)return{error:'แปลงระยะตามแนวโค้งของถนนทั้งสองเส้นก่อนเชื่อม'};
+  if(A.alignment==='arc'&&[A,B].some(r=>r.profile?.length||r.anchors||r.origin||r.links?.length))return{error:'ถนนที่จะเชื่อมมีจุดระดับ จุดเชื่อม หรือการตั้งค่าช่วงถนน — ยังเชื่อมโดยรักษารายการเหล่านี้ครบไม่ได้'};
   const pair=endJoins(roads,tolerance).find(j=>(j.a===aId&&j.b===bId)||(j.a===bId&&j.b===aId));
   if(!pair)return{error:'ปลายถนนสองเส้นนี้ไม่ได้ชนกัน หรือมีถนนอื่นอยู่ที่จุดนั้น'};
   const aEnd=pair.a===aId?pair.aEnd:pair.bEnd,bEnd=pair.a===aId?pair.bEnd:pair.aEnd;
@@ -71,10 +75,10 @@ export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:strin
   const farEnd=bEnd==='end'?B.ends?.start:B.ends?.end,ownEnd=aEnd==='end'?A.ends?.start:A.ends?.end;
   const ends=backToA?{start:farEnd,end:ownEnd}:{start:ownEnd,end:farEnd};
   // Openings keep their place on the ground: re-measured on the joined road from their centre point.
-  const centres=[A,B].flatMap(r=>(r.openings??[]).map(o=>({o,c:pointAt(r.points,o.station+o.length/2)})));
+  const centres=[A,B].flatMap(r=>(r.openings??[]).map(o=>({o,c:pointAt(r.points,o.station+o.length/2,r.alignment)})));
   const used=new Set<string>();
   const openings=centres.map(({o,c})=>{let id=o.id,k=2;while(used.has(id))id=`${o.id}-${k++}`;used.add(id);
-    return{...o,id,station:Math.max(0,Math.round((projectAlignment(finalPoints,c).station-o.length/2)*1000)/1000)};});
-  const joined:Road={id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(A.roadside?{roadside:{...A.roadside}}:{}),...(openings.length?{openings}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
+    return{...o,id,station:Math.max(0,Math.round(((A.alignment==='arc'?resolveAlignment(finalPoints).project(c):projectAlignment(finalPoints,c)).station-o.length/2)*1000)/1000)};});
+  const joined:Road={...(A.alignment?{alignment:A.alignment}:{}),id:A.id,name:A.name,...(A.role?{role:A.role}:{}),...(A.roadside?{roadside:{...A.roadside}}:{}),...(openings.length?{openings}:{}),section:structuredClone(A.section),points:finalPoints,...(ends.start||ends.end?{ends:JSON.parse(JSON.stringify(ends))}:{})};
   return{roads:roads.filter(r=>r.id!==bId).map(r=>r.id===aId?joined:r),decisions:nextDecisions,notes};
 }

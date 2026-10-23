@@ -47,6 +47,7 @@ jobs:
         with:
           name: browser-acceptance
           path: |
+            artifacts/alignment-*
             artifacts/design-*
             artifacts/junction-goldens-*
           if-no-files-found: warn

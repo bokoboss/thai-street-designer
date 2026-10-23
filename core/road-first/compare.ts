@@ -59,7 +59,7 @@ function metrics(p:RoadFirstProject,c:CompileResult){
     slips+=j.design.slips.length;
     for(const i of activeArmIds(j)){const a=j.design.arms[i],pk=pocketsFor(a,'incoming');mainLanes+=a.incoming;turnLanes+=pk.left.lanes+pk.right.lanes;}
   }
-  return{roads:p.roads.length,length:r2(p.roads.reduce((s,r)=>s+(stations(r.points).at(-1)??0),0)),junctions:c.project.junctions.length,mainLanes,turnLanes,slips};
+  return{roads:p.roads.length,length:r2(p.roads.reduce((s,r)=>s+(stations(r.points,r.alignment).at(-1)??0),0)),junctions:c.project.junctions.length,mainLanes,turnLanes,slips};
 }
 const METRICS:{key:keyof ReturnType<typeof metrics>;label:string;unit?:string}[]=[
   {key:'roads',label:'ถนน'},{key:'length',label:'ความยาวถนนรวม',unit:'ม.'},{key:'junctions',label:'ทางแยก'},

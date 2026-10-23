@@ -1,6 +1,7 @@
 'use client';
 // Road-first workspace (roadmap Phase 3): one shell — top bar, tool rail, plan, inspector, section strip, status bar.
 import './style.css';
+import {AlignmentUpgradePanel} from './alignment-upgrade-panel';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Crosshair,Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
 import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
@@ -44,6 +45,7 @@ const TOOL_HINT:Record<DesignTool,string>={
 
 export default function DesignWorkspace(){
   const ed=useRoadEditor();
+  const [alignmentReview,setAlignmentReview]=useState(false);
   const [tool,setTool]=useState<DesignTool>('select'),[selection,setSelection]=useState<DesignSelection>(null);
   const [draft,setDraft]=useState<WorldPoint[]>([]),[typedLength,setTypedLength]=useState('');
   // Drawing that starts on a road end continues that road instead of adding a new one.
@@ -96,7 +98,7 @@ export default function DesignWorkspace(){
     if(points.length===1){
       setExtend(snap.kind==='end'&&snap.roadId?{roadId:snap.roadId,atStart:snap.end==='start'}:null);
       // Starting on a road starts at that road's level there (so the new road meets it, not passes over it).
-      const on=snap.roadId?ed.project.roads.find(r=>r.id===snap.roadId):undefined,z=on?Math.round(levelAt(on.profile,projectOnRoad(on.points,points[0]).station)*10)/10:level;
+      const on=snap.roadId?ed.project.roads.find(r=>r.id===snap.roadId):undefined,z=on?Math.round(levelAt(on.profile,projectOnRoad(on.points,points[0],on.alignment).station)*10)/10:level;
       setLevel(z);updateDraft(points,z);setTypedLength('');return;
     }
     updateDraft(points);setTypedLength('');
@@ -215,6 +217,7 @@ export default function DesignWorkspace(){
   }
 
   return <main className="design-workspace" tabIndex={-1} onKeyDown={onKey} onKeyUp={e=>{if(e.key===' '){if(spacePan)e.preventDefault();setSpacePan(false);}}} onBlur={()=>setSpacePan(false)} data-design-workspace="true" data-design-ready={ed.loaded?"true":undefined} data-inspector-open={inspectorOpen?'true':'false'}>
+    {alignmentReview&&<AlignmentUpgradePanel project={ed.project} onClose={()=>setAlignmentReview(false)} onConfirm={()=>{ed.run({type:'project.upgradeAlignment'});setAlignmentReview(false);setSelection(null);}}/>}
     <header className="design-top">
       <div className="design-brand"><Route size={18}/><b>Thai Street Designer</b><span>{ed.project.title}</span></div>
       <div className="design-scenarios" role="tablist" aria-label="ทางเลือก">
@@ -294,7 +297,7 @@ export default function DesignWorkspace(){
         </div>
       </div>
       <TemplateContext.Provider value={templateServices}>
-      <DesignInspector selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
+      <DesignInspector onAlignmentReview={()=>setAlignmentReview(true)} selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
           setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole} drawLevel={level} onDrawLevel={z=>setLevel(Math.max(-30,Math.min(30,Math.round(z*10)/10)))}/>
       </TemplateContext.Provider>

@@ -135,7 +135,7 @@ function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onP
   return <section className="design-block" data-design-point-block={index}>
     <small className="design-block-title">จุดแนวถนนที่ {index+1} จาก {road.points.length}{end?' (ปลายถนน)':''}</small>
     {curve?<>
-      <NumberField field="point-radius" label="รัศมีโค้ง (ม.) · 0 = มุมตรง" value={radius} step={1} min={0} max={MAX_RADIUS} onCommit={v=>run({type:'road.setPointRadius',roadId:road.id,index,radius:v})}/>
+      <NumberField field="point-radius" label="รัศมีโค้ง (ม.) · 0 = มุมตรง" value={radius} step={1} min={0} max={road.alignment==='arc'?1e7:MAX_RADIUS} onCommit={v=>run({type:'road.setPointRadius',roadId:road.id,index,radius:v})}/>
       <p className="design-meta" data-design-curve={curve.radius>0?'arc':'corner'}>หักมุม {curve.deflection.toFixed(0)}° · {curve.radius>0?`โค้งยาว ${(curve.radius*curve.deflection*Math.PI/180).toFixed(1)} ม.`:'มุมตรง'} · ช่วงตรงสองข้างรับรัศมีได้ถึง {Math.floor(curve.maxRadius*10+1e-6)/10} ม.</p>
       {radius>curve.radius+.01&&<p className="design-meta design-warning" data-design-curve-capped="true">ใส่รัศมี {radius} ม. แต่ช่วงตรงสั้นเกิน จึงวาดได้ {Math.floor(curve.radius*10+1e-6)/10} ม. — ยืดช่วงตรงหรือลดรัศมี</p>}
     </>:<p className="design-meta">{end?'ปลายถนนทำโค้งไม่ได้':'แนวถนนไม่หักมุมที่จุดนี้ หรือช่วงตรงสั้นเกินไป'}</p>}
@@ -214,7 +214,7 @@ function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
 
 function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessage,project,onSelect}:{project:RoadFirstProject;onSelect:(s:DesignSelection)=>void;road:Road;point?:number;onPoint:(point:number|undefined)=>void;run:Run;onDeleted:()=>void;roads:Road[];compiled:CompileResult;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const s=road.section,set=(patch:Partial<RoadSection>)=>run({type:'road.setSection',roadId:road.id,patch});
-  const length=stations(road.points).at(-1)??0;
+  const length=stations(road.points,road.alignment).at(-1)??0;
   const [armed,setArmed]=useState(false);
   return <>
     <header className="design-inspector-head"><small>{road.role==='access'?'ทางเข้าโครงการ':road.role==='ramp'?'ทางลาด':'ถนน'}</small><TextField label="ชื่อ" value={road.name} field="road-name" onCommit={name=>run({type:'road.rename',roadId:road.id,name})}/></header>
@@ -570,8 +570,8 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole,drawLevel,onDrawLevel}:{
-  selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
+export function DesignInspector({onAlignmentReview,selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole,drawLevel,onDrawLevel}:{
+  onAlignmentReview:()=>void;selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newRole:NewRole;onNewRole:(v:NewRole)=>void;drawLevel:number;onDrawLevel:(z:number)=>void;
 }){
   if(tool==='road')return <aside className="design-inspector" data-design-inspector="new-road">
@@ -607,6 +607,7 @@ export function DesignInspector({selection,project,compiled,candidates,run,onSel
       <header className="design-inspector-head"><small>โครงการ</small><TextField label="ชื่อโครงการ" value={project.title} field="project-title" onCommit={title=>run({type:'project.rename',title})}/></header>
       <p className="design-meta">ถนน {project.roads.length} สาย · ทางแยก {compiled.project.junctions.length} แห่ง</p>
       <p className="design-phone-note" data-design-phone-note="true">จอเล็กเหมาะสำหรับดูและตรวจแบบ การวาดและแก้แบบละเอียดทำได้สะดวกกว่าบนจอคอมพิวเตอร์</p>
+      {project.roads.some(r=>r.alignment!=='arc')&&<button className="design-action" data-alignment-review onClick={onAlignmentReview}>ตรวจการแปลงแนวโค้ง</button>}
       <LevelCriteriaBlock project={project} run={run}/>
       <ScenarioInspector key={scenario.name} scenario={scenario}/>
       {scenario.migration&&<MigrationReportPanel m={scenario.migration}/>}

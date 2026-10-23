@@ -2,6 +2,7 @@
 // A snap only chooses a coordinate; junctions come from roads crossing after the edit.
 // Priority: road end > point on a road alignment > angle (15° steps, relative to the previous segment
 // and to the plan axes). Distances are in screen pixels so behaviour is the same at every zoom.
+import {resolveAlignment} from '../common/resolved-alignment';
 import type {WorldPoint} from '../network/network-project';
 import type {Road} from './derive';
 
@@ -35,7 +36,8 @@ export function snapCandidates(cursor:WorldPoint,roads:Road[],o:SnapOptions):Sna
   }
   for(const r of roads){
     let best:{q:WorldPoint;d:number}|null=null;
-    for(let i=1;i<r.points.length;i++){const q=nearestOnSegment(cursor,r.points[i-1],r.points[i]),d=dist(cursor,q);if(d<=roadR&&(!best||d<best.d))best={q:{x:round(q.x),y:round(q.y)},d};}
+    if(r.alignment==='arc'){const f=resolveAlignment(r.points).project(cursor);if(f.distance<=roadR)best={q:f.point,d:f.distance};}
+    else for(let i=1;i<r.points.length;i++){const q=nearestOnSegment(cursor,r.points[i-1],r.points[i]),d=dist(cursor,q);if(d<=roadR&&(!best||d<best.d))best={q:{x:round(q.x),y:round(q.y)},d};}
     if(best&&!out.some(x=>x.c.kind==='end'&&dist(x.c.point,best!.q)<1e-6))out.push({c:{point:best.q,kind:'road',roadId:r.id,...measure(best.q)},d:best.d,rank:1});
   }
   if(o.from){

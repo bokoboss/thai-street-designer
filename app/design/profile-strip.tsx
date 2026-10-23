@@ -21,7 +21,7 @@ export function ProfileStrip({road,project,run,finishGesture}:{road:Road;project
   const [frozen,setFrozen]=useState<{zMin:number;zMax:number}|null>(null);
   // Measured before the first paint, so points do not jump after the strip opens.
   useLayoutEffect(()=>{const el=box.current;if(!el)return;setW(Math.max(320,el.getBoundingClientRect().width));const o=new ResizeObserver(([e])=>setW(Math.max(320,e.contentRect.width)));o.observe(el);return()=>o.disconnect();},[]);
-  const total=stations(road.points).at(-1)??0,profile=sortedProfile(road.profile);
+  const total=stations(road.points,road.alignment).at(-1)??0,profile=sortedProfile(road.profile);
   // Other roads where this one crosses them: their level there; junctions on this road.
   type Mark={kind:'junction'|'road';station:number;z:number;name:string};
   const marks=detectCandidates(project.roads).flatMap((c):Mark[]=>{

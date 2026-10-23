@@ -2,6 +2,7 @@
 // Every edit — a drag, a typed number, a menu action or future automation — is a plain JSON command.
 // executeCommand() applies it, keeps junction decisions attached to their crossing, checks the result
 // with the engine and returns a readable Thai label for the undo history. A rejected edit changes nothing.
+import {previewAlignmentUpgrade} from './alignment-upgrade';
 import {designError} from '../junction/design-validation';
 import {createHistory,recordStep,redoStep,undoStep,closeGroup,type History} from '../common/history';
 import {validateNetworkProject,type WorldPoint} from '../network/network-project';
@@ -15,6 +16,7 @@ import {MAX_RADIUS,vertexCurve} from './curves';
 import {LEVEL_CRITERIA_LABEL,type Criterion,type LevelCriteriaKey} from './level-criteria';
 
 export type RoadFirstCommand=
+  |{type:'project.upgradeAlignment'}
   |{type:'project.rename';title:string}
   /** Several edits as one undo step (templates); stops at the first refused edit and changes nothing. */
   |{type:'batch';commands:RoadFirstCommand[];label:string;quiet?:boolean}
@@ -128,6 +130,11 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     return{project:cur,error:null,label:cmd.label,...acc};
   }
   switch(cmd.type){
+    case 'project.upgradeAlignment':{
+      const upgraded=previewAlignmentUpgrade(project);
+      if(upgraded.errors.length)return fail(upgraded.errors.join(' · '),'แปลงระยะตามแนวโค้ง');
+      Object.assign(p,upgraded.project);label='แปลงระยะตามแนวโค้ง';break;
+    }
     case 'project.rename':p.title=cmd.title;label=`เปลี่ยนชื่อโครงการเป็น ${cmd.title}`;group='project.rename';break;
     case 'project.setLevelCriteria':{
       const levels={...p.options.levels};
@@ -138,7 +145,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     }
     case 'road.add':{
       if(road(cmd.road.id))return fail(`มีถนนรหัส ${cmd.road.id} อยู่แล้ว`,`เพิ่มถนน ${cmd.road.name}`);
-      p.roads.push(structuredClone(cmd.road));label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;
+      p.roads.push({...structuredClone(cmd.road),...(p.schemaVersion===2?{alignment:'arc' as const}:{})});label=`เพิ่มถนน ${cmd.road.name}`;roadsChanged=true;break;
     }
     case 'road.remove':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
@@ -148,13 +155,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(!cmd.points.length)return fail('ไม่มีจุดให้ต่อถนน',`ต่อถนน ${r.name}`);
       const added=cmd.points.map(q=>({x:q.x,y:q.y}));
-      const oldLength=stations(r.points).at(-1)??0;
+      const oldLength=stations(r.points,r.alignment).at(-1)??0;
       r.points=cmd.atStart?[...added.reverse(),...r.points]:[...r.points,...added];
       // Openings and levels are measured from the road start: extending the start moves them along by the added length.
-      const grown=(stations(r.points).at(-1)??0)-oldLength,shift=(v:number)=>Math.round((v+(cmd.atStart?grown:0))*1000)/1000;
+      const grown=(stations(r.points,r.alignment).at(-1)??0)-oldLength,shift=(v:number)=>Math.round((v+(cmd.atStart?grown:0))*1000)/1000;
       if(cmd.atStart&&r.openings)r.openings=r.openings.map(o=>({...o,station:shift(o.station)}));
       if(r.profile||cmd.levels?.some(z=>Math.abs(z)>1e-9)){
-        const s=stations(r.points),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
+        const s=stations(r.points,r.alignment),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
         // Without a profile the old road lies at level 0; its far end keeps that level.
         const kept=(r.profile??[{station:0,z:0},{station:oldLength,z:0}]).map(q=>({station:shift(q.station),z:q.z}));
         const fresh=cmd.points.map((_,k)=>({station:Math.round(at(k)*1000)/1000,z:cmd.levels?.[k]??levelAt(r.profile,cmd.atStart?0:oldLength)}));
@@ -181,7 +188,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       else if(cmd.type==='road.insertPoint'){r.points.splice(i,0,{x:cmd.point.x,y:cmd.point.y});label=`เพิ่มจุดแนวถนน ${r.name}`;}
       else if(cmd.type==='road.removePoint'){if(r.points.length<=2)return fail('ถนนต้องมีอย่างน้อยสองจุด',`ลบจุดแนวถนน ${r.name}`);r.points.splice(i,1);label=`ลบจุดแนวถนน ${r.name}`;}
       else{
-        if(!(cmd.radius>=0&&cmd.radius<=MAX_RADIUS))return fail(`รัศมีโค้งต้องอยู่ระหว่าง 0–${MAX_RADIUS} ม.`,`ปรับรัศมีโค้ง ${r.name}`);
+        if(!(Number.isFinite(cmd.radius)&&cmd.radius>=0&&cmd.radius<=(r.alignment==='arc'?1e7:MAX_RADIUS)))return fail(r.alignment==='arc'?'รัศมีโค้งต้องเป็นจำนวนที่ไม่ติดลบและอยู่ในขอบเขตข้อมูลที่รองรับ':`รัศมีโค้งต้องอยู่ระหว่าง 0–${MAX_RADIUS} ม.`,`ปรับรัศมีโค้ง ${r.name}`);
         if(cmd.radius>0&&!vertexCurve(r.points,i))return fail('จุดนี้เป็นปลายถนนหรือแนวถนนไม่หักมุม จึงทำโค้งไม่ได้',`ปรับรัศมีโค้ง ${r.name}`);
         if(cmd.radius>0)r.points[i]={...r.points[i],radius:cmd.radius};else{const {radius:_drop,...rest}=r.points[i];void _drop;r.points[i]=rest;}
         const c=vertexCurve(r.points,i);
@@ -409,6 +416,7 @@ function newOverflow(p:RoadFirstProject,before:Set<string>):string|null{
 function engineError(p:RoadFirstProject):string|null{
   const compiled=compileRoadFirstProject(p),engine=validateNetworkProject(compiled.project);
   if(engine)return`ทำไม่ได้ · ${engine}`;
+  if(compiled.shortfalls.some(s=>p.roads.some(r=>r.id===s.roadId&&r.alignment==='arc'&&r.points.some(q=>(q.radius??0)>=.25))))return 'ช่วงตรงสำหรับปากทางแยกไม่พอ — ย้ายจุดตัดออกจากโค้งหรือปรับแนวถนน';
   for(const j of compiled.project.junctions){const e=designError(j.design);if(e)return`${j.name}: ${e}`;}
   return null;
 }

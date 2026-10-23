@@ -1,0 +1,68 @@
+{
+  "base": "1cd8f5972116beed8867a6482b041c0c3fb661b5",
+  "digestSha256": "6562378ad01f7c67b911645cc79932d5a071c0f5e14333bc3dc72d57c960fda1",
+  "project": {
+    "kind": "road-first",
+    "schemaVersion": 1,
+    "title": "legacy golden",
+    "roads": [
+      {
+        "id": "A",
+        "name": "A",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1000,
+            "y": 0,
+            "radius": 200
+          },
+          {
+            "x": 1000,
+            "y": 1000
+          }
+        ],
+        "section": {
+          "forwardLanes": 2,
+          "backwardLanes": 2,
+          "laneWidth": 3.5,
+          "median": 4,
+          "walk": 2
+        },
+        "profile": [
+          {
+            "station": 0,
+            "z": 0
+          },
+          {
+            "station": 1000,
+            "z": 10
+          },
+          {
+            "station": 2000,
+            "z": 0
+          }
+        ],
+        "openings": [
+          {
+            "id": "M",
+            "station": 1200,
+            "length": 10
+          }
+        ],
+        "origin": {
+          "template": "diamond",
+          "version": 1,
+          "group": "g",
+          "params": {
+            "keep": "authored"
+          }
+        }
+      }
+    ],
+    "decisions": [],
+    "options": {}
+  }
+}

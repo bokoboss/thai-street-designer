@@ -1,15 +1,16 @@
 import {offset,selfIntersects,type P} from '../junction/geometry';
 export type Alignment={vertices:P[]};
 export type RadiusPoint=P&{radius?:number};
-export const lengthOf=(ps:P[])=>ps.slice(1).reduce((s,p,i)=>s+Math.hypot(p.x-ps[i].x,p.y-ps[i].y),0);
-export function stationOffsets(ps:P[]){const out=ps.length?[0]:[];for(let i=1;i<ps.length;i++)out.push(out[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return out;}
-export function station(ps:P[],distance:number){let remain=Math.max(0,distance);for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],len=Math.hypot(b.x-a.x,b.y-a.y);if(remain<=len||i===ps.length-1){const t=Math.min(1,remain/(len||1));return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,angle:Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,index:i-1};}remain-=len;}return{...ps[0],angle:0,index:0};}
-export function projectAlignment(ps:P[],p:P){
- let before=0,best={t:0,station:0,offset:0,distance:Infinity,point:ps[0],index:0};const total=lengthOf(ps);
+type MeasuredPoint=P&{alignmentStation?:number};
+export const lengthOf=(ps:MeasuredPoint[])=>ps.length&&ps.every(p=>p.alignmentStation!==undefined)?ps.at(-1)!.alignmentStation!-ps[0].alignmentStation!:ps.slice(1).reduce((s,p,i)=>s+Math.hypot(p.x-ps[i].x,p.y-ps[i].y),0);
+export function stationOffsets(ps:MeasuredPoint[]){if(ps.length&&ps.every(p=>p.alignmentStation!==undefined))return ps.map(p=>p.alignmentStation!-ps[0].alignmentStation!);const out=ps.length?[0]:[];for(let i=1;i<ps.length;i++)out.push(out[i-1]+Math.hypot(ps[i].x-ps[i-1].x,ps[i].y-ps[i-1].y));return out;}
+export function station(ps:MeasuredPoint[],distance:number){let remain=Math.max(0,distance);for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],len=a.alignmentStation!==undefined&&b.alignmentStation!==undefined?b.alignmentStation-a.alignmentStation:Math.hypot(b.x-a.x,b.y-a.y);if(remain<=len||i===ps.length-1){const t=Math.min(1,remain/(len||1));return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,angle:Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,index:i-1};}remain-=len;}return{...ps[0],angle:0,index:0};}
+export function projectAlignment(ps:MeasuredPoint[],p:P){
+ let before=0,best={t:0,station:0,offset:0,distance:Infinity,point:ps[0],index:0};const total=lengthOf(ps),ss=stationOffsets(ps);
  for(let i=1;i<ps.length;i++){
-  const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),u=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len||1))),q={x:a.x+u*dx,y:a.y+u*dy},distance=Math.hypot(q.x-p.x,q.y-p.y),along=before+u*len,
+  const a=ps[i-1],b=ps[i],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),u=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len||1))),q={x:a.x+u*dx,y:a.y+u*dy},distance=Math.hypot(q.x-p.x,q.y-p.y),along=before+u*(ss[i]-ss[i-1]),
    signedOffset=len?((p.x-q.x)*(-dy/len)+(p.y-q.y)*(dx/len)):0;
-  if(distance<best.distance)best={t:along/(total||1),station:along,offset:signedOffset,distance,point:q,index:i-1};before+=len;
+  if(distance<best.distance)best={t:along/(total||1),station:along,offset:signedOffset,distance,point:q,index:i-1};before=ss[i];
  }
  return best;
 }

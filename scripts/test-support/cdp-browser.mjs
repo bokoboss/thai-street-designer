@@ -8,13 +8,13 @@ import {setTimeout as sleep} from 'node:timers/promises';
 
 const which=names=>{for(const n of names){const r=spawnSync('which',[n],{encoding:'utf8'});if(r.status===0&&r.stdout.trim())return r.stdout.trim();}return null;};
 const freePort=()=>new Promise((resolve,reject)=>{const s=createServer();s.unref();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const a=s.address();s.close(()=>resolve(a.port));});});
-async function waitJson(url,timeout=45000){const until=Date.now()+timeout;while(Date.now()<until){try{const r=await fetch(url);if(r.ok)return await r.json().catch(()=>({}));}catch{}await sleep(200);}throw new Error('Timed out waiting for '+url);}
+async function waitJson(url,timeout=45000){const until=Date.now()+timeout;while(Date.now()<until){try{const r=await fetch(url,{signal:AbortSignal.timeout(3000)});if(r.ok)return await r.json().catch(()=>({}));}catch{}await sleep(200);}throw new Error('Timed out waiting for '+url);}
 
 export async function startSession({root,path='/',profile,width=1440,height=1000}){
   const port=await freePort();let debugPort=await freePort();while(debugPort===port)debugPort=await freePort();
   const base=`http://127.0.0.1:${port}`,errors=[];
   rmSync(profile,{recursive:true,force:true});mkdirSync(profile,{recursive:true});
-  const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port)],{cwd:root,env:process.env,stdio:'ignore'});
+  const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','-p',String(port)],{cwd:root,env:process.env,stdio:'ignore'});
   let chrome=null,ws=null,seq=0;const pending=new Map();
   const close=()=>{try{ws?.close();}catch{}try{chrome?.kill('SIGTERM');}catch{}try{server.kill('SIGTERM');}catch{}};
   try{

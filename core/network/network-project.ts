@@ -1,3 +1,4 @@
+import {resolveAlignment,type AlignmentPoint} from '../common/resolved-alignment';
 import {initial,markingsFor,migrate,pocketsFor,sectionFor,valid,validSection,type Arm,type Band,type Design,type Direction,type Pocket,type Section} from '../junction/model';
 import {normalizeArrowOverrides} from '../junction/arrow-layout';
 import {cachedEdges} from '../junction/geometry';
@@ -35,6 +36,8 @@ export type LinkStationWidthComponent={id:string;kind:'width';direction:LinkDire
 export type LinkStationComponent=LinkStationLaneComponent|LinkStationWidthComponent;
 export type LinkStationComponentPatch={direction?:LinkDirection;side?:'curb'|'median';target?:LinkWidthTarget;start?:number;end?:number;taperIn?:number;taperOut?:number;delta?:number};
 export type RoadLink={
+  /** Derived slice of the road alignment, shared by every drawing consumer. */
+  alignment?:{vertices:AlignmentPoint[];from:number;to:number};
   id:string;
   name:string;
   from:LinkEndRef;
@@ -152,7 +155,7 @@ export function transformNetworkProject(project:NetworkProject,transform:Network
   return{
     ...project,
     junctions:project.junctions.map(j=>{const p=move(j);return{...j,x:p.x,y:p.y,rotation:normalizedRotation(j.rotation+rotation)};}),
-    links:project.links.map(link=>({...link,via:link.via.map(v=>({...move(v),radius:v.radius}))}))
+    links:project.links.map(link=>({...link,via:link.via.map(v=>({...move(v),radius:v.radius})),...(link.alignment?{alignment:{...link.alignment,vertices:link.alignment.vertices.map(v=>({...v,...move(v)}))}}:{})}))
   };
 }
 export function junctionById(project:NetworkProject,id:string){
@@ -218,6 +221,7 @@ export function linkAlignmentControls(project:NetworkProject,link:RoadLink){
   return raw;
 }
 export function linkPoints(project:NetworkProject,link:RoadLink){
+  if(link.alignment)return resolveAlignment(link.alignment.vertices).sample(link.alignment.from,link.alignment.to);
   const controls=linkAlignmentControls(project,link);
   return controls.length>=2?smoothAlignment(controls):[];
 }
@@ -784,6 +788,11 @@ export function validateNetworkProject(project:NetworkProject){
   }
   const occupied=new Set<string>();
   for(const l of project.links){
+    if(l.alignment!==undefined){
+      const a=l.alignment;
+      if(!a||!Array.isArray(a.vertices)||a.vertices.length<2||a.vertices.length>200||a.vertices.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.abs(p.x)>1e7||Math.abs(p.y)>1e7||(p.radius!==undefined&&(!Number.isFinite(p.radius)||p.radius<0||p.radius>1e7)))||!Number.isFinite(a.from)||!Number.isFinite(a.to)||a.from<0||a.to<=a.from)return 'ข้อมูลแนวโค้งของช่วงถนนไม่ถูกต้อง';
+      if(a.to>resolveAlignment(a.vertices).length+1e-6)return 'ระยะช่วงถนนเลยแนวโค้งที่อ้างถึง';
+    }
     const validTransition=(t:LinkLaneTransition|undefined)=>!t||(['curb','median'].includes(t.side)&&Number.isFinite(t.center)&&t.center>=0&&Number.isFinite(t.length)&&t.length>=3&&t.length<=1000),
       validSource=(input:unknown)=>{
         if(input===undefined)return true;if(!input||typeof input!=='object')return false;
@@ -796,7 +805,7 @@ export function validateNetworkProject(project:NetworkProject){
         return !!component.id&&component.id.length<=40&&['forward','backward'].includes(component.direction)&&Number.isFinite(component.start)&&component.start>=0&&Number.isFinite(component.end)&&component.end>component.start&&Number.isFinite(component.taperIn)&&component.taperIn>=0&&Number.isFinite(component.taperOut)&&component.taperOut>=0&&(component.kind==='lane'?(['curb','median'].includes(component.side)&&validSource(component.source)):(component.kind==='width'&&['walk','shoulder','bike','motorcycle','buffer'].includes(component.target)&&Number.isFinite(component.delta)&&Math.abs(component.delta)>=.01&&component.delta>=-5&&component.delta<=5));
       },
       componentList=Array.isArray(l.components)?l.components:[];
-    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||nodeId(l.from)===nodeId(l.to)||!linkEndExists(project,l.from)||!linkEndExists(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>200)||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
+    if(!l.id||l.id.length>40||typeof l.name!=='string'||l.name.length>80||nodeId(l.from)===nodeId(l.to)||!linkEndExists(project,l.from)||!linkEndExists(project,l.to)||!Array.isArray(l.via)||l.via.length>64||l.via.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.radius)||p.radius<0||p.radius>(l.alignment?1e7:200))||!l.sectionProfile||!['review','linear'].includes(l.sectionProfile.mode)||!validTransition(l.sectionProfile.forwardLaneTransition)||!validTransition(l.sectionProfile.backwardLaneTransition)||!Array.isArray(l.components)||componentList.length>24||new Set(componentList.map(v=>v?.id)).size!==componentList.length||componentList.some(v=>!validComponent(v)))return'Road Link ไม่สมบูรณ์';
     for(const ref of [l.from,l.to]){
       const key=portKey(ref);if(occupied.has(key))return'มี Road Link ใช้ port ซ้ำ';occupied.add(key);
     }
@@ -881,7 +890,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       },
       via=Array.isArray(item.via)?item.via.map(point=>{
         const p=point&&typeof point==='object'?point as Record<string,unknown>:{};
-        return{x:Number(p.x),y:Number(p.y),radius:schemaVersion===1?0:linkRadius(p.radius)};
+        return{x:Number(p.x),y:Number(p.y),radius:schemaVersion===1?0:item.alignment!==undefined?Number(p.radius??0):linkRadius(p.radius)};
       }):[],
       components:LinkStationComponent[]=schemaVersion>=3&&Array.isArray(item.components)?item.components.reduce<LinkStationComponent[]>((out,value,index)=>{
         if(!value||typeof value!=='object')return out;
@@ -910,6 +919,7 @@ export function normalizeNetworkProject(raw:unknown):NetworkProject{
       from:readLinkEnd(from,schemaVersion),
       to:readLinkEnd(to,schemaVersion),
       via,
+      ...(item.alignment!==undefined?{alignment:structuredClone(item.alignment) as RoadLink['alignment']}:{}),
       sectionProfile,
       components
     };

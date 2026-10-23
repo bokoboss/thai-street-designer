@@ -1,17 +1,17 @@
 // Mid-block median openings / U-turns on a road (UX closure before Phase 4A, GW-04). Authored in road stations
 // (start of the opening from the road start); compile places each one on the link it falls in. Starting lengths match the
 // junction-approach openings (tool values, not standards).
-import {projectAlignment} from '../common/alignment';
+import {project} from './ramps';
 import {linkPoints,type WorldPoint} from '../network/network-project';
 import {pointAt,stations,type CompileResult,type Road,type RoadOpening} from './derive';
 import {OPENING_START_LENGTH,type OpeningType} from './approach-edit';
 
-export const roadLength=(r:Road)=>stations(r.points).at(-1)??0;
+export const roadLength=(r:Road)=>stations(r.points,r.alignment).at(-1)??0;
 
 /** Road-station ranges of the links built from this road (stretches between junction approaches and road ends). */
 export function freeStretches(road:Road,compiled:CompileResult):{start:number;end:number}[]{
   return compiled.project.links.filter(l=>compiled.sources.links[l.id]===road.id).map(l=>{
-    const ps=linkPoints(compiled.project,l),a=projectAlignment(road.points,ps[0]).station,b=projectAlignment(road.points,ps[ps.length-1]).station;
+    const ps=linkPoints(compiled.project,l),a=project(road.points,ps[0],road.alignment).station,b=project(road.points,ps[ps.length-1],road.alignment).station;
     return{start:Math.min(a,b),end:Math.max(a,b)};
   }).sort((x,y)=>x.start-y.start);
 }
@@ -32,9 +32,9 @@ export function newRoadOpening(road:Road,compiled:CompileResult,type:OpeningType
 }
 
 /** Middle of an opening on the road centreline (plan handle). */
-export const roadOpeningHandle=(road:Road,o:RoadOpening):WorldPoint=>pointAt(road.points,o.station+o.length/2);
+export const roadOpeningHandle=(road:Road,o:RoadOpening):WorldPoint=>pointAt(road.points,o.station+o.length/2,road.alignment);
 /** Opening start for its handle dragged to p, in 0.5 m steps, kept on the road. */
 export function roadOpeningStationFromPoint(road:Road,o:RoadOpening,p:WorldPoint):number{
-  const s=projectAlignment(road.points,p).station-o.length/2;
+  const s=project(road.points,p,road.alignment).station-o.length/2;
   return Math.max(0,Math.min(Math.round((roadLength(road)-o.length)*2)/2,Math.round(s*2)/2));
 }
