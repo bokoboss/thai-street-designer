@@ -16,7 +16,6 @@ import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/cor
 import {detectCandidates,stations} from '@/core/road-first/derive';
 import {endJoins} from '@/core/road-first/join';
 import {toJunction,toRoundabout} from '@/core/road-first/roundabout';
-import {overCommand,underCommand} from '@/core/road-first/grade-separation';
 import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation';
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
@@ -195,7 +194,7 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
   const {request,review}=useProfileReview(project,run,onMessage);
   if(!list.length)return null;
   const name=(id:string)=>project.roads.find(r=>r.id===id)?.name??id;
-  const go=(o:{cmd:RoadFirstCommand}|{error:string},id:string)=>request(o,()=>onSelect({kind:'crossing',id}));
+  const go=(id:string,kind:'over'|'under')=>request({candidateId:id,roadId:road.id,kind,after:()=>onSelect({kind:'crossing',id})});
   return <section className="design-block" data-design-road-crossings={list.length}>
     {review}<small className="design-block-title">ทางแยกและจุดตัดบนถนนนี้</small>
     {list.map(c=>{
@@ -206,8 +205,8 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
       return <div key={c.id} className="design-crossing-row" data-design-road-crossing={c.id}>
         <button className="design-link" onClick={()=>onSelect(d?.decision==='junction'?{kind:'junction',id:c.id}:{kind:'crossing',id:c.id})}>กับ {others}</button> <span className="design-meta">· {state}</span>
         {two&&<div className="design-reference-tools">
-          <button data-design-road-over={c.id} disabled={x?.relation==='over'&&x.over===road.id} onClick={()=>go(overCommand(project,c.id,road.id),c.id)}>ยกข้าม (สะพาน)</button>
-          <button data-design-road-under={c.id} disabled={x?.relation==='over'&&x.under===road.id} onClick={()=>go(underCommand(project,c.id,road.id),c.id)}>ลอดใต้</button>
+          <button data-design-road-over={c.id} disabled={x?.relation==='over'&&x.over===road.id} onClick={()=>go(c.id,'over')}>ยกข้าม (สะพาน)</button>
+          <button data-design-road-under={c.id} disabled={x?.relation==='over'&&x.under===road.id} onClick={()=>go(c.id,'under')}>ลอดใต้</button>
         </div>}
       </div>;})}
     <LevelBasis project={project} note="กดย้อนกลับเพื่อคืนทางแยก"/>
@@ -282,12 +281,12 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
         {x?.relation==='over'&&<ClearanceLine crossing={x} project={project}/>}
         <div className="design-reference-tools" role="radiogroup" aria-label="ถนนไหนอยู่บน">
           {candidate.roads.map(r=><button key={r.roadId} role="radio" aria-checked={x?.over===r.roadId} className={x?.over===r.roadId&&x.relation==='over'?'active':''} data-design-over={r.roadId}
-            onClick={()=>request(overCommand(project,candidate.id,r.roadId))}>{name(r.roadId)} อยู่บน</button>)}
+            onClick={()=>request({candidateId:candidate.id,roadId:r.roadId,kind:'over'})}>{name(r.roadId)} อยู่บน</button>)}
         </div>
         <small className="design-block-title">หรือกดถนนลงเป็นทางลอด</small>
         <div className="design-reference-tools" aria-label="กดถนนลงเป็นทางลอด">
           {candidate.roads.map(r=><button key={r.roadId} data-design-under={r.roadId}
-            onClick={()=>request(underCommand(project,candidate.id,r.roadId))}>{name(r.roadId)} ลอดใต้</button>)}
+            onClick={()=>request({candidateId:candidate.id,roadId:r.roadId,kind:'under'})}>{name(r.roadId)} ลอดใต้</button>)}
         </div>
         <LevelBasis project={project} note="ทางลอด: ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ · ถนนที่สูงหรือต่ำพออยู่แล้วไม่ถูกปรับ · แก้ต่อได้ที่แนวดิ่งของถนน"/>
       </section>;})()}
@@ -433,14 +432,14 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   // Two roads crossing: make it a bridge or an underpass from here in one step (one undo brings the junction back).
   const crossing=detectCandidates(project.roads).find(c=>c.id===candidateId),two=crossing?.kind==='cross'&&crossing.roads.length===2&&(d.roads?.length??2)===2;
   const rname=(id:string)=>project.roads.find(r=>r.id===id)?.name??id;
-  const separate=(o:{cmd:RoadFirstCommand}|{error:string})=>request(o,()=>onSelect({kind:'crossing',id:candidateId}));
+  const separate=(roadId:string,kind:'over'|'under')=>request({candidateId,roadId,kind,after:()=>onSelect({kind:'crossing',id:candidateId})});
   return <>{review}
     <header className="design-inspector-head"><small>ทางแยก</small><TextField label="ชื่อ" value={d.name??j.name} field="junction-name" onCommit={name=>run({type:'junction.rename',candidateId,name})}/></header>
     {two&&<DiamondPanel project={project} candidateId={candidateId} run={run} onPlaced={()=>onSelect({kind:'crossing',id:candidateId})}/>}
     {two&&<Fold id="junction-grade" title="ทำเป็นทางต่างระดับ (สะพาน / ทางลอด)" summary="ไม่มีทางแยก ถนนผ่านข้ามกัน" data="junction-grade">
       <div className="design-reference-tools">
-        {crossing!.roads.map(r=><button key={'o'+r.roadId} data-design-junction-over={r.roadId} onClick={()=>separate(overCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ข้าม (สะพาน)</button>)}
-        {crossing!.roads.map(r=><button key={'u'+r.roadId} data-design-junction-under={r.roadId} onClick={()=>separate(underCommand(project,candidateId,r.roadId))}>{rname(r.roadId)} ลอดใต้</button>)}
+        {crossing!.roads.map(r=><button key={'o'+r.roadId} data-design-junction-over={r.roadId} onClick={()=>separate(r.roadId,'over')}>{rname(r.roadId)} ข้าม (สะพาน)</button>)}
+        {crossing!.roads.map(r=><button key={'u'+r.roadId} data-design-junction-under={r.roadId} onClick={()=>separate(r.roadId,'under')}>{rname(r.roadId)} ลอดใต้</button>)}
       </div>
       <LevelBasis project={project} note="การตั้งค่าของทางแยกนี้จะไม่ใช้แล้ว กดย้อนกลับเพื่อคืนทางแยก · ยกหรือลดระดับถนนเองในแนวดิ่งก็ได้ ระบบจะเปลี่ยนเป็นทางต่างระดับให้"/>
     </Fold>}

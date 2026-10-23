@@ -3,7 +3,7 @@
 // No profile = level 0, so files saved before 4A are unchanged. Values here are tool values, not standards.
 import type {WorldPoint} from '../network/network-project';
 
-import {levelAt,sortedProfile,verticalSlice,type Profile} from '../common/vertical-profile';
+import {levelAt,profileError,sortedProfile,verticalSlice,type Profile} from '../common/vertical-profile';
 export {levelAt,gradeAt,sortedProfile,profileError,resolveVerticalProfile,authoredProfile,type Profile,type ProfilePoint} from '../common/vertical-profile';
 
 /** |Δz| at or below this is "the same level" for making a junction (tool tolerance). */
@@ -28,18 +28,32 @@ export function removeGenerated(profile:Profile|undefined,owner:string):Profile{
 }
 
 /** Local rise/dip proposal; authored points and unrelated generated work are never overwritten. */
-export function riseProfile(profile:Profile|undefined,station:number,base:number,top:number,height=RISE_DEFAULTS.height,grade=RISE_DEFAULTS.grade,length=Infinity,owner='local-rise'):Profile{
-  if(!Number.isFinite(grade)||grade<=0||!Number.isFinite(height)||!Number.isFinite(top)||top<0)throw Error('ค่าระดับหรือความชันสำหรับยกถนนไม่ถูกต้อง');
+/**
+ * curve: optional vertical-curve length (m) entered by the user for the four grade breaks of the rise / dip; 0 = straight
+ * grades. The tie-in curves need a level point beyond each end: owned boundary points are added at the road ends if the
+ * profile has none there. No curve length is ever chosen by the tool.
+ */
+export function riseProfile(profile:Profile|undefined,station:number,base:number,top:number,height=RISE_DEFAULTS.height,grade=RISE_DEFAULTS.grade,length=Infinity,owner='local-rise',curve=0):Profile{
+  if(!Number.isFinite(grade)||grade<=0||!Number.isFinite(height)||!Number.isFinite(top)||top<0||!Number.isFinite(curve)||curve<0)throw Error('ค่าระดับหรือความชันสำหรับยกถนนไม่ถูกต้อง');
   const kept=removeGenerated(profile,owner),peak=base+height,ground=(s:number)=>levelAt(kept,s);
   const run=Math.max(Math.abs(height),Math.abs(peak-ground(station)))/grade,half=top/2,extent=half+run,start=station-extent,end=station+extent;
   if(start<0||end>length)throw Error(`ช่วงถนนไม่พอ: ต้องมีระยะ ${extent.toFixed(1)} ม. ก่อนและหลังจุดตัด — ปรับแนวถนนหรือแก้เกณฑ์ที่ใช้`);
-  const conflict=kept.find(q=>q.station>start+1e-6&&q.station<end-1e-6||q.curveLength&&q.station+q.curveLength/2>start&&q.station-q.curveLength/2<end);
+  if(curve>0&&(start-curve/2<=1e-6||end+curve/2>=length-1e-6))throw Error(`ช่วงถนนไม่พอสำหรับโค้งดิ่ง ${curve} ม. ที่ปลายทางขึ้นลง — ต้องมีระยะ ${(extent+curve/2).toFixed(1)} ม. ก่อนและหลังจุดตัด ลดความยาวโค้งหรือปรับแนวถนน`);
+  const lo=start-curve/2,hi=end+curve/2;
+  const conflict=kept.find(q=>q.station>lo+1e-6&&q.station<hi-1e-6||q.curveLength&&q.station+q.curveLength/2>lo&&q.station-q.curveLength/2<hi);
   if(conflict)throw Error(`จุดระดับที่ระยะ ${conflict.station.toFixed(1)} ม. อยู่ในช่วงที่จะปรับ — เก็บจุดเดิมไว้ กรุณาย้ายช่วงหรือแก้แนวดิ่งเอง`);
   const r=(v:number)=>Math.round(v*1000)/1000;
   const pts=[{station:r(start),z:r(ground(start))},{station:r(station-half),z:r(peak)},{station:r(station+half),z:r(peak)},{station:r(end),z:r(ground(end))}];
   for(let i=1;i<pts.length;i++)if(Math.abs((pts[i].z-pts[i-1].z)/(pts[i].station-pts[i-1].station))>grade+1e-5)throw Error('ระดับเดิมทำให้ช่วงขึ้นหรือลงชันเกินเกณฑ์ที่ตั้งไว้ — ปรับช่วงหรือแก้แนวดิ่งเอง');
-  const additions=pts.filter(q=>!kept.some(p=>Math.abs(p.station-q.station)<.01&&Math.abs(p.z-q.z)<1e-6)).map(q=>({...q,generatedBy:owner}));
-  return[...kept,...additions].sort((a,b)=>a.station-b.station);
+  const additions=pts.filter(q=>!kept.some(p=>Math.abs(p.station-q.station)<.01&&Math.abs(p.z-q.z)<1e-6)).map(q=>({...q,generatedBy:owner,...(curve>0?{curveLength:curve}:{})}));
+  const out=[...kept,...additions];
+  if(curve>0){
+    if(!kept.some(q=>q.station<lo))out.push({station:0,z:r(ground(0)),generatedBy:owner});
+    if(!kept.some(q=>q.station>hi))out.push({station:r(length),z:r(ground(length)),generatedBy:owner});
+  }
+  out.sort((a,b)=>a.station-b.station);
+  if(curve>0&&profileError(out))throw Error(`โค้งดิ่ง ${curve} ม. ยาวเกินช่วงทางขึ้นลงหรือช่วงราบ — ลดความยาวโค้ง เพิ่มช่วงราบ หรือลดความชัน`);
+  return out;
 }
 
 export const midpoint=(a:WorldPoint,b:WorldPoint)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});

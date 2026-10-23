@@ -42,6 +42,16 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### Flyover / underpass composer (2026-10-23, scripted)
+
+Build: `feat/grade-composer`, based on `2525fd7` (review-plan PR-06). Chromium headless, 1440 × 1000. No human timing measurement.
+
+| Task | Completed (Y/N) | Actions | Friction notes |
+| --- | --- | --- | --- |
+| Bridge with starting values | Y | 2 (ยกข้าม → วาง) | Unchanged from PR-04. The review is now a panel in the inspector instead of a modal, so the plan stays visible with a footprint ghost (approaches and level stretch). |
+| Bridge with an adjusted height / level length / grade / vertical curve | Y | 2 + one typed value per parameter | Each value re-plans live: footprint, length needed vs available, measured clearance of the result and items to check. An impossible value turns the ghost and panel red with the reason and disables placing; nothing is edited until “วาง”. |
+| Replace an earlier untagged rise | Y | 3 (button, tick release, วาง) | Earlier points of unknown source are listed with their stations and kept unless the box is ticked. |
+
 ### Vertical curves and profile review (2026-10-23, scripted)
 
 Build: `feat/vertical-curves-provenance`, based on `7d421c91344160fbc5b4bec9d08aadb7289d2ecb` (review-plan PR-04). Chromium headless, 1440 × 1000. No human timing measurement.

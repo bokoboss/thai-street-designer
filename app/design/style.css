@@ -196,3 +196,8 @@
 .design-alignment-review th,.design-alignment-review td { padding:6px 8px; text-align:left; border-bottom:1px solid #e2e8f0; }
 .design-profile-editor-point { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--d-line); }
 .design-profile-editor-point > button { align-self:flex-end; }
+.design-grade-composer { border-color:#0b7f86; }
+.design-grade-composer[data-grade-state="error"] { border-color:#b3261e; }
+.design-grade-fields { display:grid; grid-template-columns:1fr; gap:6px; }
+.design-grade-delta { width:100%; height:auto; background:#f8fafc; border-radius:4px; margin-top:6px; }
+.design-grade-composer .design-check { display:flex; gap:6px; align-items:flex-start; font-size:12px; margin:6px 0; }

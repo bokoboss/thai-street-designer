@@ -39,7 +39,9 @@ export type RoadFirstCommand=
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
-  |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string}
+  |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string;
+    /** Untagged level points the user explicitly agreed to remove (earlier work of unknown source). */
+    release?:{roadId:string;station:number}[]}
   /** Unhook a ramp end from the road it diverges from or merges into; the end point stays where it is. */
   |{type:'ramp.detach';roadId:string;end:RampEnd}
   |{type:'road.setRoadside';roadId:string;roadside:{trees:boolean;lights:boolean}|null}
@@ -221,7 +223,8 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       if(decision(c.id)?.profileOwner&&decision(c.id)!.profileOwner!==owner)return fail('เจ้าของแนวดิ่งเปลี่ยน — ตรวจผลใหม่ก่อนยืนยัน',cmd.label);
       for(const [id,profile] of Object.entries(cmd.profiles)){
         const r=road(id);if(!r)return fail('ไม่พบถนนที่เลือก');
-        const protectedPoint=r.profile?.find(q=>q.generatedBy!==owner&&!profile?.some(p=>p.station===q.station&&p.z===q.z&&(p.curveLength??0)===(q.curveLength??0)&&p.generatedBy===q.generatedBy));
+        const released=(q:{station:number;generatedBy?:string})=>!q.generatedBy&&!!cmd.release?.some(x=>x.roadId===id&&Math.abs(x.station-q.station)<1e-6);
+        const protectedPoint=r.profile?.find(q=>q.generatedBy!==owner&&!released(q)&&!profile?.some(p=>p.station===q.station&&p.z===q.z&&(p.curveLength??0)===(q.curveLength??0)&&p.generatedBy===q.generatedBy));
         if(protectedPoint)return fail(`${r.name}: ต้องเก็บจุดระดับเดิมที่ระยะ ${protectedPoint.station} ม.`,cmd.label);
         if(profile?.length)r.profile=structuredClone(profile);else delete r.profile;
         if(profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))p.schemaVersion=3;
