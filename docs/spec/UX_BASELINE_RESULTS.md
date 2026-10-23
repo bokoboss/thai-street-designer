@@ -42,6 +42,17 @@ Set by the owner after the baseline. The values below were proposed after the sc
 
 Add one table per measured build (commit, date) using the same columns.
 
+### Select as the editing hub (2026-10-23, scripted)
+
+Build: `feat/select-hub`, based on `fecefb2` (review-plan PR-03). Chromium headless, 1440 × 1000. No human timing measurement.
+
+| Task | Completed (Y/N) | Actions | Friction notes |
+| --- | --- | --- | --- |
+| Select two roads | Y | 2 (box drag on empty plan, Shift+click) — or 3 on touch (multi-select button, tap, tap) | A drag on the empty plan selects, never edits; panning stays on the middle button, Space or the Pan tool. |
+| Move several roads together | Y | 1 drag (one undo step) — or 3 by number (type, type, ย้าย) | Junctions between moved roads keep their settings; ramps follow, slide along or let go of their main road like a dragged end. |
+| Split a road and join it back | Y | 2 + 2 (right-click → แยกถนนตรงนี้; right-click → ต่อสองเส้นนี้) — on touch: pick a sharp point → แยกถนนที่จุดนี้ | Levels, median openings, junction settings and ramp attachments past the split follow the new piece. |
+| Delete a selection | Y | 1 (Delete) or 2 (ลบที่เลือก, confirm) | One undo brings all back. |
+
 ### U-turn structures (2026-10-23, scripted)
 
 Build: `feat/uturn-structures`, based on `55c6a62` (review-plan PR-07). Chromium headless, 1440 × 1000. No human timing measurement.

@@ -3,8 +3,9 @@
 import './style.css';
 import {AlignmentUpgradePanel} from './alignment-upgrade-panel';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Crosshair,Hand,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
-import {DesignCanvas,type DesignSelection,type DesignTool} from './design-canvas';
+import {Crosshair,Hand,Layers,MousePointer2,PenLine,Redo2,Undo2,Maximize2,Route,Plus,GitCompare,ImageDown,PanelRight} from 'lucide-react';
+import {DesignCanvas,roadSelection,selectedRoadIds,type DesignSelection,type DesignTool} from './design-canvas';
+import {SelectMenu,menuItems,type MenuAction,type MenuAt} from './select-menu';
 import {DesignInspector,type NewRole} from './design-inspector';
 import {TemplateContext,type TemplateGhost} from './diamond-panel';
 import type {Road} from '@/core/road-first/derive';
@@ -71,6 +72,8 @@ export default function DesignWorkspace(){
   const templateServices=useMemo(()=>({onGhost:setGhost,makeIds:(n:number)=>{const used=[...ed.workspace.scenarios.flatMap(s=>s.project.roads)],out:string[]=[];
     for(let i=0;i<n;i++){const id=newRoadId(used);out.push(id);used.push({id} as Road);}return out;}}),[ed.workspace]);
   const [snapCycle,setSnapCycle]=useState(0),[snapOff,setSnapOff]=useState(false),[spacePan,setSpacePan]=useState(false);
+  /** Multi-select (touch equivalent of Shift+click) and the right-click menu in Select. */
+  const [multiAdd,setMultiAdd]=useState(false),[menu,setMenu]=useState<MenuAt|null>(null);
   function select(s:DesignSelection){setSelection(s);if(s)setInspectorOpen(true);}
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{try{setHasEarlier(!!localStorage.getItem(NETWORK_PROJECT_STORAGE));}catch{/* unavailable */}},[]);
@@ -160,8 +163,23 @@ export default function DesignWorkspace(){
       if(ed.run({type:'road.removePoint',roadId:selectedRoad.id,index:selection.point}).ok)setSelection({kind:'road',id:selectedRoad.id});return;
     }
     if(e.key==='Delete'&&selectedRoad){if(ed.run({type:'road.remove',roadId:selectedRoad.id}).ok)setSelection(null);return;}
+    if(e.key==='Delete'&&selection?.kind==='roads'){selectionAction('delete');return;}
+    if((e.ctrlKey||e.metaKey)&&k==='a'&&tool==='select'&&view==='2d'){e.preventDefault();selectionAction('select-all');return;}
     if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(k==='v')chooseTool('select');if(k==='h')chooseTool('pan');if(k==='r')chooseTool('road');
+  }
+  /** Actions on the selected roads (menu, inspector buttons and keys share them). */
+  function selectionAction(action:MenuAction,at?:MenuAt){
+    const ids=selectedRoadIds(selection);
+    if(action==='zoom'){setFocusKey(n=>n+1);return;}
+    if(action==='clear'){setSelection(null);return;}
+    if(action==='select-all'){select(roadSelection(ed.project.roads.map(r=>r.id)));return;}
+    if(action==='delete'&&ids.length){
+      const names=ids.map(id=>ed.project.roads.find(r=>r.id===id)?.name??id);
+      if(ed.run(ids.length===1?{type:'road.remove',roadId:ids[0]}:{type:'batch',label:`ลบถนน ${ids.length} สาย (${names.join(', ')})`,commands:ids.map(roadId=>({type:'road.remove' as const,roadId}))}).ok)setSelection(null);return;
+    }
+    if(action==='join'&&ids.length===2){if(ed.run({type:'road.join',roadId:ids[0],otherId:ids[1]}).ok)setSelection({kind:'road',id:ids[0]});return;}
+    if(action==='split'&&at?.roadId){const [newId]=templateServices.makeIds(1);if(ed.run({type:'road.split',roadId:at.roadId,at:at.world,newId}).ok)setSelection(roadSelection([at.roadId,newId]));}
   }
   function download(blob:Blob,name:string){
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -261,9 +279,11 @@ export default function DesignWorkspace(){
         <button data-design-tool-button="select" className={tool==='select'?'active':''} onClick={()=>chooseTool('select')} title="เลือก (V)"><MousePointer2 size={18}/><span>เลือก</span></button>
         <button data-design-tool-button="pan" className={tool==='pan'?'active':''} onClick={()=>chooseTool('pan')} title="เลื่อนมุมมอง (H)"><Hand size={18}/><span>เลื่อน</span></button>
         <button data-design-tool-button="road" className={tool==='road'?'active':''} onClick={()=>chooseTool('road')} title="วาดถนน (R)"><PenLine size={18}/><span>วาดถนน</span></button>
+        {tool==='select'&&<button data-design-multi-select aria-pressed={multiAdd} className={multiAdd?'active':''} onClick={()=>setMultiAdd(v=>!v)} title="เลือกหลายชิ้น: แตะหรือคลิกเพื่อเพิ่ม / เอาออก (เหมือนกด Shift ค้าง)"><Layers size={18}/><span>เลือกหลายชิ้น</span></button>}
       </nav>
       <div className="design-center">
-        <DesignCanvas project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas multiAdd={multiAdd} onMenu={setMenu} project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        {menu&&<SelectMenu at={menu} items={menuItems(ed.project,selectedRoadIds(selection),menu)} onAction={a=>selectionAction(a,menu)} onClose={()=>setMenu(null)}/>}
         {/* Drawing buttons for touch and narrow screens (no right-click, Backspace, Enter or Shift there). */}
         {tool==='road'&&view==='2d'&&<div className="design-draw-actions" data-design-draw-actions="true">
           <button data-design-draw-action="back" disabled={!draft.length} onClick={draftBack}>ย้อนจุด</button>
@@ -297,7 +317,7 @@ export default function DesignWorkspace(){
         </div>
       </div>
       <TemplateContext.Provider value={templateServices}>
-      <DesignInspector onAlignmentReview={()=>setAlignmentReview(true)} selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
+      <DesignInspector onSelectionAction={a=>selectionAction(a)} onAlignmentReview={()=>setAlignmentReview(true)} selection={selection} project={ed.project} compiled={ed.compiled} candidates={candidates} run={ed.run} onSelect={select} tool={tool} onAdvanced={openAdvanced} map={map} onMessage={(text:string,kind:'info'|'error'='info')=>ed.setNotice({text,kind})} reference={{image,tool,onTool:chooseTool,calibration,viewCenter:()=>{const p=ed.project.roads.flatMap(r=>r.points);return p.length?{x:p.reduce((s,q)=>s+q.x,0)/p.length,y:p.reduce((s,q)=>s+q.y,0)/p.length}:{x:0,y:0};}}} scenario={{name:ed.active.name,existing:ed.active.kind==='existing',count:ed.workspace.scenarios.length,reference:ed.reference?.name??null,comparison,onRename:(name:string)=>ed.rename(ed.active.id,name),onRemove:()=>{if(ed.remove(ed.active.id)){setSelection(null);setCompare(false);}},unreadable:ed.unreadable?{download:()=>download(new Blob([ed.unreadable!],{type:'application/json'}),'งานเดิมที่อ่านไม่ได้.json'),clear:ed.clearUnreadable}:undefined,migration:ed.migration?{report:ed.migration,names:Object.fromEntries(ed.workspace.scenarios.map(x=>[x.id,x.name])),active:ed.active.id,dismiss:ed.dismissMigration,
         show:(scenarioId:string,target?:MigrationTarget)=>{if(scenarioId!==ed.active.id&&!ed.switchTo(scenarioId))return;clearDraft();setTool('select');setCompare(false);
           setSelection(target?(target.kind==='road'?{kind:'road',id:target.roadId}:{kind:'junction',id:target.candidateId}):null);}}:undefined,onImportEarlier:hasEarlier?()=>{if(ed.importEarlier()){setSelection(null);setFitKey(k=>k+1);}}:undefined}} newRoadPreset={matchingPreset(ed.lastSection)} newRoadSection={ed.lastSection} onNewRoadPreset={id=>ed.setLastSection(presetSection(id))} newRole={newRole} onNewRole={setNewRole} drawLevel={level} onDrawLevel={z=>setLevel(Math.max(-30,Math.min(30,Math.round(z*10)/10)))}/>
       </TemplateContext.Provider>

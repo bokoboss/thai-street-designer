@@ -133,7 +133,8 @@ PR #64 is merged at `7d421c9` after Quality and Vercel success. The next isolate
 Review-plan PR-05: [structure envelope and measured clearance](spec/STRUCTURE_CLEARANCE.md), merged as PR #66 at `2525fd7`.
 Review-plan PR-06: [flyover / underpass composer](spec/GRADE_COMPOSER.md), merged as PR #67 at `55c6a62`.
 Review-plan PR-07: [U-turn bridge and U-turn under a bridge](spec/UTURN_STRUCTURES.md), merged as PR #68 at `f85fe37`.
-Review-plan PR-08 (this slice): [ramp terminals — tangent tie-in and gore](spec/RAMP_TERMINALS.md). This closes the approved first round (PR-01/02/04–08); PR-03 and PR-09 onward need the owner's go-ahead.
+Review-plan PR-08 (this slice): [ramp terminals — tangent tie-in and gore](spec/RAMP_TERMINALS.md). This closes the approved first round (PR-01/02/04–08), merged as PR #69 at `fecefb2`.
+Owner go-ahead 2026-10-23: PR-03 next. Review-plan PR-03 (this slice): [Select as the editing hub](spec/SELECT_HUB.md) — first part of 4B-4. PR-09 onward (station-based lanes) still need the go-ahead.
 
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
 
@@ -224,7 +225,7 @@ Source for 4B-2b and the editing hub: [road drawing UX research, 2026-10-22](res
 - Placement feedback: the main road it attaches to, the station and the level it inherits.
 - "Select the pieces of this template" after commit; pieces stay ordinary objects.
 
-**4B-4 — Select as the editing hub** (right after 4B-3)
+**4B-4 — Select as the editing hub** (right after 4B-3) — first part done 2026-10-23 (box / Shift selection, move a selection, right-click zoom / split / join / delete; spec `docs/spec/SELECT_HUB.md`); still open: reverse, straighten, tangent curve, one-shot guides.
 - Box select and `Shift`+click add / remove; move a selection as one gesture (junctions and ramps re-bound after).
 - Right-click menu in Select: join, split here, reverse, straighten, zoom, delete.
 - Straighten selected points; tangent curve between two straights ("เชื่อมด้วยโค้งสัมผัส").

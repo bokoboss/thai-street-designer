@@ -1,6 +1,6 @@
 'use client';
 // Inspector for the road-first workspace: header → key properties → actions, destructive action last.
-import {useLayoutEffect,useRef,useState} from 'react';
+import {useContext,useLayoutEffect,useRef,useState} from 'react';
 import {useProfileReview} from './profile-review';
 import type {WorldPoint} from '@/core/network/network-project';
 import type {useReferenceImage} from './use-reference-image';
@@ -20,7 +20,9 @@ import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation'
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
-import {DiamondPanel,TemplatePiecesBlock} from './diamond-panel';
+import {DiamondPanel,TemplateContext,TemplatePiecesBlock} from './diamond-panel';
+import {MultiRoadInspector} from './multi-select-panel';
+import type {MenuAction} from './select-menu';
 import {UturnBridgePanel,UturnUnderAction} from './uturn-panel';
 import {MAX_RADIUS,vertexCurve} from '@/core/road-first/curves';
 /** Kind of road the next drawing makes. */
@@ -135,6 +137,11 @@ function RoadOpeningBlock({road,compiled,run,onMessage}:{road:Road;compiled:Comp
 }
 
 /** The picked road point: curve radius (typed; the plan handle edits the same value), sharp corner, delete. */
+/** Split the road at this (sharp) point: the touch / keyboard way to "แยกถนนตรงนี้". */
+function SplitAtPoint({road,index,run,onPoint}:{road:Road;index:number;run:Run;onPoint:(point:number|undefined)=>void}){
+  const {makeIds}=useContext(TemplateContext);
+  return <button data-design-action="point-split" onClick={()=>{const [newId]=makeIds(1);if(run({type:'road.split',roadId:road.id,at:road.points[index],newId}).ok)onPoint(undefined);}}>แยกถนนที่จุดนี้</button>;
+}
 function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onPoint:(point:number|undefined)=>void}){
   const curve=vertexCurve(road.points,index),end=index===0||index===road.points.length-1,radius=road.points[index].radius??0;
   return <section className="design-block" data-design-point-block={index}>
@@ -146,6 +153,7 @@ function PointBlock({road,index,run,onPoint}:{road:Road;index:number;run:Run;onP
     </>:<p className="design-meta">{end?'ปลายถนนทำโค้งไม่ได้':'แนวถนนไม่หักมุมที่จุดนี้ หรือช่วงตรงสั้นเกินไป'}</p>}
     <div className="design-actions">
       {curve&&radius>0&&<button data-design-action="point-sharp" onClick={()=>run({type:'road.setPointRadius',roadId:road.id,index,radius:0})}>ทำเป็นมุมตรง</button>}
+      {!end&&!(radius>0)&&<SplitAtPoint road={road} index={index} run={run} onPoint={onPoint}/>}
       <button data-design-action="point-remove" disabled={road.points.length<=2} title={road.points.length<=2?'ถนนต้องมีอย่างน้อยสองจุด':'Delete'} onClick={()=>{if(run({type:'road.removePoint',roadId:road.id,index}).ok)onPoint(undefined);}}>ลบจุดนี้</button>
     </div>
     <p className="design-meta">ลากจุดจับ + บนแบบเข้าด้านในโค้งเพื่อปรับรัศมี · ดับเบิลคลิกบนถนนเพื่อเพิ่มจุด · รัศมีเป็นค่าที่วาด ยังไม่ได้ตรวจกับความเร็วออกแบบ</p>
@@ -591,7 +599,9 @@ function ComparisonPanel({diff,reference,onSelect}:{diff:ScenarioDiff;reference:
   </section>;
 }
 
-export function DesignInspector({onAlignmentReview,selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole,drawLevel,onDrawLevel}:{
+export function DesignInspector({onSelectionAction=()=>{},onAlignmentReview,selection,project,compiled,candidates,run,onSelect,tool,onAdvanced,reference,map,onMessage,scenario,newRoadPreset,newRoadSection,onNewRoadPreset,newRole,onNewRole,drawLevel,onDrawLevel}:{
+  /** Actions on the selected roads (same as the right-click menu). */
+  onSelectionAction?:(a:MenuAction)=>void;
   onAlignmentReview:()=>void;selection:DesignSelection;project:RoadFirstProject;compiled:CompileResult;candidates:Candidate[];run:Run;onSelect:(s:DesignSelection)=>void;onAdvanced:(candidateId:string)=>void;reference:ReferencePanelProps;map:MapState;onMessage:(text:string,kind?:'info'|'error')=>void;scenario:ScenarioPanel;
   tool:string;newRoadPreset:RoadPresetId|null;newRoadSection:RoadSection;onNewRoadPreset:(id:RoadPresetId)=>void;newRole:NewRole;onNewRole:(v:NewRole)=>void;drawLevel:number;onDrawLevel:(z:number)=>void;
 }){
@@ -622,6 +632,7 @@ export function DesignInspector({onAlignmentReview,selection,project,compiled,ca
   return <aside className="design-inspector" data-design-inspector={selection?.kind??'project'}>
     {road?<RoadInspector key={road.id} project={project} onSelect={onSelect} road={road} point={selection?.kind==='road'?selection.point:undefined} onPoint={point=>onSelect({kind:'road',id:road.id,point})} run={run} roads={project.roads} compiled={compiled} onMessage={onMessage} onDeleted={()=>onSelect(null)}/>
     :candidate?<CrossingInspector candidate={candidate} project={project} compiled={compiled} onMessage={onMessage} run={run} onConfirmed={()=>onSelect({kind:'junction',id:candidate.id})} onPlacedDiamond={()=>onSelect({kind:'crossing',id:candidate.id})}/>
+    :selection?.kind==='roads'?<MultiRoadInspector key={selection.ids.join(',')} project={project} ids={selection.ids} run={run} onSelect={onSelect} onAction={onSelectionAction}/>
     :selection?.kind==='junction'?<JunctionInspector key={selection.id} candidateId={selection.id} project={project} compiled={compiled} run={run} onSelect={onSelect} onAdvanced={onAdvanced} onMessage={onMessage}/>
     :selection?.kind==='approach'?<ApproachInspector key={`${selection.id}|${selection.leg}`} candidateId={selection.id} leg={selection.leg} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     :<>
