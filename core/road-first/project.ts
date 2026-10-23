@@ -3,6 +3,7 @@
 import {validateNetworkProject} from '../network/network-project';
 import {profileError} from './elevation';
 import {levelCriteriaError} from './level-criteria';
+import {laneRunError} from './lane-runs';
 import {compileRoadNetwork,stations,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
 export const ROAD_FIRST_SCHEMA_VERSION=3;
@@ -37,6 +38,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(r.profile?.some(q=>(q.curveLength??0)>0)&&r.alignment!=='arc'&&r.points.some(q=>(q.radius??0)>0))return `${r.name}: แปลงระยะตามแนวโค้งก่อนเพิ่มโค้งดิ่ง เพื่อให้รูปตัดและภาพถนนใช้ระยะเดียวกัน`;
     if(r.origin!==undefined&&(!r.origin||(r.origin.template!=='diamond'&&r.origin.template!=='uturn-bridge')||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
+    const lr=laneRunError(r,stations(r.points,r.alignment).at(-1)??0);if(lr)return lr;
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
   }
   for(const r of p.roads)for(const a of [r.anchors?.start,r.anchors?.end])if(a&&!ids.has(a.roadId))return `จุดเชื่อมทางลาด ${r.name} ไม่ถูกต้อง`;

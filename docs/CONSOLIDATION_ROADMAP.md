@@ -134,7 +134,7 @@ Review-plan PR-05: [structure envelope and measured clearance](spec/STRUCTURE_CL
 Review-plan PR-06: [flyover / underpass composer](spec/GRADE_COMPOSER.md), merged as PR #67 at `55c6a62`.
 Review-plan PR-07: [U-turn bridge and U-turn under a bridge](spec/UTURN_STRUCTURES.md), merged as PR #68 at `f85fe37`.
 Review-plan PR-08 (this slice): [ramp terminals — tangent tie-in and gore](spec/RAMP_TERMINALS.md). This closes the approved first round (PR-01/02/04–08), merged as PR #69 at `fecefb2`.
-Owner go-ahead 2026-10-23: PR-03 next. Review-plan PR-03 (this slice): [Select as the editing hub](spec/SELECT_HUB.md) — first part of 4B-4. PR-09 onward (station-based lanes) still need the go-ahead.
+Owner go-ahead 2026-10-23: PR-03 next. Review-plan PR-03 (this slice): [Select as the editing hub](spec/SELECT_HUB.md) — first part of 4B-4. Owner go-ahead 2026-10-23 for 4C: review-plan PR-09 [lane runs](spec/LANE_RUNS.md) first, then PR-10 (merge / diverge lanes and lane mapping).
 
 Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
 
@@ -236,6 +236,8 @@ command search (`Ctrl/Cmd+K`), grid in three clicks, freehand sketch with a show
 road geometry, a full CAD constraint set, silent auto-clamping of drawn geometry.
 
 ### 4C — Lane runs and lane connections
+
+Status 2026-10-23: lane runs along a stretch (station-based add / drop with tapers) in progress — spec `docs/spec/LANE_RUNS.md`.
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".

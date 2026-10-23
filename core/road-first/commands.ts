@@ -12,6 +12,7 @@ import {parseLegKey,type ApproachOverride,type DesignSettings,type LegKey,type L
 import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} from './project';
 import {joinRoads} from './join';
 import {splitRoad} from './split';
+import {laneRunError,type LaneRun} from './lane-runs';
 import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type RampEnd} from './ramps';
@@ -47,6 +48,8 @@ export type RoadFirstCommand=
   |{type:'road.setSection';roadId:string;patch:Partial<RoadSection>}
   |{type:'road.setRole';roadId:string;role:RoadRole|null}
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
+  /** Lanes added along stretches of the road (road stations). */
+  |{type:'road.setLaneRuns';roadId:string;runs:LaneRun[]}
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
   |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string;
@@ -173,6 +176,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       // Openings and levels are measured from the road start: extending the start moves them along by the added length.
       const grown=(stations(r.points,r.alignment).at(-1)??0)-oldLength,shift=(v:number)=>Math.round((v+(cmd.atStart?grown:0))*1000)/1000;
       if(cmd.atStart&&r.openings)r.openings=r.openings.map(o=>({...o,station:shift(o.station)}));
+      if(cmd.atStart&&r.laneRuns)r.laneRuns=r.laneRuns.map(x=>({...x,start:shift(x.start),end:shift(x.end)}));
       if(r.profile||cmd.levels?.some(z=>Math.abs(z)>1e-9)){
         const s=stations(r.points,r.alignment),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
         // Without a profile the old road lies at level 0; its far end keeps that level.
@@ -270,6 +274,12 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
       if(cmd.roadside&&(cmd.roadside.trees||cmd.roadside.lights))r.roadside={...cmd.roadside};else delete r.roadside;
       label=`ต้นไม้และเสาไฟ ${r.name}: ${r.roadside?[r.roadside.trees?'ต้นไม้':'',r.roadside.lights?'เสาไฟ':''].filter(Boolean).join(' + '):'ไม่มี'}`;break;
+    }
+    case 'road.setLaneRuns':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.runs.length)r.laneRuns=structuredClone(cmd.runs).sort((a,b)=>a.start-b.start);else delete r.laneRuns;
+      const e=laneRunError(r,stations(r.points,r.alignment).at(-1)??0);if(e)return fail(e,`แก้ช่องจราจรเพิ่ม ${r.name}`);
+      label=`แก้ช่องจราจรเพิ่ม ${r.name}`;group=`road.laneRuns:${r.id}`;roadsChanged=true;break;
     }
     case 'road.setOpenings':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

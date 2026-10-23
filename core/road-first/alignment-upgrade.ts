@@ -50,6 +50,7 @@ export function previewAlignmentUpgrade(source:RoadFirstProject):AlignmentUpgrad
         return{...q,station:center,curveLength:b-a};
       });
       r.openings=r.openings?.map(o=>({...o,station:map(o.station),length:map(o.station+o.length)-map(o.station)}));
+      if(r.laneRuns)r.laneRuns=r.laneRuns.map(x=>({...x,start:map(x.start),end:map(x.end)}));
       // Do not introduce empty optional fields into unchanged records.
       if(!was.profile)delete r.profile;if(!was.openings)delete r.openings;
       for(const [i,q] of (r.profile??[]).entries())if(Math.abs(q.station-was.profile![i].station)>1e-6)changes.push(`${r.name}: จุดระดับ ${i+1} ระยะ ${was.profile![i].station.toFixed(3)} → ${q.station.toFixed(3)} ม.; ระดับ ${q.z} ม. คงเดิม`);

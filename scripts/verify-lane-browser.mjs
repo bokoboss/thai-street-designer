@@ -1,0 +1,34 @@
+// Lane runs in /design: add a lane along a stretch from the road panel, drag its end on the plan (one undo), and see it in
+// the plan, the section by station and 3D.
+import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
+import {startSession} from './test-support/cdp-browser.mjs';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const section={forwardLanes:2,backwardLanes:2,laneWidth:3.5,median:4,walk:2};
+const fixture={kind:'road-first',schemaVersion:3,title:'ตรวจช่องเพิ่ม',decisions:[],options:{},roads:[{id:'A',name:'ถนนเอ',alignment:'arc',points:[{x:-200,y:0},{x:200,y:0}],section}]};
+const b=await startSession({root,path:'/design',profile:'.test-build/chrome-lanes'});
+const current=()=>b.evalValue(`JSON.parse(localStorage.getItem('thai-street-road-first-v1')).scenarios[0].project`);
+const screen=(x,y)=>b.evalValue(`(()=>{const p=new DOMPoint(${x},${y}).matrixTransform(document.querySelector('[data-design-plan]').getScreenCTM());return{x:p.x,y:p.y};})()`);
+try{
+  await b.waitFor(()=>b.count('[data-design-ready="true"]'),'loaded');
+  await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(fixture))})`);await b.send('Page.reload');
+  await b.waitFor(()=>b.count('[data-design-ready="true"]'),'ready');
+  await b.clickAt(await screen(-150,0));await b.waitFor(()=>b.count('[data-design-inspector="road"]'),'road panel');
+  await b.click('[data-design-fold-toggle="lane-runs"]');await b.click('[data-design-action="add-lane-run-forward"]');
+  await b.waitFor(async()=>(await current()).roads[0].laneRuns?.length===1,'lane run added');
+  const added=(await current()).roads[0].laneRuns[0];assert.deepEqual([added.direction,added.side,added.start,added.end,added.taperIn],['forward','curb',125,275,30]);
+  await b.waitFor(async()=>await b.count('[data-design-lane-run-handle]')===2,'start / end handles on the plan');
+  await b.screenshot('artifacts/lane-run-plan.png');
+  // Drag the end handle 40 m further along the road: one undo step.
+  const h=await b.rect('[data-design-lane-run-handle="L1:end"]'),to=await screen(115,0);
+  await b.drag({x:h.x,y:h.y},{x:to.x,y:h.y},8);
+  await b.waitFor(async()=>Math.abs((await current()).roads[0].laneRuns[0].end-315)<.6,'end dragged along the road');
+  await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads[0].laneRuns[0].end===275,'one undo for the drag');
+  // Typed value edits the same run.
+  await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="lane-run-0-taper-in"]');i.focus();const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'45');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].laneRuns[0].taperIn===45,'typed taper');
+  await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await new Promise(r=>setTimeout(r,500));
+  await b.screenshot('artifacts/lane-run-3d.png');await b.click('[data-design-view="2d"]');
+  assert.deepEqual(b.errors,[]);
+  console.log('PASS lane browser: add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D');
+}catch(error){await b.screenshot('artifacts/lane-browser-failure.png');throw error;}finally{b.close();}
