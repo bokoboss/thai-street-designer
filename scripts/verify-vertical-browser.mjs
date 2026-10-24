@@ -62,5 +62,16 @@ try{
  await b.waitFor(()=>b.count('[data-design-template="uturn-bridge"]'),'new ramp selected with its set');
  await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await b.screenshot('artifacts/uturn-bridge-3d.png');await b.click('[data-design-view="2d"]');
  await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads.length===1,'one undo removes it');
- assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: U-turn bridge ghost / place / 3D / undo, composer parameters with live ghost / clearance and red refusal, structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
+ // Section on the bridge: one tick on the road panel of the road over, then a narrower footway typed; plan deck and 3D follow.
+ await seed(fixture);await selectA();await b.waitFor(()=>b.count('[data-design-fold="structure-section"],[data-design-fold-toggle="structure-section"]'),'structure fold for a road with a bridge');
+ if(!await b.evalValue(`document.querySelector('[data-design-fold="structure-section"]').open`))await b.click('[data-design-fold-toggle="structure-section"]');await new Promise(r=>setTimeout(r,300));
+ await b.click('[data-design-action="toggle-structure-section"]');
+ await b.waitFor(async()=>(await current()).roads[0].structureSection?.transition===30,'structure section on');
+ await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="structure-walk"]');i.focus();const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'0.5');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].structureSection.walk===.5,'typed footway on the bridge');
+ await b.screenshot('artifacts/structure-section-plan.png');
+ await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await new Promise(r=>setTimeout(r,500));
+ await b.screenshot('artifacts/structure-section-3d.png');await b.click('[data-design-view="2d"]');
+ await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads[0].structureSection?.walk===2,'one undo for the typed value');
+ assert.deepEqual(b.errors,[]);console.log('PASS vertical browser: bridge section (1 tick, typed footway, 3D, undo), U-turn bridge ghost / place / 3D / undo, composer parameters with live ghost / clearance and red refusal, structure + measured clearance in the long section and road panel, curve numeric/undo/redo/reopen, shared 3D; profile preview/cancel/confirm in 2 clicks; authored PVI conflict refused without mutation');
 }catch(error){await b.screenshot('artifacts/vertical-browser-failure.png');throw error;}finally{b.close();}

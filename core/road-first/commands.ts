@@ -14,6 +14,7 @@ import {joinRoads} from './join';
 import {splitRoad} from './split';
 import {laneRunError,type LaneRun} from './lane-runs';
 import {stretchError,type SectionStretch} from './section-stretches';
+import {structureSectionError,type StructureSection} from './structure-sections';
 import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type AuxLane,type RampEnd} from './ramps';
@@ -53,6 +54,7 @@ export type RoadFirstCommand=
   |{type:'road.setLaneRuns';roadId:string;runs:LaneRun[]}
   /** A different section over parts of the road (road stations). */
   |{type:'road.setSectionStretches';roadId:string;stretches:SectionStretch[]}
+  |{type:'road.setStructureSection';roadId:string;section:StructureSection|null}
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
   |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string;
@@ -289,6 +291,12 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const next={...r.terminals,[cmd.end]:cmd.lane??undefined};if(!cmd.lane)delete next[cmd.end];
       if(next.start||next.end)r.terminals=next;else delete r.terminals;
       label=`${cmd.lane?'ตั้ง':'ลบ'}${what} ${r.name}`;group=`ramp.lane:${r.id}:${cmd.end}`;roadsChanged=true;break;
+    }
+    case 'road.setStructureSection':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.section)r.structureSection=structuredClone(cmd.section);else delete r.structureSection;
+      const e=structureSectionError(r);if(e)return fail(e,`แก้หน้าตัดบนโครงสร้าง ${r.name}`);
+      label=`${cmd.section?'แก้':'ลบ'}หน้าตัดบนโครงสร้าง ${r.name}`;group=`road.structureSection:${r.id}`;roadsChanged=true;break;
     }
     case 'road.setSectionStretches':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

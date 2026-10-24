@@ -16,7 +16,7 @@ const bandWidth=(s:RoadSection,type:Band['type'])=>(s.bands??[]).find(b=>b.type=
 /** Input check for a road's section stretches; null when valid. */
 export function stretchError(road:Pick<Road,'name'|'section'>&{sectionStretches?:unknown},length:number):string|null{
   const list=road.sectionStretches;if(list===undefined)return null;
-  const bad=`หน้าตัดเฉพาะช่วงของ ${road.name} ไม่ถูกต้อง`,s=road.section;
+  const bad=`หน้าตัดเฉพาะช่วงของ ${road.name} ไม่ถูกต้อง`;
   if(!Array.isArray(list)||list.length>12)return bad;
   const ids=new Set<string>();
   for(const x of list as SectionStretch[]){
@@ -27,14 +27,21 @@ export function stretchError(road:Pick<Road,'name'|'section'>&{sectionStretches?
     const where=`${x.start.toFixed(0)}–${x.end.toFixed(0)} ม.`;
     if(x.end>length+.01)return `${road.name}: หน้าตัดเฉพาะช่วง ${where} เลยปลายถนน`;
     if(x.taperIn+x.taperOut>x.end-x.start+1e-6)return `${road.name}: ช่วงเปลี่ยนของหน้าตัด ${where} ยาวกว่าตัวช่วง`;
-    for(const [n,base,label] of [[x.forwardLanes,s.forwardLanes,'ตามทิศที่วาด'],[x.backwardLanes,s.backwardLanes,'ทิศสวน']] as const){
-      if(n<base)return `${road.name}: หน้าตัด ${where} มีช่อง${label}น้อยกว่าถนน — ลดช่องกลางช่วงยังทำไม่ได้ แก้หน้าตัดของถนนแทน`;
-      if(n>base+LANE_RUN_STACK)return `${road.name}: หน้าตัด ${where} เพิ่มช่อง${label}ได้ไม่เกิน ${LANE_RUN_STACK} ช่อง`;
-      if(n>base&&base<1)return `${road.name}: ไม่มีช่องจราจร${label} จึงเพิ่มช่องด้านนี้ไม่ได้`;
-    }
-    if(x.walk<0||Math.abs(x.walk-s.walk)>5)return `${road.name}: ทางเท้าในหน้าตัด ${where} ต้องต่างจากถนนไม่เกิน 5 ม.`;
-    for(const b of x.bands??[]){const w=bandWidth(s,b.type);if(w===undefined)return `${road.name}: ถนนไม่มีแถบ ${b.type} ให้ปรับในหน้าตัด ${where}`;if(b.width<0||Math.abs(b.width-w)>5)return `${road.name}: แถบริมทางในหน้าตัด ${where} ต้องต่างจากถนนไม่เกิน 5 ม.`;}
+    const e=sectionChangeError(road,x,` ${where}`);if(e)return e;
   }
+  return null;
+}
+
+/** The section of a stretch (or of a structure) against the road's: lanes up only, footway and bands within ±5 m. */
+export function sectionChangeError(road:Pick<Road,'name'|'section'>,x:Pick<SectionStretch,'forwardLanes'|'backwardLanes'|'walk'|'bands'>,where:string):string|null{
+  const s=road.section;
+  for(const [n,base,label] of [[x.forwardLanes,s.forwardLanes,'ตามทิศที่วาด'],[x.backwardLanes,s.backwardLanes,'ทิศสวน']] as const){
+    if(n<base)return `${road.name}: หน้าตัด${where} มีช่อง${label}น้อยกว่าถนน — ลดช่องกลางช่วงยังทำไม่ได้ แก้หน้าตัดของถนนแทน`;
+    if(n>base+LANE_RUN_STACK)return `${road.name}: หน้าตัด${where} เพิ่มช่อง${label}ได้ไม่เกิน ${LANE_RUN_STACK} ช่อง`;
+    if(n>base&&base<1)return `${road.name}: ไม่มีช่องจราจร${label} จึงเพิ่มช่องด้านนี้ไม่ได้`;
+  }
+  if(x.walk<0||Math.abs(x.walk-s.walk)>5)return `${road.name}: ทางเท้าในหน้าตัด${where} ต้องต่างจากถนนไม่เกิน 5 ม.`;
+  for(const b of x.bands??[]){const w=bandWidth(s,b.type);if(w===undefined)return `${road.name}: ถนนไม่มีแถบ ${b.type} ให้ปรับในหน้าตัด${where}`;if(b.width<0||Math.abs(b.width-w)>5)return `${road.name}: แถบริมทางในหน้าตัด${where} ต้องต่างจากถนนไม่เกิน 5 ม.`;}
   return null;
 }
 

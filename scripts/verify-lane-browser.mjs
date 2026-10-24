@@ -9,7 +9,7 @@ const fixture={kind:'road-first',schemaVersion:3,title:'ตรวจช่อง
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-lanes'});
 const current=()=>b.evalValue(`JSON.parse(localStorage.getItem('thai-street-road-first-v1')).scenarios[0].project`);
 // Open a fold and let the panel settle before clicking inside it (the panel scrolls as it grows).
-const openFold=async id=>{await b.click(`[data-design-fold-toggle="${id}"]`);await new Promise(r=>setTimeout(r,300));};
+const openFold=async id=>{if(!await b.evalValue(`document.querySelector('[data-design-fold="${id}"]')?.open`))await b.click(`[data-design-fold-toggle="${id}"]`);await new Promise(r=>setTimeout(r,300));};
 const screen=(x,y)=>b.evalValue(`(()=>{const p=new DOMPoint(${x},${y}).matrixTransform(document.querySelector('[data-design-plan]').getScreenCTM());return{x:p.x,y:p.y};})()`);
 try{
   await b.waitFor(()=>b.count('[data-design-ready="true"]'),'loaded');
