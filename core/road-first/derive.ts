@@ -17,6 +17,7 @@ import {clipPart,stretchParts,type SectionStretch} from './section-stretches';
 import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
+import {structureStretches,structureWidth,type StructureExtent,type StructureSection} from './structure-sections';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -41,6 +42,8 @@ export type Road={alignment?:'arc';id:string;name:string;role?:RoadRole;points:R
   laneRuns?:LaneRun[];
   /** A different section over parts of the road, in road stations (see section-stretches.ts). */
   sectionStretches?:SectionStretch[];
+  /** Its own section over its bridge decks and in its tunnels (see structure-sections.ts). */
+  structureSection?:StructureSection;
   /** Vertical points (station, z) — Phase 4A; absent = level 0. */
   profile?:Profile;
   /** Made by a template (Phase 4B-3): which one, its version, the group of pieces placed together and the parameters used. */
@@ -76,7 +79,9 @@ export type ArmShortfall={candidateId:string;junctionId:string;armId:number;road
 export type CompiledCrossing={candidateId:string;roads:string[];point:WorldPoint;relation:'over'|'unresolved';over?:string;under?:string;gap:number;name:string;
   /** Measured clearance under the structure over the overlap of the two roads (relation over only). */
   clearance?:ClearanceMeasure};
-export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[];linkRanges:{id:string;roadId:string;from:number;to:number}[]};
+export type CompileResult={project:NetworkProject;legs:LegBinding[];issues:string[];sources:CompileSources;unjoined:Record<string,string[]>;overflow:string[];shortfalls:ArmShortfall[];crossings:CompiledCrossing[];linkRanges:{id:string;roadId:string;from:number;to:number}[];
+  /** Bridge deck / tunnel extents on each road, in road stations (overlap plus the structure margin). */
+  structures:StructureExtent[]};
 
 /** Plan extent of a bridge deck or tunnel beyond the measured overlap of the two roads (m; display tool value). */
 export const STRUCTURE_MARGIN=2;
@@ -181,6 +186,48 @@ export function sectionArm(base:Arm,road:Road,side:'ahead'|'behind',angle:number
 type Leg={roadId:string;side:'ahead'|'behind';heading:number;available:number;room:number};
 
 /** Compile roads + explicit decisions onto the existing Network model. */
+type PairEnd={r:Road;ref:{roadId:string;station:number};z:number};
+/** One grade-separated pair of roads: which is on top, the measured clearance and the structure extents (road stations). */
+export type CrossingPair={d:Decision;c:Candidate;ra:Road;rb:Road;top:PairEnd|null;bottom:PairEnd|null;gap:number;relation:'over'|'unresolved';
+  clearance?:ClearanceMeasure;deckSpan?:[number,number];tunnelSpan?:[number,number]};
+
+/**
+ * Grade-separated pairs of a project. A crossing of three or more roads at different levels (a stack) gives one pair per
+ * two roads; a road that passes over or under a junction gives one pair with each road of the junction.
+ */
+function crossingPairs(roads:Road[],decisions:Decision[],byId:Map<string,Candidate>,roadById:Map<string,Road>,criteria:LevelCriteria):CrossingPair[]{
+  const out:CrossingPair[]=[],margin=STRUCTURE_MARGIN;
+  const add=(d:Decision,c:Candidate,a:{roadId:string;station:number},b:{roadId:string;station:number},chosen:string|undefined)=>{
+    const ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)return;
+    const za=levelAt(ra.profile,a.station),zb=levelAt(rb.profile,b.station);
+    const over=chosen===ra.id||chosen===rb.id?chosen:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
+    const top=over===ra.id?{r:ra,ref:a,z:za}:over===rb.id?{r:rb,ref:b,z:zb}:null,bottom=top?(top.r===ra?{r:rb,ref:b,z:zb}:{r:ra,ref:a,z:za}):null;
+    const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
+    const clearance=relation==='over'&&top&&bottom?measureClearance(top.r,bottom.r,top.ref.station,bottom.ref.station,criteria):undefined;
+    // Structure extents: the measured overlap plus an abutment / portal margin (display, tool value).
+    const extent=(on:PairEnd,other:PairEnd,span:[number,number]|undefined):[number,number]=>{const half=sectionWidth(other.r.section)/2+margin,len=stations(on.r.points,on.r.alignment).at(-1)??0;
+      return[Math.max(0,span?span[0]-margin:on.ref.station-half),Math.min(len,span?span[1]+margin:on.ref.station+half)];};
+    const deckSpan=top&&bottom?extent(top,bottom,clearance?.spanOver):undefined;
+    const tunnelSpan=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?extent(bottom,top,clearance?.spanUnder):undefined;
+    out.push({d,c,ra,rb,top,bottom,gap,relation,...(clearance?{clearance}:{}),...(deckSpan?{deckSpan}:{}),...(tunnelSpan?{tunnelSpan}:{})});
+  };
+  for(const d of decisions){
+    const c=byId.get(d.candidateId);if(!c||c.roads.length<2)continue;
+    if(d.decision==='grade-separated'){
+      if(c.roads.length===2){add(d,c,c.roads[0],c.roads[1],d.over);continue;}
+      for(let i=0;i<c.roads.length;i++)for(let k=i+1;k<c.roads.length;k++)add(d,c,c.roads[i],c.roads[k],undefined);
+    }else if(d.decision==='junction'&&d.excluded?.length){
+      const inJunction=c.roads.filter(r=>!d.excluded!.includes(r.roadId)),zj=inJunction.map(r=>levelAt(roadById.get(r.roadId)?.profile,r.station));
+      const mean=zj.reduce((t,v)=>t+v,0)/(zj.length||1);
+      for(const x of c.roads.filter(r=>d.excluded!.includes(r.roadId))){
+        if(Math.abs(levelAt(roadById.get(x.roadId)?.profile,x.station)-mean)<=LEVEL_TOLERANCE)continue;
+        for(const r of inJunction)add(d,c,x,r,undefined);
+      }
+    }
+  }
+  return out;
+}
+
 export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:CompileOptions={}):CompileResult{
   const approach=options.approachLength??40,tolerance=options.tolerance??1,issues:string[]=[];
   const candidates=detectCandidates(roads,tolerance),byId=new Map(candidates.map(c=>[c.id,c]));
@@ -324,6 +371,13 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   };
   // Auxiliary lanes at attached ramp ends, built on their main roads like lane runs.
   const aux=auxLaneRuns(roads);
+  // Grade-separated pairs, resolved before the links: which road is on top, the measured clearance and the structure
+  // extents in road stations (a road's section on its structures is built along its links).
+  const criteria=levelCriteria(options.levels),pairs=crossingPairs(roads,decisions,byId,roadById,criteria);
+  const structures:StructureExtent[]=pairs.flatMap(p=>[
+    // A road at grade over a tunnel keeps its section (the tunnel roof is not a deck to build on here).
+    ...(p.top&&p.deckSpan&&!p.tunnelSpan?[{roadId:p.top.r.id,kind:'deck' as const,from:p.deckSpan[0],to:p.deckSpan[1],crossing:p.d.candidateId}]:[]),
+    ...(p.bottom&&p.tunnelSpan?[{roadId:p.bottom.r.id,kind:'tunnel' as const,from:p.tunnelSpan[0],to:p.tunnelSpan[1],crossing:p.d.candidateId}]:[])]);
   for(const road of roads){
     const s=stations(road.points,road.alignment),total=s[s.length-1],list=onRoad.get(road.id)??[];
     type Node={ref:LinkEndRef;station:number};
@@ -347,6 +401,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const reach=toJunction?last!.station+armLength.get(`${toJunction.junctionId}:${toJunction.armId}`)!:total;
       if(!last||reach<total-EPS)nodes.push({behind:{ref:addEnd(road,false),station:total}});
     }
+    const stretchList=[...(road.sectionStretches??[]),...structureStretches(road,structures,total)];
     let span=0;const placed=new Set<string>(),placedRuns=new Set<string>(),clippedRuns=new Set<string>(),placedStretches=new Set<string>(),clippedStretches=new Set<string>();
     for(let k=0;k<nodes.length-1;k++){
       const from=nodes[k].ahead,to=nodes[k+1].behind;
@@ -364,7 +419,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       for(const run of [...(road.laneRuns??[]),...(aux.get(road.id)??[])]){const c=clipRun(run,from.station,to.station);if(!c)continue;
         built.components=[...built.components,c.component];placedRuns.add(run.id);if(c.clipped)clippedRuns.add(run.id);}
       // Section stretches on this link: their added lanes and width changes, clipped to it.
-      for(const x of road.sectionStretches??[]){const parts=stretchParts(x,road.section);
+      for(const x of stretchList){const parts=stretchParts(x,road.section);
         for(const c of [...parts.lanes,...parts.widths]){const k=clipPart(c,from.station,to.station);if(!k)continue;
           built.components=[...built.components,k.part];placedStretches.add(x.id);if(k.clipped)clippedStretches.add(x.id);}}
       if(built.components.some(c=>c.id.startsWith('run-')||c.id.startsWith('st-')))built.sectionProfile={...built.sectionProfile,mode:'linear'};
@@ -376,6 +431,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       links.push(built);
       span++;
     }
+    if(road.structureSection&&!structures.some(x=>x.roadId===road.id))issues.push(`${road.name}: หน้าตัดบนโครงสร้างตั้งไว้แต่ถนนนี้ไม่มีสะพานหรืออุโมงค์ จึงไม่ได้ใช้`);
     for(const x of road.sectionStretches??[]){
       const where=`${round(x.start,0)}–${round(x.end,0)} ม.`,changes=x.forwardLanes!==road.section.forwardLanes||x.backwardLanes!==road.section.backwardLanes||Math.abs(x.walk-road.section.walk)>=.01||(x.bands??[]).some(b=>Math.abs(b.width-((road.section.bands??[]).find(y=>y.type===b.type)?.width??b.width))>=.01);
       if(!changes)issues.push(`${road.name}: หน้าตัดเฉพาะช่วง ${where} เหมือนหน้าตัดของถนน — ไม่มีอะไรเปลี่ยน`);
@@ -394,7 +450,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   // Grade-separated crossings: relation and measured gap (Phase 4A). Not judged against any standard here.
   // A crossing of three or more roads at different levels (a stack) gives one crossing per pair of roads; a road that
   // passes over or under a junction gives one crossing with each road of the junction.
-  const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[],criteria=levelCriteria(options.levels);
+  const crossings:CompiledCrossing[]=[],networkCrossings:NonNullable<NetworkProject['crossings']>=[];
   // Grades steeper than the project's maximum (ramps against the ramp maximum).
   for(const road of roads){
     const p=[...(road.profile??[])].sort((a,b)=>a.station-b.station),max=gradeFor(criteria,road);
@@ -402,15 +458,9 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       if(g>max+1e-6)issues.push(`${road.name}: ความชัน ${(g*100).toFixed(1)}% ช่วง ${p[i-1].station.toFixed(0)}–${p[i].station.toFixed(0)} ม. เกินที่ตั้งไว้ ${(max*100).toFixed(1)}%${hasSource(road.role==='ramp'?criteria.rampGrade:criteria.mainGrade)?'':' (ค่ายังไม่มีแหล่งอ้างอิง)'} — ต้องตรวจตามเกณฑ์`);}
   }
   const linkAt=(roadId:string,s:number)=>linkRanges.find(l=>l.roadId===roadId&&s>=l.from-EPS&&s<=l.to+EPS)?.id;
-  const pair=(d:Decision,c:Candidate,a:{roadId:string;station:number},b:{roadId:string;station:number},chosen:string|undefined)=>{
-    const ra=roadById.get(a.roadId),rb=roadById.get(b.roadId);if(!ra||!rb)return;
-    const za=levelAt(ra.profile,a.station),zb=levelAt(rb.profile,b.station);
-    const over=chosen===ra.id||chosen===rb.id?chosen:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
-    const top=over===ra.id?{r:ra,ref:a,z:za}:over===rb.id?{r:rb,ref:b,z:zb}:null,bottom=top?(top.r===ra?{r:rb,ref:b,z:zb}:{r:ra,ref:a,z:za}):null;
-    const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
+  const pair=({d,c,ra,rb,top,bottom,gap,relation,clearance,deckSpan,tunnelSpan}:CrossingPair)=>{
     const name=top&&bottom?`${top.r.name} ข้าม ${bottom.r.name}`:`${ra.name} × ${rb.name}`;
     const id=networkCrossings.some(x=>x.id===d.candidateId)?`${d.candidateId}~${ra.id}~${rb.id}`:d.candidateId;
-    const clearance=relation==='over'&&top&&bottom?measureClearance(top.r,bottom.r,top.ref.station,bottom.ref.station,criteria):undefined;
     crossings.push({candidateId:d.candidateId,roads:[ra.id,rb.id],point:{x:round(c.point.x),y:round(c.point.y)},relation,...(top?{over:top.r.id,under:bottom!.r.id}:{}),gap,name,...(clearance?{clearance}:{})});
     // Measured clearance against the project's value (a flag to check, never a pass / fail against a standard).
     if(clearance){
@@ -418,35 +468,18 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       if(clearance.min===null)issues.push(`${name}: ยังวัดช่องลอดใต้${what}ไม่ได้ (แนวถนนสองสายซ้อนกันไม่ชัดเจน) — ต้องตรวจเอง`);
       else if(clearance.min<criteria.clearance.value-1e-6)issues.push(`${name}: ช่องลอดที่วัดได้ ${clearance.min.toFixed(2)} ม. (ใต้${what} ลึก ${clearance.depth} ม.) น้อยกว่าที่ตั้งไว้ ${criteria.clearance.value} ม.${src} — ต้องตรวจตามเกณฑ์`);
     }
-    // Structure extents in plan: the measured overlap plus an abutment / portal margin (display, tool value).
-    const margin=STRUCTURE_MARGIN;
-    const deck=top&&bottom?(()=>{const span=clearance?.spanOver,half=sectionWidth(bottom.r.section)/2+margin,len=stations(top.r.points,top.r.alignment).at(-1)??0;
-      const sa=Math.max(0,span?span[0]-margin:top.ref.station-half),sb=Math.min(len,span?span[1]+margin:top.ref.station+half);
-      return{a:pointAt(top.r.points,sa,top.r.alignment),b:pointAt(top.r.points,sb,top.r.alignment),half:sectionWidth(top.r.section)/2};})():undefined;
-    const tunnel=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?(()=>{const span=clearance?.spanUnder,half=sectionWidth(top.r.section)/2+margin,len=stations(bottom.r.points,bottom.r.alignment).at(-1)??0;
-      const sa=Math.max(0,span?span[0]-margin:bottom.ref.station-half),sb=Math.min(len,span?span[1]+margin:bottom.ref.station+half);
+    // Structure extents in plan (resolved with the pairs): as wide as the road's section on the structure.
+    const deck=top&&deckSpan?{a:pointAt(top.r.points,deckSpan[0],top.r.alignment),b:pointAt(top.r.points,deckSpan[1],top.r.alignment),half:structureWidth(top.r)/2}:undefined;
+    const tunnel=top&&bottom&&tunnelSpan?(()=>{const [sa,sb]=tunnelSpan;
       // Roof underside at each portal: the upper road level there minus the roof (falls back to the crossing level).
       const soffit=round(top.z-criteria.tunnelRoof.value,3);
-      return{a:pointAt(bottom.r.points,sa,bottom.r.alignment),b:pointAt(bottom.r.points,sb,bottom.r.alignment),half:sectionWidth(bottom.r.section)/2,z:round(bottom.z,3),
+      return{a:pointAt(bottom.r.points,sa,bottom.r.alignment),b:pointAt(bottom.r.points,sb,bottom.r.alignment),half:structureWidth(bottom.r)/2,z:round(bottom.z,3),
         za:round(levelAt(bottom.r.profile,sa),3),zb:round(levelAt(bottom.r.profile,sb),3),soffit};})():undefined;
     networkCrossings.push({id,name,point:{x:round(c.point.x),y:round(c.point.y)},relation,gap,...(tunnel?{tunnel}:{}),
       ...(clearance?{clearance:{min:clearance.min,structure:clearance.structure,depth:clearance.depth,...(clearance.at?{at:clearance.at}:{})}}:{}),
       ...(top?{overLink:linkAt(top.r.id,top.ref.station),underLink:linkAt(bottom!.r.id,bottom!.ref.station)}:{}),...(deck?{deck}:{})});
   };
-  for(const d of decisions){
-    const c=byId.get(d.candidateId);if(!c||c.roads.length<2)continue;
-    if(d.decision==='grade-separated'){
-      if(c.roads.length===2){pair(d,c,c.roads[0],c.roads[1],d.over);continue;}
-      for(let i=0;i<c.roads.length;i++)for(let k=i+1;k<c.roads.length;k++)pair(d,c,c.roads[i],c.roads[k],undefined);
-    }else if(d.decision==='junction'&&d.excluded?.length){
-      const inJunction=c.roads.filter(r=>!d.excluded!.includes(r.roadId)),zj=inJunction.map(r=>levelAt(roadById.get(r.roadId)?.profile,r.station));
-      const mean=zj.reduce((t,v)=>t+v,0)/(zj.length||1);
-      for(const x of c.roads.filter(r=>d.excluded!.includes(r.roadId))){
-        if(Math.abs(levelAt(roadById.get(x.roadId)?.profile,x.station)-mean)<=LEVEL_TOLERANCE)continue;
-        for(const r of inJunction)pair(d,c,x,r,undefined);
-      }
-    }
-  }
+  for(const p of pairs)pair(p);
   // Ramp attachments (Phase 4B): a taper at each diverge / merge, at the main road level.
   const rampTapers:NonNullable<NetworkProject['rampTapers']>=[];
   for(const r of roads)for(const end of ['start','end'] as const){
@@ -461,5 +494,5 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
    for(const l of links){const mine=(c:{id:string})=>c.id.startsWith('run-')||c.id.startsWith('st-');if(!l.components.some(mine)||linkLinearTransitionPossible(base,l))continue;
      l.components=l.components.filter(c=>!mine(c));if(!l.components.length)l.sectionProfile={...l.sectionProfile,mode:'review'};
      issues.push(`${l.name}: หน้าตัดสองปลายช่วงนี้ต่างกัน จึงยังเพิ่มช่องตามระยะทางไม่ได้ — ทำหน้าตัดสองปลายให้ตรงกันก่อน`);}}
-  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
+  return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges,structures};
 }

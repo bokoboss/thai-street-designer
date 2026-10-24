@@ -21,6 +21,7 @@ import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise
 import {freeStretches,newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {newLaneRun,type LaneRun} from '@/core/road-first/lane-runs';
 import {newStretch,type SectionStretch} from '@/core/road-first/section-stretches';
+import {STRUCTURE_SECTION_DEFAULTS,type StructureSection} from '@/core/road-first/structure-sections';
 import {AUX_LANE_DEFAULTS} from '@/core/road-first/ramps';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {DiamondPanel,TemplateContext,TemplatePiecesBlock} from './diamond-panel';
@@ -169,6 +170,31 @@ function StretchBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileR
     </div>)}
     {list.length<12&&<div className="design-reference-tools"><button data-design-action="add-stretch" onClick={add}>+ หน้าตัดเฉพาะช่วง</button></div>}
     <p className="design-meta">เพิ่มช่องได้ไม่เกินสองช่องต่อทิศ (ลดช่องกลางช่วงยังทำไม่ได้) · ปรับความกว้างทางเท้าและแถบริมทาง · ลากจุดบนแบบเพื่อเลื่อนต้น/ปลาย · ช่วงเปลี่ยนเป็นค่าที่วาด ยังไม่ได้ตรวจตามเกณฑ์</p>
+  </Fold>;
+}
+
+/** The road's own section over its bridge decks and in its tunnels; shown when the road has a structure (or a setting). */
+function StructureSectionBlock({road,compiled,run}:{road:Road;compiled:CompileResult;run:Run}){
+  const mine=(compiled.structures??[]).filter(x=>x.roadId===road.id),x=road.structureSection;
+  if(!mine.length&&!x)return null;
+  const s=road.section,set=(section:StructureSection|null)=>run({type:'road.setStructureSection',roadId:road.id,section});
+  const edit=(patch:Partial<StructureSection>)=>x&&set({...x,...patch});
+  const decks=mine.filter(v=>v.kind==='deck').length,tunnels=mine.length-decks;
+  const where=[decks?`สะพาน ${decks} แห่ง`:'',tunnels?`อุโมงค์ ${tunnels} แห่ง`:''].filter(Boolean).join(' · ')||'ยังไม่มีสะพานหรืออุโมงค์';
+  const start=()=>set({forwardLanes:s.forwardLanes,backwardLanes:s.backwardLanes,walk:s.walk,transition:STRUCTURE_SECTION_DEFAULTS.transition,
+    ...(s.bands?.length?{bands:s.bands.map(b=>({type:b.type,width:b.width}))}:{})});
+  return <Fold id="structure-section" title="หน้าตัดบนโครงสร้าง" summary={`${where}${x?' · ตั้งหน้าตัดเอง':' · ใช้หน้าตัดของถนน'}`} data="structure-section">
+    <label className="design-check"><input type="checkbox" data-design-action="toggle-structure-section" checked={!!x} onChange={e=>e.target.checked?start():set(null)}/> ใช้หน้าตัดเฉพาะบนสะพาน/ในอุโมงค์</label>
+    {x&&<div className="design-fields">
+      {s.forwardLanes>0&&<NumberField field="structure-forward" label={`ช่องตามทิศที่วาด (ถนน ${s.forwardLanes})`} value={x.forwardLanes} min={s.forwardLanes} max={s.forwardLanes+2} onCommit={forwardLanes=>edit({forwardLanes})}/>}
+      {s.backwardLanes>0&&<NumberField field="structure-backward" label={`ช่องทิศสวน (ถนน ${s.backwardLanes})`} value={x.backwardLanes} min={s.backwardLanes} max={s.backwardLanes+2} onCommit={backwardLanes=>edit({backwardLanes})}/>}
+      <NumberField field="structure-walk" label={`ทางเท้า (ม.) (ถนน ${s.walk})`} value={x.walk} step={.25} min={0} max={s.walk+5} onCommit={walk=>edit({walk})}/>
+      {(s.bands??[]).map(b=>{const v=x.bands?.find(y=>y.type===b.type)?.width??b.width;
+        return <NumberField key={b.type} field={`structure-${b.type}`} label={`${BAND_NAME[b.type]??b.type} (ม.) (ถนน ${b.width})`} value={v} step={.25} min={0} max={b.width+5}
+          onCommit={width=>edit({bands:[...(x.bands??[]).filter(y=>y.type!==b.type),{type:b.type,width}]})}/>;})}
+      <NumberField field="structure-transition" label="ช่วงเปลี่ยนนอกโครงสร้าง (ม.)" value={x.transition} step={1} min={0} max={500} onCommit={transition=>edit({transition})}/>
+    </div>}
+    <p className="design-meta">ใช้ตลอดช่วงสะพาน/อุโมงค์ของถนนนี้ (ช่วงซ้อนทับบวกระยะเผื่อ 2 ม.) และเปลี่ยนกลับเป็นหน้าตัดถนนนอกโครงสร้าง · เพิ่มช่องได้ไม่เกินสองช่องต่อทิศ · ช่วงเปลี่ยนเป็นค่าที่วาด ยังไม่ได้ตรวจตามเกณฑ์</p>
   </Fold>;
 }
 
@@ -355,6 +381,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
     <RoadOpeningBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
     <LaneRunBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>
     {road.role!=='ramp'&&<StretchBlock road={road} compiled={compiled} run={run} onMessage={onMessage}/>}
+    <StructureSectionBlock road={road} compiled={compiled} run={run}/>
     <ProfileBlock road={road} run={run}/>
     {endJoins(roads).filter(j=>j.a===road.id||j.b===road.id).map(j=>{const other=roads.find(r=>r.id===(j.a===road.id?j.b:j.a));if(!other)return null;
       return <div key={other.id} className="design-issues" data-design-join-offer={other.id}><b>ปลายถนนชนกับ {other.name}</b>
