@@ -4,7 +4,8 @@
 import {resolveAlignment} from '../common/resolved-alignment';
 import {stations,type Decision,type Road} from './derive';
 import {profileError} from './elevation';
-import {remapRuns} from './lane-runs';
+import {remapRanges,remapRuns} from './lane-runs';
+import {remapStretches} from './section-stretches';
 import {parseLegKey,legKey,type LegKey,type LegSlip} from './leg-binding';
 
 const r3=(v:number)=>Math.round(v*1000)/1000;
@@ -32,6 +33,7 @@ export function reverseRoad(roads:Road[],decisions:Decision[],roadId:string):Out
   if(r.openings)next.openings=r.openings.map(o=>({...o,station:r3(Math.max(0,L-o.station-o.length))}));
   // Lane runs stay on the ground; on a two-way road they keep their traffic (direction flips with the drawing direction).
   if(r.laneRuns)next.laneRuns=remapRuns(r.laneRuns,r,next,r.role==='ramp');
+  if(r.sectionStretches)next.sectionStretches=r.role==='ramp'?remapRanges(r.sectionStretches,r,next,x=>x):remapStretches(r.sectionStretches,r,next);
   if(r.ends)next.ends={...(r.ends.end?{start:r.ends.end}:{}),...(r.ends.start?{end:r.ends.start}:{})};
   if(r.links?.length){delete next.links;notes.push('ล้างช่วงเปลี่ยนหน้าตัดของถนนนี้');}
   return{roads:roads.map(x=>x.id===roadId?next:x),decisions:r.role==='ramp'?decisions:flipLegs(decisions,roadId),notes};
@@ -54,6 +56,7 @@ export function straightenRoad(roads:Road[],decisions:Decision[],roadId:string,f
   }
   if(r.openings)next.openings=r.openings.map(o=>{const c=map(o.station+o.length/2);return{...o,station:r3(Math.max(0,c-o.length/2))};});
   if(r.laneRuns)next.laneRuns=remapRuns(r.laneRuns,r,next);
+  if(r.sectionStretches)next.sectionStretches=remapStretches(r.sectionStretches,r,next);
   const notes:string[]=[`ลบจุดแนว ${to-from-1} จุด`];
   if(r.links?.length){delete next.links;notes.push('ล้างช่วงเปลี่ยนหน้าตัดของถนนนี้');}
   return{roads:roads.map(x=>x.id===roadId?next:x),decisions,notes};

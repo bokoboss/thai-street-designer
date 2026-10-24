@@ -48,6 +48,7 @@ Add one table per measured build (commit, date) using the same columns.
 | --- | --- | --- | --- |
 | Widen a stretch by one lane | Y | 2 with the road selected (open “ช่องจราจรเพิ่มตามระยะทาง”, + ช่อง) | Placed on the longest stretch between junctions with tool-value tapers; ends dragged on the plan or typed. 4 → 6 lanes: one more click for the other direction. |
 | Deceleration / acceleration lane at a ramp end | Y | 1 with the ramp selected (tick on the ramp panel) | Lane on the main road's traffic side; the ramp continues it; lengths by number. |
+| Different section over part of a road | Y | 2 with the road selected (open “หน้าตัดเฉพาะช่วง”, + หน้าตัดเฉพาะช่วง) | Starts as the road's section plus a lane each way; footway / band widths typed; ends dragged on the plan. Fewer lanes than the road is refused (engine limit). |
 
 ### Select as the editing hub (2026-10-23, scripted)
 

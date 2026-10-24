@@ -4,6 +4,7 @@ import {validateNetworkProject} from '../network/network-project';
 import {profileError} from './elevation';
 import {levelCriteriaError} from './level-criteria';
 import {laneRunError} from './lane-runs';
+import {stretchError} from './section-stretches';
 import {compileRoadNetwork,stations,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
 export const ROAD_FIRST_SCHEMA_VERSION=3;
@@ -39,6 +40,7 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(r.origin!==undefined&&(!r.origin||(r.origin.template!=='diamond'&&r.origin.template!=='uturn-bridge')||r.origin.version!==1||typeof r.origin.group!=='string'||!r.origin.group||r.origin.group.length>60||typeof r.origin.params!=='object'||r.origin.params===null))return `ที่มาของ ${r.name} ไม่ถูกต้อง`;
     if(r.roadside!==undefined&&(!r.roadside||typeof r.roadside.trees!=='boolean'||typeof r.roadside.lights!=='boolean'))return `ต้นไม้และเสาไฟของ ${r.name} ไม่ถูกต้อง`;
     const lr=laneRunError(r,stations(r.points,r.alignment).at(-1)??0);if(lr)return lr;
+    const se=stretchError(r,stations(r.points,r.alignment).at(-1)??0);if(se)return se;
     if(r.terminals!==undefined){const okLane=(x:unknown)=>x===undefined||(!!x&&typeof x==='object'&&finite((x as {length:number}).length,10,1000)&&finite((x as {taper:number}).taper,0,300));
       if(r.role!=='ramp'||!r.terminals||typeof r.terminals!=='object'||!okLane(r.terminals.start)||!okLane(r.terminals.end))return `ช่องเร่ง/ลดความเร็วของ ${r.name} ไม่ถูกต้อง`;}
     if(r.openings!==undefined&&(!Array.isArray(r.openings)||r.openings.length>12||!r.openings.every(o=>o&&typeof o.id==='string'&&!!o.id&&o.id.length<=40&&finite(o.station,0,1e6)&&finite(o.length,2,40)&&(o.type===undefined||o.type==='opening'||o.type==='uturn'))))return `ช่องเปิดเกาะกลางของ ${r.name} ไม่ถูกต้อง`;
