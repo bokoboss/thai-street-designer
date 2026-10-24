@@ -93,7 +93,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     |{kind:'ref';from:WorldPoint;start:WorldPoint}|{kind:'map';from:WorldPoint;start:WorldPoint}|{kind:'corner';candidateId:string;corner:number}|{kind:'pocket';candidateId:string;leg:LegKey;side:PocketSide}|{kind:'opening';candidateId:string;leg:LegKey;id:string}|{kind:'road-opening';roadId:string;id:string}|{kind:'radius';roadId:string;index:number}
     |{kind:'move';ids:string[];from:WorldPoint;screen:{x:number;y:number};applied:WorldPoint;moved:boolean;single?:string}
     |{kind:'box';from:WorldPoint;screen:{x:number;y:number};additive:boolean}
-    |{kind:'lane-run';roadId:string;id:string;end:'start'|'end'}|null>(null);
+    |{kind:'lane-run';roadId:string;id:string;end:'start'|'end'}|{kind:'stretch';roadId:string;id:string;end:'start'|'end'}|null>(null);
   const [box,setBox]=useState<{x0:number;y0:number;x1:number;y1:number}|null>(null);
   const selectedIds=selectedRoadIds(selection);
 
@@ -196,12 +196,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       const radius=radiusFromPoint(r.points,d.index,toWorld(e),r.alignment);
       if(radius!==null&&radius!==(r.points[d.index].radius??0))run({type:'road.setPointRadius',roadId:r.id,index:d.index,radius},{gesture:true});return;
     }
-    if(d.kind==='lane-run'){
-      const r=project.roads.find(x=>x.id===d.roadId),x=r?.laneRuns?.find(v=>v.id===d.id);if(!r||!x)return;
+    if(d.kind==='lane-run'||d.kind==='stretch'){
+      const r=project.roads.find(x=>x.id===d.roadId),items=d.kind==='lane-run'?r?.laneRuns:r?.sectionStretches,x=items?.find(v=>v.id===d.id);if(!r||!x||!items)return;
       // Ends slide along the road in 0.5 m steps and keep at least 2 m of lane between them.
       const A=resolveAlignment(r.points,r.alignment??'chord'),s=Math.round(A.project(toWorld(e)).station*2)/2;
       const v=d.end==='start'?Math.max(0,Math.min(s,x.end-2)):Math.min(A.length,Math.max(s,x.start+2));
-      if(v!==x[d.end])run({type:'road.setLaneRuns',roadId:r.id,runs:r.laneRuns!.map(y=>y.id===x.id?{...y,[d.end]:v}:y)},{gesture:true});return;
+      if(v===x[d.end])return;
+      if(d.kind==='lane-run')run({type:'road.setLaneRuns',roadId:r.id,runs:r.laneRuns!.map(y=>y.id===x.id?{...y,[d.end]:v}:y)},{gesture:true});
+      else run({type:'road.setSectionStretches',roadId:r.id,stretches:r.sectionStretches!.map(y=>y.id===x.id?{...y,[d.end]:v}:y)},{gesture:true});
+      return;
     }
     if(d.kind==='road-opening'){
       const r=project.roads.find(x=>x.id===d.roadId),o=r?.openings?.find(x=>x.id===d.id);if(!r||!o)return;
@@ -286,6 +289,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     drag.current={kind:'move',ids,from:toWorld(e),screen:{x:e.clientX,y:e.clientY},applied:{x:0,y:0},moved:false,...(member&&selectedIds.length>1?{single:roadId}:{})};
   }
   const grabLaneRun=(e:React.PointerEvent,roadId:string,id:string,end:'start'|'end')=>startHandleDrag(e,{kind:'lane-run',roadId,id,end});
+  const grabStretch=(e:React.PointerEvent,roadId:string,id:string,end:'start'|'end')=>startHandleDrag(e,{kind:'stretch',roadId,id,end});
   function startPointDrag(e:React.PointerEvent,road:Road,index:number){
     if(tool!=='select'||e.button!==0)return;
     e.stopPropagation();(svg.current as Element|null)?.setPointerCapture(e.pointerId);
@@ -374,6 +378,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
                 <rect x={p.x-px(6)} y={p.y-px(4)} width={px(12)} height={px(8)} rx={px(2)} fill="#fff" stroke="#6d6a8f" strokeWidth={px(2)} pointerEvents="none"/>
               </g>;})}
             {selected&&<LaneRunHandles road={road} px={px} onGrab={grabLaneRun}/>}
+            {selected&&<StretchHandles road={road} px={px} onGrab={grabStretch}/>}
             {selected&&road.points.map((p,i)=><g key={i} style={{cursor:'move'}} onPointerDown={e=>startPointDrag(e,road,i)}>
               {/* Large invisible target around a small visible handle. */}
               <circle data-design-road-point={`${road.id}:${i}`} data-design-point-picked={pointPicked===i?'true':undefined} cx={p.x} cy={p.y} r={px(14)} fill="transparent"/>
@@ -492,5 +497,16 @@ function LaneRunHandles({road,px,onGrab}:{road:Road;px:(n:number)=>number;onGrab
     return <g key={`run-${x.id}-${end}`} style={{cursor:'ew-resize'}} onPointerDown={e=>onGrab(e,road.id,x.id,end)}>
       <circle data-design-lane-run-handle={`${x.id}:${end}`} cx={q.x} cy={q.y} r={px(12)} fill="transparent"><title>{`ช่องเพิ่ม ${end==='start'?'เริ่ม':'สิ้นสุด'} ${st} ม. · ลากเพื่อเลื่อน`}</title></circle>
       <path d={`M${q.x} ${q.y-px(6)}L${q.x+px(5)} ${q.y}L${q.x} ${q.y+px(6)}L${q.x-px(5)} ${q.y}Z`} fill="#fff" stroke="#c47b12" strokeWidth={px(2)} pointerEvents="none"/>
+    </g>;}))}</>;
+}
+
+/** Start / end handles of a selected road's section stretches, on its centre line. */
+function StretchHandles({road,px,onGrab}:{road:Road;px:(n:number)=>number;onGrab:(e:React.PointerEvent,roadId:string,id:string,end:'start'|'end')=>void}){
+  const list=road.sectionStretches??[];if(!list.length)return null;
+  const A=resolveAlignment(road.points,road.alignment??'chord');
+  return <>{list.flatMap(x=>(['start','end'] as const).map(end=>{const st=x[end],p=A.pointAt(st);
+    return <g key={`st-${x.id}-${end}`} style={{cursor:'ew-resize'}} onPointerDown={e=>onGrab(e,road.id,x.id,end)}>
+      <circle data-design-stretch-handle={`${x.id}:${end}`} cx={p.x} cy={p.y} r={px(12)} fill="transparent"><title>{`หน้าตัดเฉพาะช่วง ${end==='start'?'เริ่ม':'สิ้นสุด'} ${st} ม. · ลากเพื่อเลื่อน`}</title></circle>
+      <rect x={p.x-px(5)} y={p.y-px(5)} width={px(10)} height={px(10)} fill="#fff" stroke="#6d6a8f" strokeWidth={px(2)} pointerEvents="none"/>
     </g>;}))}</>;
 }

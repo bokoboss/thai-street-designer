@@ -13,6 +13,7 @@ import {compileRoadFirstProject,validateRoadFirstProject,type RoadFirstProject} 
 import {joinRoads} from './join';
 import {splitRoad} from './split';
 import {laneRunError,type LaneRun} from './lane-runs';
+import {stretchError,type SectionStretch} from './section-stretches';
 import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type AuxLane,type RampEnd} from './ramps';
@@ -50,6 +51,8 @@ export type RoadFirstCommand=
   |{type:'road.setOpenings';roadId:string;openings:RoadOpening[]}
   /** Lanes added along stretches of the road (road stations). */
   |{type:'road.setLaneRuns';roadId:string;runs:LaneRun[]}
+  /** A different section over parts of the road (road stations). */
+  |{type:'road.setSectionStretches';roadId:string;stretches:SectionStretch[]}
   |{type:'road.setProfile';roadId:string;profile:Profile|null}
   /** Grade-separated crossing with `over` passing over, and the road profiles that make it so (one undo step). */
   |{type:'crossing.setOver';candidateId:string;owner?:string;over:string;profiles:Record<string,Profile|null>;label:string;
@@ -179,6 +182,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const grown=(stations(r.points,r.alignment).at(-1)??0)-oldLength,shift=(v:number)=>Math.round((v+(cmd.atStart?grown:0))*1000)/1000;
       if(cmd.atStart&&r.openings)r.openings=r.openings.map(o=>({...o,station:shift(o.station)}));
       if(cmd.atStart&&r.laneRuns)r.laneRuns=r.laneRuns.map(x=>({...x,start:shift(x.start),end:shift(x.end)}));
+      if(cmd.atStart&&r.sectionStretches)r.sectionStretches=r.sectionStretches.map(x=>({...x,start:shift(x.start),end:shift(x.end)}));
       if(r.profile||cmd.levels?.some(z=>Math.abs(z)>1e-9)){
         const s=stations(r.points,r.alignment),n=added.length,at=(k:number)=>s[cmd.atStart?n-1-k:r.points.length-n+k];
         // Without a profile the old road lies at level 0; its far end keeps that level.
@@ -285,6 +289,12 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const next={...r.terminals,[cmd.end]:cmd.lane??undefined};if(!cmd.lane)delete next[cmd.end];
       if(next.start||next.end)r.terminals=next;else delete r.terminals;
       label=`${cmd.lane?'ตั้ง':'ลบ'}${what} ${r.name}`;group=`ramp.lane:${r.id}:${cmd.end}`;roadsChanged=true;break;
+    }
+    case 'road.setSectionStretches':{
+      const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');
+      if(cmd.stretches.length)r.sectionStretches=structuredClone(cmd.stretches).sort((a,b)=>a.start-b.start);else delete r.sectionStretches;
+      const e=stretchError(r,stations(r.points,r.alignment).at(-1)??0);if(e)return fail(e,`แก้หน้าตัดเฉพาะช่วง ${r.name}`);
+      label=`แก้หน้าตัดเฉพาะช่วง ${r.name}`;group=`road.stretches:${r.id}`;roadsChanged=true;break;
     }
     case 'road.setLaneRuns':{
       const r=road(cmd.roadId);if(!r)return fail('ไม่พบถนนที่เลือก');

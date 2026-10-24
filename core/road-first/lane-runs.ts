@@ -43,32 +43,37 @@ export function clipRun(run:LaneRun,from:number,to:number):{component:LinkStatio
   return{clipped,component:{id:`run-${run.id}`,kind:'lane',direction:run.direction,side:run.side,start:r3(a-from),end:r3(b-from),taperIn:run.taperIn,taperOut:run.taperOut}};
 }
 
+/** Anything laid along a road between two stations with a transition at each end (lane runs, section stretches). */
+export type StationRange={id:string;start:number;end:number;taperIn:number;taperOut:number};
 /**
- * Lane runs carried onto a road whose stations changed (straighten, join, reverse, alignment conversion): both ends are
- * found on the ground and re-measured on the new alignment. A run measured the other way round now runs against the
- * drawing direction, so its direction flips (two-way roads) unless the road's traffic itself reversed (`keepDirection`).
+ * Ranges carried onto a road whose stations changed (straighten, join, reverse, alignment conversion): both ends are found
+ * on the ground and re-measured on the new alignment. A range measured the other way round gets its tapers swapped and
+ * `flip` applied (what "the other way round" means for its contents).
  */
-export function remapRuns(runs:LaneRun[]|undefined,before:Pick<Road,'points'|'alignment'>,after:Pick<Road,'points'|'alignment'>,keepDirection=false):LaneRun[]|undefined{
-  if(!runs?.length)return runs;
+export function remapRanges<T extends StationRange>(items:T[]|undefined,before:Pick<Road,'points'|'alignment'>,after:Pick<Road,'points'|'alignment'>,flip:(x:T)=>T):T[]|undefined{
+  if(!items?.length)return items;
   const A0=resolveAlignment(before.points,before.alignment??'chord'),A1=resolveAlignment(after.points,after.alignment??'chord');
   const at=(s:number)=>A1.project(A0.pointAt(s)).station;
-  return runs.map(r=>{
+  return items.map(r=>{
     const s=at(r.start),e=at(r.end);
     if(e>=s)return{...r,start:r3(s),end:r3(e)};
-    return{...r,start:r3(e),end:r3(s),taperIn:r.taperOut,taperOut:r.taperIn,...(keepDirection?{}:{direction:r.direction==='forward'?'backward' as const:'forward' as const})};
+    return flip({...r,start:r3(e),end:r3(s),taperIn:r.taperOut,taperOut:r.taperIn});
   });
 }
-
-/** Split runs at a road station: the part before stays, the part after is re-measured from the split (no taper at the cut). */
-export function splitRuns(runs:LaneRun[]|undefined,s:number):[LaneRun[],LaneRun[]]{
-  const a:LaneRun[]=[],b:LaneRun[]=[];
-  for(const r of runs??[]){
+/** Ranges split at a road station: the part before stays, the part after is re-measured from the split (no taper at the cut). */
+export function splitRanges<T extends StationRange>(items:T[]|undefined,s:number):[T[],T[]]{
+  const a:T[]=[],b:T[]=[];
+  for(const r of items??[]){
     if(r.end<=s+1e-6)a.push({...r});
     else if(r.start>=s-1e-6)b.push({...r,start:r3(r.start-s),end:r3(r.end-s)});
     else{if(s-r.start>1)a.push({...r,end:r3(s),taperOut:0,taperIn:Math.min(r.taperIn,s-r.start)});if(r.end-s>1)b.push({...r,id:`${r.id}b`.slice(0,30),start:0,end:r3(r.end-s),taperIn:0,taperOut:Math.min(r.taperOut,r.end-s)});}
   }
   return[a,b];
 }
+/** Lane runs on a re-measured road: the other way round they belong to the other direction (two-way roads). */
+export const remapRuns=(runs:LaneRun[]|undefined,before:Pick<Road,'points'|'alignment'>,after:Pick<Road,'points'|'alignment'>,keepDirection=false)=>
+  remapRanges(runs,before,after,(r):LaneRun=>keepDirection?r:{...r,direction:r.direction==='forward'?'backward':'forward'});
+export const splitRuns=(runs:LaneRun[]|undefined,s:number)=>splitRanges(runs,s);
 
 /** A new run centred on the longest stretch between junction approaches (`stretches` in road stations). */
 export function newLaneRun(road:Road,stretches:{start:number;end:number}[],direction:LaneRun['direction'],side:LaneRun['side']):{run:LaneRun}|{error:string}{

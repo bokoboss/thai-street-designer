@@ -8,13 +8,15 @@ const section={forwardLanes:2,backwardLanes:2,laneWidth:3.5,median:4,walk:2};
 const fixture={kind:'road-first',schemaVersion:3,title:'ตรวจช่องเพิ่ม',decisions:[],options:{},roads:[{id:'A',name:'ถนนเอ',alignment:'arc',points:[{x:-200,y:0},{x:200,y:0}],section}]};
 const b=await startSession({root,path:'/design',profile:'.test-build/chrome-lanes'});
 const current=()=>b.evalValue(`JSON.parse(localStorage.getItem('thai-street-road-first-v1')).scenarios[0].project`);
+// Open a fold and let the panel settle before clicking inside it (the panel scrolls as it grows).
+const openFold=async id=>{await b.click(`[data-design-fold-toggle="${id}"]`);await new Promise(r=>setTimeout(r,300));};
 const screen=(x,y)=>b.evalValue(`(()=>{const p=new DOMPoint(${x},${y}).matrixTransform(document.querySelector('[data-design-plan]').getScreenCTM());return{x:p.x,y:p.y};})()`);
 try{
   await b.waitFor(()=>b.count('[data-design-ready="true"]'),'loaded');
   await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(fixture))})`);await b.send('Page.reload');
   await b.waitFor(()=>b.count('[data-design-ready="true"]'),'ready');
   await b.clickAt(await screen(-150,0));await b.waitFor(()=>b.count('[data-design-inspector="road"]'),'road panel');
-  await b.click('[data-design-fold-toggle="lane-runs"]');await b.click('[data-design-action="add-lane-run-forward"]');
+  await openFold('lane-runs');await b.click('[data-design-action="add-lane-run-forward"]');
   await b.waitFor(async()=>(await current()).roads[0].laneRuns?.length===1,'lane run added');
   const added=(await current()).roads[0].laneRuns[0];assert.deepEqual([added.direction,added.side,added.start,added.end,added.taperIn],['forward','curb',125,275,30]);
   await b.waitFor(async()=>await b.count('[data-design-lane-run-handle]')===2,'start / end handles on the plan');
@@ -29,6 +31,18 @@ try{
   await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].laneRuns[0].taperIn===45,'typed taper');
   await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'3D');await new Promise(r=>setTimeout(r,500));
   await b.screenshot('artifacts/lane-run-3d.png');await b.click('[data-design-view="2d"]');
+  // Section of a stretch: one click adds the road's section plus a lane each way; drag its start, type a footway width.
+  await openFold('section-stretches');await b.click('[data-design-action="add-stretch"]');
+  await b.waitFor(async()=>(await current()).roads[0].sectionStretches?.length===1,'stretch added');
+  const st=(await current()).roads[0].sectionStretches[0];assert.deepEqual([st.start,st.end,st.forwardLanes,st.backwardLanes,st.walk],[100,300,3,3,2]);
+  await b.waitFor(async()=>await b.count('[data-design-stretch-handle]')===2,'stretch handles on the plan');
+  const sh=await b.rect('[data-design-stretch-handle="S1:start"]'),sto=await screen(-130,0);
+  await b.drag({x:sh.x,y:sh.y},{x:sto.x,y:sh.y},8);
+  await b.waitFor(async()=>Math.abs((await current()).roads[0].sectionStretches[0].start-70)<.6,'start dragged');
+  await b.click('[data-design-undo]');await b.waitFor(async()=>(await current()).roads[0].sectionStretches[0].start===100,'one undo for the stretch drag');
+  await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="stretch-0-walk"]');i.focus();const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'0.75');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].sectionStretches[0].walk===.75,'typed footway');
+  await b.screenshot('artifacts/section-stretch-plan.png');
   // Deceleration lane at a ramp's diverge: one tick on the ramp panel; the ramp then continues the added lane.
   const withRamp={...fixture,roads:[fixture.roads[0],{id:'X',name:'ทางออก',role:'ramp',alignment:'arc',points:[{x:-100,y:-9},{x:20,y:-35},{x:120,y:-55}],section:{forwardLanes:1,backwardLanes:0,laneWidth:3.5,median:0,walk:0},anchors:{start:{roadId:'A',station:100,side:1}}}]};
   await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(withRamp))})`);await b.send('Page.reload');
@@ -39,5 +53,5 @@ try{
   await b.screenshot('artifacts/ramp-decel-lane.png');
   await b.click('[data-design-undo]');await b.waitFor(async()=>!(await current()).roads.find(x=>x.id==='X').terminals,'one undo');
   assert.deepEqual(b.errors,[]);
-  console.log('PASS lane browser: deceleration lane at a ramp diverge in 1 click, add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D');
+  console.log('PASS lane browser: deceleration lane at a ramp diverge in 1 click, add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D; section of a stretch in 1 click, drag start = one undo, typed footway');
 }catch(error){await b.screenshot('artifacts/lane-browser-failure.png');throw error;}finally{b.close();}

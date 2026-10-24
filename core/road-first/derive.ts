@@ -13,6 +13,7 @@ import type {Direction} from '../junction/model';
 import {LEVEL_TOLERANCE,levelAt,profileSlice,sectionWidth,type Profile} from './elevation';
 import {rampTerminal,type AuxLane,type RampAnchor} from './ramps';
 import {auxLaneRuns,clipRun,weavingSections,type LaneRun} from './lane-runs';
+import {clipPart,stretchParts,type SectionStretch} from './section-stretches';
 import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
@@ -38,6 +39,8 @@ export type Road={alignment?:'arc';id:string;name:string;role?:RoadRole;points:R
   roadside?:{trees:boolean;lights:boolean};
   /** Lanes added along a stretch, in road stations (see lane-runs.ts). */
   laneRuns?:LaneRun[];
+  /** A different section over parts of the road, in road stations (see section-stretches.ts). */
+  sectionStretches?:SectionStretch[];
   /** Vertical points (station, z) — Phase 4A; absent = level 0. */
   profile?:Profile;
   /** Made by a template (Phase 4B-3): which one, its version, the group of pieces placed together and the parameters used. */
@@ -344,7 +347,7 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       const reach=toJunction?last!.station+armLength.get(`${toJunction.junctionId}:${toJunction.armId}`)!:total;
       if(!last||reach<total-EPS)nodes.push({behind:{ref:addEnd(road,false),station:total}});
     }
-    let span=0;const placed=new Set<string>(),placedRuns=new Set<string>(),clippedRuns=new Set<string>();
+    let span=0;const placed=new Set<string>(),placedRuns=new Set<string>(),clippedRuns=new Set<string>(),placedStretches=new Set<string>(),clippedStretches=new Set<string>();
     for(let k=0;k<nodes.length-1;k++){
       const from=nodes[k].ahead,to=nodes[k+1].behind;
       if(!from||!to){issues.push(`${road.name}: ต่อช่วงถนนไม่ได้`);continue;}
@@ -360,7 +363,11 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       // Lane runs on this link: clipped to it, in link stations; the link then changes section along its length.
       for(const run of [...(road.laneRuns??[]),...(aux.get(road.id)??[])]){const c=clipRun(run,from.station,to.station);if(!c)continue;
         built.components=[...built.components,c.component];placedRuns.add(run.id);if(c.clipped)clippedRuns.add(run.id);}
-      if(built.components.some(c=>c.id.startsWith('run-')))built.sectionProfile={...built.sectionProfile,mode:'linear'};
+      // Section stretches on this link: their added lanes and width changes, clipped to it.
+      for(const x of road.sectionStretches??[]){const parts=stretchParts(x,road.section);
+        for(const c of [...parts.lanes,...parts.widths]){const k=clipPart(c,from.station,to.station);if(!k)continue;
+          built.components=[...built.components,k.part];placedStretches.add(x.id);if(k.clipped)clippedStretches.add(x.id);}}
+      if(built.components.some(c=>c.id.startsWith('run-')||c.id.startsWith('st-')))built.sectionProfile={...built.sectionProfile,mode:'linear'};
       if(road.roadside&&(road.roadside.trees||road.roadside.lights))built.roadside={...road.roadside};
       const levels=profileSlice(road.profile,from.station,to.station);if(levels)built.levels=levels;
       if(road.profile?.some(q=>(q.curveLength??0)>0))built.verticalAlignment={profile:structuredClone(road.profile),from:from.station,to:to.station};
@@ -368,6 +375,12 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
       linkRanges.push({id:built.id,roadId:road.id,from:from.station,to:to.station});
       links.push(built);
       span++;
+    }
+    for(const x of road.sectionStretches??[]){
+      const where=`${round(x.start,0)}–${round(x.end,0)} ม.`,changes=x.forwardLanes!==road.section.forwardLanes||x.backwardLanes!==road.section.backwardLanes||Math.abs(x.walk-road.section.walk)>=.01||(x.bands??[]).some(b=>Math.abs(b.width-((road.section.bands??[]).find(y=>y.type===b.type)?.width??b.width))>=.01);
+      if(!changes)issues.push(`${road.name}: หน้าตัดเฉพาะช่วง ${where} เหมือนหน้าตัดของถนน — ไม่มีอะไรเปลี่ยน`);
+      else if(!placedStretches.has(x.id))issues.push(`${road.name}: หน้าตัดเฉพาะช่วง ${where} อยู่ในช่วงเข้าทางแยกหรือเลยปลายถนน จึงไม่ได้สร้าง`);
+      else if(clippedStretches.has(x.id))issues.push(`${road.name}: หน้าตัดเฉพาะช่วง ${where} ถูกตัดที่ช่วงเข้าทางแยก — หน้าตัดที่ปากทางแยกยังเป็นของถนน ตรวจความต่อเนื่อง`);
     }
     for(const run of [...(road.laneRuns??[]),...(aux.get(road.id)??[])]){
       const where=`${run.id.startsWith('aux-')?'ของทางลาด ':''}${round(run.start,0)}–${round(run.end,0)} ม.`;
@@ -445,8 +458,8 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
     issues.push(`${nm(w.roadId)}: ทางเข้าจาก ${nm(w.merge)} ถึงทางออกไป ${nm(w.diverge)} ห่าง ${round(w.length,0)} ม.${w.connected?' · ช่องเสริมต่อเนื่อง (ช่วงทอผ้า)':''} — ต้องตรวจตามเกณฑ์`);}
   // A link whose two ends differ in a way the engine cannot change between along its length keeps its plain section; its runs are reported.
   {const base:NetworkProject={schemaVersion:5,title:'',junctions,links,parallelCorridors:[],roadEnds};
-   for(const l of links){if(!l.components.some(c=>c.id.startsWith('run-'))||linkLinearTransitionPossible(base,l))continue;
-     l.components=l.components.filter(c=>!c.id.startsWith('run-'));if(!l.components.length)l.sectionProfile={...l.sectionProfile,mode:'review'};
+   for(const l of links){const mine=(c:{id:string})=>c.id.startsWith('run-')||c.id.startsWith('st-');if(!l.components.some(mine)||linkLinearTransitionPossible(base,l))continue;
+     l.components=l.components.filter(c=>!mine(c));if(!l.components.length)l.sectionProfile={...l.sectionProfile,mode:'review'};
      issues.push(`${l.name}: หน้าตัดสองปลายช่วงนี้ต่างกัน จึงยังเพิ่มช่องตามระยะทางไม่ได้ — ทำหน้าตัดสองปลายให้ตรงกันก่อน`);}}
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges};
 }
