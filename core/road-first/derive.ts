@@ -18,6 +18,7 @@ import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
 import {structureStretches,structureWidth,type StructureExtent,type StructureSection} from './structure-sections';
+import {stationCompositionIssues} from './station-composition';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -494,5 +495,6 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
    for(const l of links){const mine=(c:{id:string})=>c.id.startsWith('run-')||c.id.startsWith('st-');if(!l.components.some(mine)||linkLinearTransitionPossible(base,l))continue;
      l.components=l.components.filter(c=>!mine(c));if(!l.components.length)l.sectionProfile={...l.sectionProfile,mode:'review'};
      issues.push(`${l.name}: หน้าตัดสองปลายช่วงนี้ต่างกัน จึงยังเพิ่มช่องตามระยะทางไม่ได้ — ทำหน้าตัดสองปลายให้ตรงกันก่อน`);}}
+  for(const link of links)issues.push(...stationCompositionIssues(link));
   return {project:{schemaVersion:5,title:'Road-first spike',junctions,links,parallelCorridors:[],roadEnds,...(networkCrossings.length?{crossings:networkCrossings,structure:{deckDepth:criteria.deckDepth.value,tunnelRoof:criteria.tunnelRoof.value}}:{}),...(rampTapers.length?{rampTapers}:{})},legs,issues,sources,unjoined,overflow,shortfalls,crossings,linkRanges,structures};
 }
