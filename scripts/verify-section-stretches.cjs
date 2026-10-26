@@ -31,7 +31,7 @@ fresh();assert.equal(comp().project.links[0].components.length,0,'old files: unc
 
 // 3. Refusals with the reason.
 {const f=(x,re)=>assert.match(c.executeCommand(e.project,{type:'road.setSectionStretches',roadId:'A',stretches:[x]}).error,re);
- f({...S1,forwardLanes:1},/น้อยกว่าถนน/);f({...S1,forwardLanes:5},/ไม่เกิน 2 ช่อง/);f({...S1,walk:9},/ไม่เกิน 5 ม\./);
+ f({...S1,forwardLanes:0},/อย่างน้อย 1 ช่อง/);f({...S1,forwardLanes:5},/ไม่เกิน 2 ช่อง/);f({...S1,walk:9},/ไม่เกิน 5 ม\./);
  f({...S1,bands:[{type:'bike',width:2}]},/ไม่มีแถบ bike/);f({...S1,taperIn:150,taperOut:100},/ช่วงเปลี่ยน/);f({...S1,end:700},/เลยปลายถนน/);}
 
 // 4. Nothing changed / cut by a junction: items to check.
@@ -48,4 +48,4 @@ fresh();assert.equal(comp().project.links[0].components.length,0,'old files: unc
 
 // 6. A new stretch: the road's section plus one lane each way, on the longest free stretch.
 {const r=ss.newStretch({...R('A'),sectionStretches:[]},[{start:0,end:600}]).stretch;assert.deepEqual([r.start,r.end,r.forwardLanes,r.backwardLanes,r.walk,r.taperIn],[200,400,3,3,2,30]);}
-console.log('PASS section stretches: old files unchanged, more lanes / footway / shoulder over a stretch (plan geometry, deterministic, save / reopen, one undo), footway to 5 cm, refusals, items to check, carried through reverse / split / join, new stretch');
+console.log('PASS section stretches: old files unchanged, add lanes or reduce one curb lane / footway / shoulder over a stretch (plan geometry, deterministic, save / reopen, one undo), footway to 5 cm, refusals, items to check, carried through reverse / split / join, new stretch');

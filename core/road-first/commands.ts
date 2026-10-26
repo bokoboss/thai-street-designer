@@ -440,7 +440,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   // Preserve legacy conflicts as authored, but never introduce a new over-budget/overlap condition.
   // Comparing the complete compiled issue sets also keeps a failed edit atomic.
   const integrity=(value:RoadFirstProject)=>compileRoadFirstProject(value).issues.filter(x=>
-    x.includes('เกินขอบเขต 24 รายการ')||x.includes('ช่องเพิ่มใน')&&x.includes('ซ้อนกัน')||x.includes('การปรับความกว้าง')&&x.includes('ซ้อนกัน'));
+    x.includes('เกินขอบเขต 24 รายการ')||x.includes('ช่องเพิ่มใน')&&x.includes('ซ้อนกัน')||x.includes('ช่วงลดช่อง')&&x.includes('ซ้อนกัน')||x.includes('การปรับความกว้าง')&&x.includes('ซ้อนกัน'));
   const earlier=new Set(integrity(project));
   const introduced=integrity(p).filter(x=>!earlier.has(x));
   if(introduced.length)return fail(introduced[0]+' — ไม่รับการแก้ไขนี้',label);

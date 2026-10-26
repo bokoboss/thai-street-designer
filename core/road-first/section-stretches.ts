@@ -1,7 +1,7 @@
 // Section of a stretch ("หน้าตัดเฉพาะช่วง"): a different section over part of a road — more lanes, a wider or narrower
 // footway, wider or narrower side bands — with a transition at each end. Stored in road stations like lane runs, and
 // compiled into the same station lane / width components, so plan, section, 3D and export read one model.
-// The engine adds lanes over a stretch but does not take them away, so a stretch never has fewer lanes than the road.
+// A stretch may add up to two lanes or drop exactly one curb lane per direction; structures remain additive-only.
 import type {LinkStationLaneComponent,LinkStationWidthComponent,LinkWidthTarget} from '../network/network-project';
 import type {Band} from '../junction/model';
 import type {Road,RoadSection} from './derive';
@@ -27,16 +27,20 @@ export function stretchError(road:Pick<Road,'name'|'section'>&{sectionStretches?
     const where=`${x.start.toFixed(0)}–${x.end.toFixed(0)} ม.`;
     if(x.end>length+.01)return `${road.name}: หน้าตัดเฉพาะช่วง ${where} เลยปลายถนน`;
     if(x.taperIn+x.taperOut>x.end-x.start+1e-6)return `${road.name}: ช่วงเปลี่ยนของหน้าตัด ${where} ยาวกว่าตัวช่วง`;
-    const e=sectionChangeError(road,x,` ${where}`);if(e)return e;
+    const e=sectionChangeError(road,x,` ${where}`,true);if(e)return e;
   }
   return null;
 }
 
-/** The section of a stretch (or of a structure) against the road's: lanes up only, footway and bands within ±5 m. */
-export function sectionChangeError(road:Pick<Road,'name'|'section'>,x:Pick<SectionStretch,'forwardLanes'|'backwardLanes'|'walk'|'bands'>,where:string):string|null{
+/** Road stretches can drop one curb lane; structure sections retain the previous add-only constraint. */
+export function sectionChangeError(road:Pick<Road,'name'|'section'>,x:Pick<SectionStretch,'forwardLanes'|'backwardLanes'|'walk'|'bands'>,where:string,allowLaneReduction=false):string|null{
   const s=road.section;
   for(const [n,base,label] of [[x.forwardLanes,s.forwardLanes,'ตามทิศที่วาด'],[x.backwardLanes,s.backwardLanes,'ทิศสวน']] as const){
-    if(n<base)return `${road.name}: หน้าตัด${where} มีช่อง${label}น้อยกว่าถนน — ลดช่องกลางช่วงยังทำไม่ได้ แก้หน้าตัดของถนนแทน`;
+    if(n<base){
+      if(!allowLaneReduction)return `${road.name}: หน้าตัด${where} มีช่อง${label}น้อยกว่าถนน — ลดช่องบนโครงสร้างยังทำไม่ได้`;
+      if(n<1)return `${road.name}: หน้าตัด${where} ต้องเหลืออย่างน้อย 1 ช่อง${label} — ลดเหลือศูนย์ช่องไม่ได้`;
+      if(n!==base-1)return `${road.name}: หน้าตัด${where} ลดช่อง${label}ได้ครั้งละ 1 ช่อง`;
+    }
     if(n>base+LANE_RUN_STACK)return `${road.name}: หน้าตัด${where} เพิ่มช่อง${label}ได้ไม่เกิน ${LANE_RUN_STACK} ช่อง`;
     if(n>base&&base<1)return `${road.name}: ไม่มีช่องจราจร${label} จึงเพิ่มช่องด้านนี้ไม่ได้`;
   }
@@ -45,11 +49,13 @@ export function sectionChangeError(road:Pick<Road,'name'|'section'>,x:Pick<Secti
   return null;
 }
 
-/** The stretch as components over road stations: one added lane per extra lane (curb side), one width change per target. */
+/** The stretch becomes signed lane components (add / curb drop), plus width adjustments. */
 export function stretchParts(x:SectionStretch,s:RoadSection):{lanes:(Omit<LinkStationLaneComponent,'kind'>&{kind:'lane'})[];widths:LinkStationWidthComponent[]}{
   const base={start:x.start,end:x.end,taperIn:x.taperIn,taperOut:x.taperOut},lanes:(Omit<LinkStationLaneComponent,'kind'>&{kind:'lane'})[]=[],widths:LinkStationWidthComponent[]=[];
-  for(const [dir,n,b] of [['forward',x.forwardLanes,s.forwardLanes],['backward',x.backwardLanes,s.backwardLanes]] as const)
+  for(const [dir,n,b] of [['forward',x.forwardLanes,s.forwardLanes],['backward',x.backwardLanes,s.backwardLanes]] as const){
     for(let k=1;k<=n-b;k++)lanes.push({id:`st-${x.id}-${dir[0]}${k}`,kind:'lane',direction:dir,side:'curb',...base});
+    if(n===b-1)lanes.push({id:`st-${x.id}-${dir[0]}d1`,kind:'lane',operation:'drop',direction:dir,side:'curb',...base});
+  }
   // The engine draws a width change down to 5 cm, never to nothing: a footway "removed" over a stretch keeps 5 cm.
   const width=(target:LinkWidthTarget,from:number,to:number)=>{const delta=r3(Math.max(to,.05)-from);if(Math.abs(delta)<.01)return;
     for(const dir of ['forward','backward'] as const)widths.push({id:`st-${x.id}-${target}-${dir[0]}`,kind:'width',direction:dir,target,delta,...base});};
@@ -78,4 +84,13 @@ export function newStretch(road:Road,free:{start:number;end:number}[]):{stretch:
   return{stretch:{id:`S${n}`,start:r3(mid-length/2),end:r3(mid+length/2),taperIn:r3(t),taperOut:r3(t),
     forwardLanes:sec.forwardLanes+(sec.forwardLanes>0?1:0),backwardLanes:sec.backwardLanes+(sec.backwardLanes>0?1:0),walk:sec.walk,
     ...(sec.bands?.length?{bands:sec.bands.map(b=>({type:b.type,width:b.width}))}:{})}};
+}
+
+/** A one-lane curb reduction centred on an available road stretch (tool tapers, TO_VERIFY). */
+export function newLaneReduction(road:Road,free:{start:number;end:number}[],direction:'forward'|'backward'):{stretch:SectionStretch}|{error:string}{
+  const count=direction==='forward'?road.section.forwardLanes:road.section.backwardLanes;
+  if(count<2)return{error:'ทิศทางนี้ต้องมีอย่างน้อยสองช่องก่อนลดช่องได้หนึ่งช่อง'};
+  const made=newStretch(road,free);if('error' in made)return made;
+  return{stretch:{...made.stretch,forwardLanes:road.section.forwardLanes-(direction==='forward'?1:0),
+    backwardLanes:road.section.backwardLanes-(direction==='backward'?1:0)}};
 }

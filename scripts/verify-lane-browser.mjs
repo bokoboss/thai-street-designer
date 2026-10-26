@@ -43,6 +43,20 @@ try{
   await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="stretch-0-walk"]');i.focus();const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'0.75');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].sectionStretches[0].walk===.75,'typed footway');
   await b.screenshot('artifacts/section-stretch-plan.png');
+  // Remove the additive stretch. The lane run from the earlier test overlaps the intended curb reduction.
+  await b.click('[data-design-action="remove-stretch-0"]');
+  await b.waitFor(async()=>!(await current()).roads[0].sectionStretches?.length,'old stretch removed');
+  await openFold('section-stretches');await b.click('[data-design-action="add-lane-reduction-forward"]');
+  await new Promise(r=>setTimeout(r,250));
+  assert.equal((await current()).roads[0].sectionStretches?.length??0,0,'overlapping added lane and curb drop refused');
+  await openFold('lane-runs');await b.click('[data-design-action="remove-lane-run-0"]');
+  await b.waitFor(async()=>!(await current()).roads[0].laneRuns?.length,'overlapping lane run removed');
+  await openFold('section-stretches');await b.click('[data-design-action="add-lane-reduction-forward"]');
+  await b.waitFor(async()=>{const q=(await current()).roads[0].sectionStretches;return q?.length===1&&q[0].forwardLanes===1&&q[0].backwardLanes===2;},'2 to 1 to 2 lane reduction added');
+  await b.waitFor(async()=>await b.count('[data-design-stretch-handle]')===2,'reduction handles');
+  await b.screenshot('artifacts/lane-reduction-plan.png');
+  await b.click('[data-design-view="3d"]');await b.waitFor(()=>b.count('.network-scene3d'),'reduced lane visible in 3D');await new Promise(r=>setTimeout(r,500));
+  await b.screenshot('artifacts/lane-reduction-3d.png');await b.click('[data-design-view="2d"]');
   // Deceleration lane at a ramp's diverge: one tick on the ramp panel; the ramp then continues the added lane.
   const withRamp={...fixture,roads:[fixture.roads[0],{id:'X',name:'ทางออก',role:'ramp',alignment:'arc',points:[{x:-100,y:-9},{x:20,y:-35},{x:120,y:-55}],section:{forwardLanes:1,backwardLanes:0,laneWidth:3.5,median:0,walk:0},anchors:{start:{roadId:'A',station:100,side:1}}}]};
   await b.evalValue(`localStorage.setItem('thai-street-road-first-v1',${JSON.stringify(JSON.stringify(withRamp))})`);await b.send('Page.reload');
@@ -55,5 +69,5 @@ try{
   await b.screenshot('artifacts/ramp-decel-lane.png');
   await b.click('[data-design-undo]');await b.waitFor(async()=>!(await current()).roads.find(x=>x.id==='X').terminals,'one undo');
   assert.deepEqual(b.errors,[]);
-  console.log('PASS lane browser: deceleration lane at a ramp diverge in 1 click, add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D; section of a stretch in 1 click, drag start = one undo, typed footway');
+  console.log('PASS lane browser: mid-block curb reduction in 2 actions and shared 2D/3D; deceleration lane at a ramp diverge in 1 click, add a lane along a stretch (2 clicks), plan handles, drag end = one undo, typed taper, 3D; section of a stretch in 1 click, drag start = one undo, typed footway');
 }catch(error){await b.screenshot('artifacts/lane-browser-failure.png');throw error;}finally{b.close();}

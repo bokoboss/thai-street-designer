@@ -1,6 +1,6 @@
 // Review generated station components in a single canonical link. No silent reduction or reordering.
 // Values here are integrity/data limits, not traffic design standards.
-import type {RoadLink} from '../network/network-project';
+import type {LinkStationLaneComponent,RoadLink} from '../network/network-project';
 
 export const STATION_COMPONENT_BUDGET=24;
 /** Treat endpoint contact as non-overlap; existing authored values remain untouched. */
@@ -13,7 +13,10 @@ export function stationCompositionIssues(link:RoadLink):string[]{
     const station=(points[i-1]+points[i])/2;
     const active=link.components.filter(c=>c.start<station&&c.end>station);
     for(const direction of ['forward','backward'] as const){
-      const lanes=active.filter(c=>c.kind==='lane'&&c.direction===direction);
+      const lanes=active.filter((c):c is LinkStationLaneComponent=>c.kind==='lane'&&c.direction===direction);
+      const drops=lanes.filter(c=>c.operation==='drop'),adds=lanes.filter(c=>c.operation!=='drop');
+      if(drops.length>1)out.push(`${link.name}: ระยะ ${station.toFixed(1)} ม. มีช่วงลดช่องซ้อนกันในทิศทางเดียวกัน — เลือกช่วงเดียว`);
+      if(drops.length&&adds.length)out.push(`${link.name}: ระยะ ${station.toFixed(1)} ม. ช่วงลดช่องซ้อนกันกับช่องเพิ่มในทิศทางเดียวกัน — แยกช่วงก่อน`);
       if(lanes.length>2)out.push(`${link.name}: ระยะ ${station.toFixed(1)} ม. มีช่องเพิ่มใน${direction==='forward'?'ทิศที่วาด':'ทิศสวน'}ซ้อนกัน ${lanes.length} ช่อง — ตรวจความต่อเนื่อง`);
       for(const target of ['walk','shoulder','bike','motorcycle','buffer'] as const){
         const widths=active.filter(c=>c.kind==='width'&&c.direction===direction&&c.target===target);
