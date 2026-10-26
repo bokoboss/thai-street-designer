@@ -6,6 +6,7 @@ import {levelCriteriaError} from './level-criteria';
 import {laneRunError} from './lane-runs';
 import {stretchError} from './section-stretches';
 import {structureSectionError} from './structure-sections';
+import {connectorOverrideError} from './lane-connector-overrides';
 import {compileRoadNetwork,stations,type CompileOptions,type CompileResult,type Decision,type Road} from './derive';
 
 export const ROAD_FIRST_SCHEMA_VERSION=3;
@@ -54,7 +55,8 @@ export function validateRoadFirstProject(p:RoadFirstProject):string|null{
     if(d.profileOwner!==undefined){if(p.schemaVersion<3||typeof d.profileOwner!=='string'||!d.profileOwner||d.profileOwner.length>160||owners.has(d.profileOwner))return 'เจ้าของแนวดิ่งของจุดตัดซ้ำหรือไม่ถูกต้อง';owners.add(d.profileOwner);}
     if(!['junction','grade-separated','ignore'].includes(d.decision))return 'ประเภทการยืนยันจุดตัดไม่ถูกต้อง';
     if(d.over!==undefined&&(typeof d.over!=='string'||!ids.has(d.over)))return 'ถนนที่อยู่บนของทางต่างระดับไม่ถูกต้อง';
-    if(d.treatments!==undefined&&(typeof d.treatments!=='object'||d.treatments===null))return 'การตั้งค่าทางแยกไม่ถูกต้อง';
+    if(d.treatments!==undefined&&(typeof d.treatments!=='object'||d.treatments===null||Array.isArray(d.treatments)))return 'การตั้งค่าทางแยกไม่ถูกต้อง';
+    if(d.treatments?.connectors!==undefined){const error=connectorOverrideError(d.treatments.connectors);if(error)return `${d.name??d.candidateId}: ${error}`;}
   }
   return null;
 }

@@ -19,6 +19,8 @@ import {reverseRoad,straightenRoad} from './reshape';
 import {LEVEL_TOLERANCE,levelAt,type Profile} from './elevation';
 import {anchorNote,rampError,reattachRamps,type AuxLane,type RampEnd} from './ramps';
 import {MAX_RADIUS,vertexCurve} from './curves';
+import {connectorOverrideError,connectorOverrideKey,resolveConnectorOverrides,type ConnectorOverride} from './lane-connector-overrides';
+import {legKey} from './leg-binding';
 import {LEVEL_CRITERIA_LABEL,type Criterion,type LevelCriteriaKey} from './level-criteria';
 
 export type RoadFirstCommand=
@@ -74,6 +76,10 @@ export type RoadFirstCommand=
   |{type:'junction.setDesign';candidateId:string;patch:DesignSettings}
   /** Every junction-owned setting at once (edits brought back from the advanced junction editor). */
   |{type:'junction.setTreatments';candidateId:string;treatments:JunctionTreatments|undefined;label?:string}
+  /** Set one authored lane connection; rejected new edits never rewrite lane geometry. */
+  |{type:'junction.setConnector';candidateId:string;override:ConnectorOverride}
+  /** Clear one authored change and return to the generated lane connection. */
+  |{type:'junction.resetConnector';candidateId:string;from:ConnectorOverride['from'];movement:ConnectorOverride['movement']}
   |{type:'leg.setApproach';candidateId:string;leg:LegKey;patch:ApproachOverride}
   |{type:'leg.setTreatment';candidateId:string;leg:LegKey;patch:LegTreatment}
   /** The same leg patch on every approach of a junction (e.g. signals on all approaches), one undo step. */
@@ -346,7 +352,41 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
           group=`junction.cornerAt:${d.candidateId}:${cmd.leg}`;break;
         }
         case 'junction.setDesign':t(d).design={...t(d).design,...structuredClone(cmd.patch)};label=`ปรับการตั้งค่า ${jname(d)}`;group=`junction.design:${d.candidateId}:${Object.keys(cmd.patch).join(',')}`;break;
-        case 'junction.setTreatments':d.treatments=cmd.treatments?structuredClone(cmd.treatments):undefined;label=`${cmd.label??'แก้ทางแยกขั้นสูง'} ${jname(d)}`;break;
+        case 'junction.setTreatments':{
+          // The advanced editor cannot author these overrides yet. Never erase them on its roundtrip.
+          const saved=d.treatments?.connectors;
+          d.treatments=cmd.treatments?structuredClone({
+            ...cmd.treatments,...(saved&&cmd.treatments.connectors===undefined?{connectors:saved}:{})
+          }):saved?{connectors:structuredClone(saved)}:undefined;
+          label=`${cmd.label??'แก้ทางแยกขั้นสูง'} ${jname(d)}`;break;
+        }
+        case 'junction.setConnector':{
+          const error=connectorOverrideError([cmd.override]);if(error)return fail(error);
+          const override=structuredClone(cmd.override),key=connectorOverrideKey(override);
+          const saved=t(d).connectors??[];
+          const rest=saved.filter(o=>connectorOverrideKey(o)!==key);
+          const next=[...rest,override],bad=connectorOverrideError(next);if(bad)return fail(bad);
+          t(d).connectors=next;
+          const compiled=compileRoadFirstProject(p);
+          const id=Object.keys(compiled.sources.junctions).find(id=>compiled.sources.junctions[id]===d.candidateId);
+          const j=compiled.project.junctions.find(j=>j.id===id);
+          if(!id||!j)return fail('ยังจับคู่ขาทางแยกไม่ได้');
+          const bindings=compiled.legs.filter(l=>l.junctionId===id).map(l=>({
+            armId:l.armId,leg:legKey(l.roadId,l.side)
+          }));
+          const resolved=resolveConnectorOverrides(j.design,bindings,next);
+          const problem=resolved.issues.find(i=>i.kind==='manual-review'&&i.overrideKey===key);
+          if(problem)return fail(problem.message);
+          label=`ตั้งค่าการเชื่อมช่องจราจรที่ ${jname(d)}`;break;
+        }
+        case 'junction.resetConnector':{
+          const saved=d.treatments?.connectors??[];
+          const key=connectorOverrideKey({from:cmd.from,movement:cmd.movement});
+          const next=saved.filter(o=>connectorOverrideKey(o)!==key);
+          if(next.length===saved.length)return fail('ไม่พบการตั้งค่าช่องที่จะคืนค่า');
+          if(next.length)t(d).connectors=next;else if(d.treatments)delete d.treatments.connectors;
+          label=`คืนค่าการเชื่อมช่องอัตโนมัติที่ ${jname(d)}`;break;
+        }
         case 'leg.setApproach':{
           const a=t(d).approaches??={};a[cmd.leg]={...a[cmd.leg],...structuredClone(cmd.patch)};
           label=`ปรับช่วงเข้าทางแยก ${legName(cmd.leg)} ที่ ${jname(d)}`;group=`leg.approach:${d.candidateId}:${cmd.leg}:${Object.keys(cmd.patch).join(',')}`;break;

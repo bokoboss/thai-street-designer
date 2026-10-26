@@ -6,6 +6,7 @@ import type {WorldPoint} from '../network/network-project';
 import {pointAt,type Decision,type Road} from './derive';
 import {projectAlignment} from '../common/alignment';
 import {parseLegKey,legKey,type LegKey,type LegSlip} from './leg-binding';
+import {remapConnectorOverrides} from './lane-connector-overrides';
 import {remapRuns} from './lane-runs';
 import {remapStretches} from './section-stretches';
 
@@ -70,7 +71,7 @@ export function joinRoads(roads:Road[],decisions:Decision[],aId:string,bId:strin
     const swap=(ids?:string[])=>ids&&[...new Set(ids.map(id=>id===bId?aId:id))];
     const t=d.treatments;
     return{...d,...(d.roads?{roads:swap(d.roads)}:{}),...(d.excluded?{excluded:swap(d.excluded)}:{}),
-      treatments:t&&{...t,legs:remapRecord(t.legs),approaches:remapRecord(t.approaches),cornerRadii:remapRecord(t.cornerRadii),slips:t.slips?.map((s:LegSlip)=>({...s,from:remap(s.from),...(s.to?{to:remap(s.to)}:{})}))}};
+      treatments:t&&{...t,legs:remapRecord(t.legs),approaches:remapRecord(t.approaches),cornerRadii:remapRecord(t.cornerRadii),connectors:remapConnectorOverrides(t.connectors,remap),slips:t.slips?.map((s:LegSlip)=>({...s,from:remap(s.from),...(s.to?{to:remap(s.to)}:{})}))}};
   });
   if(JSON.stringify(A.section)!==JSON.stringify(B.section))notes.push(`ใช้หน้าตัดของ ${A.name} ตลอดเส้น`);
   if(A.links?.length||B.links?.length)notes.push('ล้างช่วงเปลี่ยนหน้าตัดของสองเส้นเดิม');

@@ -19,6 +19,7 @@ import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-crite
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
 import {structureRoadSection,structureStretches,structureWidth,type StructureExtent,type StructureSection} from './structure-sections';
 import {stationCompositionIssues} from './station-composition';
+import type {ConnectorOverride} from './lane-connector-overrides';
 
 export type RoadSection={
   forwardLanes:number;backwardLanes:number;laneWidth:number;median:number;walk:number;bands?:Band[];
@@ -59,7 +60,7 @@ export type Candidate={id:string;kind:CandidateKind;point:WorldPoint;roads:{road
 export type {LegKey} from './leg-binding';
 /** Junction-owned treatments keyed by road leg, so they survive recompiles and road edits. */
 /** cornerRadii: per-corner curb radius keyed by the road leg the corner starts from (to the next leg by angle). */
-export type JunctionTreatments={slips?:LegSlip[];corner?:number;cornerRadii?:Partial<Record<LegKey,number>>;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
+export type JunctionTreatments={connectors?:ConnectorOverride[];slips?:LegSlip[];corner?:number;cornerRadii?:Partial<Record<LegKey,number>>;legs?:Partial<Record<LegKey,LegTreatment>>;approaches?:Partial<Record<LegKey,ApproachOverride>>;design?:DesignSettings};
 /** roads: the roads that join at this junction; any other road through the same point passes over or under it. */
 /** at: last known position of the crossing, used to re-attach the decision after road edits. */
 /** excluded: roads that reach the junction point but were deliberately left out of it (not reported, never auto-joined). */

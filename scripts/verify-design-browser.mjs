@@ -102,6 +102,12 @@ try{
     await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
     await b.waitFor(()=>b.count('[data-design-lane-connection-count]'),'automatic lane mapping in junction inspector');
     assert.ok(Number(await b.evalValue(`document.querySelector('[data-design-lane-connection-count]').dataset.designLaneConnectionCount`))>0,'junction lanes auto-map without manual connectors');
+    await openFold('automatic-lane-mapping');
+    const originalConnections=await b.count('[data-design-lane-connection]');
+    await b.click('[data-design-connector-suppress]');
+    await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections-1,'suppression');
+    await b.click('[data-design-connector-reset]');
+    await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections,'reset');
     await openFold('junction-grade');
     await b.click('[data-design-junction-over]');
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');

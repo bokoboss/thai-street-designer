@@ -10,7 +10,9 @@ import {clearanceText} from '@/core/road-first/structure-clearance';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
 import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} from '@/core/junction/model';
-import {automaticLaneMapping,type AutoLaneEndpoint} from '@/core/junction/automatic-lane-mapping';
+import {eligibleTurnTargets,type AutoLaneEndpoint} from '@/core/junction/automatic-lane-mapping';
+import {configuredArrowLanes} from '@/core/junction/lane-configuration';
+import {resolveConnectorOverrides,type ConnectorLaneRef} from '@/core/road-first/lane-connector-overrides';
 import {automaticRampLaneConnections} from '@/core/road-first/ramp-lane-connections';
 import {approachInfo,cornerHandles,junctionApproaches,newOpening,newSlip,openingsOf,openingsPatch,pocketTreatment,slipPatch,type ApproachInfo,type OpeningType,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
@@ -564,10 +566,23 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const d=project.decisions.find(x=>x.candidateId===candidateId),jid=Object.keys(compiled.sources.junctions).find(k=>compiled.sources.junctions[k]===candidateId);
   const j=compiled.project.junctions.find(x=>x.id===jid);
   const [armed,setArmed]=useState(false);
+  const [connectorTarget,setConnectorTarget]=useState<Record<string,string>>({});
   const {request,review}=useProfileReview(project,run,onMessage);
   if(!d||!j)return <p className="design-meta">ไม่พบทางแยกนี้แล้ว</p>;
   const approaches=junctionApproaches(compiled,candidateId);
-  const mapping=automaticLaneMapping(j.design);
+  const bindings=compiled.legs.filter(x=>x.junctionId===jid).map(x=>({armId:x.armId,leg:legKey(x.roadId,x.side)}));
+  const mapping=resolveConnectorOverrides(j.design,bindings,d.treatments?.connectors??[]);
+  const legOf=(armId:number)=>bindings.find(x=>x.armId===armId)?.leg;
+  const fromRef=(c:{from:AutoLaneEndpoint}):ConnectorLaneRef|null=>{
+    const leg=legOf(c.from.armId);return leg?{leg,role:c.from.role,laneIndex:c.from.laneIndex}:null;
+  };
+  const targets=(c:{from:AutoLaneEndpoint;movement:'left'|'through'|'right'})=>
+    eligibleTurnTargets(j.design,c.from.armId,c.movement).flatMap(armId=>{
+      const leg=legOf(armId);return leg?configuredArrowLanes(j.design.arms[armId],'outgoing').map(l=>{
+        const ref:ConnectorLaneRef={leg,role:l.role,laneIndex:l.laneIndex};
+        return {ref,value:JSON.stringify(ref),label:legLabel(project,leg)+' · '+(l.role==='main'?'ช่องหลัก ':l.role==='aux-left'?'ช่องริมขอบทาง ':'ช่องชิดเกาะกลาง ')+(l.laneIndex+1)};
+      }):[];
+    });
   const laneName=(lane:AutoLaneEndpoint)=>{
     const leg=compiled.legs.find(x=>x.junctionId===jid&&x.armId===lane.armId);
     const roadName=leg?legLabel(project,legKey(leg.roadId,leg.side)):'ขาที่ '+(lane.armId+1);
@@ -592,12 +607,34 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
     {j.design.type!=='roundabout'&&<Fold id="automatic-lane-mapping" title="การเชื่อมช่องจราจรอัตโนมัติ"
       summary={mapping.connections.length+' ทางเชื่อม'+(mapping.issues.length?' · ให้ตรวจ '+mapping.issues.length+' รายการ':'')}
       data="automatic-lane-mapping">
-      <p className="design-meta">จับคู่จากช่องจราจรและลูกศรที่กำหนดไว้ตามทิศทางจราจรชิดซ้าย ไม่เปลี่ยนรูปถนน ไม่ใช่การตรวจความจุหรือมาตรฐานการออกแบบ</p>
+      <p className="design-meta">จับคู่ช่องตามทิศทางจราจรชิดซ้าย · เปลี่ยนช่องรับ ปิดการเชื่อม หรือคืนค่าอัตโนมัติได้ การเชื่อมเป็นแนวคิด ไม่ใช่แนวกวาดรถหรือการตรวจความจุ</p>
       <div data-design-lane-connection-count={mapping.connections.length}>
-        {mapping.connections.map(c=><p key={c.id} className="design-meta" data-design-lane-connection={c.movement}>
-          {laneName(c.from)} → {c.movement==='left'?'เลี้ยวซ้าย':c.movement==='right'?'เลี้ยวขวา':'ตรงไป'} → {laneName(c.to)}
-        </p>)}
+        {mapping.connections.map(c=>{const from=fromRef(c),available=targets(c),toLeg=legOf(c.to.armId);
+          const current=JSON.stringify({leg:toLeg,role:c.to.role,laneIndex:c.to.laneIndex});
+          const selected=connectorTarget[c.id]??current;
+          return <div key={c.id} className="design-opening" data-design-lane-connection={c.movement} data-design-connector-origin={c.origin}>
+            <p className="design-meta">{c.origin==='manual'?'กำหนดเอง · ':'อัตโนมัติ · '}{laneName(c.from)} → {c.movement==='left'?'เลี้ยวซ้าย':c.movement==='right'?'เลี้ยวขวา':'ตรงไป'} → {laneName(c.to)}</p>
+            {from&&<div className="design-reference-tools">
+              <select aria-label="เลือกช่องรับ" data-design-connector-target={c.id} value={available.some(o=>o.value===selected)?selected:current}
+                onChange={e=>setConnectorTarget(v=>({...v,[c.id]:e.target.value}))}>
+                {available.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <button data-design-connector-replace={c.id} disabled={!available.some(o=>o.value===selected)} onClick={()=>{
+                const picked=available.find(o=>o.value===selected);if(picked)run({type:'junction.setConnector',candidateId,override:{from,movement:c.movement,mode:'replace',to:picked.ref}});
+              }}>ใช้ช่องรับที่เลือก</button>
+              <button data-design-connector-suppress={c.id} onClick={()=>run({type:'junction.setConnector',candidateId,override:{from,movement:c.movement,mode:'suppress'}})}>ไม่เชื่อมช่องนี้</button>
+            </div>}
+          </div>;
+        })}
       </div>
+      {!!d.treatments?.connectors?.length&&<section data-design-manual-connector-overrides={d.treatments.connectors.length}>
+        <small className="design-block-title">รายการที่กำหนดเอง · คืนค่าอัตโนมัติได้</small>
+        {d.treatments.connectors.map(o=><div key={o.from.leg+o.from.role+o.from.laneIndex+o.movement} className="design-reference-tools">
+          <span className="design-meta">{o.from.leg} · {o.from.role} {o.from.laneIndex+1} · {o.movement} — {o.mode==='suppress'?'ไม่เชื่อม':'เลือกช่องรับเอง'}</span>
+          <button data-design-connector-reset={o.from.leg+'-'+o.from.laneIndex+'-'+o.movement}
+            onClick={()=>run({type:'junction.resetConnector',candidateId,from:o.from,movement:o.movement})}>คืนค่าอัตโนมัติ</button>
+        </div>)}
+      </section>}
       {!!mapping.slipRoutes.length&&<p className="design-meta" data-design-mapping-slip={mapping.slipRoutes.length}>Slip lane {mapping.slipRoutes.length} เส้นใช้แนวเชื่อมเดิม ไม่สร้างเส้นซ้ำในทางแยก</p>}
       {!!mapping.issues.length&&<div className="design-issues" data-design-lane-mapping-issues={mapping.issues.length}>
         <b>รายการเชื่อมช่องที่ต้องตรวจ</b>
