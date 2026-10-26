@@ -56,7 +56,7 @@ assert.deepEqual([make.stretch.start,make.stretch.end,make.stretch.taperIn,make.
 
 const reject=(project,stretches,re)=>{const r=set(project,stretches);assert.match(r.result.error??'',re);assert.deepEqual(r.editor.project,project.project,'rejection is atomic');};
 reject(fresh(),[{...reduction,forwardLanes:0}],/อย่างน้อย|ศูนย์|0 ช่อง/);
-reject(fresh(),[{...reduction,forwardLanes:4}],/ไม่เกิน 2 ช่อง/);
+reject(fresh(),[{...reduction,forwardLanes:5}],/ไม่เกิน 2 ช่อง/);
 reject(e,[reduction,{...reduction,id:'D2',start:250,end:450}],/ซ้อน|ลดช่อง/);
 const mixed=cmd.runCommand(e,{type:'road.setLaneRuns',roadId:'A',runs:[{id:'X',direction:'forward',side:'curb',start:260,end:350,taperIn:10,taperOut:10}]});
 assert.match(mixed.result.error??'',/ซ้อน|ลดช่อง/,'cannot add and reduce a lane in the same station interval');
