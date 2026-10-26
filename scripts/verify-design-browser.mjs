@@ -111,9 +111,11 @@ try{
     // Direct plan interaction is a review overlay, not new road geometry or painted markings.
     await b.click('[data-design-connector-toggle]');
     await b.waitFor(()=>b.count('[data-design-connector-source]'),'review connectors shown in 2D');
-    await b.click('[data-design-connector-source] path[stroke="transparent"]');
-    await b.waitFor(()=>b.count('[data-design-connector-edit]'),'clicked a connection on the plan');
+    await b.click('[data-design-connector-pick]');
+    await b.waitFor(()=>b.count('[data-design-connector-edit]'),'clicked visible connector handle on the plan');
     assert.ok(await b.count('[data-design-connector-receiver]')>0,'eligible receiving lanes shown as clickable markers');
+    await b.click('[data-design-connector-receiver]');
+    await b.waitFor(()=>b.count('[data-design-connector-preview]'),'receiving lane pick displays an uncommitted preview');
     await b.click('[data-design-connector-cancel]');
     await b.waitFor(async()=>await b.count('[data-design-connector-edit]')===0,'cancel does not commit a connector edit');
     await b.click('[data-design-view="3d"]');

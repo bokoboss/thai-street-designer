@@ -469,6 +469,15 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
             onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({candidateId,from:c.from,movement:c.movement,target:null});}}>
             <title>{`เลือกการเชื่อม ${pickedLabel(c.from)} → ${pickedLabel(c.to)} · ${c.movement}`}</title>
           </path>
+          {/* Distinct visible handle avoids ambiguous overlapping centre-line hit tests. */}
+          <circle data-design-connector-pick={c.id}
+            cx={c.start.x+(c.end.x-c.start.x)*.35} cy={c.start.y+(c.end.y-c.start.y)*.35}
+            r={px(9)} fill="#fff" fillOpacity={.94}
+            stroke={c.origin==='manual'?'#0b7f86':'#64748b'} strokeWidth={px(2)}
+            style={{cursor:'pointer'}} pointerEvents="all"
+            onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({candidateId,from:c.from,movement:c.movement,target:null});}}>
+            <title>{`แก้การจับคู่ช่อง ${pickedLabel(c.from)} · ${c.movement}`}</title>
+          </circle>
           <circle cx={c.start.x} cy={c.start.y} r={px(3)} fill={c.origin==='manual'?'#0b7f86':'#64748b'} pointerEvents="none"/>
           <circle cx={c.end.x} cy={c.end.y} r={px(3)} fill="#fff" stroke="#64748b" strokeWidth={px(1)} pointerEvents="none"/>
         </g>)}
