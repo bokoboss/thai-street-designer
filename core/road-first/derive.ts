@@ -17,7 +17,7 @@ import {clipPart,stretchParts,type SectionStretch} from './section-stretches';
 import {curveRanges,vertexCurve} from './curves';
 import {gradeFor,hasSource,levelCriteria,type LevelCriteria} from './level-criteria';
 import {measureClearance,type ClearanceMeasure} from './structure-clearance';
-import {structureStretches,structureWidth,type StructureExtent,type StructureSection} from './structure-sections';
+import {structureRoadSection,structureStretches,structureWidth,type StructureExtent,type StructureSection} from './structure-sections';
 import {stationCompositionIssues} from './station-composition';
 
 export type RoadSection={
@@ -204,7 +204,11 @@ function crossingPairs(roads:Road[],decisions:Decision[],byId:Map<string,Candida
     const over=chosen===ra.id||chosen===rb.id?chosen:Math.abs(za-zb)>LEVEL_TOLERANCE?(za>zb?ra.id:rb.id):undefined;
     const top=over===ra.id?{r:ra,ref:a,z:za}:over===rb.id?{r:rb,ref:b,z:zb}:null,bottom=top?(top.r===ra?{r:rb,ref:b,z:zb}:{r:ra,ref:a,z:za}):null;
     const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
-    const clearance=relation==='over'&&top&&bottom?measureClearance(top.r,bottom.r,top.ref.station,bottom.ref.station,criteria):undefined;
+    // Measure the actual overlap footprint: deck section on the upper bridge,
+    // tunnel section on the lower tunneled road. Ground over a tunnel remains unchanged.
+    const tunnel=!!bottom&&bottom.z<-LEVEL_TOLERANCE;
+    const effective=(end:PairEnd)=>({...end.r,section:(tunnel?end===bottom:end===top)?structureRoadSection(end.r):end.r.section});
+    const clearance=relation==='over'&&top&&bottom?measureClearance(effective(top),effective(bottom),top.ref.station,bottom.ref.station,criteria):undefined;
     // Structure extents: the measured overlap plus an abutment / portal margin (display, tool value).
     const extent=(on:PairEnd,other:PairEnd,span:[number,number]|undefined):[number,number]=>{const half=sectionWidth(other.r.section)/2+margin,len=stations(on.r.points,on.r.alignment).at(-1)??0;
       return[Math.max(0,span?span[0]-margin:on.ref.station-half),Math.min(len,span?span[1]+margin:on.ref.station+half)];};
