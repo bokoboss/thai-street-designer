@@ -14,6 +14,8 @@ export type ResolvedLaneLifecycle={
   side:'curb'|'median';
   source:LaneLifecycleSource;
   componentId?:string;
+  /** Explicit curb reduction; absent for old link components. */
+  operation?:'drop';
   profile:StationValueProfile;
 };
 export type ResolvedLaneLifecycleSet={
@@ -57,7 +59,8 @@ export function resolveLinkLaneLifecycles(
       side:component.side,
       source:'roadlink-component',
       componentId:component.id,
-      profile:windowStationProfile(length,component.start,component.end,component.taperIn,component.taperOut,1)
+      ...(component.operation==='drop'?{operation:'drop' as const}:{}),
+      profile:windowStationProfile(length,component.start,component.end,component.taperIn,component.taperOut,component.operation==='drop'?-1:1)
     });
   }
 

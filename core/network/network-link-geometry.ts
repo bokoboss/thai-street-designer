@@ -133,7 +133,10 @@ function lineProfiles(
 ):LinkLaneLineProfile[]{
   const sign=direction==='forward'?1:-1,profiles:LinkLaneLineProfile[]=[],
     medianSamples=samples.filter(lifecycle=>lifecycle.side==='median'),
-    curbSamples=samples.filter(lifecycle=>lifecycle.side==='curb'),
+    curbSamples=samples.filter(lifecycle=>lifecycle.side==='curb'&&lifecycle.operation!=='drop'),
+    curbDrops=samples.filter(lifecycle=>lifecycle.side==='curb'&&lifecycle.operation==='drop'),
+    // The outermost main-lane divider vanishes only where its lane disappears.
+    dropTotal=stationList.map((_,index)=>-curbDrops.reduce((sum,lifecycle)=>sum+Math.min(0,lifecycle.values[index]??0),0)),
     medianTotal=sideTotals(samples,'median',stationList),
     hasEndpoint=samples.some(lifecycle=>lifecycle.source==='junction-endpoint'),
     commonPrefix=hasEndpoint?'common':'main';
@@ -141,7 +144,8 @@ function lineProfiles(
   for(let lane=1;lane<set.baseCount;lane++)profiles.push({
     id:`${direction}:${commonPrefix}:${lane}`,
     direction,
-    offsets:stationList.map((_,index)=>sign*(medianHalf[index]+(medianTotal[index]+lane)*widths[index]))
+    offsets:stationList.map((_,index)=>set.baseCount-dropTotal[index]-lane>.015
+      ?sign*(medianHalf[index]+(medianTotal[index]+lane)*widths[index]):null)
   });
 
   const priorMedian=stationList.map(()=>0);
