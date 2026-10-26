@@ -6,6 +6,7 @@ import {deflateSync} from 'node:zlib';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {startSession} from './test-support/cdp-browser.mjs';
+import {verifyConnectorEditing} from './test-support/connector-browser.mjs';
 import {createRequire} from 'node:module';
 
 const root=fileURLToPath(new URL('../',import.meta.url));process.chdir(root);mkdirSync('artifacts',{recursive:true});
@@ -108,32 +109,7 @@ try{
     await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections-1,'suppression');
     await b.click('[data-design-connector-reset]');
     await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections,'reset');
-    // Direct plan interaction is a review overlay, not new road geometry or painted markings.
-    await b.click('[data-design-connector-toggle]');
-    await b.waitFor(()=>b.count('[data-design-connector-source]'),'review connectors shown in 2D');
-    const connectorHitInfo=await b.evalValue(`(()=>{
-      const el=document.querySelector('[data-design-connector-pick]'),r=el.getBoundingClientRect(),
-        x=r.left+r.width/2,y=r.top+r.height/2,hit=document.elementFromPoint(x,y);
-      return {x,y,box:{w:r.width,h:r.height},hit:hit?.outerHTML?.slice(0,300),marker:el.outerHTML.slice(0,220),
-        svg:document.querySelector('[data-design-plan]')?.getBoundingClientRect().toJSON()};
-    })()`);
-    console.log('CONNECTOR_HIT_BEFORE',JSON.stringify(connectorHitInfo));
-    await b.evalValue(`window.__connectorPointer=[];document.querySelector('[data-design-plan]').addEventListener('pointerdown',e=>window.__connectorPointer.push({tag:e.target?.tagName,outer:e.target?.outerHTML?.slice(0,200)}),true)`);
-    await b.click('[data-design-connector-pick]');
-    console.log('CONNECTOR_HIT_AFTER',JSON.stringify(await b.evalValue(`({pointer:window.__connectorPointer,
-      selected:document.querySelector('[data-design-connector-edit]')?.outerHTML?.slice(0,180)??null,
-      count:document.querySelectorAll('[data-design-connector-pick]').length,
-      toggle:document.querySelector('[data-design-connector-toggle]')?.getAttribute('aria-pressed')})`)));
-    await b.waitFor(()=>b.count('[data-design-connector-edit]'),'clicked visible connector handle on the plan');
-    assert.ok(await b.count('[data-design-connector-receiver]')>0,'eligible receiving lanes shown as clickable markers');
-    await b.click('[data-design-connector-receiver]');
-    await b.waitFor(()=>b.count('[data-design-connector-preview]'),'receiving lane pick displays an uncommitted preview');
-    await b.click('[data-design-connector-cancel]');
-    await b.waitFor(async()=>await b.count('[data-design-connector-edit]')===0,'cancel does not commit a connector edit');
-    await b.click('[data-design-view="3d"]');
-    await b.waitFor(()=>b.count('[data-network-connector-review]'),'3D reads the same schematic connector review');
-    await b.click('[data-design-view="2d"]');
-    await b.waitFor(async()=>await b.count('.network-scene3d')===0,'returned to plan after 3D connector review');
+    await verifyConnectorEditing(b);
     await openFold('junction-grade');
     await b.click('[data-design-junction-over]');
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');

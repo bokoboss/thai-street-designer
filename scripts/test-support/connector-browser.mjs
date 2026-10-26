@@ -1,0 +1,135 @@
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+
+// Exercises the rendered controls through Chromium's actual mouse dispatch, including SVG hit testing.
+export async function verifyConnectorEditing(b){
+  const project=()=>b.evalValue(`(()=>{const w=JSON.parse(localStorage.getItem('thai-street-road-first-v1'));return w.scenarios.find(s=>s.id===w.activeScenarioId).project;})()`);
+  const mode=()=>b.evalValue(`document.querySelector('[data-design-connector-controls]')?.dataset.designConnectorMode`);
+  const baseline=await project(),undo=await b.evalValue(`document.querySelector('[data-design-undo]').title`);
+  let measuredActions=null;
+  const act=(label,fn)=>{measuredActions?.push(label);return fn();};
+  const hit=selector=>b.evalValue(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest(${JSON.stringify(selector)})===e;})()`);
+  const begin=async()=>{
+    await act('enter connector edit mode',()=>b.click('[data-design-connector-start-edit]'));
+    await b.waitFor(async()=>await mode()==='edit','explicit connector edit mode');
+    assert.match(await b.text('[data-design-hint]'),/เชื่อมช่อง/,'status bar names the active editing mode');
+  };
+  const preview=async()=>{
+    assert.equal(await hit('[data-design-connector-pick]'),true,'source owns its actual pointer hit');
+    await b.evalValue(`window.__connectorHit=null;document.querySelector('[data-design-plan]').addEventListener('pointerdown',e=>window.__connectorHit=e.target.closest('[data-design-connector-pick]')?.getAttribute('data-design-connector-pick'),{capture:true,once:true})`);
+    const id=await b.evalValue(`document.querySelector('[data-design-connector-pick]').getAttribute('data-design-connector-pick')`);
+    await act('select source connection',()=>b.click('[data-design-connector-pick]'));
+    assert.equal(await b.evalValue('window.__connectorHit'),id,'real pointer event reaches the intended connector');
+    await b.waitFor(()=>b.count('[data-design-connector-receiver]'),'source selected: eligible receivers shown');
+    assert.equal(await b.evalValue(`document.querySelector('[data-design-connector-confirm]').disabled`),true,'confirm waits for a receiver');
+    assert.equal(await hit('[data-design-connector-receiver]'),true,'receiver owns its actual pointer hit');
+    await act('select receiving lane and preview',()=>b.click('[data-design-connector-receiver]'));
+    await b.waitFor(()=>b.count('[data-design-connector-preview]'),'receiver displays preview before commit');
+  };
+  await b.click('[data-design-connector-toggle]');
+  await b.waitFor(()=>b.count('[data-design-connector-source]'),'read-only connector review');
+  assert.equal(await b.count('[data-design-connector-pick]'),0,'review alone has no editing hit targets');
+  assert.equal(await b.count('[data-design-connector-start-edit]'),1,'review offers explicit edit mode');
+  await begin();
+  // The original failing overlap is preserved: ordinary corner handles cannot win while editing.
+  assert.equal(await b.count('[data-design-corner-handle]'),0,'conflicting corner handles deferred while editing');
+  const road=await b.evalValue(`(()=>{const e=document.querySelector('[data-design-road] path'),p=e.getPointAtLength(e.getTotalLength()/2+45),q=new DOMPoint(p.x,p.y).matrixTransform(e.getScreenCTM());return{x:q.x,y:q.y};})()`);
+  assert.equal(await b.evalValue(`!!document.elementFromPoint(${road.x},${road.y})?.closest('[data-design-road]')`),true,'pavement test hits an actual road target');
+  await b.drag(road,{x:road.x+30,y:road.y+20});
+  assert.deepEqual(await project(),baseline,'drag on ordinary pavement cannot move roads in connector mode');
+  await b.clickAt(road,2);
+  assert.deepEqual(await project(),baseline,'double-click on ordinary pavement cannot insert road points in connector mode');
+  const camera=await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`);
+  for(const [type,x] of [['mousePressed',road.x],['mouseMoved',road.x+20],['mouseReleased',road.x+20]]){
+    await b.send('Input.dispatchMouseEvent',{type,x,y:road.y,button:'middle',buttons:type==='mouseReleased'?0:4,clickCount:1});
+  }
+  await b.waitFor(async()=>await b.evalValue(`document.querySelector('[data-design-plan]').getAttribute('viewBox')`)!==camera,'middle-button pan remains available during connector editing');
+  assert.deepEqual(await project(),baseline,'camera gesture never edits roads');
+  await preview();
+  assert.deepEqual(await project(),baseline,'preview is not persisted');
+  assert.equal(await b.evalValue(`document.querySelector('[data-design-undo]').title`),undo,'preview adds no history');
+  await b.screenshot('artifacts/design-browser-connector-preview.png');
+  await b.click('[data-design-connector-cancel]');
+  await b.waitFor(async()=>await mode()==='review','Cancel returns to review');
+  assert.deepEqual(await project(),baseline,'Cancel is atomic');
+  assert.ok(await b.count('[data-design-corner-handle]')>0,'normal corner editing restored after Cancel');
+  await begin();await preview();await b.key('Escape');
+  await b.waitFor(async()=>await mode()==='review','Escape cancels preview and edit mode');
+  assert.deepEqual(await project(),baseline,'Escape preserves project and selected junction');
+  await begin();await b.key('Escape');
+  await b.waitFor(async()=>await mode()==='review','Escape also exits before selecting a source');
+  await begin();await preview();
+  await b.click('[data-design-tool-button="pan"]');
+  await b.click('[data-design-tool-button="select"]');
+  await b.waitFor(async()=>await mode()==='hidden','switching tools drops the pending connector transaction');
+  assert.equal(await b.count('[data-design-connector-preview]'),0,'tool switch cannot revive a preview');
+  measuredActions=[];
+  const measuredStart=Date.now();
+  await act('open connector review',()=>b.click('[data-design-connector-toggle]'));
+  await begin();await preview();
+  await act('confirm connector edit',()=>b.click('[data-design-connector-confirm]'));
+  await b.waitFor(async()=>await mode()==='review'&&await b.count('[data-design-connector-origin="manual"]')>0,'Confirm commits one manual mapping');
+  assert.equal(measuredActions.length,5,'selected junction to confirmed override takes five pointer actions');
+  writeFileSync('artifacts/design-browser-connector-actions.json',JSON.stringify({actions:measuredActions,elapsedMs:Date.now()-measuredStart},null,2));
+  measuredActions=null;
+  const committed=await project();
+  assert.deepEqual(committed.roads,baseline.roads,'connector commit does not move physical roads');
+  await b.click('[data-design-undo]');
+  await b.waitFor(async()=>JSON.stringify(await project())===JSON.stringify(baseline),'one Undo restores pre-edit project');
+  await b.click('[data-design-redo]');
+  await b.waitFor(async()=>JSON.stringify(await project())===JSON.stringify(committed),'one Redo restores the entire connector edit');
+  await b.screenshot('artifacts/design-browser-connector-confirmed.png');
+  const lineCount=await b.count('[data-design-connector-source]');
+  const manualCount=await b.count('[data-design-connector-review] [data-design-connector-origin="manual"]');
+  await b.click('[data-design-view="3d"]');
+  await b.waitFor(()=>b.count('[data-network-connector-review]'),'3D schematic review');
+  assert.equal(Number(await b.evalValue(`document.querySelector('[data-network-connector-review]').dataset.networkConnectorCount`)),lineCount,'2D and 3D show the same connector count');
+  assert.equal(Number(await b.evalValue(`document.querySelector('[data-network-connector-review]').dataset.networkConnectorManual`)),manualCount,'2D and 3D show the same manual edits');
+  for(let i=0;i<9;i++)await b.click('[data-network-camera-control="zoom-in"]');
+  await b.evalValue('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await b.screenshot('artifacts/design-browser-connector-3d.png');
+  await b.click('[data-design-view="2d"]');
+  await b.waitFor(async()=>await b.count('.network-scene3d')===0,'return to plan');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:412,height:915,deviceScaleFactor:1,mobile:true});
+  await b.waitFor(()=>b.evalValue('innerWidth===412'),'phone viewport');
+  await b.click('[data-design-inspector-toggle]');
+  await b.waitFor(()=>b.evalValue(`(()=>{const r=document.querySelector('.design-inspector').getBoundingClientRect();return document.querySelector('[data-design-workspace]').dataset.inspectorOpen==='false'&&(r.left>=innerWidth||r.top>=innerHeight-32);})()`),'phone inspector closed for plan editing');
+  await b.click('[data-design-connector-toggle]');
+  await begin();await preview();
+  assert.equal(await b.evalValue(`document.querySelector('[data-design-connector-controls]').getBoundingClientRect().top>=document.querySelector('.design-view-toggle').getBoundingClientRect().bottom`),true,'phone mode controls sit below the view switch');
+  await b.screenshot('artifacts/design-browser-connector-phone.png');
+  await b.key('Escape');
+  await b.waitFor(async()=>await mode()==='review','phone Escape cancels connector preview');
+  assert.deepEqual(await project(),committed,'phone preview does not edit saved geometry or manual mapping');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await b.waitFor(()=>b.evalValue('innerWidth===1440'),'desktop viewport restored');
+  await b.click('[data-design-connector-toggle]');
+  // Download interception only reads the actual output; it does not invoke editor handlers.
+  await b.evalValue(`window.__connectorDownloads={};window.__connectorAnchorClick=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){if(/\.(json|svg)$/.test(this.download))window.__connectorDownloads[this.download.endsWith('.json')?'json':'svg']=fetch(this.href).then(r=>r.text());else window.__connectorAnchorClick.call(this);}`);
+  await b.click('[data-design-file="save"]');
+  const saved=await b.waitFor(()=>b.evalValue('window.__connectorDownloads.json'),'Save file with manual mapping');
+  await b.click('[data-design-connector-toggle]');
+  await begin();await preview();
+  await b.click('[data-design-export]');await b.click('[data-design-export-format="svg"]');
+  const figure=await b.waitFor(()=>b.evalValue('window.__connectorDownloads.svg'),'export during connector preview');
+  assert.doesNotMatch(figure,/data-design-connector|data-design-corner-handle|data-design-road-point/,'export omits all connector editing/review graphics');
+  writeFileSync('artifacts/design-browser-connector-export.svg',figure);
+  await b.key('Escape');
+  await b.evalValue(`(()=>{const input=document.querySelector('[data-design-file-input]'),dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(saved)}],'connector-roundtrip.json',{type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await b.waitFor(async()=>/connector-roundtrip/.test(await b.text('[data-design-notice]')),'Open saved file');
+  assert.deepEqual(await project(),committed,'Save/Open keeps the exact authored connector and physical geometry');
+  await b.evalValue('HTMLAnchorElement.prototype.click=window.__connectorAnchorClick');
+  // Re-select on the physical approach, then reset so the following acceptance tasks retain their fixture.
+  await b.key('Escape');
+  const junction=await b.evalValue(`(()=>{const e=document.querySelector('[data-network-junction-hit]'),p=new DOMPoint(e.x1.baseVal.value,e.y1.baseVal.value).matrixTransform(e.getScreenCTM());return{x:p.x,y:p.y};})()`);
+  await b.clickAt({x:junction.x+45,y:junction.y+12});
+  await b.click('[data-design-action="back-to-junction"]');
+  await b.click('[data-design-connector-reset]');
+  await b.waitFor(async()=>JSON.stringify(await project())===JSON.stringify(baseline),'reset restores generated mapping after reopen');
+  // Normal corner dragging remains available outside connector editing (the suite also checks numeric storage).
+  const corner=await b.rect('[data-design-corner-handle="0"]');
+  await b.drag(corner,{x:corner.x+12,y:corner.y+12});
+  await b.waitFor(()=>b.evalValue(`/^ย้อนกลับ: ปรับรัศมีมุม /.test(document.querySelector('[data-design-undo]').title)`),'ordinary corner-radius drag still works');
+  await b.click('[data-design-undo]');
+  await b.waitFor(async()=>JSON.stringify(await project())===JSON.stringify(baseline),'corner drag Undo');
+}

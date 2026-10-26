@@ -50,6 +50,7 @@ const TOOL_HINT:Record<DesignTool,string>={
 export default function DesignWorkspace(){
   const ed=useRoadEditor();
   const [alignmentReview,setAlignmentReview]=useState(false);
+  const [connectorHint,setConnectorHint]=useState<string|null>(null);
   const [tool,setTool]=useState<DesignTool>('select'),[selection,setSelection]=useState<DesignSelection>(null);
   const [draft,setDraft]=useState<WorldPoint[]>([]),[typedLength,setTypedLength]=useState('');
   // Drawing that starts on a road end continues that road instead of adding a new one.
@@ -298,7 +299,7 @@ export default function DesignWorkspace(){
         {tool==='select'&&<button data-design-multi-select aria-pressed={multiAdd} className={multiAdd?'active':''} onClick={()=>setMultiAdd(v=>!v)} title="เลือกหลายชิ้น: แตะหรือคลิกเพื่อเพิ่ม / เอาออก (เหมือนกด Shift ค้าง)"><Layers size={18}/><span>เลือกหลายชิ้น</span></button>}
       </nav>
       <div className="design-center">
-        <DesignCanvas multiAdd={multiAdd} onMenu={setMenu} project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas active={view==='2d'} onConnectorHint={setConnectorHint} multiAdd={multiAdd} onMenu={setMenu} project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
         {menu&&<SelectMenu at={menu} items={menuItems(ed.project,selectedRoadIds(selection),menu)} onAction={a=>selectionAction(a,menu)} onClose={()=>setMenu(null)}/>}
         {/* Drawing buttons for touch and narrow screens (no right-click, Backspace, Enter or Shift there). */}
         {tool==='road'&&view==='2d'&&<div className="design-draw-actions" data-design-draw-actions="true">
@@ -339,7 +340,7 @@ export default function DesignWorkspace(){
       </TemplateContext.Provider>
     </div>
     <footer className="design-status">
-      <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>
+      <span className="design-hint" data-design-hint="true">{connectorHint??(tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool])}</span>
       {ed.notice.text&&<span className={'design-notice '+ed.notice.kind} data-design-notice={ed.notice.kind}>{ed.notice.text}</span>}
       <span className="design-status-right">
         {openCrossings>0&&<button className="design-open-crossings" data-design-open-crossings={openCrossings} onClick={()=>{const c=candidates.find(x=>!ed.project.decisions.some(d=>d.candidateId===x.id));if(c){setTool('select');setSelection({kind:'crossing',id:c.id});}}}>จุดตัดที่ยังไม่เป็นทางแยก {openCrossings}</button>}

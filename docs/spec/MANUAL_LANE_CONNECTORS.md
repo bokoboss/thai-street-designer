@@ -31,6 +31,16 @@ PR D changes are consumed by the Inspector and the plan review overlay. On a sel
 
 ## Acceptance gates
 
+### Pointer interaction priority
+
+Connector review and connector editing are separate, explicit states. Review shows schematic pairings without adding pointer targets. From a selected junction, open review, choose **แก้การเชื่อมช่อง**, select a connection and a compatible receiver, inspect the preview, then Confirm. The status bar names the active mode and expected next input.
+
+Entering edit mode brings a distant camera closer to the selected junction so adjacent lane targets can be distinguished. While editing, connector source handles and receiving-lane targets own primary pointer interaction. Corner-radius handles are deferred, and plan capture handlers block unrelated pavement, road, point, junction, double-click and context-menu edits. Middle-button/Space panning and wheel zoom remain available. Outside this mode, the existing selection and geometry handlers are unchanged.
+
+Cancel or Escape exits editing to review and restores normal handles without changing the project or history. Confirm uses the existing atomic connector command. Changing the selected junction, tool, view or project clears the pending source/receiver, so a preview cannot survive Undo, a file open or a scenario change and later commit against stale state. Connector targets also support Tab and Enter/Space; the Inspector remains the exact receiving-lane alternative.
+
+`scripts/test-support/connector-browser.mjs`, called by the Design browser acceptance suite, checks actual Chromium pointer hits, preview/Confirm/Cancel/Escape, pavement drag protection, normal corner dragging, Undo/Redo, Save/Open, matching 2D/3D review counts and SVG export while a preview is active. It never calls React handlers. The overlay remains separate from pavement and the 3D road texture. Dense pairings may need zoom for visual inspection; they remain abstract lane pairing rather than vehicle paths.
+
 Run all existing regression scripts plus \`verify-manual-lane-connectors.cjs\`, TypeScript, Lint, Production Build and Browser Acceptance. New tests cover set/suppress/reset, arrows, Slip invariant, stale references and schema roundtrip, command atomicity, undo/redo and advanced editor capture. Existing road-transform regressions remain mandatory.
 
 Changes are merged only when GitHub Actions \`test-and-build\` and Vercel pass for the same latest commit. Do not infer real-world engineering correctness from a green build alone.

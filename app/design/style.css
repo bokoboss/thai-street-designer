@@ -77,6 +77,14 @@
 .design-toast button:hover{background:#ffffff1a}
 .design-readout{position:absolute;z-index:6;pointer-events:none;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:baseline;background:#1f2d33e6;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap}
 .design-readout span{color:#cfe3e1}
+.design-connector-controls{top:12px;max-width:min(350px,calc(100% - 24px));gap:6px;padding:8px 10px;line-height:1.5}
+@media(max-width:600px){.design-connector-controls{top:52px}}
+.design-connector-controls button{border:1px solid #ffffff70;background:transparent;color:#fff;border-radius:6px;padding:4px 9px}
+.design-connector-controls button:hover:not(:disabled),.design-connector-controls button[aria-pressed="true"]{background:#ffffff20}
+.design-connector-controls [data-design-connector-edit]{display:grid;gap:6px;width:100%}
+.design-connector-actions{display:flex;gap:6px}
+.design-connector-actions [data-design-connector-confirm]{background:#0b7f86}
+.design-canvas [data-design-connector-review] [role="button"]:focus-visible{outline:2px solid #0b7f86;outline-offset:3px}
 .design-readout em{color:#ffb4ab;font-style:normal;font-weight:700;white-space:normal;flex-basis:100%;max-width:320px}.design-readout em.warn{color:#ffd59a}
 .design-block{border:1px solid var(--d-line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:7px}
 .design-block>header{display:flex;align-items:center;justify-content:space-between}

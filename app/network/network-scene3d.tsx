@@ -229,7 +229,18 @@ export default function NetworkScene3D({
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
       onAuxClick={e=>e.preventDefault()} onContextMenu={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>มุมมอง 3D ของโครงข่าย</b>{!!connectorReview?.lines.length&&<span data-network-connector-review="true">เส้นประสีเหลือง/เขียวเป็นการจับคู่ช่องสำหรับตรวจแบบเท่านั้น ไม่ใช่เครื่องหมายถนนหรือแนวรถวิ่ง</span>}<span>ลากซ้าย = {mode==='pan'?'เลื่อน':'หมุน'} · ลากปุ่มกลาง = เลื่อน · ลากขวาหรือ Shift+ลาก = หมุน · ล้อเมาส์ = ซูม</span>{mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}</div>
+    <div className="network-scene-note">
+      <b>มุมมอง 3D ของโครงข่าย</b>
+      {connectorReview&&<span data-network-connector-review="true"
+        data-network-connector-count={connectorReview.lines.length}
+        data-network-connector-manual={connectorReview.lines.filter(l=>l.origin==='manual').length}
+        data-network-connector-unresolved={connectorReview.unresolved}>
+        เส้นประสีเหลือง/เขียวเป็นการจับคู่ช่องสำหรับตรวจแบบเท่านั้น ไม่ใช่เครื่องหมายถนนหรือแนวรถวิ่ง
+        {connectorReview.unresolved>0&&<> · มีรายการกำหนดเองที่ต้องตรวจ {connectorReview.unresolved} รายการ</>}
+      </span>}
+      <span>ลากซ้าย = {mode==='pan'?'เลื่อน':'หมุน'} · ลากปุ่มกลาง = เลื่อน · ลากขวาหรือ Shift+ลาก = หมุน · ล้อเมาส์ = ซูม</span>
+      {mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}
+    </div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>
