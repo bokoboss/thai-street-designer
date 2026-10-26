@@ -19,6 +19,7 @@ for(const reversed of [false,true]){
   const cid=ed.project.decisions[0].candidateId,bLeg=reversed?'B:ahead':'B:behind';
   const info=ae.approachInfo(rp.compileRoadFirstProject(ed.project),cid,bLeg);
   [ed]=run(ed,{type:'leg.setTreatment',candidateId:cid,leg:bLeg,patch:ae.pocketTreatment(info.arm,'right',{length:30})});
+  [ed]=run(ed,{type:'junction.setCornerAt',candidateId:cid,leg:bLeg,radius:12});
   let r;[ed,r]=run(ed,{type:'road.join',roadId:'A',otherId:'B'});
   assert.match(r.label,/^เชื่อม ถนน A กับ ถนน B เป็นถนนเดียว/);
   const A=ed.project.roads.find(x=>x.id==='A');
@@ -28,6 +29,9 @@ for(const reversed of [false,true]){
   assert.equal(comp.project.junctions.length,1);assert.deepEqual(comp.issues,[]);
   const leg=comp.legs.find(l=>l.roadId==='A'&&l.side==='behind');
   assert.equal(comp.project.junctions[0].design.arms[leg.armId].incomingPockets.right.lanes,1,'pocket moved to the joined road (west approach)');
+  assert.equal(ed.project.decisions[0].treatments.cornerRadii['A:behind'],12,'per-corner radius follows the absorbed road leg in both road orientations');
+  assert.equal(ed.project.decisions[0].treatments.cornerRadii[bLeg],undefined,'absorbed road corner key is removed');
+  assert.equal(comp.project.junctions[0].design.cornerRadii[leg.armId],12,'compiled radius stays on the same physical corner');
   assert.equal(j.endJoins(ed.project.roads).length,0);
   // Undo restores both roads.
   assert.deepEqual(c.undo(ed).editor.project.roads.map(x=>x.id),['A','B','X']);
