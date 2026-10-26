@@ -108,6 +108,18 @@ try{
     await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections-1,'suppression');
     await b.click('[data-design-connector-reset]');
     await b.waitFor(async()=>await b.count('[data-design-lane-connection]')===originalConnections,'reset');
+    // Direct plan interaction is a review overlay, not new road geometry or painted markings.
+    await b.click('[data-design-connector-toggle]');
+    await b.waitFor(()=>b.count('[data-design-connector-source]'),'review connectors shown in 2D');
+    await b.click('[data-design-connector-source] path[stroke="transparent"]');
+    await b.waitFor(()=>b.count('[data-design-connector-edit]'),'clicked a connection on the plan');
+    assert.ok(await b.count('[data-design-connector-receiver]')>0,'eligible receiving lanes shown as clickable markers');
+    await b.click('[data-design-connector-cancel]');
+    await b.waitFor(async()=>await b.count('[data-design-connector-edit]')===0,'cancel does not commit a connector edit');
+    await b.click('[data-design-view="3d"]');
+    await b.waitFor(()=>b.count('[data-network-connector-review]'),'3D reads the same schematic connector review');
+    await b.click('[data-design-view="2d"]');
+    await b.waitFor(async()=>await b.count('.network-scene3d')===0,'returned to plan after 3D connector review');
     await openFold('junction-grade');
     await b.click('[data-design-junction-over]');
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');

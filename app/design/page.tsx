@@ -15,6 +15,8 @@ import {useReferenceImage} from './use-reference-image';
 import {useMapReference} from './map-panel';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
+import {connectorReviewGeometry} from '@/core/road-first/connector-review-geometry';
+import {legKey} from '@/core/road-first/leg-binding';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {RAMP_SECTION,project as projectOnRoad} from '@/core/road-first/ramps';
 import {DRAW_LEVEL_STEP,drawnProfile,levelAt} from '@/core/road-first/elevation';
@@ -83,6 +85,16 @@ export default function DesignWorkspace(){
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
   const candidates=useMemo(()=>detectCandidates(ed.project.roads),[ed.project.roads]);
   const selectedRoad=selection?.kind==='road'?ed.project.roads.find(r=>r.id===selection.id):undefined;
+  const connector3dReview=useMemo(()=>{
+    if(!selection||(selection.kind!=='junction'&&selection.kind!=='approach'))return null;
+    const jid=Object.keys(ed.compiled.sources.junctions).find(k=>ed.compiled.sources.junctions[k]===selection.id);
+    const junction=ed.compiled.project.junctions.find(j=>j.id===jid);
+    const decision=ed.project.decisions.find(d=>d.candidateId===selection.id);
+    if(!junction||junction.design.type==='roundabout')return null;
+    const bindings=ed.compiled.legs.filter(l=>l.junctionId===jid)
+      .map(l=>({armId:l.armId,leg:legKey(l.roadId,l.side)}));
+    return connectorReviewGeometry(junction,bindings,decision?.treatments?.connectors);
+  },[selection,ed.compiled,ed.project.decisions]);
   const openCrossings=candidates.filter(c=>!ed.project.decisions.some(d=>d.candidateId===c.id)).length;
 
   // Select the junction whose advanced edits were just brought back.
@@ -315,7 +327,7 @@ export default function DesignWorkspace(){
           onImage={f=>{void image.add(f,{x:0,y:0});setSelection(null);setInspectorOpen(true);}}
           onBlank={()=>{chooseTool('road');document.querySelector<HTMLElement>('[data-design-workspace]')?.focus();}}/>}
         {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled} project={ed.project} run={ed.run} finishGesture={ed.finishGesture}/>}
-        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d}/>}
+        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d} connectorReview={connector3dReview}/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>

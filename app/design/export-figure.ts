@@ -8,7 +8,7 @@ export type FigureInput={svg:SVGSVGElement;bounds:{x:number;y:number;w:number;h:
 
 const NS='http://www.w3.org/2000/svg';
 /** Editing aids that never belong in a report figure. */
-const EDITING_ONLY='[data-design-end-joins],[data-design-shortfalls],[data-design-roads],[data-design-candidates],[data-design-handles],[data-design-snap],[data-design-draft],[data-network-junction-hit],[data-network-instance-handle],[data-network-instance-selection],[data-network-arm-handle],[data-network-arm-handle-visible],[data-network-arm-selection],[data-network-port],[data-link-via-group],[data-network-arm-guide],[data-network-link-preview]';
+const EDITING_ONLY='[data-design-connector-review],[data-design-end-joins],[data-design-shortfalls],[data-design-roads],[data-design-candidates],[data-design-handles],[data-design-snap],[data-design-draft],[data-network-junction-hit],[data-network-instance-handle],[data-network-instance-selection],[data-network-arm-handle],[data-network-arm-handle-visible],[data-network-arm-selection],[data-network-port],[data-link-via-group],[data-network-arm-guide],[data-network-link-preview]';
 const niceLength=(m:number)=>{const p=10**Math.floor(Math.log10(m));return [1,2,5,10].map(k=>k*p).filter(v=>v<=m).at(-1)??p;};
 export const safeFilePart=(s:string)=>s.replace(/[\\/:*?"<>|\s]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')||'design';
 

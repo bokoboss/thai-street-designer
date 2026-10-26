@@ -27,7 +27,7 @@ There is at most one record per source-lane + movement. \`reset\` removes the re
 
 A connection represents an **abstract lane pairing**, not a curved vehicle trajectory. It must not be exported as a certified swept path, simulated flow, conflict-free movement or capacity/LOS result. The Thai left-hand traffic bearing classification is a \`TO_VERIFY\` heuristic. Existing Slip geometry remains separately owned by the Slip engine. Roundabout circulation and physical U-turn paths remain out of scope.
 
-PR D semantic changes are consumed by the Inspector. A future canvas connector handle/overlay must use the same stored record and canonical lane centre; it must never become a second pavement geometry model. Any 2D/3D connector overlay should be opt-in review artwork, with a clear generated/manual/review distinction.
+PR D changes are consumed by the Inspector and the plan review overlay. On a selected junction, the user can opt in to schematic 2D line pairings, click a connection, click a compatible receiving lane, and Confirm or Cancel (Esc). The same typed command commits changes. The 3D review uses the same derived world-space anchors and displayed lane pairing, offset above the junction surface as engineering review artwork; it is not baked into the road-marking texture. The report PNG/SVG export excludes the connector editor overlay. Generated/manual state is differentiated by dashed line colour and unresolved overrides remain listed for review. No curved swept path or second pavement geometry model is introduced.
 
 ## Acceptance gates
 

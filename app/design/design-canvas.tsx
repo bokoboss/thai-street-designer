@@ -15,6 +15,9 @@ import {pointAtLength,snapCandidates,type SnapCandidate,type SnapResult} from '@
 type ShownSnap=SnapCandidate&{count:number;index:number};
 import {approachInfo,cornerFromPoint,cornerHandles,openingHandle,openingStartFromPoint,openingsOf,openingsPatch,pocketHandle,pocketLengthFromPoint,pocketTreatment,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,type LegKey} from '@/core/road-first/leg-binding';
+import {connectorReviewGeometry,connectorReviewTargets,type ConnectorReviewTarget} from '@/core/road-first/connector-review-geometry';
+import type {ConnectorLaneRef} from '@/core/road-first/lane-connector-overrides';
+import type {AutoTurn} from '@/core/junction/automatic-lane-mapping';
 import {roadOpeningHandle,roadOpeningStationFromPoint} from '@/core/road-first/road-openings';
 import {curveHandle,radiusFromPoint,vertexCurve} from '@/core/road-first/curves';
 import {anchorFlow} from '@/core/road-first/ramps';
@@ -95,6 +98,14 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
     |{kind:'box';from:WorldPoint;screen:{x:number;y:number};additive:boolean}
     |{kind:'lane-run';roadId:string;id:string;end:'start'|'end'}|{kind:'stretch';roadId:string;id:string;end:'start'|'end'}|null>(null);
   const [box,setBox]=useState<{x0:number;y0:number;x1:number;y1:number}|null>(null);
+  const [showConnectorReview,setShowConnectorReview]=useState(false);
+  const [connectorPick,setConnectorPick]=useState<{candidateId:string;from:ConnectorLaneRef;movement:AutoTurn;target:ConnectorReviewTarget|null}|null>(null);
+  useEffect(()=>{
+    if(!connectorPick)return;
+    const cancel=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();setConnectorPick(null);}};
+    window.addEventListener('keydown',cancel,true);
+    return()=>window.removeEventListener('keydown',cancel,true);
+  },[connectorPick]);
   const selectedIds=selectedRoadIds(selection);
 
   useEffect(()=>{
@@ -306,6 +317,22 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
   const scaleLen=niceLength(px(120));
   const selectedJunction=selection&&(selection.kind==='junction'||selection.kind==='approach')?junctionOf(selection.id):undefined;
   const selectedApproach=selection?.kind==='approach'?approachInfo(compiled,selection.id,selection.leg):null;
+  const candidateId=selection&&(selection.kind==='junction'||selection.kind==='approach')?selection.id:null;
+  const selectedDecision=project.decisions.find(d=>d.candidateId===candidateId);
+  const currentJunctionId=selectedJunction?.id;
+  const connectorBindings=compiled.legs.filter(l=>l.junctionId===currentJunctionId)
+    .map(l=>({armId:l.armId,leg:legKey(l.roadId,l.side)}));
+  const connectorReview=selectedJunction?connectorReviewGeometry(selectedJunction,connectorBindings,selectedDecision?.treatments?.connectors):null;
+  const picking=connectorPick&&connectorPick.candidateId===candidateId?connectorPick:null;
+  const connectorTargets=selectedJunction&&picking
+    ?connectorReviewTargets(selectedJunction,connectorBindings,picking.from,picking.movement):[];
+  const pickedLabel=(ref:ConnectorLaneRef)=>ref.leg+' / '+ref.role+' '+(ref.laneIndex+1);
+  const confirmConnector=()=>{
+    if(!picking||!picking.target)return;
+    if(run({type:'junction.setConnector',candidateId:picking.candidateId,override:{
+      from:picking.from,movement:picking.movement,mode:'replace',to:picking.target.ref
+    }}).ok)setConnectorPick(null);
+  };
   const pocketHandles=selectedApproach?(['right','left'] as const).flatMap(side=>{const point=pocketHandle(selectedApproach.junction,selectedApproach.armId,side);return point?[{side,point,candidateId:selectedApproach.candidateId,leg:selectedApproach.leg}]:[];}):[];
   const typed=Number(typedLength),last=draft.at(-1);
   const cursor=tool!=='road'||!snap?null:typedLength&&last&&typed>0?pointAtLength(last,snap.point,typed):snap.point;
@@ -346,6 +373,36 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           onSelect(leg?{kind:'approach',id:compiled.sources.junctions[j],leg:legKey(leg.roadId,leg.side)}:{kind:'junction',id:compiled.sources.junctions[j]});
         }}
         onJunctionMoveStart={noop} onArmMoveStart={noop} onLinkInsertVertex={noop} onLinkVertexMoveStart={noop} onLinkVertexSelect={noop} onPort={noop}/>
+      {tool==='select'&&showConnectorReview&&candidateId&&connectorReview&&<g data-design-connector-review="true">
+        {/* This is a schematic editor overlay, never plan pavement, markings or a vehicle swept path. */}
+        {connectorReview.lines.map(c=><g key={c.id} data-design-connector-source={c.id} data-design-connector-origin={c.origin}>
+          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`}
+            fill="none" stroke={c.origin==='manual'?'#0b7f86':'#64748b'} strokeWidth={px(2)}
+            strokeDasharray={`${px(4)} ${px(5)}`} pointerEvents="none" opacity={.85}/>
+          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`} fill="none" stroke="transparent"
+            strokeWidth={px(16)} style={{cursor:'pointer'}}
+            onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({candidateId,from:c.from,movement:c.movement,target:null});}}>
+            <title>{`เลือกการเชื่อม ${pickedLabel(c.from)} → ${pickedLabel(c.to)} · ${c.movement}`}</title>
+          </path>
+          <circle cx={c.start.x} cy={c.start.y} r={px(3)} fill={c.origin==='manual'?'#0b7f86':'#64748b'} pointerEvents="none"/>
+          <circle cx={c.end.x} cy={c.end.y} r={px(3)} fill="#fff" stroke="#64748b" strokeWidth={px(1)} pointerEvents="none"/>
+        </g>)}
+        {picking&&connectorTargets.map(t=>{
+          const chosen=picking.target&&JSON.stringify(picking.target.ref)===JSON.stringify(t.ref);
+          return <g key={JSON.stringify(t.ref)} data-design-connector-receiver={t.ref.leg+':'+t.ref.role+':'+t.ref.laneIndex}
+            style={{cursor:'crosshair'}} onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({...picking,target:t});}}>
+            <circle cx={t.point.x} cy={t.point.y} r={px(13)} fill="transparent"/>
+            <circle cx={t.point.x} cy={t.point.y} r={px(6)} fill={chosen?'#0b7f86':'#fff'}
+              stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+            <title>{`เลือกช่องรับ ${pickedLabel(t.ref)}`}</title>
+          </g>;
+        })}
+        {picking?.target&&<line data-design-connector-preview="true"
+          x1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.x??picking.target.point.x}
+          y1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.y??picking.target.point.y}
+          x2={picking.target.point.x} y2={picking.target.point.y} stroke="#0b7f86" strokeWidth={px(3)}
+          strokeDasharray={`${px(3)} ${px(3)}`} pointerEvents="none"/>}
+      </g>}
       {/* Arms longer than the straight part of their road: the extra length is off the drawn alignment. */}
       {compiled.shortfalls.length>0&&<g data-design-shortfalls={compiled.shortfalls.length} pointerEvents="none">
         {compiled.shortfalls.map(s=>{const j=compiled.project.junctions.find(x=>x.id===s.junctionId);if(!j)return null;
@@ -474,6 +531,20 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
         <circle cx={snap.point.x} cy={snap.point.y} r={px(3)} fill="#0b7f86"/>
       </g>}
     </svg>
+    {tool==='select'&&candidateId&&connectorReview&&<div className="design-readout"
+      data-design-connector-controls="true" style={{left:12,top:12,maxWidth:350}}>
+      <button data-design-connector-toggle="true" aria-pressed={showConnectorReview} onClick={()=>{setShowConnectorReview(v=>!v);setConnectorPick(null);}}>
+        {showConnectorReview?'ซ่อนทางเชื่อมช่อง':'ตรวจทางเชื่อมช่อง'}
+      </button>
+      {showConnectorReview&&<span> เส้นประเป็นเพียงการจับคู่ช่อง ไม่ใช่แนวรถวิ่ง</span>}
+      {showConnectorReview&&picking&&<div data-design-connector-edit="true">
+        <p>{pickedLabel(picking.from)} · {picking.movement} · คลิกวงกลมช่องรับ แล้วกดยืนยัน</p>
+        {picking.target&&<p>ช่องรับ: {pickedLabel(picking.target.ref)}</p>}
+        <button data-design-connector-confirm="true" disabled={!picking.target} onClick={confirmConnector}>ยืนยัน</button>
+        <button data-design-connector-cancel="true" onClick={()=>setConnectorPick(null)}>ยกเลิก</button>
+      </div>}
+      {showConnectorReview&&connectorReview.unresolved>0&&<p>มีรายการกำหนดเองที่ต้องตรวจ {connectorReview.unresolved} รายการ</p>}
+    </div>}
     {tool==='road'&&snap&&<div className="design-readout" data-design-readout="true" style={{left:Math.max(8,Math.min((snap.point.x-vb.x)*view.scale+16,size.w-(draftCheck?350:140))),top:Math.max(8,Math.min((snap.point.y-vb.y)*view.scale+16,size.h-(draftCheck?90:40)))}}>
       {typedLength?<b>{typedLength} ม. ↵</b>:snap.length!==undefined&&<b>{snap.length.toFixed(1)} ม.</b>}
       {snap.angle!==undefined&&<span>{snap.angle.toFixed(0)}°</span>}
