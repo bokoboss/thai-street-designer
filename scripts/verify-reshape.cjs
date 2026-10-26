@@ -14,7 +14,7 @@ const fresh=roads=>{e=c.createEditor({kind:'road-first',schemaVersion:3,title:'t
 fresh([{id:'A',name:'ถนนเอ',alignment:'arc',points:[{x:-300,y:0},{x:300,y:0}],section:sec}]);
 run({type:'road.add',road:{id:'B',name:'ถนนบี',points:[{x:0,y:-200},{x:0,y:200}],section:{...sec,forwardLanes:2}}});
 {const cid=e.project.decisions[0].candidateId;
- run({type:'junction.setTreatments',candidateId:cid,treatments:{legs:{[lb.legKey('A','ahead')]:{stopLine:false}}}});
+ run({type:'junction.setTreatments',candidateId:cid,treatments:{legs:{[lb.legKey('A','ahead')]:{stopLine:false}},cornerRadii:{[lb.legKey('A','ahead')]:12}}});
  run({type:'road.setProfile',roadId:'A',profile:[{station:0,z:0},{station:600,z:.4}]});
  run({type:'road.setOpenings',roadId:'A',openings:[{id:'o1',type:'uturn',station:80,length:8}]});
  run({type:'road.add',road:{id:'X',name:'ทางลาด',role:'ramp',points:[{x:150,y:0},{x:230,y:-30}],section:{...rm.RAMP_SECTION}}});
@@ -24,6 +24,10 @@ run({type:'road.add',road:{id:'B',name:'ถนนบี',points:[{x:0,y:-200},{x
  assert.ok(near(el.levelAt(a.profile,500),zGround),'same level on the ground');
  assert.equal(a.openings[0].station,512,'opening at the same place');
  assert.ok(e.project.decisions[0].treatments.legs[lb.legKey('A','behind')],'leg settings on the same arm');
+ assert.equal(e.project.decisions[0].treatments.cornerRadii[lb.legKey('A','behind')],12,'per-corner radius follows the same physical road leg');
+ assert.equal(e.project.decisions[0].treatments.cornerRadii[lb.legKey('A','ahead')],undefined,'old directional leg key does not linger');
+ const compiled=rp.compileRoadFirstProject(e.project),leg=compiled.legs.find(l=>l.roadId==='A'&&l.side==='behind');
+ assert.equal(compiled.project.junctions.find(j=>j.id===leg.junctionId).design.cornerRadii[leg.armId],12,'compiled corner stays on that leg');
  assert.equal(R('X').anchors.start.roadId,'A');assert.equal(R('X').anchors.start.side,-1);assert.ok(near(R('X').anchors.start.station,150));
  assert.deepEqual(R('X').points[0],xStart,'ramp stays attached in place');assert.equal(rp.compileRoadFirstProject(e.project).project.junctions.length,1);
  run({type:'road.reverse',roadId:'A'});
@@ -58,4 +62,19 @@ fresh([{id:'A',name:'ถนนเอ',alignment:'arc',points:[{x:-300,y:0},{x:-5
  assert.equal(tc.tangentConnectPlan(e.project,'A','B',60).radius,60);assert.match(tc.tangentConnectPlan(e.project,'A','B',500).error,/สูงสุด 135/);}
 fresh([{id:'A',name:'ถนนเอ',alignment:'arc',points:[{x:-300,y:0},{x:-50,y:0}],section:sec},{id:'B',name:'ถนนบี',alignment:'arc',points:[{x:0,y:40},{x:300,y:40}],section:sec}]);
 assert.match(tc.tangentConnectPlan(e.project,'A','B').error,/ไม่ตัดกัน/,'parallel straights');
+// 5. Split before a junction: per-corner radius follows the downstream road ID, same physical leg.
+fresh([{id:'A',name:'ถนนเอ',points:[{x:-300,y:0},{x:300,y:0}],section:sec}]);
+run({type:'road.add',road:{id:'B',name:'ถนนบี',points:[{x:150,y:-180},{x:150,y:180}],section:sec}});
+{const cid=e.project.decisions[0].candidateId;
+ run({type:'junction.setCornerAt',candidateId:cid,leg:lb.legKey('A','ahead'),radius:12});
+ const before=structuredClone(e.project);
+ run({type:'road.split',roadId:'A',at:{x:0,y:0},newId:'A2'});
+ const j=e.project.decisions.find(d=>d.decision==='junction');
+ assert.equal(j.treatments.cornerRadii[lb.legKey('A2','ahead')],12,'corner key moves to the downstream road');
+ assert.equal(j.treatments.cornerRadii[lb.legKey('A','ahead')],undefined,'corner does not remain on the obsolete leg');
+ const compiled=rp.compileRoadFirstProject(e.project),leg=compiled.legs.find(l=>l.roadId==='A2'&&l.side==='ahead');
+ assert.equal(compiled.project.junctions.find(x=>x.id===leg.junctionId).design.cornerRadii[leg.armId],12,'compiled junction corner remains on the same world leg');
+ e=c.undo(e).editor;assert.deepEqual(e.project,before,'split and corner remap undo as one command');
+}
+
 console.log('PASS reshape: reverse keeps traffic / junction settings / levels / openings / ramps (twice = identity), ramp reverse flips travel; straighten re-measures levels, openings and ramps; tangent curve joins two roads with the largest fitting radius, one undo, refusals');
