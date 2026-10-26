@@ -43,9 +43,14 @@ try{
   await b.evalValue(`(()=>{const i=document.querySelector('[data-design-field="stretch-0-walk"]');i.focus();const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'0.75');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await b.key('Enter');await b.waitFor(async()=>(await current()).roads[0].sectionStretches[0].walk===.75,'typed footway');
   await b.screenshot('artifacts/section-stretch-plan.png');
-  // Remove the additive stretch and exercise the dedicated curb lane reduction flow.
+  // Remove the additive stretch. The lane run from the earlier test overlaps the intended curb reduction.
   await b.click('[data-design-action="remove-stretch-0"]');
   await b.waitFor(async()=>!(await current()).roads[0].sectionStretches?.length,'old stretch removed');
+  await openFold('section-stretches');await b.click('[data-design-action="add-lane-reduction-forward"]');
+  await new Promise(r=>setTimeout(r,250));
+  assert.equal((await current()).roads[0].sectionStretches?.length??0,0,'overlapping added lane and curb drop refused');
+  await openFold('lane-runs');await b.click('[data-design-action="remove-lane-run-0"]');
+  await b.waitFor(async()=>!(await current()).roads[0].laneRuns?.length,'overlapping lane run removed');
   await openFold('section-stretches');await b.click('[data-design-action="add-lane-reduction-forward"]');
   await b.waitFor(async()=>{const q=(await current()).roads[0].sectionStretches;return q?.length===1&&q[0].forwardLanes===1&&q[0].backwardLanes===2;},'2 to 1 to 2 lane reduction added');
   await b.waitFor(async()=>await b.count('[data-design-stretch-handle]')===2,'reduction handles');
