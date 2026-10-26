@@ -111,7 +111,19 @@ try{
     // Direct plan interaction is a review overlay, not new road geometry or painted markings.
     await b.click('[data-design-connector-toggle]');
     await b.waitFor(()=>b.count('[data-design-connector-source]'),'review connectors shown in 2D');
+    const connectorHitInfo=await b.evalValue(`(()=>{
+      const el=document.querySelector('[data-design-connector-pick]'),r=el.getBoundingClientRect(),
+        x=r.left+r.width/2,y=r.top+r.height/2,hit=document.elementFromPoint(x,y);
+      return {x,y,box:{w:r.width,h:r.height},hit:hit?.outerHTML?.slice(0,300),marker:el.outerHTML.slice(0,220),
+        svg:document.querySelector('[data-design-plan]')?.getBoundingClientRect().toJSON()};
+    })()`);
+    console.log('CONNECTOR_HIT_BEFORE',JSON.stringify(connectorHitInfo));
+    await b.evalValue(`window.__connectorPointer=[];document.querySelector('[data-design-plan]').addEventListener('pointerdown',e=>window.__connectorPointer.push({tag:e.target?.tagName,outer:e.target?.outerHTML?.slice(0,200)}),true)`);
     await b.click('[data-design-connector-pick]');
+    console.log('CONNECTOR_HIT_AFTER',JSON.stringify(await b.evalValue(`({pointer:window.__connectorPointer,
+      selected:document.querySelector('[data-design-connector-edit]')?.outerHTML?.slice(0,180)??null,
+      count:document.querySelectorAll('[data-design-connector-pick]').length,
+      toggle:document.querySelector('[data-design-connector-toggle]')?.getAttribute('aria-pressed')})`)));
     await b.waitFor(()=>b.count('[data-design-connector-edit]'),'clicked visible connector handle on the plan');
     assert.ok(await b.count('[data-design-connector-receiver]')>0,'eligible receiving lanes shown as clickable markers');
     await b.click('[data-design-connector-receiver]');
