@@ -333,10 +333,10 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
 }
 
 /** Ramp ends: where the ramp diverges from / merges into another road, with a way to unhook each end. */
-function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
+function RampBlock({road,roads,compiled,run}:{road:Road;roads:Road[];compiled:CompileResult;run:Run}){
   const name=(id:string)=>roads.find(r=>r.id===id)?.name??id;
   const ends=(['start','end'] as const).map(end=>({end,a:road.anchors?.[end]}));
-  const mapped=automaticRampLaneConnections(roads).filter(x=>x.rampRoadId===road.id);
+  const mapped=automaticRampLaneConnections(roads,compiled).filter(x=>x.rampRoadId===road.id);
   return <section className="design-block" data-design-ramp={road.id}>
     <small className="design-block-title">ทางลาด (ทางเดียวตามทิศที่วาด)</small>
     {ends.map(({end,a})=><p key={end} className="design-meta" data-design-ramp-end={end} data-design-ramp-anchor={a?a.roadId:'none'}>
@@ -370,7 +370,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
     <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     <TemplatePiecesBlock project={project} roadId={road.id} run={run} onSelectRoad={id=>onSelect({kind:'road',id})}/>
     <UturnBridgePanel key={road.id} project={project} road={road} run={run} onPlaced={id=>onSelect({kind:'road',id})}/>
-    {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
+    {road.role==='ramp'&&<RampBlock road={road} roads={roads} compiled={compiled} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
     <div className="design-fields">

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdirSync,rmSync,writeFileSync} from 'node:fs';
 import {createServer} from 'node:net';
+import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const which=names=>{for(const n of names){const r=spawnSync('which',[n],{encoding:'utf8'});if(r.status===0&&r.stdout.trim())return r.stdout.trim();}return null;};
@@ -11,6 +12,7 @@ const freePort=()=>new Promise((resolve,reject)=>{const s=createServer();s.unref
 async function waitJson(url,timeout=45000){const until=Date.now()+timeout;while(Date.now()<until){try{const r=await fetch(url,{signal:AbortSignal.timeout(3000)});if(r.ok)return await r.json().catch(()=>({}));}catch{}await sleep(200);}throw new Error('Timed out waiting for '+url);}
 
 export async function startSession({root,path='/',profile,width=1440,height=1000}){
+  profile=resolve(root,profile);
   const port=await freePort();let debugPort=await freePort();while(debugPort===port)debugPort=await freePort();
   const base=`http://127.0.0.1:${port}`,errors=[];
   rmSync(profile,{recursive:true,force:true});mkdirSync(profile,{recursive:true});
