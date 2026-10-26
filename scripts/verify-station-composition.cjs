@@ -29,4 +29,14 @@ const before=JSON.stringify(editor.project);
 const denied=cmd.runCommand(editor,{type:'road.setSectionStretches',roadId:'A',stretches:[...editor.project.roads[0].sectionStretches,stretch(4)]});
 assert.match(denied.result.error??'',/24|รายการ|ซ้อน|component/i,'reason explains component budget');
 assert.equal(JSON.stringify(denied.editor.project),before,'refused edit is atomic');
+// Two individual stretches may be valid but overlap the same width target when combined.
+const first=cmd.runCommand(cmd.createEditor(original),{type:'road.setSectionStretches',roadId:'A',stretches:[stretch(0)]});
+assert.equal(first.result.error,null);
+const conflicting={...stretch(1),start:90,end:180};
+const overlap=cmd.runCommand(first.editor,{type:'road.setSectionStretches',roadId:'A',stretches:[stretch(0),conflicting]});
+assert.match(overlap.result.error??'',/ซ้อนกัน/,'new overlapping width adjustments refused');
+assert.deepEqual(overlap.editor.project,first.editor.project,'no mutation on refused overlap');
+const oldOverlap={...original,roads:[{...original.roads[0],sectionStretches:[stretch(0),conflicting]}]};
+assert.deepEqual(project.normalizeRoadFirstProject(JSON.parse(JSON.stringify(oldOverlap))),oldOverlap,'legacy overlap stays open for review');
+assert.ok(project.compileRoadFirstProject(oldOverlap).issues.some(x=>x.includes('ซ้อนกัน')),'legacy overlap is explicitly reviewable');
 console.log('PASS station composition: over-cap legacy opens, new overflow refused without mutation');
