@@ -20,7 +20,7 @@ import {DRAW_LEVEL_STEP,levelAt,type Profile} from '@/core/road-first/elevation'
 import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise,hasSource,levelCriteria,rampLength,tunnelDepth,type LevelCriteriaKey} from '@/core/road-first/level-criteria';
 import {freeStretches,newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {newLaneRun,type LaneRun} from '@/core/road-first/lane-runs';
-import {newStretch,type SectionStretch} from '@/core/road-first/section-stretches';
+import {newLaneReduction,newStretch,type SectionStretch} from '@/core/road-first/section-stretches';
 import {STRUCTURE_SECTION_DEFAULTS,type StructureSection} from '@/core/road-first/structure-sections';
 import {AUX_LANE_DEFAULTS} from '@/core/road-first/ramps';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
@@ -146,11 +146,12 @@ function LaneRunBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileR
 }
 
 const BAND_NAME:Record<string,string>={shoulder:'ไหล่ทาง',bike:'ช่องจักรยาน',motorcycle:'ช่องรถจักรยานยนต์',buffer:'แถบคั่น'};
-/** A different section over part of the road: lanes each way (more only), footway and band widths, transitions. */
+/** A different section over part of the road: adds or a curb-side lane reduction with tapers. */
 function StretchBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileResult;run:Run;onMessage:(text:string,kind?:'info'|'error')=>void}){
   const list=road.sectionStretches??[],set=(stretches:SectionStretch[])=>run({type:'road.setSectionStretches',roadId:road.id,stretches});
   const edit=(id:string,patch:Partial<SectionStretch>)=>set(list.map(x=>x.id===id?{...x,...patch}:x));
   const add=()=>{const r=newStretch(road,freeStretches(road,compiled));if('error' in r){onMessage(r.error,'error');return;}set([...list,r.stretch]);};
+  const reduce=(direction:'forward'|'backward')=>{const r=newLaneReduction(road,freeStretches(road,compiled),direction);if('error' in r){onMessage(r.error,'error');return;}set([...list,r.stretch]);};
   const s=road.section,L=roadLength(road);
   return <Fold id="section-stretches" title="หน้าตัดเฉพาะช่วง" summary={list.length?list.map(x=>`${Math.round(x.start)}–${Math.round(x.end)} ม. (${x.forwardLanes}+${x.backwardLanes} ช่อง)`).join(' · '):'ยังไม่มี'} data="section-stretches">
     {list.map((x,i)=><div key={x.id} className="design-opening" data-design-stretch={x.id}>
@@ -160,16 +161,20 @@ function StretchBlock({road,compiled,run,onMessage}:{road:Road;compiled:CompileR
         <NumberField field={`stretch-${i}-end`} label="สิ้นสุดที่ระยะ (ม.)" value={x.end} step={1} min={0} max={L} onCommit={end=>edit(x.id,{end})}/>
         <NumberField field={`stretch-${i}-taper-in`} label="ช่วงเปลี่ยนเข้า (ม.)" value={x.taperIn} step={1} min={0} max={500} onCommit={taperIn=>edit(x.id,{taperIn})}/>
         <NumberField field={`stretch-${i}-taper-out`} label="ช่วงเปลี่ยนออก (ม.)" value={x.taperOut} step={1} min={0} max={500} onCommit={taperOut=>edit(x.id,{taperOut})}/>
-        {s.forwardLanes>0&&<NumberField field={`stretch-${i}-forward`} label={`ช่องตามทิศที่วาด (ถนน ${s.forwardLanes})`} value={x.forwardLanes} min={s.forwardLanes} max={s.forwardLanes+2} onCommit={forwardLanes=>edit(x.id,{forwardLanes})}/>}
-        {s.backwardLanes>0&&<NumberField field={`stretch-${i}-backward`} label={`ช่องทิศสวน (ถนน ${s.backwardLanes})`} value={x.backwardLanes} min={s.backwardLanes} max={s.backwardLanes+2} onCommit={backwardLanes=>edit(x.id,{backwardLanes})}/>}
+        {s.forwardLanes>0&&<NumberField field={`stretch-${i}-forward`} label={`ช่องตามทิศที่วาด (ถนน ${s.forwardLanes})`} value={x.forwardLanes} min={Math.max(1,s.forwardLanes-1)} max={s.forwardLanes+2} onCommit={forwardLanes=>edit(x.id,{forwardLanes})}/>}
+        {s.backwardLanes>0&&<NumberField field={`stretch-${i}-backward`} label={`ช่องทิศสวน (ถนน ${s.backwardLanes})`} value={x.backwardLanes} min={Math.max(1,s.backwardLanes-1)} max={s.backwardLanes+2} onCommit={backwardLanes=>edit(x.id,{backwardLanes})}/>}
         <NumberField field={`stretch-${i}-walk`} label={`ทางเท้า (ม.) (ถนน ${s.walk})`} value={x.walk} step={.25} min={0} max={s.walk+5} onCommit={walk=>edit(x.id,{walk})}/>
         {(s.bands??[]).map(b=>{const v=x.bands?.find(y=>y.type===b.type)?.width??b.width;
           return <NumberField key={b.type} field={`stretch-${i}-${b.type}`} label={`${BAND_NAME[b.type]??b.type} (ม.) (ถนน ${b.width})`} value={v} step={.25} min={0} max={b.width+5}
             onCommit={width=>edit(x.id,{bands:[...(x.bands??[]).filter(y=>y.type!==b.type),{type:b.type,width}]})}/>;})}
       </div>
     </div>)}
-    {list.length<12&&<div className="design-reference-tools"><button data-design-action="add-stretch" onClick={add}>+ หน้าตัดเฉพาะช่วง</button></div>}
-    <p className="design-meta">เพิ่มช่องได้ไม่เกินสองช่องต่อทิศ (ลดช่องกลางช่วงยังทำไม่ได้) · ปรับความกว้างทางเท้าและแถบริมทาง · ลากจุดบนแบบเพื่อเลื่อนต้น/ปลาย · ช่วงเปลี่ยนเป็นค่าที่วาด ยังไม่ได้ตรวจตามเกณฑ์</p>
+    {list.length<12&&<div className="design-reference-tools">
+      <button data-design-action="add-stretch" onClick={add}>+ หน้าตัดเฉพาะช่วง</button>
+      {s.forwardLanes>1&&<button data-design-action="add-lane-reduction-forward" onClick={()=>reduce('forward')}>− ช่องตามทิศที่วาด</button>}
+      {s.backwardLanes>1&&<button data-design-action="add-lane-reduction-backward" onClick={()=>reduce('backward')}>− ช่องทิศสวน</button>}
+    </div>}
+    <p className="design-meta">เพิ่มช่องได้ไม่เกินสองช่อง หรือลดได้หนึ่งช่องต่อทิศในช่วงกลางถนน · ปรับความกว้างทางเท้าและแถบริมทาง · ลากจุดบนแบบเพื่อเลื่อนต้น/ปลาย · ช่วงเปลี่ยนเป็นค่าที่วาด ยังไม่ได้ตรวจตามเกณฑ์</p>
   </Fold>;
 }
 

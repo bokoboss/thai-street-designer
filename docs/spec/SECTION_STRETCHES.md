@@ -8,8 +8,7 @@ Review-plan for the 4C item “replace / upgrade the section of a selected stret
 A road can carry up to 12 stretches, each in road stations like lane runs:
 `{id, start, end, taperIn, taperOut, forwardLanes, backwardLanes, walk, bands?}`.
 
-- **Lanes:** each direction may have the road's lane count, plus at most two lanes. The extra lanes are built on the curb
-  side.
+- **Lanes:** each direction may have up to two added lanes, or reduce the base road count by exactly one lane while retaining at least one running lane. Both are curb-side. Reductions are mid-block only; mapping through a junction is deferred to PR C.
 - **Footway:** the footway width may differ from the road's by up to ±5 m. A footway “removed” over a stretch, such as on
   a bridge, keeps 5 cm because the engine never draws a width change down to nothing.
 - **Side bands:** the width of each band the road already has (shoulder, bike, motorcycle, buffer) may differ by up to
@@ -18,7 +17,7 @@ A road can carry up to 12 stretches, each in road stations like lane runs:
   its length.
 
 The stretch compiles into the same station lane and width components as lane runs:
-- lane components with ids `st-<id>-f1…` and `st-<id>-b1…`
+- added lane components with ids `st-<id>-f1…` and `st-<id>-b1…`; a reduced lane uses `st-<id>-fd1` / `st-<id>-bd1` with `operation: 'drop'`
 - width components with ids `st-<id>-walk-f/b` and `st-<id>-<band>-f/b`
 
 Plan, section by station, 3D and export therefore read one model. Stretches are clipped per link, and the following are
@@ -30,12 +29,12 @@ listed as items to check:
 ## What it cannot do (engine limit)
 
 The engine cannot yet change the following in the middle of a link:
-- reduce the lane count
+- reduce by more than one lane or remove every lane in a traffic direction
 - change the median width
 - change the lane width
+- map a reduced lane through a junction (PR C)
 
-A stretch with fewer lanes than the road is refused with the reason, and the user is pointed to edit the road's own
-section instead.
+New overlapping reductions, or a reduction overlapping added/auxiliary lanes in the same direction, are refused with a reason. Previously authored files keep their original geometry and receive review items instead of silent rewrites. Structure sections remain add-only.
 
 ## Carried on the ground
 
@@ -51,10 +50,12 @@ The same rules apply to lane runs.
 
 The road panel has a “หน้าตัดเฉพาะช่วง” fold.
 
-To add a stretch, click “+ หน้าตัดเฉพาะช่วง”. The new stretch:
+To add an expanded stretch, click “+ หน้าตัดเฉพาะช่วง”. The new stretch:
 - takes the road's section plus one lane each way
 - is 200 m long with 30 m transitions (tool values)
 - is placed on the longest stretch between junction approaches
+
+To reduce a lane on a selected road, open this fold then click “− ช่องตามทิศที่วาด” or “− ช่องทิศสวน” (2 actions from road selection). This creates a single-lane curb drop with the same starting stretch and transitions; all default dimensions are TO_VERIFY. The existing add-stretch flow is unchanged.
 
 Each field is typed:
 - start and end
@@ -76,11 +77,12 @@ On the plan, the start and end handles slide along the road with one undo per dr
   - items to check: no change, cut at a junction
   - carried through reverse, split and join
   - the new stretch's defaults
+- `scripts/verify-lane-reduction.cjs`: signed lifecycle, exact footprint and lane lines, save/reopen, legacy geometry, collisions, undo, reverse/split/join, Slip invariant.
 - `scripts/verify-lane-browser.mjs`:
   - add in one click
   - drag the start, undone in one step
   - typed footway
-  - screenshot `artifacts/section-stretch-plan.png`
+  - screenshots `artifacts/section-stretch-plan.png`, `artifacts/lane-reduction-plan.png`, `artifacts/lane-reduction-3d.png`
 
 ## Not yet
 
