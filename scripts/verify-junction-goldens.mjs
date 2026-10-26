@@ -5,12 +5,13 @@ import {createHash} from 'node:crypto';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdirSync,rmSync,writeFileSync} from 'node:fs';
 import {createServer} from 'node:net';
+import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 process.chdir(root);
-const artifactDir='artifacts',profileDir='.test-build/chrome-junction-goldens';
+const artifactDir='artifacts',profileDir=resolve(root,'.test-build/chrome-junction-goldens');
 mkdirSync(artifactDir,{recursive:true});rmSync(profileDir,{recursive:true,force:true});
 
 function commandPath(names){

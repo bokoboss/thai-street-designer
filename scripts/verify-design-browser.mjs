@@ -100,6 +100,8 @@ try{
   {
     const c0=await b.evalValue(`(()=>{const l=document.querySelector('[data-network-junction-hit]'),m=l.getScreenCTM(),p=new DOMPoint(l.x1.baseVal.value,l.y1.baseVal.value).matrixTransform(m);return{x:p.x,y:p.y};})()`);
     await b.clickAt({x:c0.x+45,y:c0.y+12});await b.click('[data-design-action="back-to-junction"]');
+    await b.waitFor(()=>b.count('[data-design-lane-connection-count]'),'automatic lane mapping in junction inspector');
+    assert.ok(Number(await b.evalValue(`document.querySelector('[data-design-lane-connection-count]').dataset.designLaneConnectionCount`))>0,'junction lanes auto-map without manual connectors');
     await openFold('junction-grade');
     await b.click('[data-design-junction-over]');
     await b.waitFor(()=>b.count('[data-profile-review]'),'profile delta preview');await b.click('[data-profile-review-confirm]');

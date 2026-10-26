@@ -64,8 +64,10 @@ try{
   // The view fits the reloaded project just after it is ready: click again until the ramp is picked.
   for(let k=0;k<5&&!await b.count('[data-design-ramp-lane="start"]');k++){await b.clickAt(await screen(70,-45));await new Promise(r=>setTimeout(r,300));}
   await b.waitFor(()=>b.count('[data-design-ramp-lane="start"]'),'ramp panel with its diverge');
+  assert.equal(await b.evalValue(`document.querySelector('[data-design-ramp-lane-map="start"]').dataset.designRampLaneMapStatus`),'review','no automatic connection before an auxiliary lane exists');
   await b.click('[data-design-ramp-lane-toggle="start"]');
   await b.waitFor(async()=>{const r=(await current()).roads.find(x=>x.id==='X');return r.terminals?.start?.length===100&&Math.abs(r.points[0].y+(2+7+1.75))<.01;},'lane added; ramp starts on its centre');
+  await b.waitFor(()=>b.evalValue(`document.querySelector('[data-design-ramp-lane-map="start"]')?.dataset.designRampLaneMapStatus==='mapped'`),'ramp mapping agrees with the compiled auxiliary lane');
   await b.screenshot('artifacts/ramp-decel-lane.png');
   await b.click('[data-design-undo]');await b.waitFor(async()=>!(await current()).roads.find(x=>x.id==='X').terminals,'one undo');
   assert.deepEqual(b.errors,[]);

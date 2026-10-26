@@ -10,6 +10,8 @@ import {clearanceText} from '@/core/road-first/structure-clearance';
 import type {RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
 import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} from '@/core/junction/model';
+import {automaticLaneMapping,type AutoLaneEndpoint} from '@/core/junction/automatic-lane-mapping';
+import {automaticRampLaneConnections} from '@/core/road-first/ramp-lane-connections';
 import {approachInfo,cornerHandles,junctionApproaches,newOpening,newSlip,openingsOf,openingsPatch,pocketTreatment,slipPatch,type ApproachInfo,type OpeningType,type PocketSide} from '@/core/road-first/approach-edit';
 import {legKey,parseLegKey,type LegKey} from '@/core/road-first/leg-binding';
 import {ROAD_PRESETS,matchingPreset,presetSection,type RoadPresetId} from '@/core/road-first/presets';
@@ -331,14 +333,18 @@ function RoadCrossingsBlock({road,project,compiled,run,onSelect,onMessage}:{road
 }
 
 /** Ramp ends: where the ramp diverges from / merges into another road, with a way to unhook each end. */
-function RampBlock({road,roads,run}:{road:Road;roads:Road[];run:Run}){
+function RampBlock({road,roads,compiled,run}:{road:Road;roads:Road[];compiled:CompileResult;run:Run}){
   const name=(id:string)=>roads.find(r=>r.id===id)?.name??id;
   const ends=(['start','end'] as const).map(end=>({end,a:road.anchors?.[end]}));
+  const mapped=automaticRampLaneConnections(roads,compiled).filter(x=>x.rampRoadId===road.id);
   return <section className="design-block" data-design-ramp={road.id}>
     <small className="design-block-title">ทางลาด (ทางเดียวตามทิศที่วาด)</small>
     {ends.map(({end,a})=><p key={end} className="design-meta" data-design-ramp-end={end} data-design-ramp-anchor={a?a.roadId:'none'}>
       {end==='start'?'ต้นทาง: ':'ปลายทาง: '}{a?`${end==='start'?'แยกออกจาก':'เข้าสู่'} ${name(a.roadId)} ที่ระยะ ${a.station.toFixed(1)} ม.`:'ไม่ได้ต่อเข้าข้างถนน'}
       {a&&<> <button className="design-link" data-design-ramp-detach={end} onClick={()=>run({type:'ramp.detach',roadId:road.id,end})}>ปลดออก</button></>}
+    </p>)}
+    {mapped.map(x=><p key={'map-'+x.end} className="design-meta" data-design-ramp-lane-map={x.end} data-design-ramp-lane-map-status={x.status}>
+      {x.status==='mapped'?'จับคู่ช่องแล้ว':'ต้องตรวจการเชื่อมช่อง'} · {x.message} {x.status==='mapped'?'(ระยะช่วงเปลี่ยนยังต้องตรวจตามเกณฑ์)':''}
     </p>)}
     {ends.filter(x=>x.a).map(({end})=>{const lane=road.terminals?.[end],what=end==='start'?'ช่องลดความเร็วก่อนแยกออก':'ช่องเร่งความเร็วหลังเข้าสู่';
       return <div key={'lane-'+end} className="design-opening" data-design-ramp-lane={end}>
@@ -364,7 +370,7 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
     <RoadCrossingsBlock road={road} project={project} compiled={compiled} run={run} onSelect={onSelect} onMessage={onMessage}/>
     <TemplatePiecesBlock project={project} roadId={road.id} run={run} onSelectRoad={id=>onSelect({kind:'road',id})}/>
     <UturnBridgePanel key={road.id} project={project} road={road} run={run} onPlaced={id=>onSelect({kind:'road',id})}/>
-    {road.role==='ramp'&&<RampBlock road={road} roads={roads} run={run}/>}
+    {road.role==='ramp'&&<RampBlock road={road} roads={roads} compiled={compiled} run={run}/>}
     {road.role!=='ramp'&&<label className="design-check" title="ถนนที่ไปบรรจบไหลต่อเนื่อง ไม่มีเส้นหยุดหรือทางข้าม ทางเข้ามีเส้นหยุดให้ทาง"><input type="checkbox" checked={road.role==='access'} data-design-road-role="access" onChange={e=>run({type:'road.setRole',roadId:road.id,role:e.currentTarget.checked?'access':null})}/> ทางเข้าโครงการ (driveway)</label>}
     <PresetPicker label="หน้าตัดสำเร็จรูป" value={matchingPreset(s)} onPick={id=>set(presetSection(id))}/>
     <div className="design-fields">
@@ -561,6 +567,13 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
   const {request,review}=useProfileReview(project,run,onMessage);
   if(!d||!j)return <p className="design-meta">ไม่พบทางแยกนี้แล้ว</p>;
   const approaches=junctionApproaches(compiled,candidateId);
+  const mapping=automaticLaneMapping(j.design);
+  const laneName=(lane:AutoLaneEndpoint)=>{
+    const leg=compiled.legs.find(x=>x.junctionId===jid&&x.armId===lane.armId);
+    const roadName=leg?legLabel(project,legKey(leg.roadId,leg.side)):'ขาที่ '+(lane.armId+1);
+    const side=lane.role==='main'?'ช่องหลัก ':lane.role==='aux-left'?'ช่องริมขอบทาง ':'ช่องชิดเกาะกลาง ';
+    return roadName+' · '+side+(lane.laneIndex+1);
+  };
   // Two roads crossing: make it a bridge or an underpass from here in one step (one undo brings the junction back).
   const crossing=detectCandidates(project.roads).find(c=>c.id===candidateId),two=crossing?.kind==='cross'&&crossing.roads.length===2&&(d.roads?.length??2)===2;
   const rname=(id:string)=>project.roads.find(r=>r.id===id)?.name??id;
@@ -576,6 +589,21 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
       <LevelBasis project={project} note="การตั้งค่าของทางแยกนี้จะไม่ใช้แล้ว กดย้อนกลับเพื่อคืนทางแยก · ยกหรือลดระดับถนนเองในแนวดิ่งก็ได้ ระบบจะเปลี่ยนเป็นทางต่างระดับให้"/>
     </Fold>}
     {(d.roads??[]).some(id=>project.roads.find(r=>r.id===id)?.role==='access')&&<p className="design-meta" data-design-access-junction="true">ทางเข้าโครงการ: ถนนหลักไหลต่อเนื่อง ไม่มีเส้นหยุด ทางข้าม หรือสัญญาณไฟ · ทางเข้ามีเส้นหยุดให้ทาง (ค่าเริ่มต้นแนวคิด)</p>}
+    {j.design.type!=='roundabout'&&<Fold id="automatic-lane-mapping" title="การเชื่อมช่องจราจรอัตโนมัติ"
+      summary={mapping.connections.length+' ทางเชื่อม'+(mapping.issues.length?' · ให้ตรวจ '+mapping.issues.length+' รายการ':'')}
+      data="automatic-lane-mapping">
+      <p className="design-meta">จับคู่จากช่องจราจรและลูกศรที่กำหนดไว้ตามทิศทางจราจรชิดซ้าย ไม่เปลี่ยนรูปถนน ไม่ใช่การตรวจความจุหรือมาตรฐานการออกแบบ</p>
+      <div data-design-lane-connection-count={mapping.connections.length}>
+        {mapping.connections.map(c=><p key={c.id} className="design-meta" data-design-lane-connection={c.movement}>
+          {laneName(c.from)} → {c.movement==='left'?'เลี้ยวซ้าย':c.movement==='right'?'เลี้ยวขวา':'ตรงไป'} → {laneName(c.to)}
+        </p>)}
+      </div>
+      {!!mapping.slipRoutes.length&&<p className="design-meta" data-design-mapping-slip={mapping.slipRoutes.length}>Slip lane {mapping.slipRoutes.length} เส้นใช้แนวเชื่อมเดิม ไม่สร้างเส้นซ้ำในทางแยก</p>}
+      {!!mapping.issues.length&&<div className="design-issues" data-design-lane-mapping-issues={mapping.issues.length}>
+        <b>รายการเชื่อมช่องที่ต้องตรวจ</b>
+        <ul>{mapping.issues.map((i,k)=><li key={k}>{i.from?laneName(i.from)+' · ':''}{i.message}</li>)}</ul>
+      </div>}
+    </Fold>}
     {compiled.unjoined[candidateId]&&<div className="design-issues" data-design-unjoined-note={compiled.unjoined[candidateId].length}>
       <b>มีถนนถึงทางแยกนี้แต่ไม่ได้เชื่อม</b>
       <ul><li>{compiled.unjoined[candidateId].map(id=>project.roads.find(r=>r.id===id)?.name??id).join(', ')} — {compiled.overflow.includes(candidateId)||approaches.length>=4?'ทางแยกรองรับสูงสุด 4 ขา':'ถูกแยกออกจากทางแยกนี้'} · ถ้าต้องการเชื่อม ให้ปรับแนวถนนไปบรรจบที่จุดอื่น</li></ul>

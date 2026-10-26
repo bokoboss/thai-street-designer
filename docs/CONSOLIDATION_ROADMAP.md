@@ -237,7 +237,7 @@ road geometry, a full CAD constraint set, silent auto-clamping of drawn geometry
 
 ### 4C — Lane runs and lane connections
 
-Status 2026-10-26: lane runs (#73), ramp auxiliary lanes / continuity / weaving (#74), section stretches (#75) and structure sections (#76) are merged. Owner approved sequence: (A) station composition integrity, legacy-file review and structure-clearance footprint; (B) lane reduction foundation after a separate engine survey and owner approval; (C) automatic lane mapping; (D) advanced connector overrides. Then Diamond v2, 4D and 4E. Tool values remain TO_VERIFY. Phase 8B PR #3/#4 closed without deleting branches on 2026-10-26.
+Status 2026-10-26: lane runs (#73), ramp auxiliary lanes / continuity / weaving (#74), section stretches (#75) and structure sections (#76) are merged; PR B (#78) lane reduction foundation merged after CI + Vercel. Owner approved sequence: (A) station composition integrity, legacy-file review and structure-clearance footprint; (B) lane reduction foundation after a separate engine survey and owner approval; (C) automatic lane mapping (current isolated slice; see [mapping contract](spec/AUTOMATIC_LANE_MAPPING.md)); (D) advanced connector overrides. Then Diamond v2, 4D and 4E. Tool values remain TO_VERIFY. Phase 8B PR #3/#4 closed without deleting branches on 2026-10-26.
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".
