@@ -437,6 +437,13 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     if(separatedJunctions.length)label+=` · ${separatedJunctions.join(', ')} เป็นทางต่างระดับ`;
   }
   const structural=validateRoadFirstProject(p);if(structural)return fail(structural,label);
+  // Preserve legacy conflicts as authored, but never introduce a new over-budget/overlap condition.
+  // Comparing the complete compiled issue sets also keeps a failed edit atomic.
+  const integrity=(value:RoadFirstProject)=>compileRoadFirstProject(value).issues.filter(x=>
+    x.includes('เกินขอบเขต 24 รายการ')||x.includes('ช่องเพิ่มใน')&&x.includes('ซ้อนกัน')||x.includes('การปรับความกว้าง')&&x.includes('ซ้อนกัน'));
+  const earlier=new Set(integrity(project));
+  const introduced=integrity(p).filter(x=>!earlier.has(x));
+  if(introduced.length)return fail(introduced[0]+' — ไม่รับการแก้ไขนี้',label);
   const invalid=newOverflow(p,overflowBefore)??engineError(p);if(invalid)return fail(invalid,label);
   // New crossings become junctions automatically (owner decision 2026-10-19); one that cannot be built stays open with its reason.
   const autoJunctions:string[]=[],autoSeparated:string[]=[...separatedIds],openCrossings:{candidateId:string;reason:string}[]=[];
