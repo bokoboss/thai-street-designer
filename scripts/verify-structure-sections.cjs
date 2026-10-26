@@ -37,7 +37,9 @@ fresh();{const C=comp();assert.equal(linkOf(C,'U').components.length,0);assert.e
 
 // 3. One more lane each way on the structure (e.g. a climbing lane on the bridge) and the lower road untouched.
 {run({type:'road.setStructureSection',roadId:'U',section:{...BR,forwardLanes:3}});const C=comp();
- assert.ok(linkOf(C,'U').components.some(x=>x.id==='st-structure-1-f1'));assert.equal(linkOf(C,'L').components.length,0,'lower road keeps its section');}
+ assert.ok(linkOf(C,'U').components.some(x=>x.id==='st-structure-1-f1'));assert.equal(linkOf(C,'L').components.length,0,'lower road keeps its section');
+  const baseClearance=gs && comp().crossings[0].clearance;
+  assert.ok(baseClearance?.spanUnder, 'effective bridge section has a measured lower-road overlap');}
 
 // 4. Tunnel: the section applies in the tunnel of a lower road below ground.
 {e=c.createEditor({kind:'road-first',schemaVersion:3,title:'t',decisions:[],options:{},roads:[

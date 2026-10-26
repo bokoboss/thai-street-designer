@@ -1,6 +1,6 @@
 # Consolidation Roadmap
 
-Updated: 2026-10-21 (Phase 3 accepted)
+Updated: 2026-10-26 (Phase 4C integrity work; Phase 3 accepted)
 Decision: [ADR-0001](decisions/ADR-0001-consolidation.md)
 Status: **active plan** — replaces `docs/POST_V1_ROADMAP.md` as the source of next work.
 
@@ -125,7 +125,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 Owner-approved review sequence (2026-10-22), superseding the earlier “next Select hub” notes below:
 **review PR-01+02 together → PR-04 → PR-05 → PR-06 → PR-07 → PR-08**.
-These are review-plan IDs, not GitHub PR numbers. Select hub (PR-03) and PR-09 onward are not authorized in this round.
+These are review-plan IDs, not GitHub PR numbers. The original approval applied only to that first round; later owner approvals authorized Select hub (PR-03) and 4C (PR-09 onward).
 PR-17 is limited to CriterionRef schema after PR-05. Five licensed real-site examples are the v2 closure gate, not a gate to start coding.
 Keep road-first and one resolver; retain legacy compile on open and offer explicit previewed conversion. Diamond origin version 1 is never regenerated automatically.
 Details of the combined first slice: [canonical alignment and migration](spec/CANONICAL_ALIGNMENT.md).
@@ -136,7 +136,7 @@ Review-plan PR-07: [U-turn bridge and U-turn under a bridge](spec/UTURN_STRUCTUR
 Review-plan PR-08 (this slice): [ramp terminals — tangent tie-in and gore](spec/RAMP_TERMINALS.md). This closes the approved first round (PR-01/02/04–08), merged as PR #69 at `fecefb2`.
 Owner go-ahead 2026-10-23: PR-03 next. Review-plan PR-03 (this slice): [Select as the editing hub](spec/SELECT_HUB.md) — first part of 4B-4. Owner go-ahead 2026-10-23 for 4C: review-plan PR-09 [lane runs](spec/LANE_RUNS.md) first, then PR-10 (merge / diverge lanes and lane mapping).
 
-Phase 3 accepted 2026-10-21; Phase 4 is the current phase. 4A done (PR #50, #51); 4B-1, 4B-2, 4B-2b, level criteria and 4B-3 (diamond) done; next 4B-4 (Select editing hub).
+Phase 3 accepted 2026-10-21; Phase 4 is current. 4A done (PR #50, #51), 4B-1 through 4B-4 (Select hub, PR #70–#72) done. 4C station features PR #73–#76 done; next: station section integrity and automatic lane mapping.
 
 ### 4.0 — UX closure before 4A (from the [UX / workflow review 2026-10-21](research/2026-10-21-UX-WORKFLOW-REVIEW.md))
 
@@ -237,7 +237,7 @@ road geometry, a full CAD constraint set, silent auto-clamping of drawn geometry
 
 ### 4C — Lane runs and lane connections
 
-Status 2026-10-23: lane runs along a stretch done (PR #73, spec `docs/spec/LANE_RUNS.md`); auxiliary lanes at ramp ends, lane continuity into ramps and weaving measurement (spec `docs/spec/RAMP_LANES.md`). Section of a stretch: more lanes, footway and band widths over part of a road (spec `docs/spec/SECTION_STRETCHES.md`). Section on a structure: a road's own section over its bridge decks and in its tunnels with transitions to the at-grade section (spec `docs/spec/STRUCTURE_SECTIONS.md`). Still open in 4C: lane connectors at junctions.
+Status 2026-10-26: lane runs (#73), ramp auxiliary lanes / continuity / weaving (#74), section stretches (#75) and structure sections (#76) are merged. Owner approved sequence: (A) station composition integrity, legacy-file review and structure-clearance footprint; (B) lane reduction foundation after a separate engine survey and owner approval; (C) automatic lane mapping; (D) advanced connector overrides. Then Diamond v2, 4D and 4E. Tool values remain TO_VERIFY. Phase 8B PR #3/#4 closed without deleting branches on 2026-10-26.
 
 - Lanes defined by station runs (add / drop, auxiliary lanes, acceleration/deceleration lengths as drawn values).
 - Replaces the deferred P2 item "station-based lane transitions".
