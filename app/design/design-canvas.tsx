@@ -373,36 +373,6 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           onSelect(leg?{kind:'approach',id:compiled.sources.junctions[j],leg:legKey(leg.roadId,leg.side)}:{kind:'junction',id:compiled.sources.junctions[j]});
         }}
         onJunctionMoveStart={noop} onArmMoveStart={noop} onLinkInsertVertex={noop} onLinkVertexMoveStart={noop} onLinkVertexSelect={noop} onPort={noop}/>
-      {tool==='select'&&showConnectorReview&&candidateId&&connectorReview&&<g data-design-connector-review="true">
-        {/* This is a schematic editor overlay, never plan pavement, markings or a vehicle swept path. */}
-        {connectorReview.lines.map(c=><g key={c.id} data-design-connector-source={c.id} data-design-connector-origin={c.origin}>
-          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`}
-            fill="none" stroke={c.origin==='manual'?'#0b7f86':'#64748b'} strokeWidth={px(2)}
-            strokeDasharray={`${px(4)} ${px(5)}`} pointerEvents="none" opacity={.85}/>
-          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`} fill="none" stroke="transparent"
-            strokeWidth={px(16)} style={{cursor:'pointer'}}
-            onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({candidateId,from:c.from,movement:c.movement,target:null});}}>
-            <title>{`เลือกการเชื่อม ${pickedLabel(c.from)} → ${pickedLabel(c.to)} · ${c.movement}`}</title>
-          </path>
-          <circle cx={c.start.x} cy={c.start.y} r={px(3)} fill={c.origin==='manual'?'#0b7f86':'#64748b'} pointerEvents="none"/>
-          <circle cx={c.end.x} cy={c.end.y} r={px(3)} fill="#fff" stroke="#64748b" strokeWidth={px(1)} pointerEvents="none"/>
-        </g>)}
-        {picking&&connectorTargets.map(t=>{
-          const chosen=picking.target&&JSON.stringify(picking.target.ref)===JSON.stringify(t.ref);
-          return <g key={JSON.stringify(t.ref)} data-design-connector-receiver={t.ref.leg+':'+t.ref.role+':'+t.ref.laneIndex}
-            style={{cursor:'crosshair'}} onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({...picking,target:t});}}>
-            <circle cx={t.point.x} cy={t.point.y} r={px(13)} fill="transparent"/>
-            <circle cx={t.point.x} cy={t.point.y} r={px(6)} fill={chosen?'#0b7f86':'#fff'}
-              stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
-            <title>{`เลือกช่องรับ ${pickedLabel(t.ref)}`}</title>
-          </g>;
-        })}
-        {picking?.target&&<line data-design-connector-preview="true"
-          x1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.x??picking.target.point.x}
-          y1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.y??picking.target.point.y}
-          x2={picking.target.point.x} y2={picking.target.point.y} stroke="#0b7f86" strokeWidth={px(3)}
-          strokeDasharray={`${px(3)} ${px(3)}`} pointerEvents="none"/>}
-      </g>}
       {/* Arms longer than the straight part of their road: the extra length is off the drawn alignment. */}
       {compiled.shortfalls.length>0&&<g data-design-shortfalls={compiled.shortfalls.length} pointerEvents="none">
         {compiled.shortfalls.map(s=>{const j=compiled.project.junctions.find(x=>x.id===s.junctionId);if(!j)return null;
@@ -488,6 +458,36 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
           </g>;
         })}
       </g>
+      {tool==='select'&&showConnectorReview&&candidateId&&connectorReview&&<g data-design-connector-review="true">
+        {/* This is a schematic editor overlay, never plan pavement, markings or a vehicle swept path. */}
+        {connectorReview.lines.map(c=><g key={c.id} data-design-connector-source={c.id} data-design-connector-origin={c.origin}>
+          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`}
+            fill="none" stroke={c.origin==='manual'?'#0b7f86':'#64748b'} strokeWidth={px(2)}
+            strokeDasharray={`${px(4)} ${px(5)}`} pointerEvents="none" opacity={.85}/>
+          <path d={`M${c.start.x} ${c.start.y}L${c.end.x} ${c.end.y}`} fill="none" stroke="transparent"
+            strokeWidth={px(16)} style={{cursor:'pointer'}}
+            onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({candidateId,from:c.from,movement:c.movement,target:null});}}>
+            <title>{`เลือกการเชื่อม ${pickedLabel(c.from)} → ${pickedLabel(c.to)} · ${c.movement}`}</title>
+          </path>
+          <circle cx={c.start.x} cy={c.start.y} r={px(3)} fill={c.origin==='manual'?'#0b7f86':'#64748b'} pointerEvents="none"/>
+          <circle cx={c.end.x} cy={c.end.y} r={px(3)} fill="#fff" stroke="#64748b" strokeWidth={px(1)} pointerEvents="none"/>
+        </g>)}
+        {picking&&connectorTargets.map(t=>{
+          const chosen=picking.target&&JSON.stringify(picking.target.ref)===JSON.stringify(t.ref);
+          return <g key={JSON.stringify(t.ref)} data-design-connector-receiver={t.ref.leg+':'+t.ref.role+':'+t.ref.laneIndex}
+            style={{cursor:'crosshair'}} onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();setConnectorPick({...picking,target:t});}}>
+            <circle cx={t.point.x} cy={t.point.y} r={px(13)} fill="transparent"/>
+            <circle cx={t.point.x} cy={t.point.y} r={px(6)} fill={chosen?'#0b7f86':'#fff'}
+              stroke="#0b7f86" strokeWidth={px(2)} pointerEvents="none"/>
+            <title>{`เลือกช่องรับ ${pickedLabel(t.ref)}`}</title>
+          </g>;
+        })}
+        {picking?.target&&<line data-design-connector-preview="true"
+          x1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.x??picking.target.point.x}
+          y1={connectorReview.lines.find(l=>l.movement===picking.movement&&JSON.stringify(l.from)===JSON.stringify(picking.from))?.start.y??picking.target.point.y}
+          x2={picking.target.point.x} y2={picking.target.point.y} stroke="#0b7f86" strokeWidth={px(3)}
+          strokeDasharray={`${px(3)} ${px(3)}`} pointerEvents="none"/>}
+      </g>}
       {box&&<rect data-design-box-select="true" x={Math.min(box.x0,box.x1)} y={Math.min(box.y0,box.y1)} width={Math.abs(box.x1-box.x0)} height={Math.abs(box.y1-box.y0)} fill="#0b7f86" fillOpacity={.06} stroke="#0b7f86" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(4)}`} pointerEvents="none"/>}
       {ghost&&ghost.lines.length>0&&<g data-design-ghost={ghost.error?'error':'ok'} pointerEvents="none">
           {ghost.lines.map((l,i)=><polyline key={i} points={l.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ghost.error?'#b3261e':'#0b7f86'} strokeOpacity={.35} strokeWidth={ghost.width} strokeLinejoin="round" strokeLinecap="round"/>)}
@@ -532,7 +532,7 @@ export function DesignCanvas({project,compiled,selection,onSelect,tool,draft,onD
       </g>}
     </svg>
     {tool==='select'&&candidateId&&connectorReview&&<div className="design-readout"
-      data-design-connector-controls="true" style={{left:12,top:12,maxWidth:350}}>
+      data-design-connector-controls="true" style={{left:12,top:12,maxWidth:350,pointerEvents:"auto",whiteSpace:"normal"}}>
       <button data-design-connector-toggle="true" aria-pressed={showConnectorReview} onClick={()=>{setShowConnectorReview(v=>!v);setConnectorPick(null);}}>
         {showConnectorReview?'ซ่อนทางเชื่อมช่อง':'ตรวจทางเชื่อมช่อง'}
       </button>
