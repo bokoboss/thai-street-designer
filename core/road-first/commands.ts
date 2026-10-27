@@ -159,7 +159,7 @@ export function gradeOwnerRebindError(before:RoadFirstProject,after:RoadFirstPro
       if(cmd.type==='road.setProfile')continue;
       const oldPoints=oldRoad.profile!.filter(q=>q.generatedBy===owner),
         nextPoints=(road.profile??[]).filter(q=>q.generatedBy===owner);
-      if(!nextPoints.length){if(cmd.type==='road.setProfile')continue;return 'จุดระดับสะพานที่ระบบสร้างไว้ไม่อยู่บนถนนที่รองรับจุดตัดแล้ว — คืนระดับก่อนแก้แนว';}
+      if(!nextPoints.length)return 'จุดระดับสะพานที่ระบบสร้างไว้ไม่อยู่บนถนนที่รองรับจุดตัดแล้ว — คืนระดับก่อนแก้แนว';
       if(oldPoints.length!==nextPoints.length)return 'แนวดิ่งสะพานกระจายไปคนละช่วงถนนหรือจำนวนจุดเปลี่ยน — คืนระดับก่อนแบ่งถนนใหม่';
       const flipped=cmd.type==='road.reverse'&&cmd.roadId===oldRoad.id;
       const oldOffsets=oldPoints.map(q=>(q.station-originalRef.station)*(flipped?-1:1)).sort((a,b)=>a-b);
