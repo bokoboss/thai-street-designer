@@ -407,12 +407,46 @@ function RoadInspector({road,point,onPoint,run,onDeleted,roads,compiled,onMessag
   </>;
 }
 
+/** Preview a reversible change of topology before committing a single undoable command. */
+function RestoreJunctionReview({candidate,project,before,run,onConfirm,onCancel}:{
+  candidate:Candidate;project:RoadFirstProject;before:RoadFirstProject;run:Run;onConfirm:()=>void;onCancel:()=>void;
+}){
+  const cmd:RoadFirstCommand={type:'crossing.decide',candidateId:candidate.id,decision:'junction'};
+  const result=executeCommand(project,cmd),stale=before!==project;
+  const owner=project.decisions.find(d=>d.candidateId===candidate.id)?.profileOwner;
+  const count=owner?project.roads.reduce((sum,r)=>sum+(r.profile??[]).filter(q=>q.generatedBy===owner).length,0):0;
+  return <section className="design-block" data-design-restore-junction-review="true">
+    <small className="design-block-title">ตรวจก่อนคืนเป็นทางแยกระดับดิน</small>
+    <p className="design-meta">จะลบเฉพาะจุดแนวดิ่งที่ระบบสร้างสำหรับสะพาน/ทางลอดจุดนี้ {count} จุด และคืนรายละเอียดทางแยกที่ยังเก็บไว้ ไม่เปลี่ยนแนวถนนหรือจุดระดับที่กำหนดเอง</p>
+    <div className="design-grade-fields">
+      {candidate.roads.map(ref=>{
+        const road=project.roads.find(r=>r.id===ref.roadId),after=result.project.roads.find(r=>r.id===ref.roadId);
+        return road&&after?<p key={ref.roadId} className="design-meta" data-design-restored-level={ref.roadId}>
+          {road.name}: ก่อน {levelAt(road.profile,ref.station).toFixed(2)} ม. → หลัง {levelAt(after.profile,ref.station).toFixed(2)} ม.
+        </p>:null;
+      })}
+    </div>
+    {project.decisions.find(d=>d.candidateId===candidate.id)?.treatments
+      ?<p className="design-meta">รายละเอียดขาทางแยกที่เคยกำหนดไว้จะกลับมาใช้ หากไม่สอดคล้องกับถนนปัจจุบัน ระบบจะปฏิเสธหรือแจ้งรายการให้ตรวจ</p>
+      :<p className="design-meta">ไม่พบรายละเอียดทางแยกเดิมในไฟล์นี้ หากเคยถูกลบโดยโปรแกรมรุ่นก่อนจะไม่สร้างข้อมูลนั้นขึ้นเอง</p>}
+    {stale&&<p className="design-warning" role="alert">โครงการเปลี่ยนระหว่าง Preview — ปิดและเลือกใหม่</p>}
+    {result.error&&<p className="design-warning" role="alert" data-design-restore-junction-error>{result.error}</p>}
+    <div className="design-actions">
+      <button data-design-restore-junction-cancel onClick={onCancel}>ยกเลิก</button>
+      <button className="primary" data-design-restore-junction-confirm disabled={!!result.error||stale}
+        onClick={()=>{if(!stale&&!result.error&&run(cmd).ok)onConfirm();}}>ยืนยันคืนทางแยก (Undo ได้หนึ่งครั้ง)</button>
+    </div>
+  </section>;
+}
+
 function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage,onPlacedDiamond}:{candidate:Candidate;project:RoadFirstProject;compiled:CompileResult;run:Run;onConfirmed:()=>void;onMessage:(text:string,kind?:'info'|'error')=>void;onPlacedDiamond:()=>void}){
   const {request,review}=useProfileReview(project,run,onMessage);
+  const [restoreBefore,setRestoreBefore]=useState<RoadFirstProject|null>(null);
   const names=candidate.roads.map(r=>project.roads.find(x=>x.id===r.roadId)?.name??r.roadId),d=project.decisions.find(x=>x.candidateId===candidate.id);
   const state=d?.decision==='grade-separated'?'ทางต่างระดับ':d?.decision==='ignore'?'ไม่ใช่ทางแยก':'ยังเป็นทางแยกไม่ได้';
   return <>
-    {review}<header className="design-inspector-head"><small>จุดตัดของถนน</small><b>{names.join(' × ')}</b><span className="design-state">{state}</span></header>
+    {review}{restoreBefore&&<RestoreJunctionReview candidate={candidate} project={project} before={restoreBefore} run={run}
+      onConfirm={onConfirmed} onCancel={()=>setRestoreBefore(null)}/>}<header className="design-inspector-head"><small>จุดตัดของถนน</small><b>{names.join(' × ')}</b><span className="design-state">{state}</span></header>
     {d?.decision==='grade-separated'&&(()=>{const x=compiled.crossings.find(v=>v.candidateId===candidate.id),name=(id?:string)=>project.roads.find(r=>r.id===id)?.name??'';
       return <section className="design-block" data-design-crossing-relation={x?.relation??'unresolved'}>
         <small className="design-block-title">ถนนไหนอยู่บน</small>
@@ -431,10 +465,18 @@ function CrossingInspector({candidate,project,compiled,run,onConfirmed,onMessage
         <LevelBasis project={project} note="ทางลอด: ช่วงทางลาดเป็นร่องเปิดมีกำแพงกันดิน ใต้ถนนที่ข้ามเป็นอุโมงค์ · ถนนที่สูงหรือต่ำพออยู่แล้วไม่ถูกปรับ · แก้ต่อได้ที่แนวดิ่งของถนน"/>
       </section>;})()}
     <DiamondPanel project={project} candidateId={candidate.id} run={run} onPlaced={onPlacedDiamond}/>
-    <p className="design-meta">{d?'จุดนี้ถนนข้ามกันโดยไม่มีทางแยก':'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>
+    <p className="design-meta">{d?.decision==='grade-separated'
+      ?compiled.crossings.some(x=>x.candidateId===candidate.id&&x.relation==='over')
+        ?'จุดนี้ถนนข้ามกันต่างระดับ หากต้องการคืนทางแยกระดับดินให้ตรวจ Preview ก่อนยืนยัน'
+        :'ยังไม่ได้สร้างสะพานหรือทางลอดจริง ต้องเลือกถนนด้านบน/ล่างและวางแนวดิ่งก่อน'
+      :'ระบบสร้างทางแยกที่จุดนี้ไม่ได้ ดูเหตุผลที่แถบด้านล่าง หรือปรับแนวถนนแล้วลองใหม่'}</p>
     <div className="design-actions">
-      <button className="primary" data-design-action="confirm-junction" onClick={()=>{if(run({type:'crossing.decide',candidateId:candidate.id,decision:'junction',name:d?.name??`แยก ${names.join(' × ')}`}).ok)onConfirmed();}}>ทำเป็นทางแยก</button>
-      <button data-design-action="grade-separated" onClick={()=>run({type:'crossing.decide',candidateId:candidate.id,decision:'grade-separated'})}>ทางต่างระดับ (ข้ามกัน)</button>
+      <button className="primary" data-design-action="confirm-junction" onClick={()=>{
+        if(d?.decision==='grade-separated'){setRestoreBefore(project);return;}
+        if(run({type:'crossing.decide',candidateId:candidate.id,decision:'junction',name:d?.name??`แยก ${names.join(' × ')}`}).ok)onConfirmed();
+      }}>{d?.decision==='grade-separated'?'ตรวจและคืนค่าเป็นทางแยก':'ทำเป็นทางแยก'}</button>
+      <button data-design-action="grade-separated" disabled={d?.decision==='grade-separated'}
+        onClick={()=>run({type:'crossing.decide',candidateId:candidate.id,decision:'grade-separated'})}>กำหนดเป็นจุดตัดต่างระดับ (รอเลือกระดับ)</button>
       <button data-design-action="ignore" onClick={()=>run({type:'crossing.decide',candidateId:candidate.id,decision:'ignore'})}>ไม่ใช่ทางแยก</button>
     </div>
   </>;
@@ -686,7 +728,7 @@ function JunctionInspector({candidateId,project,compiled,run,onSelect,onAdvanced
     </section>}
     <div className="design-actions">
       <button data-design-action="advanced-junction" title="ตำแหน่งลูกศร เส้นแบ่งเลนขาออก ต้นไม้บนเกาะกลาง ทางออก Slip lane และค่าวงเวียนขั้นสูง" onClick={()=>onAdvanced(candidateId)}>แก้ทางแยกขั้นสูง (ตำแหน่งลูกศร ทางออก Slip lane …)</button>
-      <button data-design-action="to-grade-separated" onClick={()=>{if(run({type:'crossing.decide',candidateId,decision:'grade-separated'}).ok)onSelect({kind:'crossing',id:candidateId});}}>เปลี่ยนเป็นทางต่างระดับ</button>
+      <button data-design-action="to-grade-separated" onClick={()=>{if(run({type:'crossing.decide',candidateId,decision:'grade-separated'}).ok)onSelect({kind:'crossing',id:candidateId});}}>ตั้งเป็นจุดตัดต่างระดับ (เลือกถนนและระดับต่อ)</button>
       <button className="danger" data-design-action="unconfirm" onClick={()=>{if(!armed){setArmed(true);return;}run({type:'crossing.decide',candidateId,decision:'ignore'});}}>{armed?'กดอีกครั้งเพื่อยกเลิกทางแยก':'ยกเลิกทางแยก'}</button>
     </div>
   </>;

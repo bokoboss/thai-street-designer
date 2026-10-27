@@ -93,8 +93,24 @@ try{
     await b.waitFor(async()=>Number(await b.evalValue(`document.querySelector('[data-network-scene-below]')?.dataset.networkSceneBelow??0`))>0,'3D shows trough walls and portals');
     await sleep(400);await b.screenshot('artifacts/design-browser-underpass-3d.png');
     await b.click('[data-design-view="2d"]');await b.waitFor(async()=>await b.count('.network-scene3d')===0,'plan');
+    // Real UI restore, not Undo: preview both road levels before committing one transaction.
+    await b.click('[data-design-action="confirm-junction"]');
+    await b.waitFor(()=>b.count('[data-design-restore-junction-review]'),'restore confirmation preview from a real underpass');
+    assert.equal(await b.count('[data-network-crossing-tunnel]'),1,'preview does not mutate existing tunnel geometry');
+    assert.equal(await b.count('[data-design-restored-level]'),2,'both road levels are shown in the restore preview');
+    await b.click('[data-design-restore-junction-cancel]');
+    await b.waitFor(async()=>await b.count('[data-design-restore-junction-review]')===0,'cancel keeps the underpass');
+    assert.equal(await b.count('[data-network-crossing-tunnel]'),1);
+    await b.click('[data-design-action="confirm-junction"]');
+    await b.click('[data-design-restore-junction-confirm]');
+    await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===1
+      &&await b.count('[data-network-crossing-tunnel]')===0
+      &&await b.count('[data-network-crossing-deck]')===0,'restored at-grade junction removes tunnel/deck geometry');
+    await b.screenshot('artifacts/design-browser-restored-at-grade-junction.png');
+    await b.click('[data-design-undo]');
+    await b.waitFor(()=>b.count('[data-network-crossing-tunnel]'),'one undo restores the underpass and its geometry');
     await b.click('[data-design-undo]');await b.click('[data-design-undo]');await b.click('[data-design-undo]');
-    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'three undos bring the junction back');
+    await b.waitFor(()=>b.count('[data-network-junction-hit]'),'three undos bring the original junction back');
     await b.key('Escape');
   }
   // A junction of two crossing roads becomes a bridge from the junction panel in one step (owner report 2026-10-22).
