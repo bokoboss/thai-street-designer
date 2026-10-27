@@ -8,6 +8,7 @@ import {levelAt,resolveVerticalProfile,type Profile} from './elevation';
 import {splitRuns} from './lane-runs';
 import {splitStretches} from './section-stretches';
 import {legKey,parseLegKey,type LegKey,type LegSlip} from './leg-binding';
+import {remapConnectorOverrides} from './lane-connector-overrides';
 
 /** Shortest piece either side of a split (m; tool value). */
 export const SPLIT_MIN_PIECE=5;
@@ -56,7 +57,7 @@ export function splitRoad(roads:Road[],decisions:Decision[],roadId:string,at:Wor
     if(!later.has(d.candidateId))return d;
     const swap=(ids?:string[])=>ids&&ids.map(id=>id===roadId?newId:id),t=d.treatments;
     return{...d,...(d.roads?{roads:swap(d.roads)}:{}),...(d.excluded?{excluded:swap(d.excluded)}:{}),...(d.over===roadId?{over:newId}:{}),
-      ...(t?{treatments:{...t,legs:remapRecord(t.legs),approaches:remapRecord(t.approaches),cornerRadii:remapRecord(t.cornerRadii),slips:t.slips?.map((x:LegSlip)=>({...x,from:remap(x.from),...(x.to?{to:remap(x.to)}:{})}))}}:{})};
+      ...(t?{treatments:{...t,legs:remapRecord(t.legs),approaches:remapRecord(t.approaches),cornerRadii:remapRecord(t.cornerRadii),connectors:remapConnectorOverrides(t.connectors,remap),slips:t.slips?.map((x:LegSlip)=>({...x,from:remap(x.from),...(x.to?{to:remap(x.to)}:{})}))}}:{})};
   });
   const notes:string[]=[];if(r.links?.length)notes.push('ล้างช่วงเปลี่ยนหน้าตัดของถนนเดิม');
   const common={...(r.alignment?{alignment:r.alignment}:{}),...(r.role?{role:r.role}:{}),...(r.roadside?{roadside:{...r.roadside}}:{}),...(r.origin?{origin:structuredClone(r.origin)}:{}),...(r.structureSection?{structureSection:structuredClone(r.structureSection)}:{}),section:structuredClone(r.section)};

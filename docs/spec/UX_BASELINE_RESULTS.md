@@ -1,5 +1,18 @@
 # UX Baseline Results
 
+### Manual connector editing — pointer priority (2026-10-26, scripted)
+
+Chromium on Windows, 1440 × 1000 and a 412 × 915 phone viewport. Supports GW-02 junction review/editing. No human completion time was measured; the scripted transaction time and exact actions are saved in `artifacts/design-browser-connector-actions.json`. Phone acceptance uses actual pointer hits for source/receiver/preview and cancellation, with the contextual controls below the view switch; it is not a physical touch-device trial.
+
+| Task, starting with a selected junction | Actions | Result / baseline comparison |
+| --- | --- | --- |
+| Replace one lane pairing | 5 | Open review → enter edit mode → select source → select receiver and preview → Confirm. The previous intended 4-action path failed because a corner-radius handle intercepted the source click. One explicit mode action now protects ordinary geometry editing. |
+| Read-only connector review | 1 | Review does not activate connector hit targets or interrupt normal corner editing. |
+| Cancel or Escape | 1 | Exits edit mode with identical project/history and the junction still selected. |
+| Undo / Redo a confirmed connector edit | 1 each | Whole authored override restored atomically; roads remain identical. |
+
+UX review: **PASS** for this correction. The mode and next step are visible in the contextual controls and status bar. Preview is separate from saved state, ordinary road drag/double-click cannot edit geometry in connector mode, and normal corner-radius dragging returns afterward. Pointer and Inspector edits use the same command. Thai labels use road names and lane descriptions. Entering editing brings a distant camera close enough to distinguish lane targets; 3D retains its own camera controls. Existing drawing, pocket and alternative workflow action counts are unchanged. Acceptance evidence: `verify-design-browser.mjs`, connector preview/confirmed/3D PNGs and overlay-free SVG under `artifacts/design-browser-connector-*`.
+
 Protocol: `UX_BASELINE_PROTOCOL.md`. Fill in during Phase 0B.
 
 ## Baseline (before consolidation)

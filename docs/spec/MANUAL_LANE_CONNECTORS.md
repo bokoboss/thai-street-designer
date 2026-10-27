@@ -1,0 +1,46 @@
+# Phase 4C PR D — Manual lane connector overrides
+
+Implementation baseline: main at \`cc92da29\` after PR #81. This document records the persisted data contract and acceptance limits; reference Issue #80.
+
+## Ownership and persistence
+
+\`Decision.treatments.connectors?\` stores an optional, bounded array of **authored differences** from the canonical automatic lane mapping. The old Road-first schema version remains unchanged because the field is optional and existing files do not gain it on open. Nothing stores a transient \`J-n\` identifier, arm slot or generated connector id.
+
+Each record has:
+- \`from: {leg: LegKey, role: 'main'|'aux-left'|'aux-right', laneIndex: number}\`
+- \`movement: 'left'|'through'|'right'\`
+- \`mode: 'replace'|'suppress'\`
+- \`to\` with the same lane-reference shape, required only for \`replace\`
+
+There is at most one record per source-lane + movement. \`reset\` removes the record, allowing generation again. \`suppress\` removes the generated mapping for that source/movement, but does not delete the lane or markings. \`replace\` selects a receiving lane by stable road-leg reference.
+
+\`connectorOverrideError\` validates record shape, finite integer lane indices, allowed roles/movements and duplicates on file open or command commit. Semantic checks (source/receiver existence, arrows, movement classification, Slip-owned left turn and same-approach receiver conflict) run against the current compiled junction using the PR C geometry resolver. An invalid *new* command is refused atomically. A previously authored entry that becomes invalid after a road edit remains stored and is shown for review and explicit reset. No lane geometry is changed on invalid data.
+
+## Rebinding and editor lifecycle
+
+- Road reverse, split and join remap **both** source and target \`LegKey\` using each existing transformation; no lane-index guessing is performed.
+- \`captureTreatments\` and the Advanced Junction editor roundtrip preserve connector overrides; the advanced editor does not own this field.
+- The typed command layer controls set, suppress and reset. Each completed command is one Undo/Redo step.
+- The Inspector allows the user to select a receiving lane from compatible candidate legs, suppress an individual connection, see manual/review status, and reset individual overrides. Standard plan geometry is unchanged.
+
+## Engineering scope
+
+A connection represents an **abstract lane pairing**, not a curved vehicle trajectory. It must not be exported as a certified swept path, simulated flow, conflict-free movement or capacity/LOS result. The Thai left-hand traffic bearing classification is a \`TO_VERIFY\` heuristic. Existing Slip geometry remains separately owned by the Slip engine. Roundabout circulation and physical U-turn paths remain out of scope.
+
+PR D changes are consumed by the Inspector and the plan review overlay. On a selected junction, the user can opt in to schematic 2D line pairings, click a connection, click a compatible receiving lane, and Confirm or Cancel (Esc). The same typed command commits changes. The 3D review uses the same derived world-space anchors and displayed lane pairing, offset above the junction surface as engineering review artwork; it is not baked into the road-marking texture. The report PNG/SVG export excludes the connector editor overlay. Generated/manual state is differentiated by dashed line colour and unresolved overrides remain listed for review. No curved swept path or second pavement geometry model is introduced.
+
+## Acceptance gates
+
+### Pointer interaction priority
+
+Connector review and connector editing are separate, explicit states. Review shows schematic pairings without adding pointer targets. From a selected junction, open review, choose **แก้การเชื่อมช่อง**, select a connection and a compatible receiver, inspect the preview, then Confirm. The status bar names the active mode and expected next input.
+
+Entering edit mode brings a distant camera closer to the selected junction so adjacent lane targets can be distinguished. While editing, connector source handles and receiving-lane targets own primary pointer interaction. Corner-radius handles are deferred, and plan capture handlers block unrelated pavement, road, point, junction, double-click and context-menu edits. Middle-button/Space panning and wheel zoom remain available. Outside this mode, the existing selection and geometry handlers are unchanged.
+
+Cancel or Escape exits editing to review and restores normal handles without changing the project or history. Confirm uses the existing atomic connector command. Changing the selected junction, tool, view or project clears the pending source/receiver, so a preview cannot survive Undo, a file open or a scenario change and later commit against stale state. Connector targets also support Tab and Enter/Space; the Inspector remains the exact receiving-lane alternative.
+
+`scripts/test-support/connector-browser.mjs`, called by the Design browser acceptance suite, checks actual Chromium pointer hits, preview/Confirm/Cancel/Escape, pavement drag protection, normal corner dragging, Undo/Redo, Save/Open, matching 2D/3D review counts and SVG export while a preview is active. It never calls React handlers. The overlay remains separate from pavement and the 3D road texture. Dense pairings may need zoom for visual inspection; they remain abstract lane pairing rather than vehicle paths.
+
+Run all existing regression scripts plus \`verify-manual-lane-connectors.cjs\`, TypeScript, Lint, Production Build and Browser Acceptance. New tests cover set/suppress/reset, arrows, Slip invariant, stale references and schema roundtrip, command atomicity, undo/redo and advanced editor capture. Existing road-transform regressions remain mandatory.
+
+Changes are merged only when GitHub Actions \`test-and-build\` and Vercel pass for the same latest commit. Do not infer real-world engineering correctness from a green build alone.

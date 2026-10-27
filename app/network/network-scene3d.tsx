@@ -5,6 +5,7 @@ import {anchorGround,groundAt,orbitGround} from '../junction/camera3d';
 import {clampZoom,PointerGesture} from '../junction/gestures';
 import {renderMapTexture,type MapProviderCredentials,type MapReference} from '../junction/map-background';
 import {projectBounds,type NetworkProject} from '@/core/network/network-project';
+import type {ConnectorReview} from '@/core/road-first/connector-review-geometry';
 import {
   ELEVATED,resolveElevatedLinkScene,resolveJunctionSceneFaces,resolveJunctionSceneSurfaces,resolveRoadLinkSceneFaces,resolveRoadLinkSceneSurfaces,type NetworkSceneSurfaceKind
 } from '@/core/network/network-scene-geometry';
@@ -18,8 +19,8 @@ const ZOOM_MIN=.1,ZOOM_MAX=40;
 type DragState={action:'pan'|'rotate';point:{x:number;y:number};screen:{x:number;y:number}}|null;
 
 export default function NetworkScene3D({
-  project,mapReference,mapCredentials,active,fitKey=0
-}:{project:NetworkProject;mapReference:MapReference;mapCredentials:MapProviderCredentials;active:boolean;fitKey?:number}){
+  project,mapReference,mapCredentials,active,fitKey=0,connectorReview=null
+}:{project:NetworkProject;mapReference:MapReference;mapCredentials:MapProviderCredentials;active:boolean;fitKey?:number;connectorReview?:ConnectorReview|null}){
   const canvas=useRef<HTMLCanvasElement>(null),drag=useRef<DragState>(null),gestures=useRef(new PointerGesture()),modeRef=useRef<CameraMode>('pan'),
     [size,setSize]=useState<Size>({w:900,h:650}),[yaw,setYaw]=useState(rememberedCamera?.yaw??-35),[pitch,setPitch]=useState(rememberedCamera?.pitch??52),[zoom,setZoom]=useState(rememberedCamera?.zoom??.92),
     [pan,setPan]=useState(rememberedCamera?.pan??{x:0,y:0}),[mode,setMode]=useState<CameraMode>('pan'),
@@ -165,7 +166,22 @@ export default function NetworkScene3D({
     for(const face of [...furnitureFaces].sort((u,v)=>depth(u)-depth(v))){
       const ps=face.points.map(q=>projectPoint(q.x,q.y,q.z));ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle=face.color;ctx.fill();
     }
-  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces,elevated]);
+    // Screen-space engineering review overlay, AFTER pavement/furniture. Never baked into plan texture
+    // or interpreted as lane markings, a swept path, traffic capacity or physical connector geometry.
+    if(connectorReview?.lines.length){
+      ctx.save();ctx.setLineDash([6,6]);ctx.lineWidth=2;
+      for(const line of connectorReview.lines){
+        const a=projectPoint(line.start.x,line.start.y,connectorReview.elevation+1.2),
+          b=projectPoint(line.end.x,line.end.y,connectorReview.elevation+1.2);
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+        ctx.strokeStyle=line.origin==='manual'?'#24c6ad':'#f5bb48';ctx.stroke();
+        ctx.setLineDash([]);ctx.fillStyle=line.origin==='manual'?'#24c6ad':'#f5bb48';
+        for(const p of [a,b]){ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();}
+        ctx.setLineDash([6,6]);
+      }
+      ctx.restore();
+    }
+  },[active,size,yaw,pitch,zoom,pan,extent,center.x,center.y,mapImage,mapReference.opacity,detailImage,junctionSurfaces,linkSurfaces,furnitureFaces,elevated,connectorReview]);
 
   function begin(e:React.PointerEvent<HTMLCanvasElement>){
     const action=e.pointerType==='mouse'
@@ -213,7 +229,18 @@ export default function NetworkScene3D({
       data-network-camera-zoom={zoom.toFixed(4)} data-network-camera-pan-x={pan.x.toFixed(5)} data-network-camera-pan-y={pan.y.toFixed(5)}
       onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
       onAuxClick={e=>e.preventDefault()} onContextMenu={e=>e.preventDefault()} onWheel={wheel} onDoubleClick={fitView}/>
-    <div className="network-scene-note"><b>มุมมอง 3D ของโครงข่าย</b><span>ลากซ้าย = {mode==='pan'?'เลื่อน':'หมุน'} · ลากปุ่มกลาง = เลื่อน · ลากขวาหรือ Shift+ลาก = หมุน · ล้อเมาส์ = ซูม</span>{mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}</div>
+    <div className="network-scene-note">
+      <b>มุมมอง 3D ของโครงข่าย</b>
+      {connectorReview&&<span data-network-connector-review="true"
+        data-network-connector-count={connectorReview.lines.length}
+        data-network-connector-manual={connectorReview.lines.filter(l=>l.origin==='manual').length}
+        data-network-connector-unresolved={connectorReview.unresolved}>
+        เส้นประสีเหลือง/เขียวเป็นการจับคู่ช่องสำหรับตรวจแบบเท่านั้น ไม่ใช่เครื่องหมายถนนหรือแนวรถวิ่ง
+        {connectorReview.unresolved>0&&<> · มีรายการกำหนดเองที่ต้องตรวจ {connectorReview.unresolved} รายการ</>}
+      </span>}
+      <span>ลากซ้าย = {mode==='pan'?'เลื่อน':'หมุน'} · ลากปุ่มกลาง = เลื่อน · ลากขวาหรือ Shift+ลาก = หมุน · ล้อเมาส์ = ซูม</span>
+      {mapReference.enabled&&<span>{mapImage?'แสดงแผนที่อ้างอิงบนพื้น':'กำลังเตรียมแผนที่…'}</span>}
+    </div>
     <div className="network-scene-tools">
       <div className="network-camera-mode">
         <button data-network-camera-control="pan" aria-pressed={mode==='pan'} onClick={()=>setCameraMode('pan')}>Pan</button>

@@ -8,6 +8,7 @@ import {remapRanges,remapRuns} from './lane-runs';
 import {remapStretches} from './section-stretches';
 import {reverseStructureSection} from './structure-sections';
 import {parseLegKey,legKey,type LegKey,type LegSlip} from './leg-binding';
+import {remapConnectorOverrides} from './lane-connector-overrides';
 
 const r3=(v:number)=>Math.round(v*1000)/1000;
 type Out={roads:Road[];decisions:Decision[];notes:string[]}|{error:string};
@@ -17,7 +18,7 @@ function flipLegs(decisions:Decision[],roadId:string):Decision[]{
   const flip=(key:LegKey):LegKey=>{const l=parseLegKey(key);return l&&l.roadId===roadId?legKey(roadId,l.side==='ahead'?'behind':'ahead'):key;};
   const rec=<T>(r?:Partial<Record<LegKey,T>>)=>r&&Object.fromEntries(Object.entries(r).map(([k,v])=>[flip(k as LegKey),v])) as Partial<Record<LegKey,T>>;
   return decisions.map(d=>{const t=d.treatments;if(!t)return d;
-    return{...d,treatments:{...t,...(t.legs?{legs:rec(t.legs)}:{}),...(t.approaches?{approaches:rec(t.approaches)}:{}),...(t.cornerRadii?{cornerRadii:rec(t.cornerRadii)}:{}),...(t.slips?{slips:t.slips.map((s:LegSlip)=>({...s,from:flip(s.from),...(s.to?{to:flip(s.to)}:{})}))}:{})}};});
+    return{...d,treatments:{...t,...(t.legs?{legs:rec(t.legs)}:{}),...(t.approaches?{approaches:rec(t.approaches)}:{}),...(t.cornerRadii?{cornerRadii:rec(t.cornerRadii)}:{}),...(t.connectors?{connectors:remapConnectorOverrides(t.connectors,flip)}:{}),...(t.slips?{slips:t.slips.map((s:LegSlip)=>({...s,from:flip(s.from),...(s.to?{to:flip(s.to)}:{})}))}:{})}};});
 }
 
 /**

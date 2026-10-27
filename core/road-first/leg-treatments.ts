@@ -27,7 +27,8 @@ export function captureTreatments(roads:Road[],decisions:Decision[],edited:Netwo
     const id=`J-${index+1}`,base=plain.project.junctions.find(j=>j.id===id),mine=edited.junctions.find(j=>j.id===id);
     if(!base||!mine)return d;
     const legs=plain.legs.filter(l=>l.junctionId===id),keyOf=(armId:number)=>{const l=legs.find(x=>x.armId===armId);return l?legKey(l.roadId,l.side):undefined;};
-    const treatments:JunctionTreatments=d.treatments?.approaches?{approaches:structuredClone(d.treatments.approaches)}:{};
+    const treatments:JunctionTreatments={...(d.treatments?.approaches?{approaches:structuredClone(d.treatments.approaches)}:{}),
+      ...(d.treatments?.connectors?{connectors:structuredClone(d.treatments.connectors)}:{})};
     const legTreatments:Partial<Record<LegKey,LegTreatment>>={};
     for(const leg of legs){
       const a=mine.design.arms[leg.armId],b=base.design.arms[leg.armId],key=legKey(leg.roadId,leg.side),t:LegTreatment={};

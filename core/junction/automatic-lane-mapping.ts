@@ -47,6 +47,30 @@ const turnsOf=(code:LaneArrowCode):AutoTurn[]=>{
 };
 const hasUturn=(code:LaneArrowCode)=>code==='uturn'||code==='ru'||code==='su';
 const expectedTurn=(turn:AutoTurn)=>turn==='left'?-90:turn==='right'?90:0;
+
+/** Candidate receiving arms for an authored connector. Uses the same Thai LHT
+ * bearings and reciprocal through-leg heuristic as the automatic mapper.
+ * Multiple candidates are intentionally allowed for explicit user review. */
+export function eligibleTurnTargets(d:Design,fromArm:number,movement:AutoTurn):number[]{
+  const ids=activeIds(d);
+  if(d.type==='roundabout'||!ids.includes(fromArm))return[];
+  const exits=(from:number)=>ids.filter(to=>to!==from).map(toArm=>({
+    toArm,deflection:signedAngle(d.arms[toArm].angle-d.arms[from].angle-180)
+  })).sort((a,b)=>Math.abs(a.deflection)-Math.abs(b.deflection));
+  const nearest=(from:number)=>{
+    const list=exits(from),first=list[0];
+    return first&&Math.abs(first.deflection)<=45
+      &&(!list[1]||Math.abs(list[1].deflection)-Math.abs(first.deflection)>=10)?first.toArm:undefined;
+  };
+  const opposite=nearest(fromArm);
+  const throughExit=opposite!==undefined&&nearest(opposite)===fromArm?opposite:undefined;
+  return exits(fromArm).filter(target=>turnOf(target.deflection,target.toArm===throughExit)===movement)
+    .sort((a,b)=>Math.abs(a.deflection-expectedTurn(movement))-Math.abs(b.deflection-expectedTurn(movement))||a.toArm-b.toArm)
+    .map(target=>target.toArm);
+}
+/** Arrow permission for manual overrides, shared with the generated mapper. */
+export const arrowAllowsMovement=(code:LaneArrowCode,movement:AutoTurn)=>turnsOf(code).includes(movement);
+
 const rankOf=(role:LaneRole,laneIndex:number,mainCount:number)=>
   role==='aux-right'?-10+laneIndex:role==='aux-left'?mainCount+laneIndex:laneIndex;
 

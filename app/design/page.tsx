@@ -15,6 +15,8 @@ import {useReferenceImage} from './use-reference-image';
 import {useMapReference} from './map-panel';
 import {emptyRoadFirstProject,useRoadEditor} from './use-road-editor';
 import {detectCandidates} from '@/core/road-first/derive';
+import {connectorReviewGeometry} from '@/core/road-first/connector-review-geometry';
+import {legKey} from '@/core/road-first/leg-binding';
 import {matchingPreset,presetSection} from '@/core/road-first/presets';
 import {RAMP_SECTION,project as projectOnRoad} from '@/core/road-first/ramps';
 import {DRAW_LEVEL_STEP,drawnProfile,levelAt} from '@/core/road-first/elevation';
@@ -48,6 +50,7 @@ const TOOL_HINT:Record<DesignTool,string>={
 export default function DesignWorkspace(){
   const ed=useRoadEditor();
   const [alignmentReview,setAlignmentReview]=useState(false);
+  const [connectorHint,setConnectorHint]=useState<string|null>(null);
   const [tool,setTool]=useState<DesignTool>('select'),[selection,setSelection]=useState<DesignSelection>(null);
   const [draft,setDraft]=useState<WorldPoint[]>([]),[typedLength,setTypedLength]=useState('');
   // Drawing that starts on a road end continues that road instead of adding a new one.
@@ -83,6 +86,16 @@ export default function DesignWorkspace(){
   const fileInput=useRef<HTMLInputElement>(null),loaded=useRef(false);
   const candidates=useMemo(()=>detectCandidates(ed.project.roads),[ed.project.roads]);
   const selectedRoad=selection?.kind==='road'?ed.project.roads.find(r=>r.id===selection.id):undefined;
+  const connector3dReview=useMemo(()=>{
+    if(!selection||(selection.kind!=='junction'&&selection.kind!=='approach'))return null;
+    const jid=Object.keys(ed.compiled.sources.junctions).find(k=>ed.compiled.sources.junctions[k]===selection.id);
+    const junction=ed.compiled.project.junctions.find(j=>j.id===jid);
+    const decision=ed.project.decisions.find(d=>d.candidateId===selection.id);
+    if(!junction||junction.design.type==='roundabout')return null;
+    const bindings=ed.compiled.legs.filter(l=>l.junctionId===jid)
+      .map(l=>({armId:l.armId,leg:legKey(l.roadId,l.side)}));
+    return connectorReviewGeometry(junction,bindings,decision?.treatments?.connectors);
+  },[selection,ed.compiled,ed.project.decisions]);
   const openCrossings=candidates.filter(c=>!ed.project.decisions.some(d=>d.candidateId===c.id)).length;
 
   // Select the junction whose advanced edits were just brought back.
@@ -286,7 +299,7 @@ export default function DesignWorkspace(){
         {tool==='select'&&<button data-design-multi-select aria-pressed={multiAdd} className={multiAdd?'active':''} onClick={()=>setMultiAdd(v=>!v)} title="เลือกหลายชิ้น: แตะหรือคลิกเพื่อเพิ่ม / เอาออก (เหมือนกด Shift ค้าง)"><Layers size={18}/><span>เลือกหลายชิ้น</span></button>}
       </nav>
       <div className="design-center">
-        <DesignCanvas multiAdd={multiAdd} onMenu={setMenu} project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
+        <DesignCanvas active={view==='2d'} onConnectorHint={setConnectorHint} multiAdd={multiAdd} onMenu={setMenu} project={ed.project} compiled={ed.compiled} selection={selection} onSelect={select} tool={tool} draft={draft} onDraftChange={addDraftPoint} onFinishDraft={finishDraft} onDraftBack={draftBack} checkDraft={checkDraft} onSnap={s=>{snapRef.current=s;}} typedLength={typedLength} ghost={ghost} snapCycle={snapCycle} snapOff={snapOff} spacePan={spacePan} drawLevel={level} draftLevels={draftLevels} run={ed.run} finishGesture={ed.finishGesture} fitKey={fitKey} comparison={comparison} svgRef={planSvg} referenceImage={image.has?{reference:image.reference,url:image.url}:null} onReferenceMove={at=>image.update(at)} calibration={calibration} onCalibratePoint={p=>setCalibration(c=>c.length>=2?[p]:[...c,p])} map={{reference:map.reference,credentials:map.credentials}} onMapMove={o=>map.update({offsetX:o.x,offsetY:o.y})} focusKey={focusKey}/>
         {menu&&<SelectMenu at={menu} items={menuItems(ed.project,selectedRoadIds(selection),menu)} onAction={a=>selectionAction(a,menu)} onClose={()=>setMenu(null)}/>}
         {/* Drawing buttons for touch and narrow screens (no right-click, Backspace, Enter or Shift there). */}
         {tool==='road'&&view==='2d'&&<div className="design-draw-actions" data-design-draw-actions="true">
@@ -315,7 +328,7 @@ export default function DesignWorkspace(){
           onImage={f=>{void image.add(f,{x:0,y:0});setSelection(null);setInspectorOpen(true);}}
           onBlank={()=>{chooseTool('road');document.querySelector<HTMLElement>('[data-design-workspace]')?.focus();}}/>}
         {selectedRoad&&view==='2d'&&<SectionStrip key={selectedRoad.id} road={selectedRoad} compiled={ed.compiled} project={ed.project} run={ed.run} finishGesture={ed.finishGesture}/>}
-        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d}/>}
+        {view==='3d'&&<NetworkScene3D project={ed.compiled.project} mapReference={map.reference} mapCredentials={map.credentials} active fitKey={fit3d} connectorReview={connector3dReview}/>}
         <div className="design-view-toggle" role="group" aria-label="มุมมอง">
           {(['2d','3d'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} data-design-view={v} onClick={()=>{setView(v);if(v==='3d')chooseTool('select');}}>{v==='2d'?'แบบ 2 มิติ':'3 มิติ'}</button>)}
         </div>
@@ -327,7 +340,7 @@ export default function DesignWorkspace(){
       </TemplateContext.Provider>
     </div>
     <footer className="design-status">
-      <span className="design-hint" data-design-hint="true">{tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool]}</span>
+      <span className="design-hint" data-design-hint="true">{connectorHint??(tool==='select'&&(selection?.kind==='junction'||selection?.kind==='approach')?JUNCTION_HINT:TOOL_HINT[tool])}</span>
       {ed.notice.text&&<span className={'design-notice '+ed.notice.kind} data-design-notice={ed.notice.kind}>{ed.notice.text}</span>}
       <span className="design-status-right">
         {openCrossings>0&&<button className="design-open-crossings" data-design-open-crossings={openCrossings} onClick={()=>{const c=candidates.find(x=>!ed.project.decisions.some(d=>d.candidateId===x.id));if(c){setTool('select');setSelection({kind:'crossing',id:c.id});}}}>จุดตัดที่ยังไม่เป็นทางแยก {openCrossings}</button>}
