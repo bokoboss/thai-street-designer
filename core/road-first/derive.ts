@@ -207,14 +207,14 @@ function crossingPairs(roads:Road[],decisions:Decision[],byId:Map<string,Candida
     const gap=top&&bottom?round(top.z-bottom.z,2):0,relation=top&&gap>LEVEL_TOLERANCE?'over' as const:'unresolved' as const;
     // Measure the actual overlap footprint: deck section on the upper bridge,
     // tunnel section on the lower tunneled road. Ground over a tunnel remains unchanged.
-    const tunnel=!!bottom&&bottom.z<-LEVEL_TOLERANCE;
+    const tunnel=relation==='over'&&!!bottom&&bottom.z<-LEVEL_TOLERANCE;
     const effective=(end:PairEnd)=>({...end.r,section:(tunnel?end===bottom:end===top)?structureRoadSection(end.r):end.r.section});
     const clearance=relation==='over'&&top&&bottom?measureClearance(effective(top),effective(bottom),top.ref.station,bottom.ref.station,criteria):undefined;
     // Structure extents: the measured overlap plus an abutment / portal margin (display, tool value).
     const extent=(on:PairEnd,other:PairEnd,span:[number,number]|undefined):[number,number]=>{const half=sectionWidth(other.r.section)/2+margin,len=stations(on.r.points,on.r.alignment).at(-1)??0;
       return[Math.max(0,span?span[0]-margin:on.ref.station-half),Math.min(len,span?span[1]+margin:on.ref.station+half)];};
-    const deckSpan=top&&bottom?extent(top,bottom,clearance?.spanOver):undefined;
-    const tunnelSpan=top&&bottom&&bottom.z<-LEVEL_TOLERANCE?extent(bottom,top,clearance?.spanUnder):undefined;
+    const deckSpan=relation==='over'&&top&&bottom?extent(top,bottom,clearance?.spanOver):undefined;
+    const tunnelSpan=relation==='over'&&top&&bottom&&bottom.z<-LEVEL_TOLERANCE?extent(bottom,top,clearance?.spanUnder):undefined;
     out.push({d,c,ra,rb,top,bottom,gap,relation,...(clearance?{clearance}:{}),...(deckSpan?{deckSpan}:{}),...(tunnelSpan?{tunnelSpan}:{})});
   };
   for(const d of decisions){
@@ -380,7 +380,9 @@ export function compileRoadNetwork(roads:Road[],decisions:Decision[],options:Com
   // Grade-separated pairs, resolved before the links: which road is on top, the measured clearance and the structure
   // extents in road stations (a road's section on its structures is built along its links).
   const criteria=levelCriteria(options.levels),pairs=crossingPairs(roads,decisions,byId,roadById,criteria);
-  const structures:StructureExtent[]=pairs.flatMap(p=>[
+  // An unresolved level choice is not a physical bridge/tunnel, even if an `over` road is nominated.
+  // Without this gate, dormant structure sections generate phantom lane/width transitions in 2D and 3D.
+  const structures:StructureExtent[]=pairs.filter(p=>p.relation==='over').flatMap(p=>[
     // A road at grade over a tunnel keeps its section (the tunnel roof is not a deck to build on here).
     ...(p.top&&p.deckSpan&&!p.tunnelSpan?[{roadId:p.top.r.id,kind:'deck' as const,from:p.deckSpan[0],to:p.deckSpan[1],crossing:p.d.candidateId}]:[]),
     ...(p.bottom&&p.tunnelSpan?[{roadId:p.bottom.r.id,kind:'tunnel' as const,from:p.tunnelSpan[0],to:p.tunnelSpan[1],crossing:p.d.candidateId}]:[])]);

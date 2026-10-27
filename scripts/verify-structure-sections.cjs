@@ -59,4 +59,62 @@ fresh();{const C=comp();assert.equal(linkOf(C,'U').components.length,0);assert.e
 {run({type:'road.setStructureSection',roadId:'U',section:{...BR,forwardLanes:3}});run({type:'road.reverse',roadId:'U'});
  assert.deepEqual([R('U').structureSection.forwardLanes,R('U').structureSection.backwardLanes],[2,3]);run({type:'road.reverse',roadId:'U'});
  run({type:'road.split',roadId:'U',at:{x:0,y:-300},newId:'U2'});assert.deepEqual(R('U2').structureSection,R('U').structureSection);}
+// 7. An unresolved crossing with a chosen upper road is NOT a built bridge.
+// Its authored structure section stays saved but cannot change link widths, 2D deck
+// or 3D faces until real elevation gives a resolved crossing.
+{
+ const p={kind:'road-first',schemaVersion:3,title:'pending crossing',options:{},
+   roads:[
+     {id:'L',name:'Lower',points:[{x:-400,y:0},{x:400,y:0}],section:structuredClone(sec)},
+     {id:'U',name:'Upper',points:[{x:0,y:-400},{x:0,y:400}],section:structuredClone(sec),structureSection:structuredClone(BR)}
+   ],decisions:[]};
+ const id=dv.detectCandidates(p.roads)[0].id;
+ p.decisions=[{candidateId:id,decision:'grade-separated',over:'U',roads:['L','U'],at:{x:0,y:0}}];
+ const scene=T('core/network/network-scene-geometry.cjs');
+ const structureParts=(C)=>C.project.links.filter(l=>C.linkRanges.some(x=>x.id===l.id&&x.roadId==='U'))
+   .flatMap(l=>l.components.filter(x=>x.id.startsWith('st-structure-')));
+ const pending=rp.compileRoadFirstProject(p);
+ assert.equal(pending.crossings[0].relation,'unresolved');
+ assert.deepEqual(pending.structures,[],'unresolved crossing has no physical structure extents');
+ assert.equal(pending.project.crossings[0].deck,undefined,'plan has no phantom deck');
+ assert.equal(pending.project.crossings[0].tunnel,undefined,'plan has no phantom tunnel');
+ assert.equal(structureParts(pending).length,0,'pending bridge does not change section widths or lanes');
+ assert.equal(scene.resolveElevatedLinkScene(pending.project).faces.length,0,'3D has no phantom structure');
+ assert.deepEqual(rp.normalizeRoadFirstProject(JSON.parse(JSON.stringify(p))),p,'dormant settings survive reopen');
+
+ // Even an incorrectly nominated "upper" road at a lower elevation stays unresolved.
+ const lower=structuredClone(p);
+ lower.roads[1].profile=[{station:0,z:-3},{station:800,z:-3}];
+ const reversed=rp.compileRoadFirstProject(lower);
+ assert.equal(reversed.crossings[0].relation,'unresolved');
+ assert.equal(reversed.structures.length,0);
+ assert.equal(structureParts(reversed).length,0);
+
+ const proposed=gs.overCommand(p,id,'U');assert.ok(proposed.cmd,proposed.error);
+ const placed=c.executeCommand(p,proposed.cmd);assert.equal(placed.error,null,placed.error);
+ const bridge=rp.compileRoadFirstProject(placed.project);
+ assert.equal(bridge.crossings[0].relation,'over');
+ assert.ok(bridge.project.crossings[0].deck,'2D plan receives the real bridge deck');
+ assert.equal(ss.structureSpans(bridge,'U').length,1,'the saved custom section activates on a real bridge');
+ assert.ok(structureParts(bridge).length>0,'bridge structure section affects actual link geometry');
+ assert.ok(scene.resolveElevatedLinkScene(bridge.project).faces.some(f=>f.layer==='deck'),'3D renders real deck faces');
+
+ const restored=c.executeCommand(placed.project,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.equal(restored.error,null,restored.error);
+ const back=rp.compileRoadFirstProject(restored.project);
+ assert.equal(back.project.junctions.length,1,'the at-grade junction is rebuilt');
+ assert.equal(back.project.crossings?.length??0,0,'no bridge objects remain in 2D/3D');
+ assert.equal(back.structures.length,0);
+ assert.equal(structureParts(back).length,0,'the custom bridge width is dormant at grade');
+ assert.equal(scene.resolveElevatedLinkScene(back.project).faces.length,0,'restored ground has no 3D bridge faces');
+ assert.deepEqual(restored.project.roads.find(r=>r.id==='U').structureSection,BR,
+   'authored structure settings are retained, not deleted on restore');
+ assert.ok(back.issues.some(i=>i.includes('หน้าตัดบนโครงสร้างตั้งไว้แต่ถนนนี้ไม่มีสะพาน')),
+   'retained dormant settings are explicitly reported for review');
+ const again=gs.overCommand(restored.project,id,'U');assert.ok(again.cmd,again.error);
+ const replay=c.executeCommand(restored.project,again.cmd);assert.equal(replay.error,null,replay.error);
+ assert.equal(ss.structureSpans(rp.compileRoadFirstProject(replay.project),'U').length,1,
+   'custom section reactivates with the next explicit bridge proposal');
+}
+
 console.log('PASS structure sections: old files unchanged, bridge section over the deck with transitions outside it (plan geometry, deck width, deterministic, save / reopen, one undo), extra lane on a bridge, tunnel, listed when there is no structure, refusals, reverse / split');
