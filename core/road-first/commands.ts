@@ -120,6 +120,57 @@ export function rebindDecisions(before:Road[],after:Road[],decisions:Decision[])
   const dormantId=(id:string)=>{if(id.startsWith(DORMANT_PREFIX))return id;let n=1;while(used.has(`${DORMANT_PREFIX}${n}:${id}`))n++;const next=`${DORMANT_PREFIX}${n}:${id}`;used.add(next);return next;};
   return pending.map(p=>out.get(p.d)??{...p.d,candidateId:dormantId(p.d.candidateId),...(p.at?{at:p.at}:{})});
 }
+/** Refuse geometry edits that detach a generated bridge rise/dip from its crossing station.
+ * Compares PVI positions relative to the crossing, so translating all roads, extending a road,
+ * and reversing its drawing direction stay supported. Never attempt silent PVI re-stationing.
+ */
+export function gradeOwnerRebindError(before:RoadFirstProject,after:RoadFirstProject,cmd:RoadFirstCommand):string|null{
+  const oldCandidates=new Map(detectCandidates(before.roads).map(x=>[x.id,x]));
+  const newCandidates=new Map(detectCandidates(after.roads).map(x=>[x.id,x]));
+  for(const previous of before.decisions){
+    if(previous.decision!=='grade-separated'||!previous.profileOwner)continue;
+    const owner=previous.profileOwner;
+    const originals=before.roads.filter(r=>r.profile?.some(p=>p.generatedBy===owner));
+    if(!originals.length)continue;
+    const old=oldCandidates.get(previous.candidateId);
+    const current=after.decisions.find(d=>d.profileOwner===owner);
+    // A removed crossing must not leave behind owner-tagged profile points on remaining roads.
+    if(!current){
+      if(after.roads.some(r=>r.profile?.some(p=>p.generatedBy===owner)))
+        return 'ย้ายหรือถอดถนนไม่ได้: แนวดิ่งสะพาน/ทางลอดที่สร้างไว้ยังมีเจ้าของเดิม — คืนจุดตัดเป็นทางแยกก่อน';
+      continue;
+    }
+    const newer=newCandidates.get(current.candidateId);
+    if(!old||!newer)return 'ย้ายจุดตัดไม่ได้: แนวดิ่งสะพาน/ทางลอดเดิมยังค้างอยู่ — คืนระดับหรือจัดการจุดตัดก่อน';
+    const affected=(id:string)=>old.roads.some(ref=>ref.roadId===id);
+    if(cmd.type==='road.join'&&(affected(cmd.roadId)||affected(cmd.otherId)))
+      return 'รวมถนนที่มีแนวดิ่งสะพาน/ทางลอดอัตโนมัติไม่ได้ — คืนระดับก่อนเพื่อไม่ให้ Station คลาดเคลื่อน';
+    for(const oldRoad of originals){
+      // A split may move the crossing to the downstream road. Allow it only when
+      // *all* owned PVIs follow that crossing and their relative station is unchanged.
+      const targetId=cmd.type==='road.split'&&oldRoad.id===cmd.roadId
+        &&newer.roads.some(x=>x.roadId===cmd.newId)?cmd.newId:oldRoad.id;
+      const originalRef=old.roads.find(x=>x.roadId===oldRoad.id),
+        ref=newer.roads.find(x=>x.roadId===targetId);
+      const road=after.roads.find(x=>x.id===targetId);
+      if(!originalRef||!ref||!road)return 'ถนนหรือขาจุดตัดที่รองรับแนวดิ่งสะพานเปลี่ยน — คืนระดับก่อนแก้แนว';
+      // Explicit edits to a vertical profile are handled by authoredProfile and the standard
+      // command checks; this safety guard addresses unrequested repositioning by horizontal edits.
+      if(cmd.type==='road.setProfile')continue;
+      const oldPoints=oldRoad.profile!.filter(q=>q.generatedBy===owner),
+        nextPoints=(road.profile??[]).filter(q=>q.generatedBy===owner);
+      if(!nextPoints.length)return 'จุดระดับสะพานที่ระบบสร้างไว้ไม่อยู่บนถนนที่รองรับจุดตัดแล้ว — คืนระดับก่อนแก้แนว';
+      if(oldPoints.length!==nextPoints.length)return 'แนวดิ่งสะพานกระจายไปคนละช่วงถนนหรือจำนวนจุดเปลี่ยน — คืนระดับก่อนแบ่งถนนใหม่';
+      const flipped=cmd.type==='road.reverse'&&cmd.roadId===oldRoad.id;
+      const oldOffsets=oldPoints.map(q=>(q.station-originalRef.station)*(flipped?-1:1)).sort((a,b)=>a-b);
+      const nextOffsets=nextPoints.map(q=>q.station-ref.station).sort((a,b)=>a-b);
+      if(oldOffsets.some((offset,i)=>Math.abs(offset-nextOffsets[i])>.05))
+        return `${oldRoad.name}: จุดตัดขยับจากแนวดิ่งสะพานที่สร้างไว้ — ไม่รับการแก้แนวถนนนี้ กรุณาคืนระดับก่อนแล้วแก้แนวใหม่`;
+    }
+  }
+  return null;
+}
+
 export const DORMANT_PREFIX='dormant:';
 export const LEFT_WITH_SLIP='ปากทางนี้มี Slip lane เลี้ยวซ้ายแล้ว — ใช้ช่องชะลอก่อนเข้า Slip แทนเลนเลี้ยวซ้าย';
 export const SLIP_WITH_LEFT='ปากทางนี้มีเลนเลี้ยวซ้ายแล้ว — ลบเลนเลี้ยวซ้ายก่อนเพิ่ม Slip lane (ใช้ช่องชะลอก่อนเข้า Slip แทนได้)';
@@ -469,6 +520,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
   const overflowBefore=new Set(compileRoadFirstProject(project).overflow);
   if(roadsChanged){
     p.decisions=rebindDecisions(project.roads,p.roads,p.decisions);
+    const gradeRebind=gradeOwnerRebindError(project,p,cmd);if(gradeRebind)return fail(gradeRebind,label);
     // A road that now passes through or ends at an existing junction joins it when the junction can take it;
     // otherwise it stays out and is reported. A road the junction already left out on purpose is not added back.
     const before=new Map(detectCandidates(project.roads).map(c=>[c.id,c.roads.map(r=>r.roadId)]));

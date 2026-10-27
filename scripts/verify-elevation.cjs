@@ -36,10 +36,23 @@ assert.ok(e.project.roads.find(q=>q.id==='R1').profile.length>=4,'R1 has a rise 
 // 4. One undo reverts relation and profile.
 e=c.undo(e).editor;assert.equal(comp().crossings[0].over,'R2');assert.equal(e.project.roads.find(q=>q.id==='R1').profile,undefined);
 e=c.redo(e).editor;assert.equal(comp().crossings[0].over,'R1');
-// 3. Moving an alignment recomputes the crossing deterministically.
-run({type:'road.movePoint',roadId:'R2',index:0,point:{x:40,y:-300}});run({type:'road.movePoint',roadId:'R2',index:1,point:{x:40,y:300}});
-const a1=JSON.stringify(comp().crossings),a2=JSON.stringify(comp().crossings);assert.equal(a1,a2,'deterministic');
-assert.ok(Math.abs(comp().crossings[0].point.x-40)<.01,'crossing moved with the road');
+// 3. An owner-generated rise is station-bound. A horizontal edit must not move the
+// crossing away from it; an independently authored, already elevated road is still movable.
+const refused=c.executeCommand(e.project,{type:'road.movePoint',roadId:'R2',index:0,point:{x:40,y:-300}});
+assert.match(refused.error,/จุดตัดขยับจากแนวดิ่งสะพาน/,'moving the crossing away from an owned bridge needs re-plan');
+assert.deepEqual(refused.project,e.project,'refusal leaves bridge and alignment untouched');
+const independent={...e.project,
+ roads:e.project.roads.map(r=>{if(r.id!=='R1')return r;const {profile:_profile,...rest}=r;return rest;}),
+ decisions:e.project.decisions.map(d=>{const {profileOwner:_owner,...rest}=d;return{...rest,over:'R2'};})};
+const moveA=c.executeCommand(independent,{type:'road.movePoint',roadId:'R2',index:0,point:{x:40,y:-300}});
+assert.equal(moveA.error,null,moveA.error);
+const moveB=c.executeCommand(moveA.project,{type:'road.movePoint',roadId:'R2',index:1,point:{x:40,y:300}});
+assert.equal(moveB.error,null,moveB.error);
+const a1=JSON.stringify(rp.compileRoadFirstProject(moveB.project).crossings),
+  a2=JSON.stringify(rp.compileRoadFirstProject(moveB.project).crossings);
+assert.equal(a1,a2,'crossing geometry remains deterministic after independent-profile edits');
+assert.ok(Math.abs(rp.compileRoadFirstProject(moveB.project).crossings[0].point.x-40)<.01,
+  'non-owned grade-separated crossing moves with the road');
 // Unresolved: equal levels on a grade separation; contradicting choice.
 const flat=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[{id:'A',name:'A',points:[{x:-100,y:0},{x:100,y:0}],section:sec},{id:'B',name:'B',points:[{x:0,y:-100},{x:0,y:100}],section:sec}]});
 let f=c.endGesture(c.runCommand(flat,{type:'road.add',road:{id:'tmp',name:'t',points:[{x:900,y:900},{x:950,y:900}],section:sec}}).editor);
