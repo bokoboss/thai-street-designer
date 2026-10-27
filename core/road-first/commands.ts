@@ -281,7 +281,8 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
         if(profile?.some(q=>q.curveLength!==undefined||q.generatedBy!==undefined))p.schemaVersion=3;
       }
       const d=decision(c.id),next:Decision={...d,profileOwner:owner,candidateId:c.id,decision:'grade-separated',over:cmd.over,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
-      delete next.treatments;delete next.name;
+      // Junction-authored details become dormant at a grade separation and must survive restoration.
+      // Do not rewrite them or change ordinary road geometry in this operation.
       p.schemaVersion=3;p.decisions=[...p.decisions.filter(x=>x!==d),next];label=cmd.label;break;
     }
     case 'road.setRoadside':{
@@ -329,10 +330,39 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
     }
     case 'crossing.decide':{
       const c=detectCandidates(p.roads).find(x=>x.id===cmd.candidateId);if(!c)return fail('ไม่พบจุดตัดที่เลือก');
-      const names=c.roads.map(x=>road(x.roadId)?.name??x.roadId).join(' × '),d=decision(c.id);
+      const names=c.roads.map(x=>road(x.roadId)?.name??x.roadId).join(' ×'),d=decision(c.id);
+      // Restore grade-separated work as one atomic transaction. Never flatten authored elevations:
+      // only the exact owner-tagged rise/dip is reversible, and residual road levels must meet.
+      if(cmd.decision==='junction'&&d?.decision==='grade-separated'){
+        if(c.kind!=='cross'||c.roads.length!==2)return fail('คืนเป็นทางแยกระดับดินได้เฉพาะจุดตัดของถนนสองสาย — ตรวจส่วนที่ซ้อนก่อน');
+        if(d.profileOwner){
+          const owner=d.profileOwner;
+          for(const r of p.roads){
+            if(!r.profile?.some(q=>q.generatedBy===owner))continue;
+            const kept=r.profile.filter(q=>q.generatedBy!==owner);
+            if(kept.length)r.profile=kept;else delete r.profile;
+          }
+        }
+        const levels=c.roads.map(ref=>levelAt(road(ref.roadId)?.profile,ref.station));
+        const gap=Math.max(...levels)-Math.min(...levels);
+        if(gap>LEVEL_TOLERANCE)return fail(`คืนทางแยกไม่ได้: ระดับถนนยังต่างกัน ${gap.toFixed(2)} ม. (ยอมรับได้ไม่เกิน ${LEVEL_TOLERANCE} ม.) — ตรวจจุดระดับที่กำหนดเองก่อน`);
+      }
+      if(cmd.decision==='ignore'&&d?.profileOwner&&p.roads.some(r=>r.profile?.some(q=>q.generatedBy===d.profileOwner)))
+        return fail('จุดตัดนี้มีแนวดิ่งสะพาน/ทางลอดที่ระบบสร้างไว้ — คืนเป็นทางแยกหรือตรวจแนวดิ่งก่อนเลือกไม่ใช่ทางแยก');
       const next:Decision={...d,candidateId:c.id,decision:cmd.decision,name:cmd.name??d?.name,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
+      if(cmd.decision==='junction'){delete next.over;delete next.profileOwner;}
       p.decisions=[...p.decisions.filter(x=>x!==d),next];
-      label=cmd.decision==='junction'?`ยืนยันทางแยก ${next.name??names}`:cmd.decision==='grade-separated'?`กำหนด ${names} เป็นทางต่างระดับ`:`ไม่ใช้จุดตัด ${names}`;break;
+      // A bridge's owned vertical rise can also carry another crossing over a nearby road.
+      // Refuse an apparently successful local restore that silently downgrades that structure.
+      if(cmd.decision==='junction'&&d?.decision==='grade-separated'&&d.profileOwner){
+        const earlier=compileRoadFirstProject(project).crossings.filter(x=>x.candidateId!==c.id&&x.relation==='over');
+        const after=compileRoadFirstProject(p).crossings;
+        const affected=earlier.find(x=>!after.some(y=>y.candidateId===x.candidateId
+          &&y.relation==='over'&&y.over===x.over&&y.roads.length===x.roads.length
+          &&x.roads.every(id=>y.roads.includes(id))));
+        if(affected)return fail(`คืนทางแยกไม่ได้: ทางต่างระดับใกล้เคียง ${affected.name} อาศัยแนวดิ่งสะพานนี้อยู่ — ตรวจจุดตัดที่เกี่ยวข้องก่อน`);
+      }
+      label=cmd.decision==='junction'?`${d?.decision==='grade-separated'?'คืนค่า':'ยืนยัน'}ทางแยกระดับดิน ${next.name??names}`:cmd.decision==='grade-separated'?`ตั้งจุดตัด ${names} เป็นทางต่างระดับ (รอสร้างระดับ)`:`ไม่ใช้จุดตัด ${names}`;break;
     }
     default:{
       const d=decision(cmd.candidateId);if(!d||d.decision!=='junction')return fail('ไม่พบทางแยกที่เลือก');
@@ -472,7 +502,7 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const [a,b]=c.roads,gap=z(p.roads,a)-z(p.roads,b),was=z(project.roads,a)-z(project.roads,b);
       if(Math.abs(gap)<=LEVEL_TOLERANCE||Math.abs(was)>LEVEL_TOLERANCE)return d;
       separatedJunctions.push(d.name??d.candidateId);separatedIds.push(d.candidateId);
-      return{...(d.profileOwner?{profileOwner:d.profileOwner}:{}),candidateId:d.candidateId,decision:'grade-separated',over:gap>0?a.roadId:b.roadId,roads:c.roads.map(r=>r.roadId),at:{x:c.point.x,y:c.point.y}};
+      return{...d,decision:'grade-separated',over:gap>0?a.roadId:b.roadId,at:{x:c.point.x,y:c.point.y}};
     });
     if(separatedJunctions.length)label+=` · ${separatedJunctions.join(', ')} เป็นทางต่างระดับ`;
   }

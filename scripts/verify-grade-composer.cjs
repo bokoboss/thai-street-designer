@@ -75,4 +75,107 @@ const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd
  e=c.undo(e).editor;assert.equal(JSON.stringify(e.project),before,'one undo brings the old points back');
  // The command boundary still protects points nobody released.
  const forged={...rel.cmd,release:undefined};const x=c.executeCommand(legacy,forged);assert.match(x.error,/ต้องเก็บจุดระดับเดิม/);}
+// 8. Source-authorized junction → bridge → junction is reversible without deleting authored
+// per-leg junction data. Neither the roads nor their non-generated profile points change.
+{
+ const original=base(),id=dv.detectCandidates(original.roads)[0].id;
+ original.decisions=[{
+   candidateId:id,decision:'junction',name:'แยกเดิม',roads:['L','U'],at:{x:0,y:0},
+   treatments:{corner:12,cornerRadii:{'L:ahead':10},
+     legs:{'L:ahead':{stop:true,signal:true,crossing:true}},
+     approaches:{'U:behind':{length:35}},
+     slips:[],
+     connectors:[{from:{leg:'U:ahead',role:'main',laneIndex:0},movement:'through',mode:'suppress'}]}
+ }];
+ // Author a *geometrically valid* Slip using the same candidate/radius checks as the UI,
+ // instead of guessing a curve and making the fixture invalid before testing the restore.
+ const ae=T('core/road-first/approach-edit.cjs'),info=ae.approachInfo(rp.compileRoadFirstProject(original),id,'L:behind');
+ assert.ok(info&&info.slipTo,'Slip has an adjacent receiving approach');
+ const slip=ae.newSlip(info,option=>!c.executeCommand(original,{type:'slip.set',candidateId:id,slip:option}).error);
+ assert.ok(slip,'the Slip candidate was generated');
+ const withSlip=c.executeCommand(original,{type:'slip.set',candidateId:id,slip});
+ assert.equal(withSlip.error,null,withSlip.error);
+ original.decisions=withSlip.project.decisions;
+ const baseJson=JSON.stringify(original),bridge=gs.gradeProposal(original,id,'U','over');
+ assert.ok(bridge.cmd,bridge.error);
+ let ed=c.createEditor(original);
+ const raised=c.runCommand(ed,bridge.cmd);assert.equal(raised.result.error,null,raised.result.error);ed=c.endGesture(raised.editor);
+ assert.deepEqual(ed.project.decisions[0].treatments,original.decisions[0].treatments,'every authored treatment remains dormant, never deleted');
+ assert.equal(ed.project.decisions[0].name,'แยกเดิม','authored junction name remains');
+ assert.equal(rp.compileRoadFirstProject(ed.project).project.junctions.length,0,'active junction removed while bridge is present');
+ const beforeRestore=structuredClone(ed.project);
+ const restore=c.runCommand(ed,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.equal(restore.result.error,null,restore.result.error);ed=c.endGesture(restore.editor);
+ assert.deepEqual(ed.project.roads,original.roads,'exact original road coordinates, sections and profiles restored');
+ assert.deepEqual(ed.project.decisions,original.decisions,'original junction decision and all treatments restored exactly');
+ assert.equal(rp.compileRoadFirstProject(ed.project).project.junctions.length,1,'junction geometry compiled again');
+ assert.equal(rp.compileRoadFirstProject(ed.project).crossings.length,0,'no dangling bridge surface');
+ assert.equal(rp.validateRoadFirstProject(ed.project),null);
+ assert.equal(JSON.stringify(rp.normalizeRoadFirstProject(JSON.parse(JSON.stringify(ed.project)))),baseJson,'Save/Open roundtrip identical');
+ ed=c.undo(ed).editor;assert.deepEqual(ed.project,beforeRestore,'one undo restores the complete bridge with unchanged dormant details');
+ ed=c.redo(ed).editor;assert.deepEqual(ed.project,original,'one redo restores full original junction');
+ const dip=gs.gradeProposal(ed.project,id,'U','under');
+ assert.ok(dip.cmd,dip.error);
+ let tunnel=c.executeCommand(ed.project,dip.cmd);assert.equal(tunnel.error,null,tunnel.error);
+ assert.ok(rp.compileRoadFirstProject(tunnel.project).project.crossings.some(x=>x.tunnel),'underpass exists');
+ let returned=c.executeCommand(tunnel.project,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.equal(returned.error,null,returned.error);
+ assert.deepEqual(returned.project.roads,original.roads,'underpass restores original road elevations');
+ assert.deepEqual(returned.project.decisions,original.decisions,'underpass restores every authored junction treatment');
+ const alternate=gs.gradeProposal(tunnel.project,id,'U','over');
+ assert.ok(alternate.cmd,alternate.error); // switching a generated underpass to a bridge
+ const flip=c.executeCommand(tunnel.project,alternate.cmd);assert.equal(flip.error,null,flip.error);
+ const fromFlip=c.executeCommand(flip.project,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.equal(fromFlip.error,null,fromFlip.error);
+ assert.deepEqual(fromFlip.project.roads,original.roads,'bridge after underpass returns original road profile');
+ assert.deepEqual(fromFlip.project.decisions,original.decisions);
+ const ignored=c.executeCommand(raised.editor.project,{type:'crossing.decide',candidateId:id,decision:'ignore'});
+ assert.match(ignored.error,/คืนเป็นทางแยก|แนวดิ่งสะพาน/,'cannot forget the owner of an active bridge');
+ assert.deepEqual(ignored.project,raised.editor.project,'refused ignore is atomic');
+ const damaged=structuredClone(beforeRestore);
+ damaged.roads.find(r=>r.id==='L').profile=[{station:0,z:2},{station:1000,z:2}];
+ const fail=c.executeCommand(damaged,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.match(fail.error,/ระดับถนนยังต่างกัน/,'separately authored conflicting levels block restoration');
+ assert.deepEqual(fail.project,damaged,'failed restore changes no authored data');
+ // Legacy saves with no stored treatments must not get made-up details.
+ const legacy=base(),legacyCid=dv.detectCandidates(legacy.roads)[0].id;
+ legacy.decisions=[{candidateId:legacyCid,decision:'grade-separated',roads:['L','U'],at:{x:0,y:0}}];
+ const back=c.executeCommand(legacy,{type:'crossing.decide',candidateId:legacyCid,decision:'junction'});
+ assert.equal(back.error,null,back.error);
+ assert.equal(back.project.decisions[0].treatments,undefined,'no invented old treatments');
+}
+// 9. Automatic grade separation caused by a user profile edit also preserves dormant details.
+{
+ const source=base(),id=dv.detectCandidates(source.roads)[0].id;
+ source.decisions=[{candidateId:id,decision:'junction',name:'ชื่อเดิม',roads:['L','U'],
+   treatments:{corner:14,legs:{'L:ahead':{stop:false,signal:false}}}}];
+ const elevated=c.executeCommand(source,{type:'road.setProfile',roadId:'U',profile:[{station:0,z:8},{station:1000,z:8}]});
+ assert.equal(elevated.error,null,elevated.error);
+ assert.equal(elevated.project.decisions[0].decision,'grade-separated');
+ assert.deepEqual(elevated.project.decisions[0].treatments,source.decisions[0].treatments);
+ assert.equal(elevated.project.decisions[0].name,'ชื่อเดิม');
+ const restore=c.executeCommand(elevated.project,{type:'crossing.decide',candidateId:id,decision:'junction'});
+ assert.match(restore.error,/ระดับถนนยังต่างกัน/,'a user-edited independent profile is not silently flattened');
+ assert.deepEqual(restore.project,elevated.project);
+}
+
+// 10. A local restore must not silently collapse a second grade-separated crossing
+// which is supported by this same bridge profile. One undo is not the only safety mechanism.
+{
+ const p=base();p.roads.push({id:'N',name:'ถนนข้างเคียง',points:[{x:-400,y:10},{x:400,y:10}],section:sec});
+ const candidates=dv.detectCandidates(p.roads);
+ const own=candidates.find(x=>x.roads.some(r=>r.roadId==='L')&&x.roads.some(r=>r.roadId==='U'));
+ const nearby=candidates.find(x=>x.roads.some(r=>r.roadId==='N')&&x.roads.some(r=>r.roadId==='U'));
+ assert.ok(own&&nearby,'two crossing candidates use the same vertical road');
+ p.decisions=[{candidateId:own.id,decision:'junction',roads:['L','U']},
+   {candidateId:nearby.id,decision:'grade-separated',roads:['N','U'],over:'U'}];
+ const up=gs.gradeProposal(p,own.id,'U','over');assert.ok(up.cmd,up.error);
+ const raised=c.executeCommand(p,up.cmd);assert.equal(raised.error,null,raised.error);
+ const x=rp.compileRoadFirstProject(raised.project).crossings.find(v=>v.candidateId===nearby.id);
+ assert.equal(x.relation,'over','nearby crossing currently relies on the upper road');
+ const restore=c.executeCommand(raised.project,{type:'crossing.decide',candidateId:own.id,decision:'junction'});
+ assert.match(restore.error,/ทางต่างระดับใกล้เคียง/,'cannot silently remove nearby bridge');
+ assert.deepEqual(restore.project,raised.project,'dependency refusal is atomic');
+}
+
 console.log('PASS grade composer: criteria defaults, height / level length / grade / entered vertical curves, footprint + ghost, measured outcome before placing, refusals keep the plan, one undo, bridge → underpass, already clear unchanged, release only with consent');
