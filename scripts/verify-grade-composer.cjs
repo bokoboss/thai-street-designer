@@ -178,4 +178,24 @@ const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd
  assert.deepEqual(restore.project,raised.project,'dependency refusal is atomic');
 }
 
+// 11. Geometry edits must never detach an existing owner-generated rise from its crossing station.
+{
+ const project=base(),id=dv.detectCandidates(project.roads)[0].id;
+ const up=gs.gradeProposal(project,id,'U','over');assert.ok(up.cmd,up.error);
+ const raised=c.executeCommand(project,up.cmd);assert.equal(raised.error,null,raised.error);
+ const before=raised.project;
+ const shifted=c.executeCommand(before,{type:'roads.move',roadIds:['U'],delta:{x:0,y:25}});
+ assert.match(shifted.error,/จุดตัดขยับจากแนวดิ่งสะพาน/,'moving only one road along its axis misaligns the owned bridge');
+ assert.deepEqual(shifted.project,before,'misaligned move is refused atomically');
+ const together=c.executeCommand(before,{type:'roads.move',roadIds:['U','L'],delta:{x:15,y:25}});
+ assert.equal(together.error,null,together.error,'moving both roads together keeps the owner relative station');
+ const reversed=c.executeCommand(before,{type:'road.reverse',roadId:'U'});
+ assert.equal(reversed.error,null,reversed.error,'reversing road orientation remaps generated PVI stations');
+ const split=c.executeCommand(before,{type:'road.split',roadId:'U',at:{x:0,y:-300},newId:'U2'});
+ assert.match(split.error,/คืนระดับก่อน|แนวดิ่งสะพาน/,'split cannot silently strand a bridge profile');
+ const detached=c.executeCommand(before,{type:'roads.move',roadIds:['U'],delta:{x:1200,y:0}});
+ assert.match(detached.error,/ย้ายจุดตัดไม่ได้|คืนระดับก่อน/,'removing crossing geometry cannot leave owner-tagged rise unseen');
+ assert.deepEqual(detached.project,before);
+}
+
 console.log('PASS grade composer: criteria defaults, height / level length / grade / entered vertical curves, footprint + ghost, measured outcome before placing, refusals keep the plan, one undo, bridge → underpass, already clear unchanged, release only with consent');
