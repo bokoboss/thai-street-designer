@@ -7,7 +7,7 @@ import type {useReferenceImage} from './use-reference-image';
 import {MapPanel,type MapState} from './map-panel';
 import type {Candidate,CompiledCrossing,CompileResult,Road,RoadSection} from '@/core/road-first/derive';
 import {clearanceText} from '@/core/road-first/structure-clearance';
-import type {RoadFirstProject} from '@/core/road-first/project';
+import {compileRoadFirstProject,type RoadFirstProject} from '@/core/road-first/project';
 import {executeCommand,type RoadFirstCommand} from '@/core/road-first/commands';
 import {laneArrowFor,options as ARROW_OPTIONS,withLaneArrow,type LaneArrowCode} from '@/core/junction/model';
 import {eligibleTurnTargets,type AutoLaneEndpoint} from '@/core/junction/automatic-lane-mapping';
@@ -25,7 +25,7 @@ import {LEVEL_CRITERIA_KEYS,LEVEL_CRITERIA_LABEL,LEVEL_CRITERIA_RANGE,bridgeRise
 import {freeStretches,newRoadOpening,roadLength} from '@/core/road-first/road-openings';
 import {newLaneRun,type LaneRun} from '@/core/road-first/lane-runs';
 import {newLaneReduction,newStretch,type SectionStretch} from '@/core/road-first/section-stretches';
-import {STRUCTURE_SECTION_DEFAULTS,type StructureSection} from '@/core/road-first/structure-sections';
+import {STRUCTURE_SECTION_DEFAULTS,structureSpans,type StructureSection} from '@/core/road-first/structure-sections';
 import {AUX_LANE_DEFAULTS} from '@/core/road-first/ramps';
 import {RAMP_RULES,RAMP_SECTION} from '@/core/road-first/ramps';
 import {DiamondPanel,TemplateContext,TemplatePiecesBlock} from './diamond-panel';
@@ -194,6 +194,7 @@ function StructureSectionBlock({road,compiled,run}:{road:Road;compiled:CompileRe
     ...(s.bands?.length?{bands:s.bands.map(b=>({type:b.type,width:b.width}))}:{})});
   return <Fold id="structure-section" title="หน้าตัดบนโครงสร้าง" summary={`${where}${x?' · ตั้งหน้าตัดเอง':' · ใช้หน้าตัดของถนน'}`} data="structure-section">
     <label className="design-check"><input type="checkbox" data-design-action="toggle-structure-section" checked={!!x} onChange={e=>e.target.checked?start():set(null)}/> ใช้หน้าตัดเฉพาะบนสะพาน/ในอุโมงค์</label>
+    {!mine.length&&x&&<p className="design-meta" data-design-structure-dormant={road.id}>หน้าตัดโครงสร้างที่กำหนดเองยังเก็บอยู่ แต่ไม่มีสะพาน/อุโมงค์ที่ใช้งานจริงในตอนนี้ จึงไม่เปลี่ยนความกว้างหรือช่องจราจรใน 2D, 3D และภาพส่งออก เมื่อสร้างทางต่างระดับที่มีระดับจริงจึงจะนำค่ากลับมาใช้</p>}
     {x&&<div className="design-fields">
       {s.forwardLanes>0&&<NumberField field="structure-forward" label={`ช่องตามทิศที่วาด (ถนน ${s.forwardLanes})`} value={x.forwardLanes} min={s.forwardLanes} max={s.forwardLanes+2} onCommit={forwardLanes=>edit({forwardLanes})}/>}
       {s.backwardLanes>0&&<NumberField field="structure-backward" label={`ช่องทิศสวน (ถนน ${s.backwardLanes})`} value={x.backwardLanes} min={s.backwardLanes} max={s.backwardLanes+2} onCommit={backwardLanes=>edit({backwardLanes})}/>}
@@ -413,6 +414,17 @@ function RestoreJunctionReview({candidate,project,before,run,onConfirm,onCancel}
 }){
   const cmd:RoadFirstCommand={type:'crossing.decide',candidateId:candidate.id,decision:'junction'};
   const result=executeCommand(project,cmd),stale=before!==project;
+  const compiledBefore=compileRoadFirstProject(project),
+    compiledAfter=result.error?null:compileRoadFirstProject(result.project);
+  const introducedIssues=compiledAfter?.issues.filter(i=>!compiledBefore.issues.includes(i))??[];
+  const dormantSections=compiledAfter?project.roads.filter(r=>
+    candidate.roads.some(ref=>ref.roadId===r.id)&&r.structureSection
+      &&structureSpans(compiledBefore,r.id).length>0&&structureSpans(compiledAfter,r.id).length===0):[];
+  const crossing=compiledBefore.crossings.find(v=>v.candidateId===candidate.id),
+    lower=crossing?.under?project.roads.find(r=>r.id===crossing.under):undefined,
+    span=crossing?.clearance?.spanUnder,
+    underUturns=lower?.openings?.filter(o=>o.type==='uturn'&&!!span
+      &&o.station<span[1]&&o.station+o.length>span[0])??[];
   const owner=project.decisions.find(d=>d.candidateId===candidate.id)?.profileOwner;
   const count=owner?project.roads.reduce((sum,r)=>sum+(r.profile??[]).filter(q=>q.generatedBy===owner).length,0):0;
   return <section className="design-block" data-design-restore-junction-review="true">
@@ -429,6 +441,16 @@ function RestoreJunctionReview({candidate,project,before,run,onConfirm,onCancel}
     {project.decisions.find(d=>d.candidateId===candidate.id)?.treatments
       ?<p className="design-meta">รายละเอียดขาทางแยกที่เคยกำหนดไว้จะกลับมาใช้ หากไม่สอดคล้องกับถนนปัจจุบัน ระบบจะปฏิเสธหรือแจ้งรายการให้ตรวจ</p>
       :<p className="design-meta">ไม่พบรายละเอียดทางแยกเดิมในไฟล์นี้ หากเคยถูกลบโดยโปรแกรมรุ่นก่อนจะไม่สร้างข้อมูลนั้นขึ้นเอง</p>}
+    {dormantSections.length>0&&<p className="design-meta" data-design-restore-dormant-sections={dormantSections.length}>
+      หน้าตัดเฉพาะสะพาน/อุโมงค์ของ {dormantSections.map(r=>r.name).join(', ')} จะพักไว้ในข้อมูลเดิม โดยไม่แสดงความกว้างหรือช่องจราจรเฉพาะโครงสร้างเมื่อกลับเป็นทางแยกระดับดิน
+    </p>}
+    {underUturns.length>0&&<p className="design-warning" data-design-restore-under-uturns={underUturns.length}>
+      มีช่องกลับรถใต้สะพาน {underUturns.length} รายการบน {lower?.name} ซึ่งยังเก็บไว้หลังคืนเป็นทางแยก แต่ตำแหน่งอาจอยู่ในช่วงปากทางแยกจนไม่ได้แสดง ต้องตรวจตำแหน่งก่อนใช้งาน
+    </p>}
+    {introducedIssues.length>0&&<div className="design-issues" data-design-restore-review-issues={introducedIssues.length}>
+      <b>รายการที่ต้องตรวจหลังคืนทางแยก</b><ul>{introducedIssues.slice(0,5).map((issue,i)=><li key={i}>{issue}</li>)}</ul>
+      {introducedIssues.length>5&&<p className="design-meta">ยังมีอีก {introducedIssues.length-5} รายการที่แถบรายการตรวจ</p>}
+    </div>}
     {stale&&<p className="design-warning" role="alert">โครงการเปลี่ยนระหว่าง Preview — ปิดและเลือกใหม่</p>}
     {result.error&&<p className="design-warning" role="alert" data-design-restore-junction-error>{result.error}</p>}
     <div className="design-actions">

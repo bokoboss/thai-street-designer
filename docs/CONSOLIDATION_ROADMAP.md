@@ -121,7 +121,7 @@ findings are handled as fixes. Carried forward, not blocking:
 
 ---
 
-> **Junction/bridge transition gate (27 Oct 2026):** Reversible Junction ↔ Bridge/Underpass state and its preservation/Preview acceptance were merged in PR #86 (`b9012da1`). Owner-profile station safety for subsequent road geometry edits is the next isolated repair. Track remaining multi-crossing/legacy/accessory and 2D/3D QA in [Issue #85](https://github.com/bokoboss/thai-street-designer/issues/85). **Hold Diamond v2 PR #84 and later 4D/4E until remaining safety checks are closed.** See [Grade Composer contract](spec/GRADE_COMPOSER.md).
+> **Junction/bridge transition gate (27 Oct 2026):** Reversible Junction ↔ Bridge/Underpass state and its preservation/Preview acceptance were merged in PR #86 (`b9012da1`). Owner-profile station safety for road edits was merged in PR #87 (`eb07dca9`). The next isolated Issue #85 slice corrects unresolved crossings generating phantom structure-section extents, and adds explicit preview/review of dormant authored structure settings and under-bridge U-turns. Track remaining multi-crossing/legacy/accessory and 2D/3D QA in [Issue #85](https://github.com/bokoboss/thai-street-designer/issues/85). **Hold Diamond v2 PR #84 and later 4D/4E until remaining safety checks are closed.** See [Grade Composer contract](spec/GRADE_COMPOSER.md).
 
 ## Phase 4 — Grade separation and engineering depth
 
