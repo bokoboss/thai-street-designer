@@ -56,18 +56,19 @@ assert.match(dm.diamondPlan(e.project,cid,{...P,ramps:{forwardOff:false,forwardO
 // for terminal elevations. A tangent projection is only an approximation and gives
 // a nonzero elevation step even though the terminal lies exactly on the crossroad.
 {
+ // Crosses on the straight at y=0; the +135 m terminal lies on the actual
+ // circular curve. Keep this independent of the junction's auto-fit decision.
  const curved={...cross,alignment:'arc',points:[
-   {x:0,y:-550},{x:0,y:-180},{x:0,y:0,radius:250},{x:90,y:180},{x:300,y:550}
+   {x:0,y:-650},{x:0,y:95,radius:240},{x:80,y:255},{x:80,y:650}
  ]};
- let ed=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[main]});
- ed=c.endGesture(c.runCommand(ed,{type:'road.add',road:curved}).editor);
- const cid=ed.project.decisions[0]?.candidateId;
- assert.ok(cid,'curved-crossroad crossing detected');
- const params=dm.diamondDefaults(ed.project,cid,'M');
+ const source={kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[main,curved]};
+ const cid=T('core/road-first/derive.cjs').detectCandidates(source.roads).find(x=>x.kind==='cross')?.id;
+ assert.ok(cid,'two roads cross on the straight approach before the curve');
+ const params=dm.diamondDefaults(source,cid,'M');
  assert.ok(params,'curved-crossroad defaults');
- const planned=dm.diamondPlan(ed.project,cid,{...params,over:'cross'},ids);
+ const planned=dm.diamondPlan(source,cid,{...params,offset:135,over:'cross'},ids);
  assert.ok(!planned.error,planned.error);
- const sep=gs.overCommand(ed.project,cid,'C');assert.ok(!sep.error,sep.error);
+ const sep=gs.overCommand(source,cid,'C');assert.ok(!sep.error,sep.error);
  const profile=sep.cmd.profiles.C,alignment=ra.resolveAlignment(curved.points,'arc');
  assert.ok(profile&&profile.length>=4,'crossroad has a non-flat grade-separated vertical profile');
  const endpoints=[];
