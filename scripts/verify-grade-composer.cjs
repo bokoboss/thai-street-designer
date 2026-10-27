@@ -84,9 +84,18 @@ const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd
    treatments:{corner:12,cornerRadii:{'L:ahead':10},
      legs:{'L:ahead':{stop:true,signal:true,crossing:true}},
      approaches:{'U:behind':{length:35}},
-     slips:[{from:'L:behind',width:3.25,radius:20}],
+     slips:[],
      connectors:[{from:{leg:'U:ahead',role:'main',laneIndex:0},movement:'through',mode:'suppress'}]}
  }];
+ // Author a *geometrically valid* Slip using the same candidate/radius checks as the UI,
+ // instead of guessing a curve and making the fixture invalid before testing the restore.
+ const ae=T('core/road-first/approach-edit.cjs'),info=ae.approachInfo(rp.compileRoadFirstProject(original),id,'L:behind');
+ assert.ok(info&&info.slipTo,'Slip has an adjacent receiving approach');
+ const slip=ae.newSlip(info,option=>!c.executeCommand(original,{type:'slip.set',candidateId:id,slip:option}).error);
+ assert.ok(slip,'the Slip candidate was generated');
+ const withSlip=c.executeCommand(original,{type:'slip.set',candidateId:id,slip});
+ assert.equal(withSlip.error,null,withSlip.error);
+ original.decisions=withSlip.project.decisions;
  const baseJson=JSON.stringify(original),bridge=gs.gradeProposal(original,id,'U','over');
  assert.ok(bridge.cmd,bridge.error);
  let ed=c.createEditor(original);
@@ -148,6 +157,25 @@ const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd
  const restore=c.executeCommand(elevated.project,{type:'crossing.decide',candidateId:id,decision:'junction'});
  assert.match(restore.error,/ระดับถนนยังต่างกัน/,'a user-edited independent profile is not silently flattened');
  assert.deepEqual(restore.project,elevated.project);
+}
+
+// 10. A local restore must not silently collapse a second grade-separated crossing
+// which is supported by this same bridge profile. One undo is not the only safety mechanism.
+{
+ const p=base();p.roads.push({id:'N',name:'ถนนข้างเคียง',points:[{x:-400,y:10},{x:400,y:10}],section:sec});
+ const candidates=dv.detectCandidates(p.roads);
+ const own=candidates.find(x=>x.roads.some(r=>r.roadId==='L')&&x.roads.some(r=>r.roadId==='U'));
+ const nearby=candidates.find(x=>x.roads.some(r=>r.roadId==='N')&&x.roads.some(r=>r.roadId==='U'));
+ assert.ok(own&&nearby,'two crossing candidates use the same vertical road');
+ p.decisions=[{candidateId:own.id,decision:'junction',roads:['L','U']},
+   {candidateId:nearby.id,decision:'grade-separated',roads:['N','U'],over:'U'}];
+ const up=gs.gradeProposal(p,own.id,'U','over');assert.ok(up.cmd,up.error);
+ const raised=c.executeCommand(p,up.cmd);assert.equal(raised.error,null,raised.error);
+ const x=rp.compileRoadFirstProject(raised.project).crossings.find(v=>v.candidateId===nearby.id);
+ assert.equal(x.relation,'over','nearby crossing currently relies on the upper road');
+ const restore=c.executeCommand(raised.project,{type:'crossing.decide',candidateId:own.id,decision:'junction'});
+ assert.match(restore.error,/ทางต่างระดับใกล้เคียง/,'cannot silently remove nearby bridge');
+ assert.deepEqual(restore.project,raised.project,'dependency refusal is atomic');
 }
 
 console.log('PASS grade composer: criteria defaults, height / level length / grade / entered vertical curves, footprint + ghost, measured outcome before placing, refusals keep the plan, one undo, bridge → underpass, already clear unchanged, release only with consent');

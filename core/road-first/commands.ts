@@ -352,6 +352,16 @@ export function executeCommand(project:RoadFirstProject,cmd:RoadFirstCommand):Co
       const next:Decision={...d,candidateId:c.id,decision:cmd.decision,name:cmd.name??d?.name,roads:d?.roads??c.roads.map(x=>x.roadId),at:{x:c.point.x,y:c.point.y}};
       if(cmd.decision==='junction'){delete next.over;delete next.profileOwner;}
       p.decisions=[...p.decisions.filter(x=>x!==d),next];
+      // A bridge's owned vertical rise can also carry another crossing over a nearby road.
+      // Refuse an apparently successful local restore that silently downgrades that structure.
+      if(cmd.decision==='junction'&&d?.decision==='grade-separated'&&d.profileOwner){
+        const earlier=compileRoadFirstProject(project).crossings.filter(x=>x.candidateId!==c.id&&x.relation==='over');
+        const after=compileRoadFirstProject(p).crossings;
+        const affected=earlier.find(x=>!after.some(y=>y.candidateId===x.candidateId
+          &&y.relation==='over'&&y.over===x.over&&y.roads.length===x.roads.length
+          &&x.roads.every(id=>y.roads.includes(id))));
+        if(affected)return fail(`คืนทางแยกไม่ได้: ทางต่างระดับใกล้เคียง ${affected.name} อาศัยแนวดิ่งสะพานนี้อยู่ — ตรวจจุดตัดที่เกี่ยวข้องก่อน`);
+      }
       label=cmd.decision==='junction'?`${d?.decision==='grade-separated'?'คืนค่า':'ยืนยัน'}ทางแยกระดับดิน ${next.name??names}`:cmd.decision==='grade-separated'?`ตั้งจุดตัด ${names} เป็นทางต่างระดับ (รอสร้างระดับ)`:`ไม่ใช้จุดตัด ${names}`;break;
     }
     default:{
