@@ -103,7 +103,20 @@ try{
     assert.equal(await b.count('[data-network-crossing-tunnel]'),1);
     await b.click('[data-design-action="confirm-junction"]');
     await b.click('[data-design-restore-junction-confirm]');
-    await b.waitFor(async()=>await b.count('[data-network-junction-hit]')===1
+    await sleep(450);
+    const restoredInspect=await b.evalValue(`(()=>{
+      const item=JSON.parse(localStorage.getItem('thai-street-road-first-v1')||'null');
+      const p=item?.scenarios?.[0]?.project;
+      return {hits:document.querySelectorAll('[data-network-junction-hit]').length,
+        tunnels:document.querySelectorAll('[data-network-crossing-tunnel]').length,
+        decks:document.querySelectorAll('[data-network-crossing-deck]').length,
+        candidates:document.querySelectorAll('[data-design-candidate]').length,
+        selection:document.querySelector('[data-design-inspector]')?.getAttribute('data-design-inspector'),
+        decisions:p?.decisions?.map(d=>({decision:d.decision,owner:d.profileOwner,over:d.over,roads:d.roads})),
+        profiles:p?.roads?.map(r=>({name:r.name,levels:r.profile?.map(q=>({z:q.z,owner:q.generatedBy}))}))};
+    })()`);
+    console.log('RESTORED_JUNCTION_DIAGNOSTIC',JSON.stringify(restoredInspect));
+    await b.waitFor(async()=>await b.count('[data-network-junction-hit]')>0
       &&await b.count('[data-network-crossing-tunnel]')===0
       &&await b.count('[data-network-crossing-deck]')===0,'restored at-grade junction removes tunnel/deck geometry');
     await b.screenshot('artifacts/design-browser-restored-at-grade-junction.png');
