@@ -192,7 +192,11 @@ const run=cmd=>{const x=c.runCommand(e,cmd);assert.equal(x.result.error,null,cmd
  const reversed=c.executeCommand(before,{type:'road.reverse',roadId:'U'});
  assert.equal(reversed.error,null,reversed.error,'reversing road orientation remaps generated PVI stations');
  const split=c.executeCommand(before,{type:'road.split',roadId:'U',at:{x:0,y:-300},newId:'U2'});
- assert.match(split.error,/คืนระดับก่อน|แนวดิ่งสะพาน/,'split cannot silently strand a bridge profile');
+ assert.equal(split.error,null,split.error,'safe split before the grade footprint retains every owned PVI with the downstream crossing');
+ assert.ok(split.project.roads.find(r=>r.id==='U2').profile.some(q=>q.generatedBy===before.decisions[0].profileOwner),'downstream road keeps the bridge PVIs');
+ const unsafe=c.executeCommand(before,{type:'road.split',roadId:'U',at:{x:0,y:-100},newId:'U2'});
+ assert.match(unsafe.error,/กระจายไปคนละช่วง|คืนระดับก่อน/,'splitting through the generated rise requires review');
+ assert.deepEqual(unsafe.project,before,'unsafe split is atomic');
  const detached=c.executeCommand(before,{type:'roads.move',roadIds:['U'],delta:{x:1200,y:0}});
  assert.match(detached.error,/ย้ายจุดตัดไม่ได้|คืนระดับก่อน/,'removing crossing geometry cannot leave owner-tagged rise unseen');
  assert.deepEqual(detached.project,before);
