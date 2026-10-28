@@ -2,7 +2,7 @@
 const path=require('path'),assert=require('node:assert/strict');
 require('./test-support/build.cjs')();
 const T=p=>require(path.resolve('.test-build/tree/'+p));
-const c=T('core/road-first/commands.cjs'),rp=T('core/road-first/project.cjs'),dm=T('core/road-first/diamond.cjs'),n=T('core/network/network-project.cjs'),lc=T('core/road-first/level-criteria.cjs');
+const c=T('core/road-first/commands.cjs'),rp=T('core/road-first/project.cjs'),dm=T('core/road-first/diamond.cjs'),n=T('core/network/network-project.cjs'),lc=T('core/road-first/level-criteria.cjs'),gs=T('core/road-first/grade-separation.cjs'),ra=T('core/common/resolved-alignment.cjs'),elevation=T('core/road-first/elevation.cjs');
 const main={id:'M',name:'ทางหลวง',points:[{x:-700,y:0},{x:700,y:0}],section:{forwardLanes:2,backwardLanes:2,laneWidth:3.5,median:4,walk:0}};
 const cross={id:'C',name:'ถนนตัด',points:[{x:0,y:-500},{x:0,y:500}],section:{forwardLanes:2,backwardLanes:2,laneWidth:3.25,median:2,walk:2}};
 const start=()=>{let e=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[main]});e=c.endGesture(c.runCommand(e,{type:'road.add',road:cross}).editor);return e;};
@@ -52,4 +52,43 @@ assert.match(dm.diamondPlan(e.project,cid,{...P,ramps:{forwardOff:false,forwardO
 {const shortCross={...cross,points:[{x:0,y:-20},{x:0,y:20}]};let e6=c.createEditor({kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[main]});
  e6=c.endGesture(c.runCommand(e6,{type:'road.add',road:shortCross}).editor);const cid6=e6.project.decisions[0].candidateId;
  assert.match(dm.diamondPlan(e6.project,cid6,dm.diamondDefaults(e6.project,cid6,'M'),ids).error,/ถนนตัด สั้นเกินไป/);}
+// 9. Diamond v2 foundation: a curved crossroad must use resolved arc-length stations
+// for terminal elevations. A tangent projection is only an approximation and gives
+// a nonzero elevation step even though the terminal lies exactly on the crossroad.
+{
+ // Crosses on the straight at y=0; the +135 m terminal lies on the actual
+ // circular curve. Keep this independent of the junction's auto-fit decision.
+ const curved={...cross,alignment:'arc',points:[
+   {x:0,y:-650},{x:0,y:95,radius:240},{x:80,y:255},{x:80,y:650}
+ ]};
+ const source={kind:'road-first',schemaVersion:1,title:'t',decisions:[],options:{},roads:[main,curved]};
+ const cid=T('core/road-first/derive.cjs').detectCandidates(source.roads).find(x=>x.kind==='cross')?.id;
+ assert.ok(cid,'two roads cross on the straight approach before the curve');
+ const params=dm.diamondDefaults(source,cid,'M');
+ assert.ok(params,'curved-crossroad defaults');
+ const planned=dm.diamondPlan(source,cid,{...params,offset:135,over:'cross'},ids);
+ assert.ok(!planned.error,planned.error);
+ const sep=gs.overCommand(source,cid,'C');assert.ok(!sep.error,sep.error);
+ const profile=sep.cmd.profiles.C,alignment=ra.resolveAlignment(curved.points,'arc');
+ assert.ok(profile&&profile.length>=4,'crossroad has a non-flat grade-separated vertical profile');
+ const endpoints=[];
+ for(const piece of planned.ramps){
+   const off=piece.key.endsWith('Off'),terminal=off?piece.road.points.at(-1):piece.road.points[0];
+   const actual=off?piece.road.profile?.at(-1)?.z:piece.road.profile?.[0]?.z;
+   const projection=alignment.project(terminal);
+   assert.ok(projection.distance<.025,'terminal is on the curved crossroad alignment');
+   const expected=elevation.levelAt(profile,projection.station);
+   assert.ok(Number.isFinite(actual),'ramp terminal has a defined elevation');
+   assert.ok(Math.abs(actual-expected)<=.011,
+     piece.key+' must meet curved crossroad at its actual station; expected '+expected+' got '+actual);
+   const hit=ra.alignmentIntersections(ra.resolveAlignment(main.points,'chord'),alignment)[0];
+   assert.ok(hit);
+   const tangent=alignment.tangentAt(hit.stationB),
+     approximate=hit.stationB+(terminal.x-hit.point.x)*tangent.x+(terminal.y-hit.point.y)*tangent.y;
+   endpoints.push(Math.abs(elevation.levelAt(profile,approximate)-expected));
+   assert.equal(piece.road.origin.version,1,'existing generated shape/provenance stays v1');
+ }
+ assert.ok(endpoints.some(delta=>delta>.011),'regression exercises a real curved-station elevation discrepancy');
+}
+
 console.log('PASS 4B-3 diamond: bent main road, short crossroad refused, defaults from level criteria, one batch step, bridge by criteria, ramps attached on traffic sides, 4-leg terminals, undo, remove group, crossroad over, half diamond, refusals');

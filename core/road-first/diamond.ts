@@ -79,7 +79,7 @@ export function diamondPlan(project:RoadFirstProject,candidateId:string,params:D
   if('error' in sep)return sep;
   const profiles=sep.cmd.type==='crossing.setOver'?sep.cmd.profiles:{};
   const prof=(r:Road):Profile|undefined=>r.id in profiles?(profiles[r.id]??undefined):r.profile;
-  const X=c.point,u=unitAt(main.points,mRef.station,main.alignment),n={x:u.y,y:-u.x}; // n: forward-lane side (left of travel on the plan)
+  const u=unitAt(main.points,mRef.station,main.alignment),n={x:u.y,y:-u.x}; // n: forward-lane side (left of travel on the plan)
   const v0=unitAt(cross.points,cRef.station,cross.alignment);
   // Terminal on the crossroad at distance W across the main road, on one side (+1 forward side, -1 the other).
   // Points follow both alignments (a curved road keeps its ramps along its curve).
@@ -96,7 +96,12 @@ export function diamondPlan(project:RoadFirstProject,candidateId:string,params:D
     forwardOff:[onMain(-L),at(-(L-taper),1),tF],forwardOn:[tF,at(L-taper,1),onMain(L)],
     backwardOff:[onMain(L),at(L-taper,-1),tB],backwardOn:[tB,at(-(L-taper),-1),onMain(-L)],
   };
-  const zMain=(s:number)=>levelAt(prof(main),mRef.station+s),zCross=(p:WorldPoint)=>{const d=(p.x-X.x)*v0.x+(p.y-X.y)*v0.y;return levelAt(prof(cross),cRef.station+d);};
+  // The terminal point is sampled by station on the crossroad's *resolved* alignment.
+  // Reproject onto that same alignment before querying its profile: the chord of a curved
+  // road is not an arc-length station, and a local tangent only approximates it.
+  const resolvedCross=resolveAlignment(cross.points,cross.alignment??'chord');
+  const zMain=(s:number)=>levelAt(prof(main),mRef.station+s),
+    zCross=(p:WorldPoint)=>levelAt(prof(cross),resolvedCross.project(p).station);
   const ends:Record<DiamondRampKey,[number,number]>={
     forwardOff:[zMain(-L),zCross(tF)],forwardOn:[zCross(tF),zMain(L)],backwardOff:[zMain(L),zCross(tB)],backwardOn:[zCross(tB),zMain(-L)],
   };
